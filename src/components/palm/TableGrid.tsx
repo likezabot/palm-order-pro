@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 
 interface TableGridProps {
-  onSelectTable: (tableName: string) => void;
+  onSelectTable: (tableName: string, existingOrderId?: string) => void;
   waiterName: string;
   onSetWaiter: (name: string) => void;
 }
@@ -63,9 +63,9 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 
   const balcaoOrders = activeOrders?.filter((o) => o.table_name === "BALCÃO") || [];
 
-  const handleTableClick = (tableName: string) => {
+  const handleTableClick = (tableName: string, orderId?: string) => {
     playFeedback("click");
-    onSelectTable(tableName);
+    onSelectTable(tableName, orderId);
   };
 
   const handleNewBalcao = () => {
@@ -201,7 +201,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                   return (
                     <button
                       key={order.id}
-                      onClick={() => handleTableClick("BALCÃO")}
+                      onClick={() => handleTableClick("BALCÃO", order.id)}
                       className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 min-w-[100px] transition-all active:scale-95 hover:border-primary/50"
                     >
                       <div className="flex items-center gap-1 text-muted-foreground">
