@@ -2,8 +2,8 @@ import { useState } from "react";
 import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
-import { printReceipt } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
+import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
   tableName: string;
@@ -23,6 +23,7 @@ const OrderReview = ({
 }: Props) => {
   const [sending, setSending] = useState(false);
   const { toast } = useToast();
+  const { playFeedback } = useFeedback();
 
   const handleFinalize = async () => {
     if (sending || cart.length === 0) return;
@@ -52,12 +53,11 @@ const OrderReview = ({
       const { error: itemsError } = await supabase.from("order_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // No longer printing from phone.
-      // Print will be handled by the Print Station.
-
+      playFeedback("success");
       onSuccess();
     } catch (err) {
       console.error(err);
+      playFeedback("error");
       toast({
         title: "Erro ao enviar pedido",
         description: "Tente novamente.",
@@ -70,7 +70,13 @@ const OrderReview = ({
   return (
     <div className="flex min-h-screen flex-col pb-32">
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
-        <button onClick={onBack} className="flex items-center gap-2 text-muted-foreground text-base">
+        <button 
+          onClick={() => {
+            playFeedback("click");
+            onBack();
+          }} 
+          className="flex items-center gap-2 text-muted-foreground text-base"
+        >
           <ArrowLeft size={20} /> Voltar ao cardápio
         </button>
         <h2 className="mt-2 text-xl font-bold">Mesa: {tableName}</h2>
@@ -88,14 +94,20 @@ const OrderReview = ({
               </div>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => onUpdateQuantity(item.product.id, -1)}
+                  onClick={() => {
+                    playFeedback("click");
+                    onUpdateQuantity(item.product.id, -1);
+                  }}
                   className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground active:scale-90 transition-transform"
                 >
                   <Minus size={18} />
                 </button>
                 <span className="text-lg font-bold w-6 text-center">{item.quantity}</span>
                 <button
-                  onClick={() => onUpdateQuantity(item.product.id, 1)}
+                  onClick={() => {
+                    playFeedback("click");
+                    onUpdateQuantity(item.product.id, 1);
+                  }}
                   className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground active:scale-90 transition-transform"
                 >
                   <Plus size={18} />
@@ -112,7 +124,10 @@ const OrderReview = ({
             />
 
             <button
-              onClick={() => onRemove(item.product.id)}
+              onClick={() => {
+                playFeedback("heavy");
+                onRemove(item.product.id);
+              }}
               className="mt-2 flex items-center gap-1 text-sm text-destructive font-semibold"
             >
               <Trash2 size={14} /> REMOVER
