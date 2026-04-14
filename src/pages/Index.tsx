@@ -25,7 +25,10 @@ const Index = () => {
         {modes.map((mode) => (
           <button
             key={mode.path}
-            onClick={() => navigate(mode.path)}
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(30);
+              navigate(mode.path);
+            }}
             className="flex items-center gap-4 rounded-lg bg-card p-5 text-left text-lg font-semibold text-card-foreground transition-all duration-150 active:scale-[0.97] hover:bg-secondary border border-border min-h-[56px]"
           >
             <span className="text-2xl">{mode.emoji}</span>
