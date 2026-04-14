@@ -8,16 +8,17 @@ interface Props {
   waiterName: string;
   setWaiterName: (v: string) => void;
   onStart: () => void;
+  onBack: () => void;
 }
 
-const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onStart }: Props) => {
+const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onStart, onBack }: Props) => {
   const navigate = useNavigate();
   const [editingWaiter, setEditingWaiter] = useState(!waiterName.trim());
 
   return (
     <div className="flex min-h-screen flex-col p-4">
       <button
-        onClick={() => navigate("/")}
+        onClick={onBack}
         className="flex items-center gap-2 text-muted-foreground mb-6 text-base"
       >
         <ArrowLeft size={20} /> Voltar
