@@ -9,6 +9,7 @@ import Kitchen from "./pages/Kitchen";
 import Cashier from "./pages/Cashier";
 import Admin from "./pages/Admin";
 import PrintStation from "./pages/PrintStation";
+import Pdv from "./pages/Pdv";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
