@@ -165,7 +165,7 @@ const OrderReview = ({
           disabled={sending || cart.length === 0}
           className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 min-h-[56px]"
         >
-          {sending ? "ENVIANDO..." : "✅ FINALIZAR PEDIDO"}
+          {sending ? "ENVIANDO..." : existingOrderId ? "✅ ATUALIZAR PEDIDO" : "✅ FINALIZAR PEDIDO"}
         </button>
       </div>
     </div>
