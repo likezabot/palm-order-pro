@@ -57,7 +57,7 @@ function buildBaseCSS(paper: PaperWidth): string {
     .separator {
       border: none;
       border-top: 1px dashed #000;
-      margin: 6px 0;
+      margin: 4px 0;
     }
     .row {
       display: table;
