@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Printer, RefreshCw, AlertCircle, CheckCircle2, Power } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { printReceipt } from "@/lib/print-receipt";
@@ -15,6 +15,12 @@ const PrintStation = () => {
   const [autoPrint, setAutoPrint] = useState(true);
   const [status, setStatus] = useState<"online" | "offline">("online");
   const { toast } = useToast();
+  const printedOrdersRef = useRef<Set<string>>(new Set());
+  const autoPrintRef = useRef(autoPrint);
+
+  useEffect(() => {
+    autoPrintRef.current = autoPrint;
+  }, [autoPrint]);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -31,7 +37,7 @@ const PrintStation = () => {
     }
   }, [toast]);
 
-  const handlePrint = async (order: Order) => {
+  const handlePrint = useCallback(async (order: Order) => {
     const { data: items, error } = await supabase
       .from("order_items")
       .select("*")
@@ -43,7 +49,7 @@ const PrintStation = () => {
     }
 
     printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchOrders();
@@ -57,8 +63,10 @@ const PrintStation = () => {
           const newOrder = payload.new as Order;
           setOrders((prev) => [newOrder, ...prev.slice(0, 9)]);
 
-          if (autoPrint) {
-            // Pequeno delay para garantir que os itens do pedido foram inseridos no banco
+          if (printedOrdersRef.current.has(newOrder.id)) return;
+
+          if (autoPrintRef.current) {
+            printedOrdersRef.current.add(newOrder.id);
             setTimeout(() => handlePrint(newOrder), 1000);
             toast({
               title: "Novo pedido recebido!",
@@ -80,7 +88,7 @@ const PrintStation = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchOrders, autoPrint]);
+  }, [fetchOrders, handlePrint, toast]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
