@@ -11,15 +11,16 @@ interface Props {
   cart: CartItem[];
   total: number;
   existingOrderId?: string | null;
+  senha?: string;
   onBack: () => void;
   onUpdateQuantity: (productId: string, delta: number) => void;
   onUpdateNote: (productId: string, note: string) => void;
   onRemove: (productId: string) => void;
-  onSuccess: () => void;
+  onSuccess: (senha: string) => void;
 }
 
 const OrderReview = ({
-  tableName, waiterName, cart, total, existingOrderId, onBack,
+  tableName, waiterName, cart, total, existingOrderId, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess,
 }: Props) => {
   const [sending, setSending] = useState(false);
