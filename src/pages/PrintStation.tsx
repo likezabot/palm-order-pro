@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Printer, RefreshCw, AlertCircle, CheckCircle2, Power, Volume2 } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Printer, RefreshCw, AlertCircle, CheckCircle2, Power } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { printReceipt } from "@/lib/print-receipt";
-import { Order, OrderItem } from "@/lib/types";
+import { Order } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -12,24 +12,9 @@ import { Button } from "@/components/ui/button";
 
 const PrintStation = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [autoPrint, setAutoPrint] = useState(true);
   const [status, setStatus] = useState<"online" | "offline">("online");
   const { toast } = useToast();
-  
-  // Usar useRef para rastrear IDs já impressos na sessão para evitar loop infinito
-  const printedOrdersRef = useRef<Set<string>>(new Set());
-  const processingRef = useRef<boolean>(false);
-
-  const playBeep = () => {
-    try {
-      const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
-      audio.volume = 0.5;
-      audio.play().catch(e => console.warn("Som bloqueado pelo navegador:", e));
-    } catch (e) {
-      console.error("Erro ao tocar som:", e);
-    }
-  };
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -43,23 +28,10 @@ const PrintStation = () => {
       toast({ title: "Erro ao carregar pedidos", variant: "destructive" });
     } else {
       setOrders(data || []);
-      // Adicionar pedidos "new" que ainda não foram impressos à fila
-      const unprinted = (data || []).filter(o => o.status === 'new' && !o.is_printed && !printedOrdersRef.current.has(o.id));
-      if (unprinted.length > 0 && autoPrint) {
-        setPendingOrders(prev => {
-          const newPending = [...prev];
-          unprinted.forEach(o => {
-            if (!newPending.find(p => p.id === o.id)) {
-              newPending.push(o);
-            }
-          });
-          return newPending;
-        });
-      }
     }
-  }, [toast, autoPrint]);
+  }, [toast]);
 
-  const handlePrint = useCallback(async (order: Order) => {
+  const handlePrint = async (order: Order) => {
     const { data: items, error } = await supabase
       .from("order_items")
       .select("*")
@@ -67,56 +39,11 @@ const PrintStation = () => {
 
     if (error || !items) {
       toast({ title: "Erro ao buscar itens do pedido", variant: "destructive" });
-      return false;
+      return;
     }
 
-    printReceipt(order.table_name, order.waiter_name || "N/A", items as OrderItem[], order.total || 0);
-    
-    // Marcar como impresso no banco
-    await supabase.from("orders").update({ is_printed: true }).eq("id", order.id);
-    
-    return true;
-  }, [toast]);
-
-  // Efeito para processar a fila de impressão
-  useEffect(() => {
-    if (pendingOrders.length === 0 || processingRef.current || !autoPrint) return;
-
-    const processQueue = async () => {
-      processingRef.current = true;
-      const orderToPrint = pendingOrders[0];
-      const orderId = orderToPrint.id;
-
-      if (printedOrdersRef.current.has(orderId)) {
-        setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-        processingRef.current = false;
-        return;
-      }
-
-      // Marcar como impresso na sessão ANTES de chamar print
-      printedOrdersRef.current.add(orderId);
-      
-      playBeep();
-      
-      toast({
-        title: "Novo pedido recebido!",
-        description: `Imprimindo pedido da Mesa ${orderToPrint.table_name}...`,
-      });
-
-      const success = await handlePrint(orderToPrint);
-      
-      if (success) {
-        // Aguardar um pouco para o usuário ver o diálogo de impressão e fechá-lo
-        // window.onafterprint não é confiável em todos os navegadores para janelas popups
-        // então removemos da fila após a chamada
-        setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-      }
-      
-      processingRef.current = false;
-    };
-
-    processQueue();
-  }, [pendingOrders, autoPrint, handlePrint, toast]);
+    printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -131,11 +58,12 @@ const PrintStation = () => {
           setOrders((prev) => [newOrder, ...prev.slice(0, 9)]);
 
           if (autoPrint) {
-            // Verificar se já foi impresso nesta sessão
-            if (printedOrdersRef.current.has(newOrder.id)) return;
-            
-            // Adicionar à fila de impressão
-            setPendingOrders(prev => [...prev, newOrder]);
+            // Pequeno delay para garantir que os itens do pedido foram inseridos no banco
+            setTimeout(() => handlePrint(newOrder), 1000);
+            toast({
+              title: "Novo pedido recebido!",
+              description: `Imprimindo pedido da Mesa ${newOrder.table_name}...`,
+            });
           } else {
             toast({
               title: "Novo pedido recebido!",
@@ -152,7 +80,7 @@ const PrintStation = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchOrders, autoPrint, toast]);
+  }, [fetchOrders, autoPrint]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">

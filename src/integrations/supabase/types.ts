@@ -14,82 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      cash_movements: {
-        Row: {
-          amount: number
-          cash_register_id: string | null
-          created_at: string | null
-          id: string
-          reason: string | null
-          type: string
-        }
-        Insert: {
-          amount: number
-          cash_register_id?: string | null
-          created_at?: string | null
-          id?: string
-          reason?: string | null
-          type: string
-        }
-        Update: {
-          amount?: number
-          cash_register_id?: string | null
-          created_at?: string | null
-          id?: string
-          reason?: string | null
-          type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cash_movements_cash_register_id_fkey"
-            columns: ["cash_register_id"]
-            isOneToOne: false
-            referencedRelation: "cash_register"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cash_register: {
-        Row: {
-          closed_at: string | null
-          final_amount: number | null
-          id: string
-          initial_amount: number
-          opened_at: string | null
-          status: string | null
-          total_sales: number | null
-          user_id: string | null
-        }
-        Insert: {
-          closed_at?: string | null
-          final_amount?: number | null
-          id?: string
-          initial_amount?: number
-          opened_at?: string | null
-          status?: string | null
-          total_sales?: number | null
-          user_id?: string | null
-        }
-        Update: {
-          closed_at?: string | null
-          final_amount?: number | null
-          id?: string
-          initial_amount?: number
-          opened_at?: string | null
-          status?: string | null
-          total_sales?: number | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cash_register_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       order_items: {
         Row: {
           id: string
@@ -143,7 +67,6 @@ export type Database = {
           amount_paid: number | null
           created_at: string
           id: string
-          is_printed: boolean | null
           payment_method: string | null
           status: string
           table_name: string
@@ -155,7 +78,6 @@ export type Database = {
           amount_paid?: number | null
           created_at?: string
           id?: string
-          is_printed?: boolean | null
           payment_method?: string | null
           status?: string
           table_name: string
@@ -167,7 +89,6 @@ export type Database = {
           amount_paid?: number | null
           created_at?: string
           id?: string
-          is_printed?: boolean | null
           payment_method?: string | null
           status?: string
           table_name?: string
@@ -185,8 +106,6 @@ export type Database = {
           id: string
           name: string
           price: number
-          stock_quantity: number | null
-          unit: string | null
         }
         Insert: {
           active?: boolean
@@ -195,8 +114,6 @@ export type Database = {
           id?: string
           name: string
           price: number
-          stock_quantity?: number | null
-          unit?: string | null
         }
         Update: {
           active?: boolean
@@ -205,32 +122,6 @@ export type Database = {
           id?: string
           name?: string
           price?: number
-          stock_quantity?: number | null
-          unit?: string | null
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          created_at: string | null
-          id: string
-          name: string
-          pin: string | null
-          role: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          name: string
-          pin?: string | null
-          role: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          name?: string
-          pin?: string | null
-          role?: string
         }
         Relationships: []
       }
@@ -257,41 +148,6 @@ export type Database = {
           value?: string
         }
         Relationships: []
-      }
-      stock_movements: {
-        Row: {
-          created_at: string | null
-          id: string
-          product_id: string | null
-          quantity: number
-          reason: string | null
-          type: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          product_id?: string | null
-          quantity: number
-          reason?: string | null
-          type: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          product_id?: string | null
-          quantity?: number
-          reason?: string | null
-          type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stock_movements_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Views: {

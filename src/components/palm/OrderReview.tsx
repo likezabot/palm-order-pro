@@ -65,13 +65,7 @@ const OrderReview = ({
         // Create new order
         const { data: order, error: orderError } = await supabase
           .from("orders")
-          .insert({ 
-            table_name: tableName, 
-            waiter_name: waiterName, 
-            total, 
-            status: "new",
-            is_printed: false 
-          })
+          .insert({ table_name: tableName, waiter_name: waiterName, total, status: "new" })
           .select()
           .single();
 
@@ -89,27 +83,6 @@ const OrderReview = ({
 
         const { error: itemsError } = await supabase.from("order_items").insert(items);
         if (itemsError) throw itemsError;
-
-        // Decrementar estoque automaticamente
-        for (const item of cart) {
-          if (item.product.id) {
-            const currentStock = item.product.stock_quantity || 0;
-            const newStock = Math.max(0, currentStock - item.quantity);
-            
-            await supabase
-              .from("products")
-              .update({ stock_quantity: newStock })
-              .eq("id", item.product.id);
-            
-            // Registrar movimento de saída
-            await supabase.from("stock_movements").insert({
-              product_id: item.product.id,
-              quantity: -item.quantity,
-              type: 'out',
-              reason: `Venda - Mesa ${tableName}`,
-            });
-          }
-        }
 
         playFeedback("success");
         onSuccess(newSenha);
