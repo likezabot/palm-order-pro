@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Monitor, DollarSign, Settings } from "lucide-react";
+import { Smartphone, Monitor, DollarSign, Settings, Download, Share } from "lucide-react";
 import { useFeedback } from "@/hooks/use-feedback";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", icon: Smartphone, path: "/palm", emoji: "📱" },
@@ -13,6 +14,7 @@ const modes = [
 const Index = () => {
   const navigate = useNavigate();
   const { playFeedback } = useFeedback();
+  const { install, canPrompt, isIOS, showInstallBanner } = usePwaInstall();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
@@ -22,6 +24,38 @@ const Index = () => {
         </h1>
         <p className="text-lg font-semibold text-muted-foreground">ESPETARIA</p>
       </div>
+
+      {showInstallBanner && (
+        <div className="w-full max-w-sm rounded-lg border border-primary/30 bg-primary/10 p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <Download className="h-6 w-6 text-primary shrink-0" />
+            <div>
+              <p className="font-semibold text-card-foreground text-sm">
+                Instale o App
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Acesse mais rápido direto da tela inicial
+              </p>
+            </div>
+          </div>
+          {canPrompt ? (
+            <button
+              onClick={async () => {
+                playFeedback("click");
+                await install();
+              }}
+              className="w-full rounded-lg bg-primary py-3 text-sm font-bold text-primary-foreground active:scale-[0.97] transition-transform"
+            >
+              INSTALAR AGORA
+            </button>
+          ) : isIOS ? (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              Toque em <Share className="h-4 w-4 inline" /> e depois em{" "}
+              <strong>"Adicionar à Tela de Início"</strong>
+            </p>
+          ) : null}
+        </div>
+      )}
 
       <div className="flex w-full max-w-sm flex-col gap-4">
         {modes.map((mode) => (
