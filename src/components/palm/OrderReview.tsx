@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   tableName: string;
+  waiterName: string;
   cart: CartItem[];
   total: number;
   onBack: () => void;
@@ -17,7 +18,7 @@ interface Props {
 }
 
 const OrderReview = ({
-  tableName, cart, total, onBack,
+  tableName, waiterName, cart, total, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess,
 }: Props) => {
   const [sending, setSending] = useState(false);
@@ -31,7 +32,7 @@ const OrderReview = ({
       // Create order
       const { data: order, error: orderError } = await supabase
         .from("orders")
-        .insert({ table_name: tableName, total, status: "new" })
+        .insert({ table_name: tableName, waiter_name: waiterName, total, status: "new" })
         .select()
         .single();
 
@@ -51,8 +52,8 @@ const OrderReview = ({
       const { error: itemsError } = await supabase.from("order_items").insert(items);
       if (itemsError) throw itemsError;
 
-      // Print receipt
-      printReceipt(tableName, cart, total);
+      // No longer printing from phone.
+      // Print will be handled by the Print Station.
 
       onSuccess();
     } catch (err) {

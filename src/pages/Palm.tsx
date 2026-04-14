@@ -54,6 +54,7 @@ const Palm = () => {
   const resetOrder = () => {
     setCart([]);
     setTableName("");
+    setWaiterName("");
     setStep("table");
   };
 
@@ -65,6 +66,7 @@ const Palm = () => {
     return (
       <OrderReview
         tableName={tableName}
+        waiterName={waiterName}
         cart={cart}
         total={total}
         onBack={() => setStep("menu")}
@@ -93,6 +95,8 @@ const Palm = () => {
     <TableSelect
       tableName={tableName}
       setTableName={setTableName}
+      waiterName={waiterName}
+      setWaiterName={setWaiterName}
       onStart={() => setStep("menu")}
     />
   );
