@@ -49,6 +49,19 @@ const OrderReview = ({
         const { error: itemsError } = await supabase.from("order_items").insert(items);
         if (itemsError) throw itemsError;
       } else {
+        // Count today's balcão orders for senha
+        let newSenha = senha || "";
+        if (tableName === "BALCÃO" && !existingOrderId) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const { count } = await supabase
+            .from("orders")
+            .select("id", { count: "exact", head: true })
+            .eq("table_name", "BALCÃO")
+            .gte("created_at", today.toISOString());
+          newSenha = `#${((count || 0) + 1).toString().padStart(3, "0")}`;
+        }
+
         // Create new order
         const { data: order, error: orderError } = await supabase
           .from("orders")
@@ -70,10 +83,14 @@ const OrderReview = ({
 
         const { error: itemsError } = await supabase.from("order_items").insert(items);
         if (itemsError) throw itemsError;
+
+        playFeedback("success");
+        onSuccess(newSenha);
+        return;
       }
 
       playFeedback("success");
-      onSuccess();
+      onSuccess(senha || "");
     } catch (err) {
       console.error(err);
       playFeedback("error");
@@ -98,7 +115,9 @@ const OrderReview = ({
         >
           <ArrowLeft size={20} /> Voltar ao cardápio
         </button>
-        <h2 className="mt-2 text-xl font-bold">Mesa: {tableName}</h2>
+        <h2 className="mt-2 text-xl font-bold">
+          {tableName === "BALCÃO" ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
+        </h2>
       </div>
 
       <div className="flex flex-col gap-3 p-3">
