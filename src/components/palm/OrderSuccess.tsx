@@ -3,11 +3,12 @@ import { CheckCircle } from "lucide-react";
 
 interface Props {
   onReset: () => void;
+  senha?: string;
 }
 
-const OrderSuccess = ({ onReset }: Props) => {
+const OrderSuccess = ({ onReset, senha }: Props) => {
   useEffect(() => {
-    const timer = setTimeout(onReset, 2000);
+    const timer = setTimeout(onReset, 3000);
     return () => clearTimeout(timer);
   }, [onReset]);
 
@@ -18,6 +19,9 @@ const OrderSuccess = ({ onReset }: Props) => {
       </div>
       <div className="space-y-2">
         <h1 className="text-4xl font-black text-white tracking-tighter">PEDIDO ENVIADO! ✅</h1>
+        {senha && (
+          <p className="text-6xl font-black text-white mt-4">{senha}</p>
+        )}
         <p className="text-success-foreground font-bold text-lg opacity-80">
           Tudo certo! Voltando ao início...
         </p>

@@ -61,7 +61,18 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     };
   }, [queryClient]);
 
-  const balcaoOrders = activeOrders?.filter((o) => o.table_name === "BALCÃO") || [];
+  const balcaoOrders = (activeOrders?.filter((o) => o.table_name === "BALCÃO") || [])
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const getSenha = (order: typeof balcaoOrders[0]) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const allTodayBalcao = (activeOrders || [])
+      .filter((o) => o.table_name === "BALCÃO" && new Date(o.created_at) >= today)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const idx = allTodayBalcao.findIndex((o) => o.id === order.id);
+    return `#${(idx + 1).toString().padStart(3, "0")}`;
+  };
 
   const handleTableClick = (tableName: string, orderId?: string) => {
     playFeedback("click");
@@ -204,6 +215,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                       onClick={() => handleTableClick("BALCÃO", order.id)}
                       className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 min-w-[100px] transition-all active:scale-95 hover:border-primary/50"
                     >
+                      <span className="text-lg font-black text-primary">{getSenha(order)}</span>
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Clock size={12} />
                         <span className="text-xs font-bold">{formatTime(order.created_at)}</span>
