@@ -134,11 +134,18 @@ const PrintStation = () => {
 
           <CardContent className="p-0">
             {/* Aviso de Configuração */}
-            <div className="bg-amber-50 border-b border-amber-100 p-4 flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-              <p className="text-sm font-semibold text-amber-800">
-                Atenção: Configure sua impressora térmica como <span className="underline">padrão</span> no Windows para a impressão automática funcionar corretamente.
-              </p>
+            <div className="bg-amber-50 border-b border-amber-100 p-4 flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                <p className="text-sm font-semibold text-amber-800">
+                  Atenção: Configure sua impressora térmica como <span className="underline">padrão</span> no Windows para a impressão automática funcionar corretamente.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 ml-8">
+                <p className="text-xs font-medium text-amber-700">
+                  ⚠️ Certifique-se de <span className="font-bold">permitir pop-ups</span> neste site para a impressão abrir automaticamente.
+                </p>
+              </div>
             </div>
 
             <div className="p-6">
