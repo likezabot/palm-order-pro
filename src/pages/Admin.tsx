@@ -8,7 +8,7 @@ import ProductForm from "@/components/admin/ProductForm";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { printReceipt } from "@/lib/print-receipt";
 
@@ -102,6 +102,9 @@ const Admin = () => {
                   <Settings className="w-5 h-5" />
                   Configurações de Impressão
                 </DialogTitle>
+                <DialogDescription>
+                  Configure como o sistema lida com as impressões de pedidos.
+                </DialogDescription>
               </DialogHeader>
               
               <div className="space-y-6 pt-4">
