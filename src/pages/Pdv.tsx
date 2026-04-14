@@ -11,24 +11,21 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useFeedback } from "@/hooks/use-feedback";
 
 const PAYMENT_METHODS = [
-  { key: "cash", label: "💵 DINHEIRO" },
-  { key: "pix", label: "📱 PIX" },
-  { key: "card", label: "💳 CARTÃO" },
+...
 ] as const;
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
-  new: { label: "NOVO", color: "bg-primary text-primary-foreground", next: "preparing", nextLabel: "▶ PREPARAR" },
-  preparing: { label: "PREPARO", color: "bg-warning text-warning-foreground", next: "done", nextLabel: "✅ PRONTO" },
-  done: { label: "PRONTO", color: "bg-success text-success-foreground" },
-  paid: { label: "PAGO", color: "bg-muted text-muted-foreground" },
+...
 };
 
 const Pdv = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { playFeedback } = useFeedback();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("pdv_autoprint") !== "false");
   const [showPayment, setShowPayment] = useState(false);
