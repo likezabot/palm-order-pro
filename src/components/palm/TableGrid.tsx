@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFeedback } from "@/hooks/use-feedback";
-import { UserCircle, RefreshCw, Loader2, ArrowLeft } from "lucide-react";
+import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -12,7 +12,7 @@ interface TableGridProps {
   onSetWaiter: (name: string) => void;
 }
 
-const TABLES = ["BALCÃO", ...Array.from({ length: 20 }, (_, i) => (i + 1).toString())];
+const TABLES = Array.from({ length: 10 }, (_, i) => (i + 1).toString());
 
 export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridProps) => {
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("table_name, status, total, waiter_name")
+        .select("id, table_name, status, total, waiter_name, created_at")
         .in("status", ["new", "preparing", "done"]);
       
       if (error) throw error;
@@ -52,9 +52,16 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     };
   }, [queryClient]);
 
+  const balcaoOrders = activeOrders?.filter((o) => o.table_name === "BALCÃO") || [];
+
   const handleTableClick = (tableName: string) => {
     playFeedback("click");
     onSelectTable(tableName);
+  };
+
+  const handleNewBalcao = () => {
+    playFeedback("click");
+    onSelectTable("BALCÃO");
   };
 
   const handleSaveWaiter = () => {
@@ -62,6 +69,33 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
       onSetWaiter(tempWaiterName.trim());
       setEditingWaiter(false);
       playFeedback("success");
+    }
+  };
+
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatCurrency = (value: number | null) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value || 0);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "new":
+        return { label: "Novo", cls: "bg-blue-500/20 text-blue-400" };
+      case "preparing":
+        return { label: "Preparo", cls: "bg-red-500/20 text-red-400" };
+      case "done":
+        return { label: "Pronto", cls: "bg-amber-500/20 text-amber-400" };
+      default:
+        return { label: status, cls: "bg-muted text-muted-foreground" };
     }
   };
 
@@ -98,8 +132,8 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 
   return (
     <div className="flex min-h-screen flex-col bg-background p-4 pb-10">
-      {/* Header / Waiter Info */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
         <button
           onClick={() => {
             playFeedback("click");
@@ -130,62 +164,109 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
         </div>
       </div>
 
-      <h2 className="text-xl font-bold mb-4 px-1">MESAS</h2>
-
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-primary" size={32} />
         </div>
       ) : (
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {TABLES.map((table) => {
-            const order = activeOrders?.find((o) => o.table_name === table);
-            const isOccupied = !!order;
-            const isWaitingPayment = order?.status === "done";
-            
-            let statusColor = "bg-emerald-500/20 border-emerald-500 text-emerald-500";
-            let pulseClass = "";
-            let pulseColor = "";
+        <>
+          {/* ── BALCÃO Section ── */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Store size={18} className="text-primary" />
+              <h2 className="text-lg font-bold">BALCÃO</h2>
+            </div>
 
-            if (isWaitingPayment) {
-              statusColor = "bg-amber-500/20 border-amber-500 text-amber-500";
-              pulseClass = "animate-pulse-active ring-2 ring-amber-500/50";
-              pulseColor = "rgba(245, 158, 11, 0.4)";
-            } else if (isOccupied) {
-              statusColor = "bg-red-500/20 border-red-500 text-red-500";
-              pulseClass = "animate-pulse-active ring-2 ring-red-500/50";
-              pulseColor = "rgba(239, 68, 68, 0.4)";
-            }
+            <button
+              onClick={handleNewBalcao}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/50 bg-primary/10 p-4 text-primary font-bold transition-all active:scale-[0.98] hover:bg-primary/20 mb-3"
+            >
+              <Plus size={20} />
+              NOVO PEDIDO
+            </button>
 
-            return (
-              <button
-                key={table}
-                onClick={() => handleTableClick(table)}
-                style={{ "--pulse-color": pulseColor } as any}
-                className={`
-                  relative aspect-square flex flex-col items-center justify-center rounded-2xl border-[3px] transition-all active:scale-95
-                  ${statusColor} ${pulseClass}
-                  ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
-                `}
-              >
-                <span className="text-2xl font-black">{table}</span>
-                {isOccupied && (
-                  <div className="mt-1 flex flex-col items-center">
-                    <span className="text-[10px] font-bold opacity-80 uppercase truncate w-full text-center px-1">
-                      {order.waiter_name || "---"}
-                    </span>
-                    <span className="text-xs font-bold">
-                      {new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }).format(order.total)}
-                    </span>
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+            {balcaoOrders.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+                {balcaoOrders.map((order) => {
+                  const badge = getStatusBadge(order.status);
+                  return (
+                    <button
+                      key={order.id}
+                      onClick={() => handleTableClick("BALCÃO")}
+                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 min-w-[100px] transition-all active:scale-95 hover:border-primary/50"
+                    >
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Clock size={12} />
+                        <span className="text-xs font-bold">{formatTime(order.created_at)}</span>
+                      </div>
+                      <span className="text-sm font-black text-foreground">
+                        {formatCurrency(order.total)}
+                      </span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                      {order.waiter_name && (
+                        <span className="text-[10px] text-muted-foreground truncate w-full">
+                          {order.waiter_name}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── MESAS Section ── */}
+          <h2 className="text-lg font-bold mb-3 px-1">MESAS</h2>
+
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {TABLES.map((table) => {
+              const order = activeOrders?.find((o) => o.table_name === table);
+              const isOccupied = !!order;
+              const isWaitingPayment = order?.status === "done";
+              
+              let statusColor = "bg-emerald-500/20 border-emerald-500 text-emerald-500";
+              let pulseClass = "";
+              let pulseColor = "";
+
+              if (isWaitingPayment) {
+                statusColor = "bg-amber-500/20 border-amber-500 text-amber-500";
+                pulseClass = "animate-pulse-active ring-2 ring-amber-500/50";
+                pulseColor = "rgba(245, 158, 11, 0.4)";
+              } else if (isOccupied) {
+                statusColor = "bg-red-500/20 border-red-500 text-red-500";
+                pulseClass = "animate-pulse-active ring-2 ring-red-500/50";
+                pulseColor = "rgba(239, 68, 68, 0.4)";
+              }
+
+              return (
+                <button
+                  key={table}
+                  onClick={() => handleTableClick(table)}
+                  style={{ "--pulse-color": pulseColor } as any}
+                  className={`
+                    relative aspect-square flex flex-col items-center justify-center rounded-2xl border-[3px] transition-all active:scale-95
+                    ${statusColor} ${pulseClass}
+                    ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
+                  `}
+                >
+                  <span className="text-2xl font-black">{table}</span>
+                  {isOccupied && (
+                    <div className="mt-1 flex flex-col items-center">
+                      <span className="text-[10px] font-bold opacity-80 uppercase truncate w-full text-center px-1">
+                        {order.waiter_name || "---"}
+                      </span>
+                      <span className="text-xs font-bold">
+                        {formatCurrency(order.total)}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
