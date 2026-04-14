@@ -269,8 +269,12 @@ const Admin = () => {
                 <p className="font-bold text-base text-white truncate">{product.name}</p>
                 {product.stock_quantity !== undefined && (
                   <Badge 
-                    variant={product.stock_quantity === 0 ? "destructive" : product.stock_quantity < 10 ? "warning" : "secondary"}
-                    className="text-[10px] font-black uppercase tracking-tighter h-5 px-1.5"
+                    variant={product.stock_quantity === 0 ? "destructive" : "secondary"}
+                    className={`text-[10px] font-black uppercase tracking-tighter h-5 px-1.5 ${
+                      product.stock_quantity !== undefined && product.stock_quantity < 10 && product.stock_quantity > 0 
+                        ? "bg-amber-500 text-white" 
+                        : ""
+                    }`}
                   >
                     {product.stock_quantity === 0 ? "ESGOTADO" : `${product.stock_quantity} ${product.unit || 'un'}`}
                   </Badge>
