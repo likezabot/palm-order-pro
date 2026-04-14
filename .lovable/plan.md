@@ -1,81 +1,56 @@
+# Plano: Balcão Multi-Pedido + Reduzir para 10 Mesas
 
+## Problemas
 
-# Plano: Garçom Persistente + PDV Desktop Unificado
+1. **Balcão** é tratado como mesa única — só mostra 1 pedido. Na prática, o balcão tem vários pedidos simultâneos (cada cliente é um pedido separado).
+2. **20 mesas** no grid, mas o restaurante tem no máximo **10**.
+3. O ADM não tem acesso a edições de mesas como aumentar ou diminuir ou editar pedidos 
 
-## Resumo
+## Solução
 
-Duas melhorias principais: (1) garçom não digita nome toda hora — identificação persistente com localStorage, e (2) novo modo PDV Desktop que unifica pedidos em tempo real, impressão e caixa numa tela só.
+### 1. Reduzir mesas para 10
 
-## 1. Identificação Persistente do Garçom
+- Alterar `TABLES` de `length: 20` para `length: 10` em `TableGrid.tsx`.
 
-**Problema**: O garçom já tem `localStorage` salvando o nome (Palm.tsx linha 13), mas a tela de TableSelect ainda exibe o campo de nome toda vez e exige preenchimento.
+### 2. Balcão como seção separada
 
-**Solução**: Modificar `TableSelect.tsx` e `Palm.tsx`:
-- Se `waiterName` já está salvo no localStorage, **pular o campo de nome** e mostrar um banner no topo: `"Atendendo como: João"` + botão pequeno `"Trocar"`
-- O campo de nome do garçom só aparece se não houver nome salvo, ou se o usuário clicar "Trocar"
-- Manter o campo "Mesa / Nome do Cliente" + teclado numérico sempre visíveis
+Em vez de ser um quadrado no grid, o **BALCÃO** vira uma seção própria no topo com comportamento diferente:
 
-**Arquivos alterados**: `src/components/palm/TableSelect.tsx`, `src/pages/Palm.tsx`
-
-## 2. Novo Modo PDV Desktop (`/pdv`)
-
-Criar uma página unificada para o PC do estabelecimento que combina: fila de pedidos em tempo real + impressão + fechamento de caixa.
-
-**Layout** (tela dividida em 2 painéis):
+- **Botão grande "NOVO PEDIDO BALCÃO"** — cria pedido avulso no balcão (cada toque = pedido novo, identificado como `BALCÃO #1`, `BALCÃO #2`, etc., ou sequencial por horário).
+- **Lista horizontal** dos pedidos ativos do balcão abaixo do botão — cards compactos mostrando:
+  - Horário de abertura (ex: "14:32")
+  - Valor total
+  - Status (badge colorido)
+- Ao tocar num pedido existente do balcão → vai para o menu (adicionar itens).
 
 ```text
-┌──────────────────────────────┬─────────────────────────┐
-│ FILA DE PEDIDOS              │ DETALHES DO PEDIDO      │
-│                              │                         │
-│ [Mesa 5 — João — 10:32] NEW  │ Mesa: 5                 │
-│ [Mesa 2 — Ana — 10:28] PREP  │ Garçom: João            │
-│ [Mesa 8 — Carlos — 10:15] OK │ Horário: 10:32          │
-│                              │ ─────────────────────── │
-│                              │ 2x Bovino      R$20,00  │
-│                              │ 1x Skol 600ml  R$10,00  │
-│                              │   OBS: gelada           │
-│                              │ ─────────────────────── │
-│                              │ TOTAL:         R$30,00  │
-│                              │                         │
-│                              │ [🖨️ IMPRIMIR]           │
-│                              │ [▶ PREPARAR / ✅ PRONTO]│
-│                              │ [💰 FECHAR CONTA]       │
-│ ─────────────────────────────│                         │
-│ 🖨️ Auto-print: [ON/OFF]     │                         │
-│ Status: ONLINE ●             │                         │
-└──────────────────────────────┴─────────────────────────┘
+┌─────────────────────────────────┐
+│  🏪 BALCÃO                      │
+│  [+ NOVO PEDIDO]                │
+│  ┌──────┐ ┌──────┐ ┌──────┐    │
+│  │14:32 │ │14:45 │ │15:01 │    │  ← scroll horizontal
+│  │R$25  │ │R$18  │ │R$42  │    │
+│  └──────┘ └──────┘ └──────┘    │
+├─────────────────────────────────┤
+│  MESAS                          │
+│  [1] [2] [3]                    │
+│  [4] [5] [6]                    │
+│  [7] [8] [9] [10]              │
+└─────────────────────────────────┘
 ```
 
-**Funcionalidades**:
-- **Lista de pedidos** à esquerda com Realtime (mesma lógica do Kitchen + PrintStation)
-- **Painel de detalhes** à direita ao clicar num pedido: itens, total, observações, horário, garçom
-- **Botão IMPRIMIR**: abre `window.print()` com cupom formatado (reutiliza `printReceipt`)
-- **Botão de status**: muda pedido entre `new → preparing → done` (mesma lógica do Kitchen)
-- **Botão FECHAR CONTA**: abre fluxo de pagamento inline (Dinheiro/PIX/Cartão + troco automático — reutiliza lógica do `CloseOrder`)
-- **Toggle auto-print**: imprime automaticamente novos pedidos (mesma lógica do PrintStation)
-- **Status online/offline** do Realtime
-- **Som de alerta** ao chegar pedido novo
-- Badge colorido por status: laranja=novo, amarelo=preparo, verde=pronto
+### 3. Identificação dos pedidos de balcão
 
-**Arquivo criado**: `src/pages/Pdv.tsx`
+- `table_name` no banco será `"BALCÃO"` para todos (sem mudar schema).
+- Cada pedido é diferenciado pelo `id` e `created_at`.
+- No grid, ao clicar "NOVO PEDIDO", o Palm vai direto para o menu com `tableName = "BALCÃO"`.
+- Ao clicar num pedido existente, o sistema carrega aquele pedido específico para edição.
+- &nbsp;
 
-## 3. Atualizar Navegação
+## Arquivos a modificar
 
-**`src/pages/Index.tsx`**: Adicionar botão "PDV / IMPRESSÃO" com ícone de Monitor + Printer (rota `/pdv`)
 
-**`src/App.tsx`**: Adicionar rota `/pdv` → componente `Pdv`
-
-## 4. Sem Alterações no Banco
-
-Todas as tabelas e colunas necessárias já existem (`orders`, `order_items`, `waiter_name`). Realtime já está ativo na tabela `orders`. Sem migrações necessárias.
-
-## Arquivos alterados/criados
-
-| Arquivo | Ação |
-|---|---|
-| `src/components/palm/TableSelect.tsx` | Modificar — identificação persistente |
-| `src/pages/Palm.tsx` | Modificar — lógica de "trocar garçom" |
-| `src/pages/Pdv.tsx` | **Criar** — tela PDV desktop unificada |
-| `src/pages/Index.tsx` | Modificar — adicionar botão PDV |
-| `src/App.tsx` | Modificar — adicionar rota /pdv |
-
+| Arquivo                             | Mudança                                                                                 |
+| ----------------------------------- | --------------------------------------------------------------------------------------- |
+| `src/components/palm/TableGrid.tsx` | Seção Balcão separada com lista de pedidos ativos + botão novo; mesas reduzidas para 10 |
+| `src/pages/Palm.tsx`                | Sem alteração significativa (fluxo já funciona)                                         |
