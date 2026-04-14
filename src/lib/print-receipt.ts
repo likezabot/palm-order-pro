@@ -1,3 +1,38 @@
+export function printSenha(senha: string, items: { product_name: string; quantity: number }[]) {
+  const now = new Date();
+  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  const itemsHtml = items
+    .map((i) => `<div style="font-size:16px">${i.quantity}x ${i.product_name}</div>`)
+    .join("");
+
+  const html = `
+    <html><head><title>Senha</title>
+    <style>
+      body { font-family: monospace; width: 300px; margin: 0 auto; padding: 12px; font-size: 14px; }
+      .center { text-align: center; }
+      .bold { font-weight: bold; }
+      .divider { border-top: 1px dashed #000; margin: 8px 0; }
+      .senha { font-size: 64px; font-weight: 900; text-align: center; margin: 8px 0; }
+    </style></head><body>
+      <div class="center bold">PLANO B ESPETARIA</div>
+      <div class="center">BALCÃO — ${time}</div>
+      <div class="senha">${senha}</div>
+      <div class="divider"></div>
+      ${itemsHtml}
+      <div class="divider"></div>
+      <div class="center" style="font-size:12px">Aguarde sua senha ser chamada</div>
+    </body></html>
+  `;
+
+  const win = window.open("", "_blank", "width=350,height=400");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 500);
+  }
+}
+
 export function printReceipt(
   tableName: string,
   waiterName: string,
@@ -45,10 +80,8 @@ export function printReceipt(
   if (win) {
     win.document.write(html);
     win.document.close();
-    // Give it a small delay to ensure content is loaded before printing
     setTimeout(() => {
       win.print();
-      // win.close(); // Not closing automatically to allow user to see what was printed if needed
     }, 500);
   }
 }

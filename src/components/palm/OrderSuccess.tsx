@@ -1,14 +1,31 @@
-import { useEffect } from "react";
-import { CheckCircle } from "lucide-react";
+import { useEffect, useCallback } from "react";
+import { CheckCircle, Printer } from "lucide-react";
+import { printSenha } from "@/lib/print-receipt";
+import { CartItem } from "@/lib/types";
 
 interface Props {
   onReset: () => void;
   senha?: string;
+  cart?: CartItem[];
 }
 
-const OrderSuccess = ({ onReset, senha }: Props) => {
+const OrderSuccess = ({ onReset, senha, cart }: Props) => {
+  const handlePrint = useCallback(() => {
+    if (!senha) return;
+    const items = (cart || []).map((i) => ({
+      product_name: i.product.name,
+      quantity: i.quantity,
+    }));
+    printSenha(senha, items);
+  }, [senha, cart]);
+
   useEffect(() => {
-    const timer = setTimeout(onReset, 3000);
+    // Auto-print senha for counter orders
+    if (senha) handlePrint();
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(onReset, 4000);
     return () => clearTimeout(timer);
   }, [onReset]);
 
@@ -20,7 +37,15 @@ const OrderSuccess = ({ onReset, senha }: Props) => {
       <div className="space-y-2">
         <h1 className="text-4xl font-black text-white tracking-tighter">PEDIDO ENVIADO! ✅</h1>
         {senha && (
-          <p className="text-6xl font-black text-white mt-4">{senha}</p>
+          <>
+            <p className="text-6xl font-black text-white mt-4">{senha}</p>
+            <button
+              onClick={handlePrint}
+              className="mt-4 flex items-center gap-2 mx-auto rounded-lg bg-white/20 px-6 py-3 text-white font-bold text-lg active:scale-95 transition-transform"
+            >
+              <Printer size={22} /> IMPRIMIR SENHA
+            </button>
+          </>
         )}
         <p className="text-success-foreground font-bold text-lg opacity-80">
           Tudo certo! Voltando ao início...
