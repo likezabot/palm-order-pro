@@ -1,7 +1,7 @@
 /**
  * Sistema de Impressão Térmica — Plano B Espetaria
  * Suporta impressoras 58mm e 80mm
- * Usa popup window isolada para impressão limpa
+ * Usa iframe oculto para impressão limpa (sem popup about:blank)
  */
 
 type PaperWidth = "58mm" | "80mm";
@@ -22,42 +22,50 @@ function getContentWidth(paper: PaperWidth): string {
 
 function buildBaseCSS(paper: PaperWidth): string {
   const contentW = getContentWidth(paper);
+  const fontSize = paper === "58mm" ? "11px" : "13px";
   return `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       width: ${paper};
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
       margin: 0;
       padding: 0;
       font-family: 'Courier New', Courier, monospace;
-      font-size: ${paper === "58mm" ? "11px" : "13px"};
+      font-size: ${fontSize};
       color: #000;
       background: #fff;
-      overflow: hidden;
+      overflow: hidden !important;
     }
     @page {
       size: ${paper} auto;
-      margin: 0;
+      margin: 0mm !important;
     }
     @media print {
       html, body {
-        width: ${paper};
-        height: auto;
-        overflow: hidden;
+        width: ${paper} !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
       }
+      /* Remove headers/footers in print */
+      @page { margin: 0mm !important; }
     }
     .receipt {
       width: ${contentW};
       margin: 0 auto;
-      padding-top: 2mm;
-      padding-bottom: 0;
-      page-break-inside: avoid;
+      padding: 2mm 0 1mm 0;
     }
     .center { text-align: center; }
     .bold { font-weight: bold; }
     .separator {
       border: none;
       border-top: 1px dashed #000;
-      margin: 4px 0;
+      margin: 3px 0;
     }
     .row {
       display: table;
@@ -99,70 +107,69 @@ function buildBaseCSS(paper: PaperWidth): string {
     .footer {
       font-size: ${paper === "58mm" ? "8px" : "10px"};
       text-align: center;
-      margin-top: 6px;
+      margin-top: 4px;
       color: #555;
-    }
-    .cut-line {
-      margin-top: 2px;
-      border-top: 1px dashed #000;
     }
   `;
 }
 
-function doPrint(html: string) {
-  const win = window.open("", "_blank", "width=400,height=600,menubar=no,toolbar=no,location=no,status=no");
-  if (!win) {
-    // Fallback: se popup for bloqueada, usar iframe
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-    document.body.appendChild(iframe);
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-    doc.open();
-    doc.write(html);
-    doc.close();
-    iframe.onload = () => {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-      setTimeout(() => document.body.removeChild(iframe), 2000);
-    };
+/**
+ * Imprime usando iframe oculto.
+ * Não abre popup, não cria janela about:blank.
+ * O diálogo de impressão do navegador vai aparecer (limitação web).
+ */
+function doPrint(html: string): void {
+  // Remove iframe anterior se existir
+  const existingFrame = document.getElementById("__thermal_print_frame");
+  if (existingFrame) existingFrame.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "__thermal_print_frame";
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!doc) {
+    console.error("[print] Não foi possível acessar o documento do iframe");
+    iframe.remove();
     return;
   }
 
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
+  doc.open();
+  doc.write(html);
+  doc.close();
 
-  // Aguardar carregamento e imprimir automaticamente
-  win.onload = () => {
-    win.focus();
-    win.print();
-    // Fechar a janela após a impressão
-    win.onafterprint = () => win.close();
-    // Fallback: fechar após 5s caso onafterprint não funcione
+  // Aguardar renderização e chamar print UMA vez
+  setTimeout(() => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch (e) {
+      console.error("[print] Erro ao imprimir:", e);
+    }
+    // Limpar iframe após impressão
     setTimeout(() => {
-      try { win.close(); } catch {}
-    }, 5000);
-  };
+      try { iframe.remove(); } catch {}
+    }, 3000);
+  }, 300);
 }
 
 // ============================================================
-// IMPRESSÃO DA SENHA (BALCÃO)
+// GERAÇÃO DE HTML (separada da impressão)
 // ============================================================
 
-export function printSenha(
+export function buildSenhaHtml(
   senha: string,
   items: { product_name: string; quantity: number }[]
-) {
+): string {
   const paper = getPaperWidth();
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const time = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   const itemsHtml = items
     .map((i) => `<div>${i.quantity}x ${i.product_name}</div>`)
     .join("");
 
-  const html = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Senha</title>
 <style>${buildBaseCSS(paper)}</style>
 </head><body>
@@ -177,20 +184,14 @@ export function printSenha(
   <div class="footer">Aguarde sua senha ser chamada</div>
 </div>
 </body></html>`;
-
-  doPrint(html);
 }
 
-// ============================================================
-// IMPRESSÃO DO CUPOM (MESA)
-// ============================================================
-
-export function printReceipt(
+export function buildReceiptHtml(
   tableName: string,
   waiterName: string,
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number
-) {
+): string {
   const paper = getPaperWidth();
   const now = new Date();
   const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -208,7 +209,7 @@ export function printReceipt(
     })
     .join("");
 
-  const html = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Cupom</title>
 <style>${buildBaseCSS(paper)}</style>
 </head><body>
@@ -230,13 +231,27 @@ export function printReceipt(
   <div class="footer">Plano B Espetaria</div>
 </div>
 </body></html>`;
-
-  doPrint(html);
 }
 
 // ============================================================
-// IMPRESSÃO DE TESTE
+// FUNÇÕES PÚBLICAS DE IMPRESSÃO
 // ============================================================
+
+export function printSenha(
+  senha: string,
+  items: { product_name: string; quantity: number }[]
+) {
+  doPrint(buildSenhaHtml(senha, items));
+}
+
+export function printReceipt(
+  tableName: string,
+  waiterName: string,
+  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  total: number
+) {
+  doPrint(buildReceiptHtml(tableName, waiterName, items, total));
+}
 
 export function printTest() {
   printReceipt(
