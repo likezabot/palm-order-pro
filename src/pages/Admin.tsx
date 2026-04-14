@@ -11,11 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { printReceipt } from "@/lib/print-receipt";
+import { useFeedback } from "@/hooks/use-feedback";
 
 const Admin = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { playFeedback } = useFeedback();
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("pdv_autoprint") !== "false");
@@ -39,18 +41,21 @@ const Admin = () => {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este produto?")) return;
+    playFeedback("heavy");
     await supabase.from("products").delete().eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
     toast({ title: "Produto excluído" });
   };
 
   const handleToggleActive = async (id: string, current: boolean) => {
+    playFeedback("click");
     const { error } = await supabase
       .from("products")
       .update({ active: !current })
       .eq("id", id);
     
     if (error) {
+      playFeedback("error");
       toast({ variant: "destructive", title: "Erro ao atualizar", description: error.message });
       return;
     }
@@ -60,11 +65,13 @@ const Admin = () => {
   };
 
   const handleEdit = (product: Product) => {
+    playFeedback("click");
     setEditing(product);
     setShowForm(true);
   };
 
   const handleSaved = () => {
+    playFeedback("success");
     setShowForm(false);
     setEditing(null);
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
@@ -74,7 +81,11 @@ const Admin = () => {
     return (
       <ProductForm
         product={editing}
-        onBack={() => { setShowForm(false); setEditing(null); }}
+        onBack={() => { 
+          playFeedback("click");
+          setShowForm(false); 
+          setEditing(null); 
+        }}
         onSaved={handleSaved}
       />
     );
@@ -84,7 +95,13 @@ const Admin = () => {
     <div className="min-h-screen flex flex-col">
       <div className="border-b border-border p-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/")} className="text-muted-foreground">
+          <button 
+            onClick={() => {
+              playFeedback("click");
+              navigate("/");
+            }} 
+            className="text-muted-foreground"
+          >
             <ArrowLeft size={24} />
           </button>
           <h1 className="text-xl font-bold">ADMIN</h1>
@@ -92,7 +109,10 @@ const Admin = () => {
         <div className="flex items-center gap-2">
           <Dialog>
             <DialogTrigger asChild>
-              <button className="p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground mr-2">
+              <button 
+                onClick={() => playFeedback("click")}
+                className="p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground mr-2"
+              >
                 <Settings size={24} />
               </button>
             </DialogTrigger>
@@ -113,7 +133,13 @@ const Admin = () => {
                     <Label className="text-base font-bold">Impressão Automática</Label>
                     <p className="text-xs text-muted-foreground">Imprime novos pedidos assim que chegam</p>
                   </div>
-                  <Switch checked={autoPrint} onCheckedChange={setAutoPrint} />
+                  <Switch 
+                    checked={autoPrint} 
+                    onCheckedChange={(val) => {
+                      playFeedback("click");
+                      setAutoPrint(val);
+                    }} 
+                  />
                 </div>
 
                 <div className="space-y-3">
@@ -154,7 +180,10 @@ const Admin = () => {
             </DialogContent>
           </Dialog>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              playFeedback("click");
+              setShowForm(true);
+            }}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-3 font-bold text-primary-foreground active:scale-95 transition-transform"
           >
             <Plus size={18} /> NOVO
