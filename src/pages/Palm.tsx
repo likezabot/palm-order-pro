@@ -10,6 +10,7 @@ type Step = "table" | "menu" | "review" | "success";
 const Palm = () => {
   const [step, setStep] = useState<Step>("table");
   const [tableName, setTableName] = useState("");
+  const [waiterName, setWaiterName] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const addToCart = (product: CartItem["product"]) => {
