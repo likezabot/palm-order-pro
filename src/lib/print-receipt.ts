@@ -175,7 +175,6 @@ export function printSenha(
   ${itemsHtml}
   <hr class="separator">
   <div class="footer">Aguarde sua senha ser chamada</div>
-  <div class="cut-line"></div>
 </div>
 </body></html>`;
 
