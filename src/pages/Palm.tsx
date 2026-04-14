@@ -10,8 +10,12 @@ type Step = "table" | "menu" | "review" | "success";
 const Palm = () => {
   const [step, setStep] = useState<Step>("table");
   const [tableName, setTableName] = useState("");
-  const [waiterName, setWaiterName] = useState("");
+  const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    localStorage.setItem("waiter_name", waiterName);
+  }, [waiterName]);
 
   const addToCart = (product: CartItem["product"]) => {
     // Haptic feedback
