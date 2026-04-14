@@ -4,6 +4,8 @@ export interface Product {
   price: number;
   category: string;
   active: boolean;
+  stock_quantity?: number;
+  unit?: string;
   created_at: string;
 }
 
