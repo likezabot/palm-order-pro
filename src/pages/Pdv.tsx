@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import { printReceipt } from "@/lib/print-receipt";
@@ -14,9 +14,9 @@ import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 
 const PAYMENT_METHODS = [
-  { key: "cash", label: "💵 DINHEIRO" },
-  { key: "pix", label: "📱 PIX" },
-  { key: "card", label: "💳 CARTÃO" },
+  { key: "cash", label: "DINHEIRO", icon: Banknote, color: "bg-emerald-500" },
+  { key: "pix", label: "PIX", icon: QrCode, color: "bg-cyan-500" },
+  { key: "card", label: "CARTÃO", icon: CreditCard, color: "bg-blue-500" },
 ] as const;
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
