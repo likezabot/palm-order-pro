@@ -59,7 +59,7 @@ const PrintStation = () => {
     }
   }, [toast, autoPrint]);
 
-  const handlePrint = async (order: Order) => {
+  const handlePrint = useCallback(async (order: Order) => {
     const { data: items, error } = await supabase
       .from("order_items")
       .select("*")
