@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
-import { printReceipt } from "@/lib/print-receipt";
+import { printReceipt, printTest, getPaperWidth, setPaperWidth } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -195,13 +195,34 @@ const Pdv = () => {
 
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
+                    Largura do Papel
+                  </h3>
+                  <div className="flex gap-2">
+                    {(["58mm", "80mm"] as const).map((w) => (
+                      <Button
+                        key={w}
+                        variant={getPaperWidth() === w ? "default" : "outline"}
+                        className="flex-1 font-bold"
+                        onClick={() => {
+                          setPaperWidth(w);
+                          toast({ title: `Papel alterado para ${w}` });
+                        }}
+                      >
+                        {w}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
                     <AlertCircle className="w-4 h-4" />
                     Como configurar impressora
                   </h3>
                   <div className="space-y-2 text-sm bg-amber-50 dark:bg-amber-950/20 p-4 rounded-lg border border-amber-100 dark:border-amber-900/50">
                     <p>1. No Windows, defina sua <strong>Impressora Térmica</strong> como <strong>Padrão</strong>.</p>
                     <p>2. Certifique-se de <strong>permitir pop-ups</strong> neste site.</p>
-                    <p>3. Nas configurações de impressão do navegador, desmarque a opção <strong>"Cabeçalhos e rodapés"</strong>.</p>
+                    <p>3. Nas configurações de impressão do navegador, desmarque <strong>"Cabeçalhos e rodapés"</strong>.</p>
                   </div>
                 </div>
 
@@ -210,12 +231,12 @@ const Pdv = () => {
                     variant="outline" 
                     className="w-full gap-2 font-bold"
                     onClick={() => {
-                      printReceipt("Mesa TESTE", "Admin", [{ product_name: "Item de Teste", quantity: 1, product_price: 10, note: "Teste de impressão" }], 10);
-                      toast({ title: "Teste enviado", description: "Verifique se o cupom abriu corretamente." });
+                      printTest();
+                      toast({ title: "Teste enviado!", description: "Verifique o cupom na impressora." });
                     }}
                   >
                     <Printer className="w-4 h-4" />
-                    TESTAR IMPRESSÃO
+                    🖨️ IMPRIMIR TESTE
                   </Button>
                   
                   <Button 
