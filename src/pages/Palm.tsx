@@ -6,6 +6,7 @@ import MenuView from "@/components/palm/MenuView";
 import OrderReview from "@/components/palm/OrderReview";
 import OrderSuccess from "@/components/palm/OrderSuccess";
 import { CartItem } from "@/lib/types";
+import { useFeedback } from "@/hooks/use-feedback";
 
 type Step = "choice" | "table" | "open_tables" | "menu" | "review" | "success";
 
@@ -14,23 +15,17 @@ const Palm = () => {
   const [tableName, setTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const { playFeedback } = useFeedback();
 
   useEffect(() => {
     localStorage.setItem("waiter_name", waiterName);
   }, [waiterName]);
 
   const addToCart = (product: CartItem["product"]) => {
-    // Haptic feedback
-    if (navigator.vibrate) navigator.vibrate(30);
+    playFeedback("click");
 
     setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
-        );
-      }
-      return [...prev, { product, quantity: 1, note: "" }];
+...
     });
   };
 
