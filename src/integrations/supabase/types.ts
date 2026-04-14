@@ -145,6 +145,7 @@ export type Database = {
           id: string
           is_printed: boolean | null
           payment_method: string | null
+          printed_at: string | null
           status: string
           table_name: string
           total: number | null
@@ -157,6 +158,7 @@ export type Database = {
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
+          printed_at?: string | null
           status?: string
           table_name: string
           total?: number | null
@@ -169,6 +171,7 @@ export type Database = {
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
+          printed_at?: string | null
           status?: string
           table_name?: string
           total?: number | null
