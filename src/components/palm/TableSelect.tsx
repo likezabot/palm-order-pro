@@ -4,10 +4,12 @@ import { useNavigate } from "react-router-dom";
 interface Props {
   tableName: string;
   setTableName: (v: string) => void;
+  waiterName: string;
+  setWaiterName: (v: string) => void;
   onStart: () => void;
 }
 
-const TableSelect = ({ tableName, setTableName, onStart }: Props) => {
+const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onStart }: Props) => {
   const navigate = useNavigate();
 
   return (
@@ -24,11 +26,18 @@ const TableSelect = ({ tableName, setTableName, onStart }: Props) => {
 
         <input
           type="text"
+          placeholder="Seu Nome (Garçom)"
+          value={waiterName}
+          onChange={(e) => setWaiterName(e.target.value)}
+          className="w-full max-w-sm rounded-lg border border-border bg-card p-4 text-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+
+        <input
+          type="text"
           placeholder="Mesa / Nome do Cliente"
           value={tableName}
           onChange={(e) => setTableName(e.target.value)}
           className="w-full max-w-sm rounded-lg border border-border bg-card p-4 text-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          autoFocus
         />
 
         <div className="grid grid-cols-3 gap-3 max-w-sm w-full">
@@ -58,7 +67,7 @@ const TableSelect = ({ tableName, setTableName, onStart }: Props) => {
 
         <button
           onClick={onStart}
-          disabled={!tableName.trim()}
+          disabled={!tableName.trim() || !waiterName.trim()}
           className="w-full max-w-sm rounded-lg bg-primary p-4 text-lg font-bold text-primary-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 min-h-[56px]"
         >
           INICIAR PEDIDO

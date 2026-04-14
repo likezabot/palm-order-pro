@@ -8,6 +8,7 @@ import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
 import Cashier from "./pages/Cashier";
 import Admin from "./pages/Admin";
+import PrintStation from "./pages/PrintStation";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/kitchen" element={<Kitchen />} />
           <Route path="/cashier" element={<Cashier />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/print-station" element={<PrintStation />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

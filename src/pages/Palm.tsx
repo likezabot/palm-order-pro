@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TableSelect from "@/components/palm/TableSelect";
 import MenuView from "@/components/palm/MenuView";
 import OrderReview from "@/components/palm/OrderReview";
@@ -10,7 +10,12 @@ type Step = "table" | "menu" | "review" | "success";
 const Palm = () => {
   const [step, setStep] = useState<Step>("table");
   const [tableName, setTableName] = useState("");
+  const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    localStorage.setItem("waiter_name", waiterName);
+  }, [waiterName]);
 
   const addToCart = (product: CartItem["product"]) => {
     // Haptic feedback
@@ -53,6 +58,7 @@ const Palm = () => {
   const resetOrder = () => {
     setCart([]);
     setTableName("");
+    setWaiterName("");
     setStep("table");
   };
 
@@ -64,6 +70,7 @@ const Palm = () => {
     return (
       <OrderReview
         tableName={tableName}
+        waiterName={waiterName}
         cart={cart}
         total={total}
         onBack={() => setStep("menu")}
@@ -92,6 +99,8 @@ const Palm = () => {
     <TableSelect
       tableName={tableName}
       setTableName={setTableName}
+      waiterName={waiterName}
+      setWaiterName={setWaiterName}
       onStart={() => setStep("menu")}
     />
   );

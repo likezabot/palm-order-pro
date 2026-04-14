@@ -17,6 +17,7 @@ export interface Order {
   id: string;
   table_name: string;
   status: string;
+  waiter_name: string | null;
   total: number | null;
   payment_method: string | null;
   amount_paid: number | null;
