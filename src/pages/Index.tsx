@@ -1,16 +1,39 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useNavigate } from "react-router-dom";
+import { Smartphone, Monitor, DollarSign, Settings } from "lucide-react";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const modes = [
+  { label: "ATENDIMENTO / PALM", icon: Smartphone, path: "/palm", emoji: "📱" },
+  { label: "PAINEL COZINHA", icon: Monitor, path: "/kitchen", emoji: "🖥️" },
+  { label: "CAIXA", icon: DollarSign, path: "/cashier", emoji: "💰" },
+  { label: "ADMIN", icon: Settings, path: "/admin", emoji: "⚙️" },
+];
+
+const Index = () => {
+  const navigate = useNavigate();
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
+      <div className="text-center mb-4">
+        <h1 className="text-3xl font-extrabold tracking-tight text-primary">
+          PLANO B
+        </h1>
+        <p className="text-lg font-semibold text-muted-foreground">ESPETARIA</p>
+      </div>
+
+      <div className="flex w-full max-w-sm flex-col gap-4">
+        {modes.map((mode) => (
+          <button
+            key={mode.path}
+            onClick={() => navigate(mode.path)}
+            className="flex items-center gap-4 rounded-lg bg-card p-5 text-left text-lg font-semibold text-card-foreground transition-all duration-150 active:scale-[0.97] hover:bg-secondary border border-border min-h-[56px]"
+          >
+            <span className="text-2xl">{mode.emoji}</span>
+            <span>{mode.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
