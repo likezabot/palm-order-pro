@@ -35,7 +35,7 @@ const TableSelect = ({ tableName, setTableName, onStart }: Props) => {
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
             <button
               key={n}
-              onClick={() => setTableName(String(n))}
+              onClick={() => setTableName(tableName + n)}
               className="rounded-lg bg-card border border-border p-4 text-xl font-semibold text-foreground active:scale-95 transition-transform duration-150"
             >
               {n}
@@ -43,12 +43,17 @@ const TableSelect = ({ tableName, setTableName, onStart }: Props) => {
           ))}
           <div />
           <button
-            onClick={() => setTableName("0")}
+            onClick={() => setTableName(tableName + "0")}
             className="rounded-lg bg-card border border-border p-4 text-xl font-semibold text-foreground active:scale-95 transition-transform duration-150"
           >
             0
           </button>
-          <div />
+          <button
+            onClick={() => setTableName(tableName.slice(0, -1))}
+            className="rounded-lg bg-card border border-border p-4 text-xl font-semibold text-foreground active:scale-95 transition-transform duration-150"
+          >
+            ⌫
+          </button>
         </div>
 
         <button
