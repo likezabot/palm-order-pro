@@ -59,7 +59,7 @@ const Palm = () => {
   const resetOrder = () => {
     setCart([]);
     setTableName("");
-    setStep("table");
+    setStep("choice");
   };
 
   if (step === "success") {
