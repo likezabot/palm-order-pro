@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Monitor, DollarSign, Settings } from "lucide-react";
+import { Smartphone, Monitor, DollarSign, Settings, Printer } from "lucide-react";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", icon: Smartphone, path: "/palm", emoji: "📱" },
-  { label: "PAINEL COZINHA", icon: Monitor, path: "/kitchen", emoji: "🖥️" },
+  { label: "PDV / IMPRESSÃO", icon: Monitor, path: "/pdv", emoji: "🖥️" },
+  { label: "PAINEL COZINHA", icon: Monitor, path: "/kitchen", emoji: "👨‍🍳" },
   { label: "CAIXA", icon: DollarSign, path: "/cashier", emoji: "💰" },
   { label: "ADMIN", icon: Settings, path: "/admin", emoji: "⚙️" },
 ];
