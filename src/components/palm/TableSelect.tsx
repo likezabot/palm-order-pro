@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, UserCircle, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
   tableName: string;
@@ -14,11 +15,15 @@ interface Props {
 const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onStart, onBack }: Props) => {
   const navigate = useNavigate();
   const [editingWaiter, setEditingWaiter] = useState(!waiterName.trim());
+  const { playFeedback } = useFeedback();
 
   return (
     <div className="flex min-h-screen flex-col p-4">
       <button
-        onClick={onBack}
+        onClick={() => {
+          playFeedback("click");
+          onBack();
+        }}
         className="flex items-center gap-2 text-muted-foreground mb-6 text-base"
       >
         <ArrowLeft size={20} /> Voltar
@@ -33,7 +38,10 @@ const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onSta
             <span className="font-bold text-foreground">{waiterName}</span>
           </div>
           <button
-            onClick={() => setEditingWaiter(true)}
+            onClick={() => {
+              playFeedback("click");
+              setEditingWaiter(true);
+            }}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
             <RefreshCw size={14} />
@@ -58,7 +66,10 @@ const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onSta
             />
             {waiterName.trim() && (
               <button
-                onClick={() => setEditingWaiter(false)}
+                onClick={() => {
+                  playFeedback("click");
+                  setEditingWaiter(false);
+                }}
                 className="w-full rounded-lg bg-secondary p-2 text-sm font-semibold text-secondary-foreground"
               >
                 Confirmar: {waiterName}
@@ -79,7 +90,10 @@ const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onSta
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
             <button
               key={n}
-              onClick={() => setTableName(tableName + n)}
+              onClick={() => {
+                playFeedback("click");
+                setTableName(tableName + n);
+              }}
               className="rounded-lg bg-card border border-border p-4 text-xl font-semibold text-foreground active:scale-95 transition-transform duration-150"
             >
               {n}
@@ -87,13 +101,19 @@ const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onSta
           ))}
           <div />
           <button
-            onClick={() => setTableName(tableName + "0")}
+            onClick={() => {
+              playFeedback("click");
+              setTableName(tableName + "0");
+            }}
             className="rounded-lg bg-card border border-border p-4 text-xl font-semibold text-foreground active:scale-95 transition-transform duration-150"
           >
             0
           </button>
           <button
-            onClick={() => setTableName(tableName.slice(0, -1))}
+            onClick={() => {
+              playFeedback("click");
+              setTableName(tableName.slice(0, -1));
+            }}
             className="rounded-lg bg-card border border-border p-4 text-xl font-semibold text-foreground active:scale-95 transition-transform duration-150"
           >
             ⌫
@@ -101,7 +121,10 @@ const TableSelect = ({ tableName, setTableName, waiterName, setWaiterName, onSta
         </div>
 
         <button
-          onClick={onStart}
+          onClick={() => {
+            playFeedback("click");
+            onStart();
+          }}
           disabled={!tableName.trim() || !waiterName.trim()}
           className="w-full max-w-sm rounded-lg bg-primary p-4 text-lg font-bold text-primary-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 min-h-[56px]"
         >
