@@ -303,5 +303,3 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 };
 
 export default TableGrid;
-
-export default TableGrid;
