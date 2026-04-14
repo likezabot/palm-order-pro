@@ -5,6 +5,7 @@ import OrderSuccess from "@/components/palm/OrderSuccess";
 import TableGrid from "@/components/palm/TableGrid";
 import { CartItem } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
+import { supabase } from "@/integrations/supabase/client";
 
 type Step = "grid" | "menu" | "review" | "success";
 
@@ -13,6 +14,7 @@ const Palm = () => {
   const [tableName, setTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
   const { playFeedback } = useFeedback();
 
   useEffect(() => {
@@ -21,7 +23,6 @@ const Palm = () => {
 
   const addToCart = (product: CartItem["product"]) => {
     playFeedback("click");
-
     setCart((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
       if (existing) {
@@ -62,11 +63,38 @@ const Palm = () => {
     playFeedback("notification");
     setCart([]);
     setTableName("");
+    setExistingOrderId(null);
     setStep("grid");
   };
 
-  const handleSelectTable = (name: string) => {
+  const handleSelectTable = async (name: string, orderId?: string) => {
     setTableName(name);
+
+    if (orderId) {
+      // Load existing order items into cart
+      const { data: items } = await supabase
+        .from("order_items")
+        .select("product_id, product_name, product_price, quantity, note")
+        .eq("order_id", orderId);
+
+      if (items && items.length > 0) {
+        const loadedCart: CartItem[] = items.map((item) => ({
+          product: {
+            id: item.product_id || item.product_name,
+            name: item.product_name,
+            price: item.product_price,
+            category: "",
+            active: true,
+            created_at: "",
+          },
+          quantity: item.quantity,
+          note: item.note || "",
+        }));
+        setCart(loadedCart);
+        setExistingOrderId(orderId);
+      }
+    }
+
     setStep("menu");
   };
 
@@ -81,6 +109,7 @@ const Palm = () => {
         waiterName={waiterName}
         cart={cart}
         total={total}
+        existingOrderId={existingOrderId}
         onBack={() => setStep("menu")}
         onUpdateQuantity={updateQuantity}
         onUpdateNote={updateNote}
@@ -102,6 +131,7 @@ const Palm = () => {
           setStep("grid");
           setTableName("");
           setCart([]);
+          setExistingOrderId(null);
         }}
       />
     );

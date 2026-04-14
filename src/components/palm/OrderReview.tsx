@@ -10,6 +10,7 @@ interface Props {
   waiterName: string;
   cart: CartItem[];
   total: number;
+  existingOrderId?: string | null;
   onBack: () => void;
   onUpdateQuantity: (productId: string, delta: number) => void;
   onUpdateNote: (productId: string, note: string) => void;
@@ -18,7 +19,7 @@ interface Props {
 }
 
 const OrderReview = ({
-  tableName, waiterName, cart, total, onBack,
+  tableName, waiterName, cart, total, existingOrderId, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess,
 }: Props) => {
   const [sending, setSending] = useState(false);
@@ -30,28 +31,45 @@ const OrderReview = ({
     setSending(true);
 
     try {
-      // Create order
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert({ table_name: tableName, waiter_name: waiterName, total, status: "new" })
-        .select()
-        .single();
+      if (existingOrderId) {
+        // Update existing order
+        await supabase.from("orders").update({ total, updated_at: new Date().toISOString() }).eq("id", existingOrderId);
+        // Delete old items and insert new ones
+        await supabase.from("order_items").delete().eq("order_id", existingOrderId);
+        const items = cart.map((item) => ({
+          order_id: existingOrderId,
+          product_id: item.product.id.length === 36 ? item.product.id : null,
+          product_name: item.product.name,
+          product_price: item.product.price,
+          quantity: item.quantity,
+          note: item.note || null,
+          subtotal: item.product.price * item.quantity,
+        }));
+        const { error: itemsError } = await supabase.from("order_items").insert(items);
+        if (itemsError) throw itemsError;
+      } else {
+        // Create new order
+        const { data: order, error: orderError } = await supabase
+          .from("orders")
+          .insert({ table_name: tableName, waiter_name: waiterName, total, status: "new" })
+          .select()
+          .single();
 
-      if (orderError || !order) throw orderError;
+        if (orderError || !order) throw orderError;
 
-      // Create order items
-      const items = cart.map((item) => ({
-        order_id: order.id,
-        product_id: item.product.id,
-        product_name: item.product.name,
-        product_price: item.product.price,
-        quantity: item.quantity,
-        note: item.note || null,
-        subtotal: item.product.price * item.quantity,
-      }));
+        const items = cart.map((item) => ({
+          order_id: order.id,
+          product_id: item.product.id,
+          product_name: item.product.name,
+          product_price: item.product.price,
+          quantity: item.quantity,
+          note: item.note || null,
+          subtotal: item.product.price * item.quantity,
+        }));
 
-      const { error: itemsError } = await supabase.from("order_items").insert(items);
-      if (itemsError) throw itemsError;
+        const { error: itemsError } = await supabase.from("order_items").insert(items);
+        if (itemsError) throw itemsError;
+      }
 
       playFeedback("success");
       onSuccess();
@@ -147,7 +165,7 @@ const OrderReview = ({
           disabled={sending || cart.length === 0}
           className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 min-h-[56px]"
         >
-          {sending ? "ENVIANDO..." : "✅ FINALIZAR PEDIDO"}
+          {sending ? "ENVIANDO..." : existingOrderId ? "✅ ATUALIZAR PEDIDO" : "✅ FINALIZAR PEDIDO"}
         </button>
       </div>
     </div>
