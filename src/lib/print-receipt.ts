@@ -213,9 +213,9 @@ export function printReceipt(
 <style>${buildBaseCSS(paper)}</style>
 </head><body>
 <div class="receipt">
-  <div class="center bold">================================</div>
+  <hr class="separator">
   <div class="center title">PLANO B ESPETARIA</div>
-  <div class="center bold">================================</div>
+  <hr class="separator">
   <div>Garçom: ${waiterName}</div>
   <div>Mesa: ${tableName}</div>
   <div>${time} — ${date}</div>
@@ -226,7 +226,7 @@ export function printReceipt(
     <span class="left">TOTAL:</span>
     <span class="right">R$${total.toFixed(2)}</span>
   </div>
-  <div class="center bold">================================</div>
+  <hr class="separator">
   <div class="footer">Plano B Espetaria</div>
 </div>
 </body></html>`;
