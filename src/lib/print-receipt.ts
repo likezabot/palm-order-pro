@@ -168,8 +168,8 @@ export function printSenha(
 </head><body>
 <div class="receipt">
   <div class="center title">PLANO B ESPETARIA</div>
-  <div class="center">BALCÃO — ${time}</div>
   <hr class="separator">
+  <div class="center">BALCÃO — ${time}</div>
   <div class="senha-num">${senha}</div>
   <hr class="separator">
   ${itemsHtml}
