@@ -128,10 +128,10 @@ const Admin = () => {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Settings className="w-5 h-5" />
-                  Configurações de Impressão
+                  Configurações
                 </DialogTitle>
                 <DialogDescription>
-                  Configure como o sistema lida com as impressões de pedidos.
+                  Configure mesas e impressão do sistema.
                 </DialogDescription>
               </DialogHeader>
               
