@@ -143,25 +143,29 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
             const isOccupied = !!order;
             const isWaitingPayment = order?.status === "done";
             
-            let statusColor = "bg-emerald-500/10 border-emerald-500/50 text-emerald-500";
+            let statusColor = "bg-emerald-500/20 border-emerald-500 text-emerald-500";
             let pulseClass = "";
+            let pulseColor = "";
 
             if (isWaitingPayment) {
               statusColor = "bg-amber-500/20 border-amber-500 text-amber-500";
               pulseClass = "animate-pulse-active ring-2 ring-amber-500/50";
+              pulseColor = "rgba(245, 158, 11, 0.4)";
             } else if (isOccupied) {
               statusColor = "bg-red-500/20 border-red-500 text-red-500";
               pulseClass = "animate-pulse-active ring-2 ring-red-500/50";
+              pulseColor = "rgba(239, 68, 68, 0.4)";
             }
 
             return (
               <button
                 key={table}
                 onClick={() => handleTableClick(table)}
+                style={{ "--pulse-color": pulseColor } as any}
                 className={`
-                  relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 transition-all active:scale-95
+                  relative aspect-square flex flex-col items-center justify-center rounded-2xl border-[3px] transition-all active:scale-95
                   ${statusColor} ${pulseClass}
-                  ${!isOccupied ? 'hover:bg-emerald-500/20 border-dashed' : 'border-solid shadow-lg'}
+                  ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
                 `}
               >
                 <span className="text-2xl font-black">{table}</span>
