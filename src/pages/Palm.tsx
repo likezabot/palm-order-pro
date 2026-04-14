@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import TableSelect from "@/components/palm/TableSelect";
+import AtendimentoChoice from "@/components/palm/AtendimentoChoice";
 import MenuView from "@/components/palm/MenuView";
 import OrderReview from "@/components/palm/OrderReview";
 import OrderSuccess from "@/components/palm/OrderSuccess";
 import { CartItem } from "@/lib/types";
 
-type Step = "table" | "menu" | "review" | "success";
+type Step = "choice" | "table" | "menu" | "review" | "success";
 
 const Palm = () => {
-  const [step, setStep] = useState<Step>("table");
+  const [step, setStep] = useState<Step>("choice");
   const [tableName, setTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
