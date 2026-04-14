@@ -1,17 +1,15 @@
 import { useState, useEffect } from "react";
-import TableSelect from "@/components/palm/TableSelect";
-import AtendimentoChoice from "@/components/palm/AtendimentoChoice";
-import OpenTablesSelect from "@/components/palm/OpenTablesSelect";
 import MenuView from "@/components/palm/MenuView";
 import OrderReview from "@/components/palm/OrderReview";
 import OrderSuccess from "@/components/palm/OrderSuccess";
+import TableGrid from "@/components/palm/TableGrid";
 import { CartItem } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 
-type Step = "choice" | "table" | "open_tables" | "menu" | "review" | "success";
+type Step = "grid" | "menu" | "review" | "success";
 
 const Palm = () => {
-  const [step, setStep] = useState<Step>("choice");
+  const [step, setStep] = useState<Step>("grid");
   const [tableName, setTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -64,7 +62,12 @@ const Palm = () => {
     playFeedback("notification");
     setCart([]);
     setTableName("");
-    setStep("choice");
+    setStep("grid");
+  };
+
+  const handleSelectTable = (name: string) => {
+    setTableName(name);
+    setStep("menu");
   };
 
   if (step === "success") {
@@ -96,59 +99,19 @@ const Palm = () => {
         itemCount={itemCount}
         onViewCart={() => setStep("review")}
         onBack={() => {
-          if (tableName === "BALCÃO") {
-            setStep("choice");
-          } else {
-            // Se veio de mesa_atendida, volta para open_tables. 
-            // Mas como sabemos se veio de open_tables? 
-            // Podemos checar se a mesa foi selecionada via Step.
-            // Para simplificar, se houver tableName, volta para choice ou tenta inferir.
-            // Melhor: se o step anterior era open_tables, voltar para open_tables.
-            // Vamos apenas voltar para choice por enquanto ou table se for nova mesa.
-            setStep("choice");
-          }
-        }}
-      />
-    );
-  }
-
-  if (step === "open_tables") {
-    return (
-      <OpenTablesSelect
-        onSelect={(name) => {
-          setTableName(name);
-          setStep("menu");
-        }}
-        onBack={() => setStep("choice")}
-      />
-    );
-  }
-
-  if (step === "choice") {
-    return (
-      <AtendimentoChoice
-        onSelect={(type) => {
-          if (type === "balcao") {
-            setTableName("BALCÃO");
-            setStep("menu");
-          } else if (type === "mesa_atendida") {
-            setStep("open_tables");
-          } else {
-            setStep("table");
-          }
+          setStep("grid");
+          setTableName("");
+          setCart([]);
         }}
       />
     );
   }
 
   return (
-    <TableSelect
-      tableName={tableName}
-      setTableName={setTableName}
+    <TableGrid
       waiterName={waiterName}
-      setWaiterName={setWaiterName}
-      onStart={() => setStep("menu")}
-      onBack={() => setStep("choice")}
+      onSetWaiter={setWaiterName}
+      onSelectTable={handleSelectTable}
     />
   );
 };
