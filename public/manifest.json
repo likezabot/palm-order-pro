@@ -1,15 +1,21 @@
 {
   "name": "Plano B Espetaria",
   "short_name": "Plano B",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0D0D0D",
   "theme_color": "#E25822",
   "icons": [
     {
-      "src": "/placeholder.svg",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
