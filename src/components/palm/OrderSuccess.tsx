@@ -22,10 +22,10 @@ const OrderSuccess = ({ onReset, senha, cart }: Props) => {
   useEffect(() => {
     // Auto-print senha for counter orders
     if (senha) handlePrint();
-  }, []);
+  }, [handlePrint, senha]);
 
   useEffect(() => {
-    const timer = setTimeout(onReset, 4000);
+    const timer = setTimeout(onReset, 8000);
     return () => clearTimeout(timer);
   }, [onReset]);
 
