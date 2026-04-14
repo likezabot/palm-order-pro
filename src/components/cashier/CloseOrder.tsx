@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft } from "lucide-react";
 import { Order, OrderItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
   order: Order;
@@ -22,6 +23,7 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   const [amountPaid, setAmountPaid] = useState("");
   const [sending, setSending] = useState(false);
   const { toast } = useToast();
+  const { playFeedback } = useFeedback();
 
   const { data: items = [] } = useQuery({
     queryKey: ["order-items", order.id],
@@ -53,9 +55,11 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
         })
         .eq("id", order.id);
 
+      playFeedback("success");
       toast({ title: "Pagamento confirmado!" });
       onClosed();
     } catch {
+      playFeedback("error");
       toast({ title: "Erro", variant: "destructive" });
       setSending(false);
     }
@@ -64,7 +68,13 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   return (
     <div className="min-h-screen flex flex-col pb-28">
       <div className="border-b border-border p-4 flex items-center gap-4">
-        <button onClick={onBack} className="text-muted-foreground">
+        <button 
+          onClick={() => {
+            playFeedback("click");
+            onBack();
+          }} 
+          className="text-muted-foreground"
+        >
           <ArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-bold">Fechar - {order.table_name}</h1>
@@ -90,7 +100,10 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
           {PAYMENT_METHODS.map((pm) => (
             <button
               key={pm.key}
-              onClick={() => setMethod(pm.key)}
+              onClick={() => {
+                playFeedback("click");
+                setMethod(pm.key);
+              }}
               className={`rounded-lg border p-3 text-base font-semibold transition-all duration-150 active:scale-95 ${
                 method === pm.key
                   ? "border-primary bg-primary/20 text-primary"

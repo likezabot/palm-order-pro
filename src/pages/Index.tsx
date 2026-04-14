@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Monitor, DollarSign, Settings, Printer } from "lucide-react";
+import { Smartphone, Monitor, DollarSign, Settings } from "lucide-react";
+import { useFeedback } from "@/hooks/use-feedback";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", icon: Smartphone, path: "/palm", emoji: "📱" },
@@ -11,6 +12,7 @@ const modes = [
 
 const Index = () => {
   const navigate = useNavigate();
+  const { playFeedback } = useFeedback();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
@@ -26,7 +28,7 @@ const Index = () => {
           <button
             key={mode.path}
             onClick={() => {
-              if (navigator.vibrate) navigator.vibrate(30);
+              playFeedback("click");
               navigate(mode.path);
             }}
             className="flex items-center gap-4 rounded-lg bg-card p-5 text-left text-lg font-semibold text-card-foreground transition-all duration-150 active:scale-[0.97] hover:bg-secondary border border-border min-h-[56px]"

@@ -5,11 +5,12 @@ import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import KanbanColumn from "@/components/kitchen/KanbanColumn";
+import { useFeedback } from "@/hooks/use-feedback";
 
 const Kitchen = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { playFeedback } = useFeedback();
   const prevCountRef = useRef(0);
 
   const { data: orders = [] } = useQuery({
@@ -55,20 +56,13 @@ const Kitchen = () => {
   const newOrders = orders.filter((o) => o.status === "new");
   useEffect(() => {
     if (newOrders.length > prevCountRef.current) {
-      // Play beep
-      try {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        osc.frequency.value = 880;
-        osc.connect(ctx.destination);
-        osc.start();
-        setTimeout(() => { osc.stop(); ctx.close(); }, 200);
-      } catch {}
+      playFeedback("notification");
     }
     prevCountRef.current = newOrders.length;
-  }, [newOrders.length]);
+  }, [newOrders.length, playFeedback]);
 
   const updateStatus = async (orderId: string, status: string) => {
+    playFeedback("click");
     await supabase.from("orders").update({ status }).eq("id", orderId);
     queryClient.invalidateQueries({ queryKey: ["kitchen-orders"] });
   };
