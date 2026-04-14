@@ -101,7 +101,7 @@ const Palm = () => {
   };
 
   if (step === "success") {
-    return <OrderSuccess onReset={resetOrder} senha={senha} />;
+    return <OrderSuccess onReset={resetOrder} senha={senha} cart={cart} />;
   }
 
   if (step === "review") {
