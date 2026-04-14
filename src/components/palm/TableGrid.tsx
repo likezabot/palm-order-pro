@@ -12,14 +12,23 @@ interface TableGridProps {
   onSetWaiter: (name: string) => void;
 }
 
-const TABLES = Array.from({ length: 10 }, (_, i) => (i + 1).toString());
-
 export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridProps) => {
   const navigate = useNavigate();
   const { playFeedback } = useFeedback();
   const queryClient = useQueryClient();
   const [editingWaiter, setEditingWaiter] = useState(!waiterName);
   const [tempWaiterName, setTempWaiterName] = useState(waiterName);
+
+  const { data: tableCount = 10 } = useQuery({
+    queryKey: ["table-count"],
+    queryFn: async () => {
+      const { data } = await supabase.from("settings").select("value").eq("key", "table_count").single();
+      return data ? Number(data.value) : 10;
+    },
+    staleTime: 30000,
+  });
+
+  const TABLES = Array.from({ length: tableCount }, (_, i) => (i + 1).toString());
 
   const { data: activeOrders, isLoading } = useQuery({
     queryKey: ["active-orders"],

@@ -21,6 +21,14 @@ const Admin = () => {
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("pdv_autoprint") !== "false");
+  const [tableCount, setTableCount] = useState(10);
+  const [savingTables, setSavingTables] = useState(false);
+
+  useEffect(() => {
+    supabase.from("settings").select("value").eq("key", "table_count").single().then(({ data }) => {
+      if (data) setTableCount(Number(data.value));
+    });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("pdv_autoprint", String(autoPrint));
@@ -120,10 +128,10 @@ const Admin = () => {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Settings className="w-5 h-5" />
-                  Configurações de Impressão
+                  Configurações
                 </DialogTitle>
                 <DialogDescription>
-                  Configure como o sistema lida com as impressões de pedidos.
+                  Configure mesas e impressão do sistema.
                 </DialogDescription>
               </DialogHeader>
               
@@ -152,6 +160,45 @@ const Admin = () => {
                     <p>2. Certifique-se de <strong>permitir pop-ups</strong> neste site.</p>
                     <p>3. Nas configurações de impressão do navegador, desmarque a opção <strong>"Cabeçalhos e rodapés"</strong>.</p>
                   </div>
+                </div>
+
+              {/* Número de Mesas */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
+                    Mesas do Restaurante
+                  </h3>
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
+                    <button
+                      onClick={() => setTableCount((c) => Math.max(1, c - 1))}
+                      className="w-10 h-10 rounded-lg bg-card border border-border flex items-center justify-center text-xl font-bold active:scale-90 transition-transform"
+                    >−</button>
+                    <span className="text-2xl font-black text-foreground flex-1 text-center">{tableCount}</span>
+                    <button
+                      onClick={() => setTableCount((c) => Math.min(30, c + 1))}
+                      className="w-10 h-10 rounded-lg bg-card border border-border flex items-center justify-center text-xl font-bold active:scale-90 transition-transform"
+                    >+</button>
+                  </div>
+                  <Button
+                    variant="default"
+                    className="w-full font-bold"
+                    disabled={savingTables}
+                    onClick={async () => {
+                      setSavingTables(true);
+                      const { error } = await supabase
+                        .from("settings")
+                        .update({ value: String(tableCount) })
+                        .eq("key", "table_count");
+                      setSavingTables(false);
+                      if (error) {
+                        toast({ variant: "destructive", title: "Erro ao salvar" });
+                      } else {
+                        playFeedback("success");
+                        toast({ title: `Mesas atualizadas para ${tableCount}` });
+                      }
+                    }}
+                  >
+                    {savingTables ? "Salvando..." : "SALVAR MESAS"}
+                  </Button>
                 </div>
 
                 <div className="space-y-3">
