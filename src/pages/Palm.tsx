@@ -36,6 +36,7 @@ const Palm = () => {
   };
 
   const updateQuantity = (productId: string, delta: number) => {
+    playFeedback("click");
     setCart((prev) =>
       prev
         .map((i) =>
@@ -52,6 +53,7 @@ const Palm = () => {
   };
 
   const removeItem = (productId: string) => {
+    playFeedback("heavy");
     setCart((prev) => prev.filter((i) => i.product.id !== productId));
   };
 
@@ -59,6 +61,7 @@ const Palm = () => {
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   const resetOrder = () => {
+    playFeedback("notification");
     setCart([]);
     setTableName("");
     setStep("choice");
