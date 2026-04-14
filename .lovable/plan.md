@@ -1,56 +1,40 @@
-# Plano: Balcão Multi-Pedido + Reduzir para 10 Mesas
 
-## Problemas
+# Plano: Tornar o App Instalável (PWA Simples)
 
-1. **Balcão** é tratado como mesa única — só mostra 1 pedido. Na prática, o balcão tem vários pedidos simultâneos (cada cliente é um pedido separado).
-2. **20 mesas** no grid, mas o restaurante tem no máximo **10**.
-3. O ADM não tem acesso a edições de mesas como aumentar ou diminuir ou editar pedidos 
+## Resultado do Teste
 
-## Solução
+O fluxo do Palm foi testado com sucesso:
+- Identificação do garçom funciona
+- Grid de mesas com 10 mesas + Balcão separado ok
+- Criação de pedido no balcão: card aparece com horário, valor, status e garçom
+- Criação de pedido na mesa: mesa 3 ficou vermelha com nome do garçom e valor
+- Fluxo completo: Grid → Menu → Review → Finalizar → volta ao Grid (2 cliques)
 
-### 1. Reduzir mesas para 10
+## Tornar Instalável
 
-- Alterar `TABLES` de `length: 20` para `length: 10` em `TableGrid.tsx`.
+O app já tem `manifest.json` com `display: standalone` e `theme-color`. Faltam apenas ajustes para atender os requisitos mínimos de instalação do Chrome/Safari:
 
-### 2. Balcão como seção separada
+### 1. Gerar ícones PWA (192x192 e 512x512)
+- Criar ícones PNG com o logo/tema do Plano B (laranja #E25822 sobre fundo escuro #0D0D0D)
+- Salvar em `public/icon-192.png` e `public/icon-512.png`
 
-Em vez de ser um quadrado no grid, o **BALCÃO** vira uma seção própria no topo com comportamento diferente:
+### 2. Atualizar `public/manifest.json`
+- Adicionar ambos os ícones (192 e 512) como PNG
+- Adicionar `"id": "/"` para identificação estável
 
-- **Botão grande "NOVO PEDIDO BALCÃO"** — cria pedido avulso no balcão (cada toque = pedido novo, identificado como `BALCÃO #1`, `BALCÃO #2`, etc., ou sequencial por horário).
-- **Lista horizontal** dos pedidos ativos do balcão abaixo do botão — cards compactos mostrando:
-  - Horário de abertura (ex: "14:32")
-  - Valor total
-  - Status (badge colorido)
-- Ao tocar num pedido existente do balcão → vai para o menu (adicionar itens).
+### 3. Atualizar `index.html`
+- Adicionar `<link rel="apple-touch-icon">` para iOS
+- Adicionar `<meta name="apple-mobile-web-app-capable" content="yes">`
+- Adicionar `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">`
 
-```text
-┌─────────────────────────────────┐
-│  🏪 BALCÃO                      │
-│  [+ NOVO PEDIDO]                │
-│  ┌──────┐ ┌──────┐ ┌──────┐    │
-│  │14:32 │ │14:45 │ │15:01 │    │  ← scroll horizontal
-│  │R$25  │ │R$18  │ │R$42  │    │
-│  └──────┘ └──────┘ └──────┘    │
-├─────────────────────────────────┤
-│  MESAS                          │
-│  [1] [2] [3]                    │
-│  [4] [5] [6]                    │
-│  [7] [8] [9] [10]              │
-└─────────────────────────────────┘
-```
+### 4. Sem service worker
+Instalabilidade não requer service worker — apenas manifest + ícones + HTTPS. O app já roda em HTTPS via Lovable. Sem `vite-plugin-pwa` para evitar problemas no preview.
 
-### 3. Identificação dos pedidos de balcão
+### Arquivos
 
-- `table_name` no banco será `"BALCÃO"` para todos (sem mudar schema).
-- Cada pedido é diferenciado pelo `id` e `created_at`.
-- No grid, ao clicar "NOVO PEDIDO", o Palm vai direto para o menu com `tableName = "BALCÃO"`.
-- Ao clicar num pedido existente, o sistema carrega aquele pedido específico para edição.
-- &nbsp;
-
-## Arquivos a modificar
-
-
-| Arquivo                             | Mudança                                                                                 |
-| ----------------------------------- | --------------------------------------------------------------------------------------- |
-| `src/components/palm/TableGrid.tsx` | Seção Balcão separada com lista de pedidos ativos + botão novo; mesas reduzidas para 10 |
-| `src/pages/Palm.tsx`                | Sem alteração significativa (fluxo já funciona)                                         |
+| Arquivo | Ação |
+|---|---|
+| `public/icon-192.png` | Criar — ícone PWA 192x192 |
+| `public/icon-512.png` | Criar — ícone PWA 512x512 |
+| `public/manifest.json` | Atualizar — adicionar ícones PNG |
+| `index.html` | Atualizar — meta tags Apple |
