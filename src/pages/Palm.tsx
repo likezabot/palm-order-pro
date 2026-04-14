@@ -25,7 +25,13 @@ const Palm = () => {
     playFeedback("click");
 
     setCart((prev) => {
-...
+      const existing = prev.find((i) => i.product.id === product.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
+      }
+      return [...prev, { product, quantity: 1, note: "" }];
     });
   };
 
