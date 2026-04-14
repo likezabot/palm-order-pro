@@ -14,17 +14,17 @@ function executePrint(html: string) {
   doc.write(html);
   doc.close();
 
-  // Give it a moment to load styles and content
-  setTimeout(() => {
+  // Load handler
+  iframe.onload = () => {
     if (iframe.contentWindow) {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
-      // Remove the iframe after printing dialog closes/completes
+      // Remove after printing dialog closes/completes
       setTimeout(() => {
         document.body.removeChild(iframe);
       }, 1000);
     }
-  }, 500);
+  };
 }
 
 export function printSenha(senha: string, items: { product_name: string; quantity: number }[]) {
@@ -41,13 +41,19 @@ export function printSenha(senha: string, items: { product_name: string; quantit
         <title>Senha</title>
         <style>
           @page { margin: 0; size: 80mm auto; }
+          @media print {
+            body { margin: 0; width: 80mm; height: auto; }
+            html, body { height: auto !important; overflow: visible !important; }
+          }
           body { 
             margin: 0; 
-            padding: 8mm 4mm; 
-            width: 72mm; 
+            padding: 0;
+            width: 80mm; 
             font-family: monospace; 
             font-size: 14px; 
+            color: black;
           }
+          .content { padding: 4mm; width: 72mm; }
           .center { text-align: center; }
           .bold { font-weight: bold; }
           .divider { border-top: 1px dashed #000; margin: 8px 0; }
@@ -55,14 +61,16 @@ export function printSenha(senha: string, items: { product_name: string; quantit
         </style>
       </head>
       <body>
-        <div class="center bold">PLANO B ESPETARIA</div>
-        <div class="center">BALCÃO — ${time}</div>
-        <div class="senha">${senha}</div>
-        <div class="divider"></div>
-        ${itemsHtml}
-        <div class="divider"></div>
-        <div class="center" style="font-size:12px">Aguarde sua senha ser chamada</div>
-        <div style="height: 10mm;"></div> <!-- Small space at bottom for cleaner cut -->
+        <div class="content">
+          <div class="center bold">PLANO B ESPETARIA</div>
+          <div class="center">BALCÃO — ${time}</div>
+          <div class="senha">${senha}</div>
+          <div class="divider"></div>
+          ${itemsHtml}
+          <div class="divider"></div>
+          <div class="center" style="font-size:12px">Aguarde sua senha ser chamada</div>
+          <div style="height: 5mm;"></div> <!-- Small gap -->
+        </div>
       </body>
     </html>
   `;
@@ -95,33 +103,41 @@ export function printReceipt(
         <title>Cupom</title>
         <style>
           @page { margin: 0; size: 80mm auto; }
+          @media print {
+            body { margin: 0; width: 80mm; height: auto; }
+            html, body { height: auto !important; overflow: visible !important; }
+          }
           body { 
             margin: 0; 
-            padding: 8mm 4mm; 
-            width: 72mm; 
+            padding: 0;
+            width: 80mm; 
             font-family: monospace; 
             font-size: 14px; 
+            color: black;
           }
+          .content { padding: 4mm; width: 72mm; }
           .divider { border-top: 1px dashed #000; margin: 8px 0; }
           .center { text-align: center; }
           .bold { font-weight: bold; }
         </style>
       </head>
       <body>
-        <div class="center bold">================================</div>
-        <div class="center bold">PLANO B ESPETARIA</div>
-        <div class="center bold">================================</div>
-        <div>Garçom: ${waiterName}</div>
-        <div>Mesa: ${tableName}</div>
-        <div>Horário: ${time} — ${date}</div>
-        <div class="divider"></div>
-        ${itemsHtml}
-        <div class="divider"></div>
-        <div class="bold" style="display:flex;justify-content:space-between">
-          <span>TOTAL:</span><span>R$${total.toFixed(2)}</span>
+        <div class="content">
+          <div class="center bold">================================</div>
+          <div class="center bold">PLANO B ESPETARIA</div>
+          <div class="center bold">================================</div>
+          <div>Garçom: ${waiterName}</div>
+          <div>Mesa: ${tableName}</div>
+          <div>Horário: ${time} — ${date}</div>
+          <div class="divider"></div>
+          ${itemsHtml}
+          <div class="divider"></div>
+          <div class="bold" style="display:flex;justify-content:space-between">
+            <span>TOTAL:</span><span>R$${total.toFixed(2)}</span>
+          </div>
+          <div class="center bold">================================</div>
+          <div style="height: 5mm;"></div> <!-- Small gap -->
         </div>
-        <div class="center bold">================================</div>
-        <div style="height: 10mm;"></div> <!-- Small space at bottom for cleaner cut -->
       </body>
     </html>
   `;
