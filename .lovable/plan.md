@@ -1,40 +1,38 @@
 
-# Plano: Tornar o App Instalável (PWA Simples)
 
-## Resultado do Teste
+# Plano: Corrigir PWA + Adicionar Senha nos Pedidos de Balcão
 
-O fluxo do Palm foi testado com sucesso:
-- Identificação do garçom funciona
-- Grid de mesas com 10 mesas + Balcão separado ok
-- Criação de pedido no balcão: card aparece com horário, valor, status e garçom
-- Criação de pedido na mesa: mesa 3 ficou vermelha com nome do garçom e valor
-- Fluxo completo: Grid → Menu → Review → Finalizar → volta ao Grid (2 cliques)
+## 1. PWA - Correção
 
-## Tornar Instalável
+O PWA não funciona no preview do Lovable porque o app roda dentro de um iframe. A instalação só funciona na versão publicada. Porém, o `manifest.json` e os ícones já estão corretos. O que falta:
 
-O app já tem `manifest.json` com `display: standalone` e `theme-color`. Faltam apenas ajustes para atender os requisitos mínimos de instalação do Chrome/Safari:
+- Verificar se os ícones (`icon-192.png`, `icon-512.png`) foram gerados corretamente (podem estar vazios/corrompidos)
+- Regenerar os ícones com SVG inline convertido para PNG via canvas script
+- O PWA funcionará apenas no site publicado (`palm-order-pro.lovable.app`), não no preview
 
-### 1. Gerar ícones PWA (192x192 e 512x512)
-- Criar ícones PNG com o logo/tema do Plano B (laranja #E25822 sobre fundo escuro #0D0D0D)
-- Salvar em `public/icon-192.png` e `public/icon-512.png`
+## 2. Balcão - Adicionar Senha do Pedido
 
-### 2. Atualizar `public/manifest.json`
-- Adicionar ambos os ícones (192 e 512) como PNG
-- Adicionar `"id": "/"` para identificação estável
+Ao criar um pedido de balcão, gerar automaticamente uma **senha numérica sequencial** (ex: #001, #002...) para identificar o pedido. Isso substitui o horário como identificador principal.
 
-### 3. Atualizar `index.html`
-- Adicionar `<link rel="apple-touch-icon">` para iOS
-- Adicionar `<meta name="apple-mobile-web-app-capable" content="yes">`
-- Adicionar `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">`
+### Como funciona:
+- Usar um campo `customer_name` na tabela `orders` (já existe `table_name = "BALCÃO"`)
+- A senha será armazenada no campo `table_name` como `"BALCÃO"` e exibida a partir de um **contador diário** baseado nos pedidos de balcão do dia
+- Alternativa mais simples: calcular a senha no frontend contando pedidos de balcão do dia + 1
+- No card do balcão, exibir `#001` em destaque no lugar do horário como identificador principal
 
-### 4. Sem service worker
-Instalabilidade não requer service worker — apenas manifest + ícones + HTTPS. O app já roda em HTTPS via Lovable. Sem `vite-plugin-pwa` para evitar problemas no preview.
+### Mudanças:
 
-### Arquivos
-
-| Arquivo | Ação |
+| Arquivo | Mudança |
 |---|---|
-| `public/icon-192.png` | Criar — ícone PWA 192x192 |
-| `public/icon-512.png` | Criar — ícone PWA 512x512 |
-| `public/manifest.json` | Atualizar — adicionar ícones PNG |
-| `index.html` | Atualizar — meta tags Apple |
+| `public/icon-192.png` | Regenerar ícone PWA |
+| `public/icon-512.png` | Regenerar ícone PWA |
+| `src/components/palm/TableGrid.tsx` | Exibir senha `#NNN` nos cards de balcão (calculada pela posição do pedido no dia) |
+| `src/components/palm/OrderReview.tsx` | Mostrar senha do pedido no header quando for balcão |
+| `src/components/palm/OrderSuccess.tsx` | Exibir senha do pedido na tela de sucesso |
+
+### Lógica da senha:
+- Filtrar pedidos de balcão criados hoje (`created_at >= início do dia`)
+- Ordenar por `created_at ASC`
+- A posição + 1 = senha (ex: primeiro pedido do dia = #001)
+- Para novo pedido: senha = total de pedidos balcão do dia + 1
+
