@@ -38,7 +38,7 @@ const Index = () => {
     if (error) {
       console.error(error);
     } else {
-      setProfiles(data || []);
+      setProfiles((data as any) || []);
     }
     setLoading(false);
   };
