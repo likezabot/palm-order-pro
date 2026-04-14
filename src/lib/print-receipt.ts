@@ -48,16 +48,16 @@ function buildBaseCSS(paper: PaperWidth): string {
     .receipt {
       width: ${contentW};
       margin: 0 auto;
-      padding: 4mm 0;
+      padding-top: 2mm;
+      padding-bottom: 0;
       page-break-inside: avoid;
-      page-break-after: avoid;
     }
     .center { text-align: center; }
     .bold { font-weight: bold; }
     .separator {
       border: none;
       border-top: 1px dashed #000;
-      margin: 6px 0;
+      margin: 4px 0;
     }
     .row {
       display: table;
@@ -103,7 +103,7 @@ function buildBaseCSS(paper: PaperWidth): string {
       color: #555;
     }
     .cut-line {
-      margin-top: 8px;
+      margin-top: 2px;
       border-top: 1px dashed #000;
     }
   `;
@@ -168,14 +168,13 @@ export function printSenha(
 </head><body>
 <div class="receipt">
   <div class="center title">PLANO B ESPETARIA</div>
-  <div class="center">BALCÃO — ${time}</div>
   <hr class="separator">
+  <div class="center">BALCÃO — ${time}</div>
   <div class="senha-num">${senha}</div>
   <hr class="separator">
   ${itemsHtml}
   <hr class="separator">
   <div class="footer">Aguarde sua senha ser chamada</div>
-  <div class="cut-line"></div>
 </div>
 </body></html>`;
 
@@ -214,9 +213,9 @@ export function printReceipt(
 <style>${buildBaseCSS(paper)}</style>
 </head><body>
 <div class="receipt">
-  <div class="center bold">================================</div>
+  <hr class="separator">
   <div class="center title">PLANO B ESPETARIA</div>
-  <div class="center bold">================================</div>
+  <hr class="separator">
   <div>Garçom: ${waiterName}</div>
   <div>Mesa: ${tableName}</div>
   <div>${time} — ${date}</div>
@@ -227,9 +226,8 @@ export function printReceipt(
     <span class="left">TOTAL:</span>
     <span class="right">R$${total.toFixed(2)}</span>
   </div>
-  <div class="center bold">================================</div>
+  <hr class="separator">
   <div class="footer">Plano B Espetaria</div>
-  <div class="cut-line"></div>
 </div>
 </body></html>`;
 
