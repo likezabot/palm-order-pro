@@ -74,21 +74,43 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
       <div className="grid grid-cols-2 gap-3 p-3">
         {filtered.map((product) => {
           const qty = getQty(product.id);
+          const isOutOfStock = product.stock_quantity !== undefined && product.stock_quantity <= 0;
+          const isLowStock = product.stock_quantity !== undefined && product.stock_quantity < 10 && product.stock_quantity > 0;
+          
           return (
             <button
               key={product.id}
+              disabled={isOutOfStock}
               onClick={() => {
                 onAdd(product);
               }}
-              className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+              className={`relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96] ${
+                isOutOfStock ? "opacity-50 grayscale cursor-not-allowed" : ""
+              }`}
             >
-              <span className="font-semibold text-base text-foreground leading-tight">
-                {product.name}
-              </span>
+              <div className="flex justify-between items-start gap-1">
+                <span className="font-semibold text-base text-foreground leading-tight">
+                  {product.name}
+                </span>
+                {product.stock_quantity !== undefined && (
+                  <span className={`text-[10px] font-black uppercase px-1 rounded ${
+                    isOutOfStock ? "bg-destructive text-destructive-foreground" : 
+                    isLowStock ? "bg-amber-500 text-white" : "text-white/40"
+                  }`}>
+                    {isOutOfStock ? "OFF" : product.stock_quantity}
+                  </span>
+                )}
+              </div>
               <span className="mt-1 text-sm text-primary font-bold">
                 R$ {product.price.toFixed(2)}
               </span>
-              <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
+              
+              {isOutOfStock ? (
+                <span className="mt-2 text-[10px] font-black text-destructive uppercase tracking-tighter">ESGOTADO</span>
+              ) : (
+                <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
+              )}
+
               {qty > 0 && (
                 <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                   {qty}
