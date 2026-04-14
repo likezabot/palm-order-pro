@@ -102,7 +102,7 @@ function buildBaseCSS(paper: PaperWidth): string {
       color: #555;
     }
     .cut-line {
-      margin-top: 8px;
+      margin-top: 4px;
       border-top: 1px dashed #000;
     }
   `;
