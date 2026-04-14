@@ -95,6 +95,21 @@ const Palm = () => {
     );
   }
 
+  if (step === "choice") {
+    return (
+      <AtendimentoChoice
+        onSelect={(type) => {
+          if (type === "balcao") {
+            setTableName("BALCÃO");
+            setStep("menu");
+          } else {
+            setStep("table");
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <TableSelect
       tableName={tableName}
@@ -102,6 +117,7 @@ const Palm = () => {
       waiterName={waiterName}
       setWaiterName={setWaiterName}
       onStart={() => setStep("menu")}
+      onBack={() => setStep("choice")}
     />
   );
 };
