@@ -15,6 +15,7 @@ const Palm = () => {
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
+  const [senha, setSenha] = useState("");
   const { playFeedback } = useFeedback();
 
   useEffect(() => {
@@ -64,6 +65,7 @@ const Palm = () => {
     setCart([]);
     setTableName("");
     setExistingOrderId(null);
+    setSenha("");
     setStep("grid");
   };
 
@@ -99,7 +101,7 @@ const Palm = () => {
   };
 
   if (step === "success") {
-    return <OrderSuccess onReset={resetOrder} />;
+    return <OrderSuccess onReset={resetOrder} senha={senha} />;
   }
 
   if (step === "review") {
@@ -110,11 +112,15 @@ const Palm = () => {
         cart={cart}
         total={total}
         existingOrderId={existingOrderId}
+        senha={senha}
         onBack={() => setStep("menu")}
         onUpdateQuantity={updateQuantity}
         onUpdateNote={updateNote}
         onRemove={removeItem}
-        onSuccess={() => setStep("success")}
+        onSuccess={(s: string) => {
+          setSenha(s);
+          setStep("success");
+        }}
       />
     );
   }
