@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFeedback } from "@/hooks/use-feedback";
-import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock } from "lucide-react";
+import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, Hash, Delete } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface TableGridProps {
   onSelectTable: (tableName: string, existingOrderId?: string) => void;
@@ -16,8 +18,9 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   const navigate = useNavigate();
   const { playFeedback } = useFeedback();
   const queryClient = useQueryClient();
-  const [editingWaiter, setEditingWaiter] = useState(!waiterName);
-  const [tempWaiterName, setTempWaiterName] = useState(waiterName);
+  
+  const [showManualTable, setShowManualTable] = useState(false);
+  const [manualTable, setManualTable] = useState("");
 
   const { data: tableCount = 10 } = useQuery({
     queryKey: ["table-count"],
@@ -84,14 +87,6 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     onSelectTable("BALCÃO");
   };
 
-  const handleSaveWaiter = () => {
-    if (tempWaiterName.trim()) {
-      onSetWaiter(tempWaiterName.trim());
-      setEditingWaiter(false);
-      playFeedback("success");
-    }
-  };
-
   const formatTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleTimeString("pt-BR", {
       hour: "2-digit",
@@ -119,39 +114,22 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     }
   };
 
-  if (editingWaiter) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-primary mb-2">BEM-VINDO</h1>
-            <p className="text-muted-foreground">Identifique-se para começar</p>
-          </div>
-          
-          <input
-            type="text"
-            placeholder="Seu Nome (Garçom)"
-            value={tempWaiterName}
-            onChange={(e) => setTempWaiterName(e.target.value)}
-            className="w-full rounded-xl border-2 border-border bg-card p-4 text-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
-            autoFocus
-            onKeyDown={(e) => e.key === "Enter" && handleSaveWaiter()}
-          />
-          
-          <button
-            onClick={handleSaveWaiter}
-            disabled={!tempWaiterName.trim()}
-            className="w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground transition-all active:scale-[0.98] disabled:opacity-50"
-          >
-            ENTRAR
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleNumpadPress = (num: string) => {
+    playFeedback("click");
+    // SOLUÇÃO OBRIGATÓRIA: Usar callback para append
+    setManualTable(prev => prev + num);
+  };
+
+  const handleManualConfirm = () => {
+    if (!manualTable) return;
+    const existingOrder = activeOrders?.find(o => o.table_name === manualTable);
+    onSelectTable(manualTable, existingOrder?.id);
+    setManualTable("");
+    setShowManualTable(false);
+  };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background p-4 pb-10">
+    <div className="flex min-h-screen flex-col bg-[#1a1a1a] p-4 pb-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <button
@@ -159,28 +137,17 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
             playFeedback("click");
             navigate("/");
           }}
-          className="flex items-center gap-2 text-muted-foreground"
+          className="flex items-center gap-2 text-white/40 font-bold uppercase text-xs tracking-widest"
         >
           <ArrowLeft size={20} />
-          <span className="font-medium">Início</span>
+          <span>Sair</span>
         </button>
 
-        <div className="flex items-center gap-3 bg-card border border-border rounded-full pl-3 pr-1 py-1">
-          <div className="flex items-center gap-2">
-            <UserCircle size={18} className="text-primary" />
-            <span className="text-xs font-bold text-foreground truncate max-w-[80px]">
-              {waiterName}
-            </span>
-          </div>
-          <button
-            onClick={() => {
-              playFeedback("click");
-              setEditingWaiter(true);
-            }}
-            className="p-1.5 rounded-full hover:bg-secondary transition-colors"
-          >
-            <RefreshCw size={14} className="text-muted-foreground" />
-          </button>
+        <div className="flex items-center gap-3 bg-[#2a2a2a] border border-white/5 rounded-full pl-3 pr-4 py-2">
+          <UserCircle size={18} className="text-primary" />
+          <span className="text-xs font-black text-white uppercase tracking-tight truncate max-w-[120px]">
+            {waiterName}
+          </span>
         </div>
       </div>
 
@@ -190,95 +157,88 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
         </div>
       ) : (
         <>
-          {/* ── BALCÃO Section ── */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Store size={18} className="text-primary" />
-              <h2 className="text-lg font-bold">BALCÃO</h2>
-            </div>
-
+          <div className="flex gap-2 mb-6">
             <button
               onClick={handleNewBalcao}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/50 bg-primary/10 p-4 text-primary font-bold transition-all active:scale-[0.98] hover:bg-primary/20 mb-3"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary/10 border-2 border-dashed border-primary/30 p-5 text-primary font-black uppercase tracking-widest text-sm transition-all active:scale-[0.98]"
             >
-              <Plus size={20} />
-              NOVO PEDIDO
+              <Store size={20} />
+              BALCÃO
             </button>
+            <button
+              onClick={() => setShowManualTable(true)}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-white/5 border-2 border-dashed border-white/10 p-5 text-white/60 font-black uppercase tracking-widest text-sm transition-all active:scale-[0.98]"
+            >
+              <Hash size={20} />
+              DIGITAR MESA
+            </button>
+          </div>
 
-            {balcaoOrders.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+          {balcaoOrders.length > 0 && (
+            <div className="mb-6">
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                 {balcaoOrders.map((order) => {
                   const badge = getStatusBadge(order.status);
                   return (
                     <button
                       key={order.id}
                       onClick={() => handleTableClick("BALCÃO", order.id)}
-                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 min-w-[100px] transition-all active:scale-95 hover:border-primary/50"
+                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-white/5 bg-[#2a2a2a] p-4 min-w-[120px] transition-all active:scale-95 hover:border-primary/50 shadow-lg"
                     >
-                      <span className="text-lg font-black text-primary">{getSenha(order)}</span>
-                      <div className="flex items-center gap-1 text-muted-foreground">
+                      <span className="text-xl font-black text-primary">{getSenha(order)}</span>
+                      <div className="flex items-center gap-1 text-white/40">
                         <Clock size={12} />
-                        <span className="text-xs font-bold">{formatTime(order.created_at)}</span>
+                        <span className="text-[10px] font-bold">{formatTime(order.created_at)}</span>
                       </div>
-                      <span className="text-sm font-black text-foreground">
+                      <span className="text-sm font-black text-white">
                         {formatCurrency(order.total)}
                       </span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
+                      <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full mt-1 ${badge.cls}`}>
                         {badge.label}
                       </span>
-                      {order.waiter_name && (
-                        <span className="text-[10px] text-muted-foreground truncate w-full">
-                          {order.waiter_name}
-                        </span>
-                      )}
                     </button>
                   );
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* ── MESAS Section ── */}
-          <h2 className="text-lg font-bold mb-3 px-1">MESAS</h2>
+          <h2 className="text-xs font-black text-white/40 uppercase tracking-[0.2em] mb-4 px-1">Selecione a Mesa</h2>
 
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {TABLES.map((table) => {
               const order = activeOrders?.find((o) => o.table_name === table);
               const isOccupied = !!order;
               const isWaitingPayment = order?.status === "done";
               
-              let statusColor = "bg-emerald-500/20 border-emerald-500 text-emerald-500";
+              let statusColor = "bg-[#2a2a2a] border-white/5 text-white/40";
               let pulseClass = "";
-              let pulseColor = "";
 
               if (isWaitingPayment) {
-                statusColor = "bg-amber-500/20 border-amber-500 text-amber-500";
-                pulseClass = "animate-pulse-active ring-2 ring-amber-500/50";
-                pulseColor = "rgba(245, 158, 11, 0.4)";
+                statusColor = "bg-amber-500/10 border-amber-500 text-amber-500";
+                pulseClass = "animate-pulse ring-1 ring-amber-500/30";
               } else if (isOccupied) {
-                statusColor = "bg-red-500/20 border-red-500 text-red-500";
-                pulseClass = "animate-pulse-active ring-2 ring-red-500/50";
-                pulseColor = "rgba(239, 68, 68, 0.4)";
+                statusColor = "bg-primary/10 border-primary text-primary";
+                pulseClass = "ring-1 ring-primary/30";
               }
 
               return (
                 <button
                   key={table}
                   onClick={() => handleTableClick(table)}
-                  style={{ "--pulse-color": pulseColor } as any}
                   className={`
-                    relative aspect-square flex flex-col items-center justify-center rounded-2xl border-[3px] transition-all active:scale-95
+                    relative aspect-square flex flex-col items-center justify-center rounded-2xl border-2 transition-all active:scale-95
                     ${statusColor} ${pulseClass}
-                    ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
+                    ${!isOccupied ? 'hover:bg-white/5' : 'shadow-xl'}
                   `}
                 >
                   <span className="text-2xl font-black">{table}</span>
                   {isOccupied && (
                     <div className="mt-1 flex flex-col items-center">
-                      <span className="text-[10px] font-bold opacity-80 uppercase truncate w-full text-center px-1">
+                      <span className="text-[9px] font-black opacity-60 uppercase truncate w-full text-center px-1">
                         {order.waiter_name || "---"}
                       </span>
-                      <span className="text-xs font-bold">
+                      <span className="text-[10px] font-black">
                         {formatCurrency(order.total)}
                       </span>
                     </div>
@@ -289,8 +249,59 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
           </div>
         </>
       )}
+
+      {/* Manual Table Numpad Dialog */}
+      <Dialog open={showManualTable} onOpenChange={setShowManualTable}>
+        <DialogContent className="bg-[#1a1a1a] border-white/10 text-white max-w-sm p-6 rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-center uppercase tracking-tight text-primary">Número da Mesa</DialogTitle>
+            <DialogDescription className="text-center text-white/40 font-bold uppercase tracking-widest text-xs">
+              Digite o número para identificar o pedido
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6">
+            <div className="h-20 w-full bg-[#2a2a2a] rounded-2xl border-2 border-white/5 flex items-center justify-center text-4xl font-black text-white mb-8">
+              {manualTable || <span className="text-white/10">00</span>}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => handleNumpadPress(num.toString())}
+                  className="aspect-square rounded-2xl bg-[#2a2a2a] text-2xl font-black text-white active:scale-90 transition-transform border border-white/5"
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                onClick={() => setManualTable(prev => prev.slice(0, -1))}
+                className="aspect-square flex items-center justify-center text-white/40 active:scale-90"
+              >
+                <Delete size={32} />
+              </button>
+              <button
+                onClick={() => handleNumpadPress("0")}
+                className="aspect-square rounded-2xl bg-[#2a2a2a] text-2xl font-black text-white active:scale-90 transition-transform border border-white/5"
+              >
+                0
+              </button>
+              <button
+                onClick={handleManualConfirm}
+                disabled={!manualTable}
+                className="aspect-square rounded-2xl bg-primary text-primary-foreground font-black active:scale-90 transition-transform flex items-center justify-center disabled:opacity-50"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+export default TableGrid;
 
 export default TableGrid;
