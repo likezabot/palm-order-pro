@@ -9,7 +9,11 @@ export function printSenha(senha: string, items: { product_name: string; quantit
   const html = `
     <html><head><title>Senha</title>
     <style>
-      body { font-family: monospace; width: 300px; margin: 0 auto; padding: 12px; font-size: 14px; }
+      @page { margin: 0; width: 80mm; height: auto; }
+      @media print {
+        body { width: 72mm; margin: 0 auto; }
+      }
+      body { font-family: monospace; width: 72mm; margin: 0 auto; padding: 12px; font-size: 14px; }
       .center { text-align: center; }
       .bold { font-weight: bold; }
       .divider { border-top: 1px dashed #000; margin: 8px 0; }
@@ -55,7 +59,11 @@ export function printReceipt(
   const html = `
     <html><head><title>Cupom</title>
     <style>
-      body { font-family: monospace; width: 300px; margin: 0 auto; padding: 16px; font-size: 14px; }
+      @page { margin: 0; width: 80mm; height: auto; }
+      @media print {
+        body { width: 72mm; margin: 0 auto; }
+      }
+      body { font-family: monospace; width: 72mm; margin: 0 auto; padding: 16px; font-size: 14px; }
       .divider { border-top: 1px dashed #000; margin: 8px 0; }
       .center { text-align: center; }
       .bold { font-weight: bold; }
