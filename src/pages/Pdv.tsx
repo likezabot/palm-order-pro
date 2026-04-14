@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
-import { printReceipt, printTest, getPaperWidth, setPaperWidth } from "@/lib/print-receipt";
+import { manualPrintOrder } from "@/lib/print-service";
+import { printTest, getPaperWidth, setPaperWidth } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -32,19 +33,11 @@ const Pdv = () => {
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("pdv_autoprint") !== "false");
   const [showPayment, setShowPayment] = useState(false);
   const [payMethod, setPayMethod] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
   const [sending, setSending] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState<"online" | "offline">("offline");
-  const prevCountRef = useRef(0);
-  const autoPrintRef = useRef(autoPrint);
-
-  useEffect(() => {
-    autoPrintRef.current = autoPrint;
-    localStorage.setItem("pdv_autoprint", String(autoPrint));
-  }, [autoPrint]);
 
   const { data: orders = [] } = useQuery({
     queryKey: ["pdv-orders"],
@@ -71,21 +64,17 @@ const Pdv = () => {
     refetchInterval: 10000,
   });
 
+  // Impressão MANUAL — sem auto-print, sem claim
   const handlePrint = useCallback(async (order: Order) => {
-    const items = allItems.filter((i) => i.order_id === order.id);
-    if (items.length === 0) {
-      const { data } = await supabase.from("order_items").select("*").eq("order_id", order.id);
-      if (data && data.length > 0) {
-        printReceipt(order.table_name, order.waiter_name || "N/A", data, order.total || 0);
-        return;
-      }
+    const success = await manualPrintOrder(order);
+    if (!success) {
       toast({ title: "Sem itens para imprimir", variant: "destructive" });
-      return;
+    } else {
+      toast({ title: "Cupom enviado para impressão!" });
     }
-    printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
-  }, [allItems, toast]);
+  }, [toast]);
 
-  // Realtime
+  // Realtime — apenas notificação, SEM autoimpressão
   useEffect(() => {
     const channel = supabase
       .channel("pdv-realtime")
@@ -96,14 +85,7 @@ const Pdv = () => {
           const newOrder = payload.new as Order;
           playFeedback("notification");
           toast({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
-          if (autoPrintRef.current) {
-            setTimeout(async () => {
-              const { data: items } = await supabase.from("order_items").select("*").eq("order_id", newOrder.id);
-              if (items && items.length > 0) {
-                printReceipt(newOrder.table_name, newOrder.waiter_name || "N/A", items, newOrder.total || 0);
-              }
-            }, 1000);
-          }
+          // NÃO auto-imprime — isso é responsabilidade da PrintStation
         }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
@@ -154,19 +136,12 @@ const Pdv = () => {
           <button onClick={() => navigate("/")} className="text-muted-foreground">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-xl font-bold">PDV / IMPRESSÃO</h1>
+          <h1 className="text-xl font-bold">PDV / CAIXA</h1>
           <Badge className={realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
             {realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}
           </Badge>
         </div>
         <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-2 border-r pr-4 border-border">
-            <Switch id="pdv-auto" checked={autoPrint} onCheckedChange={setAutoPrint} />
-            <Label htmlFor="pdv-auto" className="font-semibold text-sm cursor-pointer whitespace-nowrap">
-              Auto-print: {autoPrint ? "ON" : "OFF"}
-            </Label>
-          </div>
-          
           <Dialog>
             <DialogTrigger asChild>
               <button className="p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground">
@@ -180,17 +155,17 @@ const Pdv = () => {
                   Configurações de Impressão
                 </DialogTitle>
                 <DialogDescription>
-                  Configure como o sistema lida com as impressões de pedidos.
+                  Configure a largura do papel e faça testes de impressão.
                 </DialogDescription>
               </DialogHeader>
               
               <div className="space-y-6 pt-4">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
-                  <div className="space-y-0.5">
-                    <Label className="text-base font-bold">Impressão Automática</Label>
-                    <p className="text-xs text-muted-foreground">Imprime novos pedidos assim que chegam</p>
-                  </div>
-                  <Switch checked={autoPrint} onCheckedChange={setAutoPrint} />
+                {/* Info: auto-print centralizado */}
+                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>ℹ️ Impressão automática</strong> é gerenciada exclusivamente pela <strong>Estação de Impressão</strong>.
+                    Aqui no PDV você pode reimprimir pedidos manualmente.
+                  </p>
                 </div>
 
                 <div className="space-y-3">
@@ -221,8 +196,8 @@ const Pdv = () => {
                   </h3>
                   <div className="space-y-2 text-sm bg-amber-50 dark:bg-amber-950/20 p-4 rounded-lg border border-amber-100 dark:border-amber-900/50">
                     <p>1. No Windows, defina sua <strong>Impressora Térmica</strong> como <strong>Padrão</strong>.</p>
-                    <p>2. Certifique-se de <strong>permitir pop-ups</strong> neste site.</p>
-                    <p>3. Nas configurações de impressão do navegador, desmarque <strong>"Cabeçalhos e rodapés"</strong>.</p>
+                    <p>2. Nas configurações de impressão do navegador, desmarque <strong>"Cabeçalhos e rodapés"</strong>.</p>
+                    <p>3. Impressão silenciosa (sem diálogo) requer <strong>modo kiosk</strong> ou <strong>app desktop</strong>.</p>
                   </div>
                 </div>
 
@@ -267,6 +242,7 @@ const Pdv = () => {
             orders.map((order) => {
               const s = statusConfig[order.status] || statusConfig.new;
               const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+              const wasPrinted = !!(order as any).printed_at;
               return (
                 <button
                   key={order.id}
@@ -282,7 +258,10 @@ const Pdv = () => {
                       <div className="text-xs text-muted-foreground">{time}</div>
                     </div>
                     <div>
-                      <div className="font-bold text-lg">Mesa {order.table_name}</div>
+                      <div className="font-bold text-lg flex items-center gap-2">
+                        Mesa {order.table_name}
+                        {wasPrinted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                      </div>
                       <div className="text-sm text-muted-foreground">{order.waiter_name || "—"}</div>
                     </div>
                   </div>
@@ -373,6 +352,14 @@ const Pdv = () => {
                   {" — "}
                   {new Date(selectedOrder.created_at).toLocaleDateString("pt-BR")}
                 </span></div>
+                {(selectedOrder as any).printed_at && (
+                  <div className="flex items-center gap-1 text-emerald-600">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span className="font-semibold text-xs">
+                      Impresso às {new Date((selectedOrder as any).printed_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-border pt-3 space-y-2">
@@ -404,7 +391,7 @@ const Pdv = () => {
                   onClick={() => handlePrint(selectedOrder)}
                   className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card p-4 font-bold text-foreground hover:bg-secondary transition-colors min-h-[56px]"
                 >
-                  <Printer size={20} /> IMPRIMIR CUPOM
+                  <Printer size={20} /> {(selectedOrder as any).printed_at ? "REIMPRIMIR CUPOM" : "IMPRIMIR CUPOM"}
                 </button>
 
                 {cfg?.next && (
