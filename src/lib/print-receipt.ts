@@ -48,7 +48,8 @@ function buildBaseCSS(paper: PaperWidth): string {
     .receipt {
       width: ${contentW};
       margin: 0 auto;
-      padding: 2mm 0;
+      padding-top: 2mm;
+      padding-bottom: 0;
       page-break-inside: avoid;
     }
     .center { text-align: center; }
