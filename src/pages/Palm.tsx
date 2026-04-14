@@ -90,7 +90,7 @@ const Palm = () => {
         total={total}
         itemCount={itemCount}
         onViewCart={() => setStep("review")}
-        onBack={() => setStep("table")}
+        onBack={() => setStep(tableName === "BALCÃO" ? "choice" : "table")}
       />
     );
   }
