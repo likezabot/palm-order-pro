@@ -228,7 +228,6 @@ export function printReceipt(
   </div>
   <div class="center bold">================================</div>
   <div class="footer">Plano B Espetaria</div>
-  <div class="cut-line"></div>
 </div>
 </body></html>`;
 
