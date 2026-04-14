@@ -12,10 +12,16 @@ const OrderSuccess = ({ onReset }: Props) => {
   }, [onReset]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-success/10">
-      <CheckCircle size={80} className="text-success animate-pulse-success" />
-      <h1 className="text-3xl font-bold text-success">PEDIDO ENVIADO!</h1>
-      <p className="text-muted-foreground">Voltando em instantes...</p>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-success p-6 text-center">
+      <div className="rounded-full bg-white/20 p-6 animate-pulse-success">
+        <CheckCircle size={100} className="text-white" />
+      </div>
+      <div className="space-y-2">
+        <h1 className="text-4xl font-black text-white tracking-tighter">PEDIDO ENVIADO! ✅</h1>
+        <p className="text-success-foreground font-bold text-lg opacity-80">
+          Tudo certo! Voltando ao início...
+        </p>
+      </div>
     </div>
   );
 };
