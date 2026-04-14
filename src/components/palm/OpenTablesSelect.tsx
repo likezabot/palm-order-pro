@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useFeedback } from "@/hooks/use-feedback";
 
 interface OpenTable {
   id: string;
@@ -23,6 +24,7 @@ const OpenTablesSelect = ({ onSelect, onBack }: Props) => {
   const [tables, setTables] = useState<OpenTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const { playFeedback } = useFeedback();
 
   useEffect(() => {
     fetchOpenTables();
@@ -38,13 +40,6 @@ const OpenTablesSelect = ({ onSelect, onBack }: Props) => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      
-      // Group by table name to show only one entry per table if multiple orders exist
-      // or just show all active orders. The requirement says "mesas abertas".
-      // Usually, if there are multiple "new/preparing" orders for the same table, 
-      // they should probably be grouped or we just show them as separate "orders" on that table.
-      // For simplicity and following the prompt "Mesa X — Garçom: João", 
-      // I will show the orders.
       setTables(data || []);
     } catch (error) {
       console.error("Error fetching open tables:", error);
@@ -84,7 +79,10 @@ const OpenTablesSelect = ({ onSelect, onBack }: Props) => {
     <div className="flex min-h-screen flex-col p-4 bg-background">
       <header className="sticky top-0 z-10 bg-background pb-4 pt-2">
         <button
-          onClick={onBack}
+          onClick={() => {
+            playFeedback("click");
+            onBack();
+          }}
           className="flex items-center gap-2 text-muted-foreground mb-4 text-base"
         >
           <ArrowLeft size={20} /> Voltar
@@ -117,7 +115,10 @@ const OpenTablesSelect = ({ onSelect, onBack }: Props) => {
           filteredTables.map((table) => (
             <button
               key={table.id}
-              onClick={() => onSelect(table.table_name)}
+              onClick={() => {
+                playFeedback("click");
+                onSelect(table.table_name);
+              }}
               className="flex flex-col gap-3 rounded-xl bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.98] hover:bg-secondary/30"
             >
               <div className="flex items-center justify-between">
