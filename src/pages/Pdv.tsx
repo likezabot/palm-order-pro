@@ -14,11 +14,16 @@ import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 
 const PAYMENT_METHODS = [
-...
+  { key: "cash", label: "💵 DINHEIRO" },
+  { key: "pix", label: "📱 PIX" },
+  { key: "card", label: "💳 CARTÃO" },
 ] as const;
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
-...
+  new: { label: "NOVO", color: "bg-primary text-primary-foreground", next: "preparing", nextLabel: "▶ PREPARAR" },
+  preparing: { label: "PREPARO", color: "bg-warning text-warning-foreground", next: "done", nextLabel: "✅ PRONTO" },
+  done: { label: "PRONTO", color: "bg-success text-success-foreground" },
+  paid: { label: "PAGO", color: "bg-muted text-muted-foreground" },
 };
 
 const Pdv = () => {
@@ -89,15 +94,7 @@ const Pdv = () => {
         if (payload.eventType === "INSERT") {
           queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
           const newOrder = payload.new as Order;
-          // Beep
-          try {
-            const ctx = new AudioContext();
-            const osc = ctx.createOscillator();
-            osc.frequency.value = 880;
-            osc.connect(ctx.destination);
-            osc.start();
-            setTimeout(() => { osc.stop(); ctx.close(); }, 200);
-          } catch {}
+          playFeedback("notification");
           toast({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
           if (autoPrintRef.current) {
             setTimeout(async () => {
@@ -117,12 +114,13 @@ const Pdv = () => {
       });
 
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient, toast]);
+  }, [queryClient, toast, playFeedback]);
 
   const selectedOrder = orders.find((o) => o.id === selectedId) || null;
   const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
 
   const updateStatus = async (orderId: string, status: string) => {
+    playFeedback("click");
     await supabase.from("orders").update({ status }).eq("id", orderId);
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
   };
@@ -133,6 +131,7 @@ const Pdv = () => {
     const total = selectedOrder.total || 0;
     const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
     await supabase.from("orders").update({ status: "paid", payment_method: payMethod, amount_paid: paid }).eq("id", selectedOrder.id);
+    playFeedback("success");
     toast({ title: "Pagamento confirmado!" });
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
     setShowPayment(false);
