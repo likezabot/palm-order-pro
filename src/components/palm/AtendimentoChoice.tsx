@@ -1,5 +1,6 @@
 import { ArrowLeft, Store, PlusCircle, History } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
   onSelect: (type: "balcao" | "nova_mesa" | "mesa_atendida") => void;
@@ -7,19 +8,20 @@ interface Props {
 
 const AtendimentoChoice = ({ onSelect }: Props) => {
   const navigate = useNavigate();
+  const { playFeedback } = useFeedback();
 
   const handleSelect = (type: "balcao" | "nova_mesa" | "mesa_atendida") => {
-    // Haptic feedback
-    if (navigator.vibrate) {
-      navigator.vibrate(30);
-    }
+    playFeedback("click");
     onSelect(type);
   };
 
   return (
     <div className="flex min-h-screen flex-col p-4">
       <button
-        onClick={() => navigate("/")}
+        onClick={() => {
+          playFeedback("click");
+          navigate("/");
+        }}
         className="flex items-center gap-2 text-muted-foreground mb-6 text-base"
       >
         <ArrowLeft size={20} /> Voltar

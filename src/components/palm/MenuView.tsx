@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
+import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -15,6 +16,7 @@ interface Props {
 
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
+  const { playFeedback } = useFeedback();
 
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
@@ -37,7 +39,13 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
     <div className="flex min-h-screen flex-col pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
-        <button onClick={onBack} className="flex items-center gap-2 text-muted-foreground text-base mb-2">
+        <button 
+          onClick={() => {
+            playFeedback("click");
+            onBack();
+          }} 
+          className="flex items-center gap-2 text-muted-foreground text-base mb-2"
+        >
           <ArrowLeft size={20} /> Voltar
         </button>
 
@@ -46,7 +54,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => {
+                playFeedback("click");
+                setActiveCategory(cat);
+              }}
               className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
                 activeCategory === cat
                   ? "bg-primary text-primary-foreground"
@@ -66,7 +77,9 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
           return (
             <button
               key={product.id}
-              onClick={() => onAdd(product)}
+              onClick={() => {
+                onAdd(product);
+              }}
               className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
             >
               <span className="font-semibold text-base text-foreground leading-tight">
@@ -90,7 +103,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
       {itemCount > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/90 backdrop-blur border-t border-border">
           <button
-            onClick={onViewCart}
+            onClick={() => {
+              playFeedback("click");
+              onViewCart();
+            }}
             className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.97] transition-transform duration-150 min-h-[56px]"
           >
             <ShoppingCart size={22} />
