@@ -72,6 +72,7 @@ export type Database = {
           table_name: string
           total: number | null
           updated_at: string
+          waiter_name: string | null
         }
         Insert: {
           amount_paid?: number | null
@@ -82,6 +83,7 @@ export type Database = {
           table_name: string
           total?: number | null
           updated_at?: string
+          waiter_name?: string | null
         }
         Update: {
           amount_paid?: number | null
@@ -92,6 +94,7 @@ export type Database = {
           table_name?: string
           total?: number | null
           updated_at?: string
+          waiter_name?: string | null
         }
         Relationships: []
       }
