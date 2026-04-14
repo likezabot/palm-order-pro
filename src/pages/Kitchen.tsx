@@ -14,12 +14,26 @@ const Kitchen = () => {
   const prevCountRef = useRef(0);
 
   const { data: orders = [] } = useQuery({
-...
+    queryKey: ["kitchen-orders"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .in("status", ["new", "preparing", "done"])
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as Order[];
+    },
     refetchInterval: 5000,
   });
 
   const { data: allItems = [] } = useQuery({
-...
+    queryKey: ["kitchen-items"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("order_items").select("*");
+      if (error) throw error;
+      return data as OrderItem[];
+    },
     refetchInterval: 5000,
   });
 
