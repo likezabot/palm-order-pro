@@ -147,12 +147,12 @@ export async function manualPrintOrder(order: {
   }
 
   console.log(`[print-service] ManualPrint: Imprimindo ${items.length} itens para Mesa ${order.table_name}`);
-  await printReceipt(
+  const success = await printReceipt(
     order.table_name,
     order.waiter_name || "N/A",
-    items,
+    items as any[],
     order.total || 0
   );
 
-  return true;
+  return success;
 }
