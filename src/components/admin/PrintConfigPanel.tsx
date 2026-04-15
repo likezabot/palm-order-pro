@@ -103,25 +103,39 @@ export default function PrintConfigPanel() {
           </p>
         </div>
 
-        {/* Preview mode */}
+        {/* Print Mode */}
         <div className="space-y-2">
-          <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Tipo de Preview</p>
+          <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Modo de Impressão</p>
           <div className="flex gap-2">
-            <Button
-              variant={previewMode === "receipt" ? "default" : "outline"}
-              className="flex-1 font-bold text-sm"
-              onClick={() => setPreviewMode("receipt")}
-            >
-              Cupom de Mesa
-            </Button>
-            <Button
-              variant={previewMode === "senha" ? "default" : "outline"}
-              className="flex-1 font-bold text-sm"
-              onClick={() => setPreviewMode("senha")}
-            >
-              Senha / Balcão
-            </Button>
+            {(["browser", "bridge"] as const).map((m) => (
+              <Button
+                key={m}
+                variant={cfg.printMode === m ? "default" : "outline"}
+                className="flex-1 font-bold"
+                onClick={() => update("printMode", m)}
+              >
+                {m === "browser" ? "Navegador" : "Ponte Local"}
+              </Button>
+            ))}
           </div>
+          {cfg.printMode === "bridge" ? (
+            <div className="pt-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase">URL da Ponte Local</label>
+              <input 
+                type="text" 
+                value={cfg.bridgeUrl}
+                onChange={(e) => update("bridgeUrl", e.target.value)}
+                className="w-full mt-0.5 p-2 text-sm border rounded bg-slate-50 font-mono focus:ring-1 focus:ring-primary outline-none"
+              />
+              <p className="text-[10px] text-emerald-600 font-bold mt-1">
+                ✓ Impressão direta sem diálogo (ESC/POS)
+              </p>
+            </div>
+          ) : (
+            <p className="text-[10px] text-amber-600 font-bold">
+              ⚠ Abre o diálogo de impressão do navegador
+            </p>
+          )}
         </div>
 
         {/* Actions */}
@@ -130,7 +144,7 @@ export default function PrintConfigPanel() {
             <RotateCcw className="w-4 h-4" /> RESETAR
           </Button>
           <Button className="flex-1 gap-2 font-bold" onClick={handleTestPrint}>
-            <Printer className="w-4 h-4" /> IMPRIMIR TESTE
+            <Printer className="w-4 h-4" /> TESTAR
           </Button>
         </div>
       </div>
