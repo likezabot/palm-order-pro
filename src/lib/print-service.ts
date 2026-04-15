@@ -85,10 +85,10 @@ export async function autoPrintOrder(order: {
 
 /**
  * Impressão automática de UPDATE — usa print_type do banco.
- * - "extra" → imprime apenas delta_items (acréscimo)
+ * - "extra" → imprime apenas delta_items
  * - "full"  → imprime comanda completa
  * - "bill"  → imprime conta
- * - null/fallback → imprime delta se existir, senão completo
+ * - null/fallback legado → imprime delta se existir, senão completo
  */
 export async function autoPrintUpdate(order: {
   id: string;
@@ -101,7 +101,6 @@ export async function autoPrintUpdate(order: {
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) return { printed: false, reason: "already_printed" };
 
-  // Fetch print_type and delta_items
   const { data: orderData } = await supabase
     .from("orders")
     .select("delta_items, print_type, waiter_name")
@@ -113,7 +112,6 @@ export async function autoPrintUpdate(order: {
 
   console.log(`[print-service] print_type=${printType}, delta_items=${deltaItems?.length ?? 0}`);
 
-  // Helper: fetch all items
   const fetchAllItems = async (): Promise<PrintableItem[]> => {
     for (let attempt = 0; attempt < 6; attempt++) {
       const { data } = await supabase.from("order_items").select("*").eq("order_id", order.id);
@@ -139,13 +137,19 @@ export async function autoPrintUpdate(order: {
     return success ? { printed: true, reason: "full_success" } : { printed: false, reason: "print_failed" };
   }
 
-  // "extra" or default: print delta if available
+  if (printType === "extra") {
+    if (!deltaItems || deltaItems.length === 0) {
+      return { printed: false, reason: "no_delta" };
+    }
+    success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
+    return success ? { printed: true, reason: "delta_success" } : { printed: false, reason: "print_failed" };
+  }
+
   if (deltaItems && deltaItems.length > 0) {
     success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
     return success ? { printed: true, reason: "delta_success" } : { printed: false, reason: "print_failed" };
   }
 
-  // Fallback: no delta, print full
   const items = await fetchAllItems();
   if (items.length === 0) return { printed: false, reason: "no_items" };
   success = await printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);

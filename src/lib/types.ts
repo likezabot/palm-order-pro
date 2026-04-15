@@ -13,6 +13,8 @@ export interface CartItem {
   note: string;
 }
 
+export type OrderPrintType = "extra" | "full" | "bill";
+
 export interface Order {
   id: string;
   table_name: string;
@@ -23,7 +25,9 @@ export interface Order {
   amount_paid: number | null;
   created_at: string;
   updated_at: string;
+  printed_at?: string | null;
   delta_items?: any | null;
+  print_type?: OrderPrintType | null;
 }
 
 export interface OrderItem {
