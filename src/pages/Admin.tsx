@@ -233,7 +233,7 @@ const Admin = () => {
               Produtos
             </TabsTrigger>
             <TabsTrigger value="print" className="font-bold text-sm gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-              <Printer className="w-4 h-4" /> Editor de Cupom
+              <Printer className="w-4 h-4" /> Impressão
             </TabsTrigger>
           </TabsList>
         </div>
