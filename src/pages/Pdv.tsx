@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import { manualPrintOrder, manualPrintDelta, manualPrintBill, autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
-import { printTest, getPaperWidth, setPaperWidth } from "@/lib/print-receipt";
+import { printTest, getPaperWidth, setPaperWidth, printCustomerReceipt } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const PAYMENT_METHODS = [
   { key: "cash", label: "DINHEIRO", icon: Banknote, color: "bg-emerald-500" },
@@ -38,6 +39,9 @@ const Pdv = () => {
   const [amountPaid, setAmountPaid] = useState("");
   const [sending, setSending] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState<"online" | "offline">("offline");
+  const [wantCustomerData, setWantCustomerData] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [customerDoc, setCustomerDoc] = useState("");
 
   const { data: orders = [] } = useQuery({
     queryKey: ["pdv-orders"],
@@ -166,12 +170,31 @@ const Pdv = () => {
     const total = selectedOrder.total || 0;
     const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
     await supabase.from("orders").update({ status: "paid", payment_method: payMethod, amount_paid: paid }).eq("id", selectedOrder.id);
+    
+    // Print customer receipt
+    const items = allItems.filter((i) => i.order_id === selectedOrder.id);
+    if (items.length > 0) {
+      const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
+      await printCustomerReceipt(
+        selectedOrder.table_name,
+        selectedOrder.waiter_name || "N/A",
+        items,
+        total,
+        payMethod,
+        paid,
+        custData
+      );
+    }
+
     playFeedback("success");
-    toast({ title: "Pagamento confirmado!" });
+    toast({ title: "Pagamento confirmado! Comprovante impresso." });
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
     setShowPayment(false);
     setPayMethod("");
     setAmountPaid("");
+    setWantCustomerData(false);
+    setCustomerName("");
+    setCustomerDoc("");
     setSending(false);
     setSelectedId(null);
   };
@@ -374,10 +397,42 @@ const Pdv = () => {
                   )}
                 </div>
               )}
+              {/* Customer data section */}
+              <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="customer-data"
+                    checked={wantCustomerData}
+                    onCheckedChange={(v) => setWantCustomerData(!!v)}
+                  />
+                  <label htmlFor="customer-data" className="text-base font-semibold cursor-pointer flex items-center gap-2">
+                    <User size={16} />
+                    Identificar cliente no comprovante?
+                  </label>
+                </div>
+                {wantCustomerData && (
+                  <div className="space-y-2 pl-7">
+                    <input
+                      type="text"
+                      placeholder="Nome / Razão Social"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background p-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <input
+                      type="text"
+                      placeholder="CPF / CNPJ"
+                      value={customerDoc}
+                      onChange={(e) => setCustomerDoc(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background p-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                )}
+              </div>
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowPayment(false)}
+                  onClick={() => { setShowPayment(false); setWantCustomerData(false); setCustomerName(""); setCustomerDoc(""); }}
                   className="flex-1 rounded-lg border border-border p-4 font-bold text-foreground"
                 >
                   VOLTAR

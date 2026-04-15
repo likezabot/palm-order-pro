@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index";
 import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
-import Cashier from "./pages/Cashier";
 import Admin from "./pages/Admin";
 import PrintStation from "./pages/PrintStation";
 import Pdv from "./pages/Pdv";
@@ -24,7 +23,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/palm" element={<Palm />} />
           <Route path="/kitchen" element={<Kitchen />} />
-          <Route path="/cashier" element={<Cashier />} />
+          <Route path="/cashier" element={<Pdv />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/print-station" element={<PrintStation />} />
