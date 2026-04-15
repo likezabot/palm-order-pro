@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
-import { manualPrintOrder } from "@/lib/print-service";
+import { manualPrintOrder, autoPrintOrder } from "@/lib/print-service";
 import { printTest, getPaperWidth, setPaperWidth } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
