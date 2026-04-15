@@ -39,6 +39,9 @@ const Pdv = () => {
   const [amountPaid, setAmountPaid] = useState("");
   const [sending, setSending] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState<"online" | "offline">("offline");
+  const [wantCustomerData, setWantCustomerData] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [customerDoc, setCustomerDoc] = useState("");
 
   const { data: orders = [] } = useQuery({
     queryKey: ["pdv-orders"],
