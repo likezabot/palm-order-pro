@@ -105,7 +105,7 @@ export async function autoPrintOrder(order: {
 
   // 3. Imprimir
   console.log(`[print-service] AutoPrint: Disparando impressão final para Mesa ${order.table_name}`);
-  printReceipt(
+  await printReceipt(
     order.table_name,
     order.waiter_name || "N/A",
     items,
