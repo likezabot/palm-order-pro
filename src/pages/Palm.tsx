@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import MenuView from "@/components/palm/MenuView";
 import OrderReview from "@/components/palm/OrderReview";
 import OrderSuccess from "@/components/palm/OrderSuccess";
@@ -10,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 type Step = "grid" | "menu" | "review" | "success";
 
 const Palm = () => {
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>("grid");
   const [tableName, setTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
@@ -21,6 +23,45 @@ const Palm = () => {
   useEffect(() => {
     localStorage.setItem("waiter_name", waiterName);
   }, [waiterName]);
+
+  const handleSelectTable = useCallback(async (name: string, orderId?: string) => {
+    setTableName(name);
+
+    if (orderId) {
+      // Load existing order items into cart
+      const { data: items } = await supabase
+        .from("order_items")
+        .select("product_id, product_name, product_price, quantity, note")
+        .eq("order_id", orderId);
+
+      if (items && items.length > 0) {
+        const loadedCart: CartItem[] = items.map((item) => ({
+          product: {
+            id: item.product_id || item.product_name,
+            name: item.product_name,
+            price: item.product_price,
+            category: "",
+            active: true,
+            created_at: "",
+          },
+          quantity: item.quantity,
+          note: item.note || "",
+        }));
+        setCart(loadedCart);
+        setExistingOrderId(orderId);
+      }
+    }
+
+    setStep("menu");
+  }, []);
+
+  useEffect(() => {
+    const orderId = searchParams.get("orderId");
+    const table = searchParams.get("tableName");
+    if (orderId && table) {
+      handleSelectTable(table, orderId);
+    }
+  }, [searchParams, handleSelectTable]);
 
   const addToCart = (product: CartItem["product"]) => {
     playFeedback("click");
@@ -67,37 +108,6 @@ const Palm = () => {
     setExistingOrderId(null);
     setSenha("");
     setStep("grid");
-  };
-
-  const handleSelectTable = async (name: string, orderId?: string) => {
-    setTableName(name);
-
-    if (orderId) {
-      // Load existing order items into cart
-      const { data: items } = await supabase
-        .from("order_items")
-        .select("product_id, product_name, product_price, quantity, note")
-        .eq("order_id", orderId);
-
-      if (items && items.length > 0) {
-        const loadedCart: CartItem[] = items.map((item) => ({
-          product: {
-            id: item.product_id || item.product_name,
-            name: item.product_name,
-            price: item.product_price,
-            category: "",
-            active: true,
-            created_at: "",
-          },
-          quantity: item.quantity,
-          note: item.note || "",
-        }));
-        setCart(loadedCart);
-        setExistingOrderId(orderId);
-      }
-    }
-
-    setStep("menu");
   };
 
   if (step === "success") {
