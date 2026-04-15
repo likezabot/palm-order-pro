@@ -165,7 +165,7 @@ const Pdv = () => {
 
   const updateStatus = async (orderId: string, status: string) => {
     playFeedback("click");
-    await supabase.from("orders").update({ status }).eq("id", orderId);
+    await supabase.rpc("update_order_status", { p_order_id: orderId, p_status: status } as any);
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
   };
 
@@ -174,7 +174,7 @@ const Pdv = () => {
     setSending(true);
     const total = selectedOrder.total || 0;
     const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
-    await supabase.from("orders").update({ status: "paid", payment_method: payMethod, amount_paid: paid }).eq("id", selectedOrder.id);
+    await supabase.rpc("pay_order", { p_order_id: selectedOrder.id, p_payment_method: payMethod, p_amount_paid: paid } as any);
     
     // Print customer receipt
     const items = allItems.filter((i) => i.order_id === selectedOrder.id);
