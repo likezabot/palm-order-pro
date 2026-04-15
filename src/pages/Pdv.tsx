@@ -426,7 +426,7 @@ const Pdv = () => {
                   onClick={() => handlePrint(selectedOrder)}
                   className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card p-4 font-bold text-foreground hover:bg-secondary transition-colors min-h-[56px]"
                 >
-                  <Printer size={20} /> {(selectedOrder as any).printed_at ? "REIMPRIMIR CUPOM" : "IMPRIMIR CUPOM"}
+                  <Printer size={20} /> REIMPRIMIR CUPOM
                 </button>
 
                 {cfg?.next && (
