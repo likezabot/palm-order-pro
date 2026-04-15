@@ -1,25 +1,14 @@
 /**
  * Configurações persistentes para impressão térmica.
- * Salva em localStorage para acesso síncrono rápido.
+ * Simplificado: apenas largura do papel e tamanho (normal/grande).
  */
 
+export type PaperWidth = "58mm" | "80mm";
+export type PrintSize = "normal" | "grande";
+
 export interface PrintConfig {
-  paperWidth: "58mm" | "80mm";
-  baseFontSize: number;    // px
-  titleFontSize: number;   // px
-  senhaFontSize: number;   // px
-  totalFontSize: number;   // px
-  noteFontSize: number;    // px
-  footerFontSize: number;  // px
-  lineSpacing: number;     // line-height multiplier
-  receiptPadding: number;  // mm
-  showEstablishment: boolean;
-  showWaiter: boolean;
-  showTable: boolean;
-  showDateTime: boolean;
-  showNotes: boolean;
-  showFooter: boolean;
-  showCutLine: boolean;
+  paperWidth: PaperWidth;
+  printSize: PrintSize;
   headerText: string;
   footerText: string;
 }
@@ -28,24 +17,34 @@ const STORAGE_KEY = "print_config";
 
 export const DEFAULT_CONFIG: PrintConfig = {
   paperWidth: "80mm",
-  baseFontSize: 14,
-  titleFontSize: 18,
-  senhaFontSize: 72,
-  totalFontSize: 17,
-  noteFontSize: 11,
-  footerFontSize: 10,
-  lineSpacing: 1.4,
-  receiptPadding: 3,
-  showEstablishment: true,
-  showWaiter: true,
-  showTable: true,
-  showDateTime: true,
-  showNotes: true,
-  showFooter: true,
-  showCutLine: true,
+  printSize: "grande",
   headerText: "PLANO B ESPETARIA",
   footerText: "Obrigado pela preferência!",
 };
+
+/** Font sizes derived from printSize preset */
+export function getFontSizes(size: PrintSize) {
+  if (size === "grande") {
+    return {
+      title: 20,
+      base: 15,
+      total: 19,
+      senha: 80,
+      note: 12,
+      footer: 11,
+      lineHeight: 1.5,
+    };
+  }
+  return {
+    title: 16,
+    base: 13,
+    total: 16,
+    senha: 64,
+    note: 10,
+    footer: 9,
+    lineHeight: 1.4,
+  };
+}
 
 export function loadPrintConfig(): PrintConfig {
   try {

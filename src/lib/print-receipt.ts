@@ -2,12 +2,12 @@
  * Sistema de Impressão Térmica — Plano B Espetaria
  * 
  * Usa iframe oculto com documento HTML isolado.
- * Configurações dinâmicas via PrintConfig.
+ * Layout profissional otimizado para impressoras 58mm/80mm.
  */
 
-import { loadPrintConfig, savePrintConfig, type PrintConfig } from "./print-config";
+import { loadPrintConfig, savePrintConfig, getFontSizes, type PrintConfig, type PaperWidth } from "./print-config";
 
-export type PaperWidth = "58mm" | "80mm";
+export type { PaperWidth };
 
 export function getPaperWidth(): PaperWidth {
   return loadPrintConfig().paperWidth;
@@ -27,14 +27,11 @@ function contentWidth(paper: PaperWidth): string {
   return paper === "58mm" ? "48mm" : "72mm";
 }
 
-function sidePad(paper: PaperWidth, paddingMm: number): string {
-  return `${paddingMm}mm`;
-}
-
-export function thermalCSS(cfg: PrintConfig): string {
+function thermalCSS(cfg: PrintConfig): string {
   const paper = cfg.paperWidth;
   const cw = contentWidth(paper);
-  const sp = sidePad(paper, cfg.receiptPadding);
+  const f = getFontSizes(cfg.printSize);
+  const pad = paper === "58mm" ? "2mm" : "4mm";
 
   return `
     @page {
@@ -42,159 +39,136 @@ export function thermalCSS(cfg: PrintConfig): string {
       margin: 0 !important;
       padding: 0 !important;
     }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html {
-      width: ${paper} !important;
-      max-width: ${paper} !important;
-      min-width: ${paper} !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #fff !important;
-    }
-
-    body {
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
       width: ${paper} !important;
       max-width: ${paper} !important;
       min-width: ${paper} !important;
       height: auto !important;
-      min-height: 0 !important;
-      max-height: none !important;
       margin: 0 !important;
       padding: 0 !important;
       background: #fff !important;
       color: #000 !important;
       font-family: 'Courier New', Courier, monospace !important;
-      font-size: ${cfg.baseFontSize}px !important;
-      line-height: ${cfg.lineSpacing} !important;
+      font-size: ${f.base}px !important;
+      line-height: ${f.lineHeight} !important;
       overflow: hidden !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-
     .receipt {
       width: ${cw} !important;
       max-width: ${cw} !important;
-      padding: 3mm ${sp} 4mm ${sp} !important;
+      padding: 3mm ${pad} 4mm ${pad} !important;
       margin: 0 auto !important;
     }
-
     .center { text-align: center !important; }
     .bold { font-weight: bold !important; }
 
-    .separator {
+    .header-text {
+      font-size: ${f.title}px !important;
+      font-weight: 900 !important;
+      text-align: center !important;
+      letter-spacing: 1px !important;
+      padding: 6px 0 4px 0 !important;
+      text-transform: uppercase !important;
+    }
+
+    .sep {
       border: none !important;
       border-top: 1px dashed #000 !important;
-      margin: 4px 0 !important;
-      padding: 0 !important;
+      margin: 5px 0 !important;
     }
-
-    .separator-double {
+    .sep-bold {
       border: none !important;
       border-top: 2px solid #000 !important;
-      margin: 4px 0 !important;
-      padding: 0 !important;
+      margin: 5px 0 !important;
     }
 
-    .row {
+    .info-row {
+      display: flex !important;
+      justify-content: space-between !important;
+      padding: 2px 0 !important;
+      font-size: ${f.base}px !important;
+    }
+    .info-label {
+      font-weight: bold !important;
+      text-transform: uppercase !important;
+      font-size: ${f.base - 1}px !important;
+    }
+    .info-value {
+      font-weight: 900 !important;
+    }
+
+    .item-row {
       display: flex !important;
       justify-content: space-between !important;
       align-items: flex-start !important;
+      padding: 3px 0 !important;
+      font-size: ${f.base}px !important;
       gap: 4px !important;
-      width: 100% !important;
-      padding: 2px 0 !important;
     }
-
-    .row .left {
+    .item-left {
       flex: 1 !important;
-      text-align: left !important;
       word-break: break-word !important;
-      overflow-wrap: break-word !important;
     }
-
-    .row .right {
+    .item-qty {
+      font-weight: 900 !important;
+      min-width: 28px !important;
+      display: inline-block !important;
+    }
+    .item-right {
       flex-shrink: 0 !important;
       text-align: right !important;
-      white-space: nowrap !important;
       font-weight: bold !important;
+      white-space: nowrap !important;
     }
-
     .item-note {
-      padding-left: 12px !important;
-      font-size: ${cfg.noteFontSize}px !important;
+      padding-left: 16px !important;
+      font-size: ${f.note}px !important;
       color: #333 !important;
       font-style: italic !important;
       margin-bottom: 2px !important;
     }
 
-    .header-text {
-      font-size: ${cfg.titleFontSize}px !important;
-      font-weight: 900 !important;
-      text-align: center !important;
-      letter-spacing: 1px !important;
-      padding: 4px 0 !important;
-    }
-
-    .info-line {
-      font-size: ${cfg.baseFontSize - 1}px !important;
-      padding: 1px 0 !important;
-    }
-
-    .info-label {
-      font-weight: bold !important;
-      text-transform: uppercase !important;
-      font-size: ${cfg.baseFontSize - 2}px !important;
-      color: #555 !important;
-    }
-
-    .info-value {
-      font-weight: bold !important;
-    }
-
-    .senha-num {
-      font-size: ${cfg.senhaFontSize}px !important;
-      font-weight: 900 !important;
-      text-align: center !important;
-      line-height: 1.1 !important;
-      margin: 6px 0 !important;
-      letter-spacing: 2px !important;
-    }
-
     .total-block {
       padding: 6px 0 !important;
     }
-
     .total-row {
-      font-size: ${cfg.totalFontSize}px !important;
+      font-size: ${f.total}px !important;
       font-weight: 900 !important;
       display: flex !important;
       justify-content: space-between !important;
+      letter-spacing: 0.5px !important;
     }
 
-    .item-qty {
-      font-weight: 900 !important;
-      min-width: 24px !important;
-      display: inline-block !important;
-    }
-
-    .footer {
-      font-size: ${cfg.footerFontSize}px !important;
+    .qty-line {
+      font-size: ${f.base - 1}px !important;
       text-align: center !important;
-      margin-top: 6px !important;
       color: #555 !important;
       padding: 2px 0 !important;
     }
 
+    .senha-num {
+      font-size: ${f.senha}px !important;
+      font-weight: 900 !important;
+      text-align: center !important;
+      line-height: 1.1 !important;
+      margin: 8px 0 !important;
+      letter-spacing: 3px !important;
+    }
+
+    .footer {
+      font-size: ${f.footer}px !important;
+      text-align: center !important;
+      margin-top: 8px !important;
+      color: #555 !important;
+    }
     .cut {
       text-align: center !important;
       font-size: 8px !important;
       color: #aaa !important;
-      margin-top: 4mm !important;
+      margin-top: 5mm !important;
       letter-spacing: 2px !important;
     }
 
@@ -204,8 +178,6 @@ export function thermalCSS(cfg: PrintConfig): string {
         max-width: ${paper} !important;
         min-width: ${paper} !important;
         height: auto !important;
-        min-height: 0 !important;
-        max-height: none !important;
         margin: 0 !important;
         padding: 0 !important;
         overflow: hidden !important;
@@ -215,7 +187,7 @@ export function thermalCSS(cfg: PrintConfig): string {
 }
 
 // ============================================================
-// HTML GENERATION (public, used by preview)
+// HTML GENERATION
 // ============================================================
 
 function wrapHtml(title: string, cfg: PrintConfig, body: string): string {
@@ -244,21 +216,20 @@ export function buildSenhaHtml(
   const time = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   const itemsHtml = items
-    .map((i) => `<div class="row"><span class="left"><span class="item-qty">${i.quantity}x</span> ${i.product_name}</span></div>`)
+    .map((i) => `<div class="item-row"><span class="item-left"><span class="item-qty">${i.quantity}x</span> ${i.product_name}</span></div>`)
     .join("");
 
   return wrapHtml("Senha", cfg, `
 <div class="receipt">
-  ${cfg.showEstablishment ? `<div class="header-text">${cfg.headerText}</div>` : ""}
-  <hr class="separator-double">
-  ${cfg.showDateTime ? `<div class="center info-line">${time}</div>` : ""}
-  <div class="center info-line" style="font-size:${cfg.baseFontSize - 2}px;color:#555;">BALCÃO</div>
+  <div class="header-text">${cfg.headerText}</div>
+  <hr class="sep-bold">
+  <div class="center" style="font-size:${getFontSizes(cfg.printSize).base - 1}px;color:#555;">BALCÃO • ${time}</div>
   <div class="senha-num">${senha}</div>
-  <hr class="separator">
+  <hr class="sep">
   ${itemsHtml}
-  <hr class="separator">
-  ${cfg.showFooter ? `<div class="footer">${cfg.footerText}</div>` : ""}
-  ${cfg.showCutLine ? `<div class="cut">✂ --------------------------------</div>` : ""}
+  <hr class="sep">
+  <div class="footer">${cfg.footerText}</div>
+  <div class="cut">✂ --------------------------------</div>
 </div>`);
 }
 
@@ -270,47 +241,46 @@ export function buildReceiptHtml(
   configOverride?: PrintConfig
 ): string {
   const cfg = configOverride || loadPrintConfig();
+  const f = getFontSizes(cfg.printSize);
   const now = new Date();
   const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("pt-BR");
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
 
   const itemsHtml = items
     .map((item) => {
       const sub = (item.product_price * item.quantity).toFixed(2);
-      const noteHtml = (item.note && cfg.showNotes)
+      const noteHtml = item.note
         ? `<div class="item-note">↳ ${item.note}</div>`
         : "";
       return `
-      <div class="row">
-        <span class="left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span>
-        <span class="right">R$${sub}</span>
+      <div class="item-row">
+        <span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span>
+        <span class="item-right">R$${sub}</span>
       </div>${noteHtml}`;
     })
     .join("");
 
-  const infoLines: string[] = [];
-  if (cfg.showTable) infoLines.push(`<div class="info-line"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>`);
-  if (cfg.showWaiter) infoLines.push(`<div class="info-line"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>`);
-  if (cfg.showDateTime) infoLines.push(`<div class="info-line"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>`);
-
   return wrapHtml("Cupom", cfg, `
 <div class="receipt">
-  ${cfg.showEstablishment ? `<div class="header-text">${cfg.headerText}</div>` : ""}
-  <hr class="separator-double">
-  ${infoLines.join("\n  ")}
-  <hr class="separator">
+  <div class="header-text">${cfg.headerText}</div>
+  <hr class="sep-bold">
+  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
+  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
+  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
+  <hr class="sep">
   ${itemsHtml}
-  <hr class="separator-double">
+  <hr class="sep-bold">
   <div class="total-block">
     <div class="total-row">
       <span>TOTAL</span>
       <span>R$ ${total.toFixed(2)}</span>
     </div>
   </div>
-  <hr class="separator">
-  <div class="center info-line" style="font-size:${cfg.baseFontSize - 2}px;color:#777;">Qtd itens: ${items.reduce((s, i) => s + i.quantity, 0)}</div>
-  ${cfg.showFooter ? `<div class="footer">${cfg.footerText}</div>` : ""}
-  ${cfg.showCutLine ? `<div class="cut">✂ --------------------------------</div>` : ""}
+  <hr class="sep">
+  <div class="qty-line">Qtd itens: ${totalQty}</div>
+  <div class="footer">${cfg.footerText}</div>
+  <div class="cut">✂ --------------------------------</div>
 </div>`);
 }
 
@@ -331,8 +301,7 @@ function doPrint(html: string): void {
   if (old) old.remove();
 
   const cfg = loadPrintConfig();
-  const paper = cfg.paperWidth;
-  const pxWidth = paper === "58mm" ? 219 : 302;
+  const pxWidth = cfg.paperWidth === "58mm" ? 219 : 302;
 
   const iframe = document.createElement("iframe");
   iframe.id = "__thermal_print_frame";
