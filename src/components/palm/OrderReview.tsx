@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
+import { calculateDelta } from "@/lib/order-delta";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 
@@ -9,6 +10,7 @@ interface Props {
   tableName: string;
   waiterName: string;
   cart: CartItem[];
+  originalCart?: CartItem[];
   total: number;
   existingOrderId?: string | null;
   senha?: string;
@@ -20,7 +22,7 @@ interface Props {
 }
 
 const OrderReview = ({
-  tableName, waiterName, cart, total, existingOrderId, senha, onBack,
+  tableName, waiterName, cart, originalCart = [], total, existingOrderId, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess,
 }: Props) => {
   const [sending, setSending] = useState(false);
@@ -33,6 +35,10 @@ const OrderReview = ({
 
     try {
       if (existingOrderId) {
+        // Calcular delta (acréscimos)
+        const delta = calculateDelta(originalCart, cart);
+        console.log("[OrderReview] Delta calculado:", delta);
+
         // Atomic update via RPC — delete + insert in a single transaction
         const items = cart.map((item) => ({
           product_id: item.product.id.length === 36 ? item.product.id : null,
@@ -46,7 +52,8 @@ const OrderReview = ({
           p_order_id: existingOrderId,
           p_total: total,
           p_items: items,
-        });
+          p_delta_items: delta.length > 0 ? delta : null,
+        } as any);
         if (rpcError) throw rpcError;
       } else {
         // Count today's balcão orders for senha

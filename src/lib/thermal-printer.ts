@@ -167,6 +167,37 @@ export function buildEscPosReceipt(
   total: number,
   config: PrintConfig
 ): Uint8Array {
+  return buildEscPosGeneric(tableName, waiterName, items, total, config, "PEDIDO");
+}
+
+export function buildEscPosDelta(
+  tableName: string,
+  waiterName: string,
+  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  config: PrintConfig
+): Uint8Array {
+  const deltaTotal = items.reduce((s, i) => s + i.product_price * i.quantity, 0);
+  return buildEscPosGeneric(tableName, waiterName, items, deltaTotal, config, "ACRESCIMO");
+}
+
+export function buildEscPosBill(
+  tableName: string,
+  waiterName: string,
+  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  total: number,
+  config: PrintConfig
+): Uint8Array {
+  return buildEscPosGeneric(tableName, waiterName, items, total, config, "CONTA");
+}
+
+function buildEscPosGeneric(
+  tableName: string,
+  waiterName: string,
+  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  total: number,
+  config: PrintConfig,
+  docType: "PEDIDO" | "ACRESCIMO" | "CONTA"
+): Uint8Array {
   const b = new EscPosBuilder();
   const is80 = config.paperWidth === "80mm";
   const now = new Date();
@@ -182,6 +213,17 @@ export function buildEscPosReceipt(
    .bold(false)
    .feed(1);
 
+  // Document type banner
+  if (docType !== "PEDIDO") {
+    b.align("center")
+     .bold(true)
+     .size(true, true)
+     .line(`*** ${docType} ***`)
+     .size(false, false)
+     .bold(false)
+     .feed(1);
+  }
+
   // Info
   b.align("left")
    .line(`MESA: ${tableName}`)
@@ -195,7 +237,6 @@ export function buildEscPosReceipt(
     const priceStr = `R$${(item.product_price * item.quantity).toFixed(2)}`;
     const name = item.product_name.toUpperCase();
     
-    // Manual layout calculation
     const maxChars = is80 ? 48 : 32;
     const priceLen = priceStr.length;
     const nameSpace = maxChars - qtyStr.length - priceLen - 1;
@@ -217,10 +258,11 @@ export function buildEscPosReceipt(
   b.hr(config.paperWidth, "=");
 
   // Total
+  const totalLabel = docType === "ACRESCIMO" ? "SUBTOTAL ACRESCIMO" : "TOTAL";
   b.align("right")
    .size(true, true)
    .bold(true)
-   .line(`TOTAL: R$ ${total.toFixed(2)}`)
+   .line(`${totalLabel}: R$ ${total.toFixed(2)}`)
    .size(false, false)
    .bold(false);
 
