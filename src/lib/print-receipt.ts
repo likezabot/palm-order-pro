@@ -52,7 +52,7 @@ function thermalCSS(cfg: PrintConfig): string {
       font-family: 'Courier New', Courier, monospace !important;
       font-size: ${f.base}px !important;
       line-height: ${f.lineHeight} !important;
-      overflow: hidden !important;
+      overflow: visible !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
@@ -180,7 +180,7 @@ function thermalCSS(cfg: PrintConfig): string {
         height: auto !important;
         margin: 0 !important;
         padding: 0 !important;
-        overflow: hidden !important;
+        overflow: visible !important;
       }
     }
   `;
@@ -262,7 +262,7 @@ export function buildReceiptHtml(
     .join("");
 
   return wrapHtml("Cupom", cfg, `
-<div class="receipt">
+<div class="receipt" id="receipt-root">
   <div class="header-text">${cfg.headerText}</div>
   <hr class="sep-bold">
   <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
@@ -290,11 +290,14 @@ export function buildReceiptHtml(
 
 let printLock = false;
 
-function doPrint(html: string): void {
+function doPrint(html: string, expectedItemCount: number): void {
+  console.log(`[print] Iniciando processo de impressão. Itens esperados: ${expectedItemCount}`);
+  
   if (printLock) {
-    console.warn("[print] Impressão já em andamento, ignorando chamada duplicada");
+    console.warn("[print] Impressão bloqueada: outra tarefa em andamento");
     return;
   }
+  
   printLock = true;
 
   const old = document.getElementById("__thermal_print_frame");
@@ -310,7 +313,7 @@ function doPrint(html: string): void {
     right: -9999px;
     bottom: -9999px;
     width: ${pxWidth}px;
-    height: 600px;
+    height: 800px;
     border: 0;
     visibility: hidden;
     pointer-events: none;
@@ -319,7 +322,7 @@ function doPrint(html: string): void {
 
   const doc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!doc) {
-    console.error("[print] Não foi possível acessar o documento do iframe");
+    console.error("[print] Erro crítico: Iframe inacessível");
     iframe.remove();
     printLock = false;
     return;
@@ -330,27 +333,54 @@ function doPrint(html: string): void {
   doc.close();
 
   const cleanup = () => {
+    console.log("[print] Limpando recursos de impressão");
     printLock = false;
     setTimeout(() => {
       try { iframe.remove(); } catch {}
-    }, 1000);
+    }, 2000);
   };
 
+  // Espera a renderização completa
   setTimeout(() => {
     try {
+      const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!frameDoc) throw new Error("Documento perdeu referência");
+
+      // Validação final do DOM antes de disparar o comando do sistema
+      const itemRows = frameDoc.querySelectorAll(".item-row");
+      const hasTotal = frameDoc.body.innerText.includes("TOTAL");
+      
+      console.log(`[print] Validação DOM: ${itemRows.length} itens encontrados, Total presente: ${hasTotal}`);
+
+      if (itemRows.length < expectedItemCount) {
+        console.error(`[print] ERRO: HTML incompleto! Esperava ${expectedItemCount}, encontrou ${itemRows.length}. Cancelando.`);
+        cleanup();
+        return;
+      }
+
+      if (!hasTotal) {
+        console.error("[print] ERRO: Bloco de total ausente no HTML final. Cancelando.");
+        cleanup();
+        return;
+      }
+
+      console.log("[print] Disparando window.print()");
       iframe.contentWindow?.focus();
       if (iframe.contentWindow) {
         iframe.contentWindow.onafterprint = cleanup;
       }
       iframe.contentWindow?.print();
+      
+      // Fallback cleanup para drivers de impressora que não disparam onafterprint corretamente
       setTimeout(() => {
         if (printLock) cleanup();
-      }, 15000);
+      }, 20000);
+      
     } catch (e) {
-      console.error("[print] Erro ao imprimir:", e);
+      console.error("[print] Exceção durante disparo:", e);
       cleanup();
     }
-  }, 400);
+  }, 800); // Aumentado de 400ms para 800ms para garantir layout em apps desktop
 }
 
 // ============================================================
@@ -361,7 +391,7 @@ export function printSenha(
   senha: string,
   items: { product_name: string; quantity: number }[]
 ) {
-  doPrint(buildSenhaHtml(senha, items));
+  doPrint(buildSenhaHtml(senha, items), items.length);
 }
 
 export function printReceipt(
@@ -370,7 +400,8 @@ export function printReceipt(
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number
 ) {
-  doPrint(buildReceiptHtml(tableName, waiterName, items, total));
+  console.log(`[print] Preparando cupom para Mesa ${tableName}. Itens: ${items.length}`);
+  doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);
 }
 
 export function printTest() {
