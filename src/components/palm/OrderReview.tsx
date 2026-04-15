@@ -10,7 +10,6 @@ import { useFeedback } from "@/hooks/use-feedback";
 interface Props {
   tableName: string;
   waiterName: string;
-  waiterName: string;
   cart: CartItem[];
   originalCart?: CartItem[];
   total: number;
