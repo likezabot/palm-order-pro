@@ -423,11 +423,14 @@ export async function printReceipt(
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg);
     const success = await sendToBridge(payload, cfg.bridgeUrl);
+    
     if (!success) {
-      console.warn("[print] Falha na ponte, tentando fallback para navegador");
-      doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);
+      console.warn("[print] Falha na ponte térmica.");
+      // Opcional: só faz fallback se o usuário não exigir erro real
+      // Mas o usuário pediu "sem falsa confirmação", então vamos retornar o erro.
+      return false;
     }
-    return success;
+    return true;
   }
 
   doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);
