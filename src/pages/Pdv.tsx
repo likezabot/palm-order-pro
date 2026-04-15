@@ -98,19 +98,24 @@ const Pdv = () => {
     console.log(`[PDV AutoPrint] Aguardando itens do pedido ${order.id} (Mesa ${order.table_name})...`);
     await new Promise((r) => setTimeout(r, 2000));
 
-    const result = isUpdate
-      ? await autoPrintDelta(order)
-      : await autoPrintOrder(order);
-    printingNowRef.current.delete(order.id);
+    try {
+      const result = isUpdate
+        ? await autoPrintDelta(order)
+        : await autoPrintOrder(order);
 
-    if (result.printed) {
-      const msg = result.reason === "delta_success"
-        ? `Acréscimo impresso — Mesa ${order.table_name}`
-        : `Impresso automaticamente — Mesa ${order.table_name}`;
-      console.log(`[PDV AutoPrint] ${msg}`);
-      toastRef.current({ title: msg });
-    } else {
-      console.warn(`[PDV AutoPrint] Não imprimiu: ${result.reason}`);
+      if (result.printed) {
+        const msg = result.reason === "delta_success"
+          ? `Acréscimo impresso — Mesa ${order.table_name}`
+          : `Impresso automaticamente — Mesa ${order.table_name}`;
+        console.log(`[PDV AutoPrint] ${msg}`);
+        toastRef.current({ title: msg });
+      } else {
+        console.warn(`[PDV AutoPrint] Não imprimiu: ${result.reason}`);
+      }
+    } catch (error) {
+      console.error("[PDV AutoPrint] Falha na autoimpressão:", error);
+    } finally {
+      printingNowRef.current.delete(order.id);
     }
   });
 

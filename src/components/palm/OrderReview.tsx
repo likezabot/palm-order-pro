@@ -105,7 +105,7 @@ const OrderReview = ({
       }
 
       playFeedback("success");
-      onSuccess(senha || "");
+      onSuccess("");
     } catch (err) {
       console.error(err);
       playFeedback("error");

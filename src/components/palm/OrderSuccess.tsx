@@ -7,23 +7,24 @@ interface Props {
   onReset: () => void;
   senha?: string;
   cart?: CartItem[];
+  allowLocalPrint?: boolean;
 }
 
-const OrderSuccess = ({ onReset, senha, cart }: Props) => {
+const OrderSuccess = ({ onReset, senha, cart, allowLocalPrint = false }: Props) => {
   const printedRef = useRef(false);
 
   const handlePrint = useCallback(() => {
-    if (!senha) return;
+    if (!allowLocalPrint || !senha) return;
     const items = (cart || []).map((i) => ({
       product_name: i.product.name,
       quantity: i.quantity,
     }));
     printSenha(senha, items);
-  }, [senha, cart]);
+  }, [allowLocalPrint, senha, cart]);
 
   useEffect(() => {
     // Auto-print senha for counter orders only once
-    if (senha && !printedRef.current) {
+    if (allowLocalPrint && senha && !printedRef.current) {
       printedRef.current = true;
       // Small delay to ensure the component is fully mounted and browser is ready
       const timer = setTimeout(() => {
@@ -31,13 +32,13 @@ const OrderSuccess = ({ onReset, senha, cart }: Props) => {
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [handlePrint, senha]);
+  }, [allowLocalPrint, handlePrint, senha]);
 
   useEffect(() => {
-    const delay = senha ? 5000 : 3000;
+    const delay = allowLocalPrint && senha ? 5000 : 3000;
     const timer = setTimeout(onReset, delay);
     return () => clearTimeout(timer);
-  }, [onReset]);
+  }, [allowLocalPrint, onReset, senha]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-success p-6 text-center">
@@ -46,7 +47,7 @@ const OrderSuccess = ({ onReset, senha, cart }: Props) => {
       </div>
       <div className="space-y-2">
         <h1 className="text-4xl font-black text-white tracking-tighter">PEDIDO ENVIADO! ✅</h1>
-        {senha && (
+        {allowLocalPrint && senha && (
           <>
             <p className="text-xl font-bold text-white/80 uppercase">Sua Senha:</p>
             <p className="text-8xl font-black text-white mt-1">{senha}</p>

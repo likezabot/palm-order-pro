@@ -71,25 +71,31 @@ const PrintStation = () => {
 
           if (autoPrintRef.current) {
             printingRef.current.add(newOrder.id);
-            console.log(`[PrintStation] INSERT recebido: ${newOrder.id} — Mesa ${newOrder.table_name}`);
+            try {
+              console.log(`[PrintStation] INSERT recebido: ${newOrder.id} — Mesa ${newOrder.table_name}`);
 
-            // Delay para itens chegarem ao banco
-            await new Promise((r) => setTimeout(r, 2000));
+              // Delay para itens chegarem ao banco
+              await new Promise((r) => setTimeout(r, 2000));
 
-            const result = await autoPrintOrder(newOrder);
+              const result = await autoPrintOrder(newOrder);
 
-            if (result.printed) {
-              setPrintedIds((prev) => new Set(prev).add(newOrder.id));
-              console.log(`[PrintStation] Impresso com sucesso — Mesa ${newOrder.table_name}`);
-              toastRef.current({
-                title: "Pedido impresso!",
-                description: `Mesa ${newOrder.table_name} — impressão automática.`,
-              });
-            } else if (result.reason === "already_printed") {
-              setPrintedIds((prev) => new Set(prev).add(newOrder.id));
-              console.log(`[PrintStation] Já impresso por outra instância: ${newOrder.id}`);
-            } else {
-              console.warn(`[PrintStation] Não imprimiu: ${result.reason}`);
+              if (result.printed) {
+                setPrintedIds((prev) => new Set(prev).add(newOrder.id));
+                console.log(`[PrintStation] Impresso com sucesso — Mesa ${newOrder.table_name}`);
+                toastRef.current({
+                  title: "Pedido impresso!",
+                  description: `Mesa ${newOrder.table_name} — impressão automática.`,
+                });
+              } else if (result.reason === "already_printed") {
+                setPrintedIds((prev) => new Set(prev).add(newOrder.id));
+                console.log(`[PrintStation] Já impresso por outra instância: ${newOrder.id}`);
+              } else {
+                console.warn(`[PrintStation] Não imprimiu: ${result.reason}`);
+              }
+            } catch (error) {
+              console.error("[PrintStation] Falha na autoimpressão de pedido novo:", error);
+            } finally {
+              printingRef.current.delete(newOrder.id);
             }
           } else {
             toastRef.current({
@@ -116,15 +122,20 @@ const PrintStation = () => {
           if (autoPrintRef.current && (printedAtReset || totalChanged)) {
             if (printingRef.current.has(updated.id)) return;
             printingRef.current.add(updated.id);
-            console.log(`[PrintStation] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name}`);
-            
-            await new Promise((r) => setTimeout(r, 2000));
-            const result = await autoPrintDelta(updated);
-            printingRef.current.delete(updated.id);
-            
-            if (result.printed) {
-              setPrintedIds((prev) => new Set(prev).add(updated.id));
-              toastRef.current({ title: `Reimpresso — Mesa ${updated.table_name}` });
+            try {
+              console.log(`[PrintStation] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name}`);
+              
+              await new Promise((r) => setTimeout(r, 2000));
+              const result = await autoPrintDelta(updated);
+              
+              if (result.printed) {
+                setPrintedIds((prev) => new Set(prev).add(updated.id));
+                toastRef.current({ title: `Reimpresso — Mesa ${updated.table_name}` });
+              }
+            } catch (error) {
+              console.error("[PrintStation] Falha na autoimpressão de atualização:", error);
+            } finally {
+              printingRef.current.delete(updated.id);
             }
           }
         }
