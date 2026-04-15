@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import { manualPrintOrder, manualPrintDelta, manualPrintBill, autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
-import { printTest, getPaperWidth, setPaperWidth } from "@/lib/print-receipt";
+import { printTest, getPaperWidth, setPaperWidth, printCustomerReceipt } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const PAYMENT_METHODS = [
   { key: "cash", label: "DINHEIRO", icon: Banknote, color: "bg-emerald-500" },
