@@ -264,7 +264,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
               return (
                 <button
                   key={table}
-                  onClick={() => handleTableClick(table)}
+                  onClick={() => handleTableClick(table, order?.id)}
                   style={{ "--pulse-color": pulseColor } as any}
                   className={`
                     relative aspect-square flex flex-col items-center justify-center rounded-2xl border-[3px] transition-all active:scale-95

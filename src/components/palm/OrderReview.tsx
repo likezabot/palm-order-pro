@@ -33,12 +33,8 @@ const OrderReview = ({
 
     try {
       if (existingOrderId) {
-        // Update existing order
-        await supabase.from("orders").update({ total, updated_at: new Date().toISOString() }).eq("id", existingOrderId);
-        // Delete old items and insert new ones
-        await supabase.from("order_items").delete().eq("order_id", existingOrderId);
+        // Atomic update via RPC — delete + insert in a single transaction
         const items = cart.map((item) => ({
-          order_id: existingOrderId,
           product_id: item.product.id.length === 36 ? item.product.id : null,
           product_name: item.product.name,
           product_price: item.product.price,
@@ -46,8 +42,12 @@ const OrderReview = ({
           note: item.note || null,
           subtotal: item.product.price * item.quantity,
         }));
-        const { error: itemsError } = await supabase.from("order_items").insert(items);
-        if (itemsError) throw itemsError;
+        const { error: rpcError } = await supabase.rpc("update_order_items", {
+          p_order_id: existingOrderId,
+          p_total: total,
+          p_items: items,
+        });
+        if (rpcError) throw rpcError;
       } else {
         // Count today's balcão orders for senha
         let newSenha = senha || "";
