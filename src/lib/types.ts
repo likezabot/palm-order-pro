@@ -23,6 +23,7 @@ export interface Order {
   amount_paid: number | null;
   created_at: string;
   updated_at: string;
+  delta_items?: any | null;
 }
 
 export interface OrderItem {

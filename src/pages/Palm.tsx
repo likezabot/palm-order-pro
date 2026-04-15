@@ -16,6 +16,7 @@ const Palm = () => {
   const [tableName, setTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [originalCart, setOriginalCart] = useState<CartItem[]>([]);
   const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
   const [senha, setSenha] = useState("");
   const { playFeedback } = useFeedback();
@@ -48,8 +49,12 @@ const Palm = () => {
           note: item.note || "",
         }));
         setCart(loadedCart);
+        // Guardar snapshot dos itens originais para cálculo de delta
+        setOriginalCart(loadedCart.map(i => ({ ...i, product: { ...i.product } })));
         setExistingOrderId(orderId);
       }
+    } else {
+      setOriginalCart([]);
     }
 
     setStep("menu");
@@ -104,6 +109,7 @@ const Palm = () => {
   const resetOrder = () => {
     playFeedback("notification");
     setCart([]);
+    setOriginalCart([]);
     setTableName("");
     setExistingOrderId(null);
     setSenha("");
@@ -120,6 +126,7 @@ const Palm = () => {
         tableName={tableName}
         waiterName={waiterName}
         cart={cart}
+        originalCart={originalCart}
         total={total}
         existingOrderId={existingOrderId}
         senha={senha}
@@ -147,6 +154,7 @@ const Palm = () => {
           setStep("grid");
           setTableName("");
           setCart([]);
+          setOriginalCart([]);
           setExistingOrderId(null);
         }}
       />
