@@ -170,12 +170,31 @@ const Pdv = () => {
     const total = selectedOrder.total || 0;
     const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
     await supabase.from("orders").update({ status: "paid", payment_method: payMethod, amount_paid: paid }).eq("id", selectedOrder.id);
+    
+    // Print customer receipt
+    const items = allItems.filter((i) => i.order_id === selectedOrder.id);
+    if (items.length > 0) {
+      const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
+      await printCustomerReceipt(
+        selectedOrder.table_name,
+        selectedOrder.waiter_name || "N/A",
+        items,
+        total,
+        payMethod,
+        paid,
+        custData
+      );
+    }
+
     playFeedback("success");
-    toast({ title: "Pagamento confirmado!" });
+    toast({ title: "Pagamento confirmado! Comprovante impresso." });
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
     setShowPayment(false);
     setPayMethod("");
     setAmountPaid("");
+    setWantCustomerData(false);
+    setCustomerName("");
+    setCustomerDoc("");
     setSending(false);
     setSelectedId(null);
   };
