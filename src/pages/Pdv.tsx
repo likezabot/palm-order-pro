@@ -173,12 +173,12 @@ const Pdv = () => {
   const handlePayment = async () => {
     if (!selectedOrder || !payMethod || sending) return;
     setSending(true);
+    const printConfig = loadPrintConfig();
     const total = selectedOrder.total || 0;
     const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
     await supabase.rpc("pay_order", { p_order_id: selectedOrder.id, p_payment_method: payMethod, p_amount_paid: paid } as any);
     
     // Print customer receipt only if in bridge mode
-    const printConfig = loadPrintConfig();
     const items = allItems.filter((i) => i.order_id === selectedOrder.id);
     let printed = false;
 
@@ -196,7 +196,6 @@ const Pdv = () => {
     }
 
     playFeedback("success");
-    const printConfig = loadPrintConfig();
     if (printConfig.printMode === "bridge") {
       toast({ title: "Pagamento confirmado! Comprovante impresso." });
     } else {
