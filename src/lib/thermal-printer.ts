@@ -89,7 +89,7 @@ export async function checkBridgeStatus(url: string): Promise<{ online: boolean;
   const healthUrl = url.replace(/\/print$/, "/health");
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 2000); // 2s timeout
+    const id = setTimeout(() => controller.abort(), 1500); // Fast timeout
     
     const response = await fetch(healthUrl, { 
       signal: controller.signal,
@@ -97,7 +97,7 @@ export async function checkBridgeStatus(url: string): Promise<{ online: boolean;
     });
     clearTimeout(id);
 
-    if (!response.ok) return { online: false, printer_connected: false, error: `HTTP ${response.status}` };
+    if (!response.ok) return { online: false, printer_connected: false, error: `Serviço retornou erro HTTP ${response.status}` };
     
     const data = await response.json();
     return { 
@@ -106,7 +106,11 @@ export async function checkBridgeStatus(url: string): Promise<{ online: boolean;
       error: data.printer_connected ? undefined : "Impressora USB não detectada na ponte"
     };
   } catch (e) {
-    return { online: false, printer_connected: false, error: "Ponte local offline (localhost:9100)" };
+    return { 
+      online: false, 
+      printer_connected: false, 
+      error: "Ponte local indisponível (Certifique-se que o serviço lp-bridge está rodando em localhost:9100)" 
+    };
   }
 }
 
