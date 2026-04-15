@@ -1,11 +1,8 @@
 /**
  * Serviço centralizado de impressão — Plano B Espetaria
  * 
- * Responsabilidades:
- * - Controle de idempotência (cada pedido imprime no máximo 1x automaticamente)
- * - Claim via Supabase (campo printed_at) para evitar duplicidade entre abas
- * - Separação entre autoimpressão (PrintStation) e reimpressão manual (PDV)
- * - Usa print_type do pedido para decidir layout: extra | full | bill
+ * Usa RPCs seguras para claim/complete/fail de impressão.
+ * Nunca marca como impresso antes do sucesso real.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -19,32 +16,50 @@ interface PrintableItem {
 }
 
 /**
- * Tenta "clamar" o pedido para impressão automática.
+ * Tenta "clamar" o pedido para impressão via RPC atômica.
  */
 export async function claimOrderForPrint(orderId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("orders")
-    .update({ printed_at: new Date().toISOString() } as any)
-    .eq("id", orderId)
-    .is("printed_at", null)
-    .select("id");
+  const { data, error } = await supabase.rpc("claim_order_print", {
+    p_order_id: orderId,
+  } as any);
 
   if (error) {
     console.error("[print-service] Erro ao clamar pedido:", error);
     return false;
   }
 
-  return (data && data.length > 0) || false;
+  return !!data;
+}
+
+/**
+ * Marca impressão como concluída com sucesso.
+ */
+async function completePrint(orderId: string): Promise<void> {
+  const { error } = await supabase.rpc("complete_order_print", {
+    p_order_id: orderId,
+  } as any);
+  if (error) console.error("[print-service] Erro ao completar print:", error);
+}
+
+/**
+ * Marca impressão como falha, permitindo retry.
+ */
+async function failPrint(orderId: string, errorMsg?: string): Promise<void> {
+  const { error } = await supabase.rpc("fail_order_print", {
+    p_order_id: orderId,
+    p_error: errorMsg || null,
+  } as any);
+  if (error) console.error("[print-service] Erro ao registrar falha:", error);
 }
 
 export async function isOrderPrinted(orderId: string): Promise<boolean> {
   const { data } = await supabase
     .from("orders")
-    .select("printed_at")
+    .select("print_status")
     .eq("id", orderId)
     .single();
 
-  return !!(data as any)?.printed_at;
+  return (data as any)?.print_status === "printed";
 }
 
 /**
@@ -59,7 +74,7 @@ export async function autoPrintOrder(order: {
   console.log(`[print-service] AutoPrint: Pedido ${order.id} Mesa ${order.table_name}`);
 
   const claimed = await claimOrderForPrint(order.id);
-  if (!claimed) return { printed: false, reason: "already_printed" };
+  if (!claimed) return { printed: false, reason: "already_claimed" };
 
   let items: PrintableItem[] = [];
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -71,7 +86,10 @@ export async function autoPrintOrder(order: {
     await new Promise((r) => setTimeout(r, 1000));
   }
 
-  if (items.length === 0) return { printed: false, reason: "no_items" };
+  if (items.length === 0) {
+    await failPrint(order.id, "no_items_found");
+    return { printed: false, reason: "no_items" };
+  }
 
   const success = await printReceipt(
     order.table_name,
@@ -80,15 +98,17 @@ export async function autoPrintOrder(order: {
     order.total || 0
   );
 
-  return success ? { printed: true, reason: "success" } : { printed: false, reason: "print_failed" };
+  if (success) {
+    await completePrint(order.id);
+    return { printed: true, reason: "success" };
+  } else {
+    await failPrint(order.id, "print_failed");
+    return { printed: false, reason: "print_failed" };
+  }
 }
 
 /**
  * Impressão automática de UPDATE — usa print_type do banco.
- * - "extra" → imprime apenas delta_items
- * - "full"  → imprime comanda completa
- * - "bill"  → imprime conta
- * - null/fallback legado → imprime delta se existir, senão completo
  */
 export async function autoPrintUpdate(order: {
   id: string;
@@ -99,7 +119,7 @@ export async function autoPrintUpdate(order: {
   console.log(`[print-service] AutoPrintUpdate: Pedido ${order.id} Mesa ${order.table_name}`);
 
   const claimed = await claimOrderForPrint(order.id);
-  if (!claimed) return { printed: false, reason: "already_printed" };
+  if (!claimed) return { printed: false, reason: "already_claimed" };
 
   const { data: orderData } = await supabase
     .from("orders")
@@ -122,41 +142,53 @@ export async function autoPrintUpdate(order: {
   };
 
   let success = false;
+  let reason = "unknown";
 
-  if (printType === "bill") {
-    const items = await fetchAllItems();
-    if (items.length === 0) return { printed: false, reason: "no_items" };
-    success = await printBill(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
-    return success ? { printed: true, reason: "bill_success" } : { printed: false, reason: "print_failed" };
-  }
-
-  if (printType === "full") {
-    const items = await fetchAllItems();
-    if (items.length === 0) return { printed: false, reason: "no_items" };
-    success = await printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
-    return success ? { printed: true, reason: "full_success" } : { printed: false, reason: "print_failed" };
-  }
-
-  if (printType === "extra") {
-    if (!deltaItems || deltaItems.length === 0) {
-      return { printed: false, reason: "no_delta" };
+  try {
+    if (printType === "bill") {
+      const items = await fetchAllItems();
+      if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
+      success = await printBill(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
+      reason = success ? "bill_success" : "print_failed";
+    } else if (printType === "full") {
+      const items = await fetchAllItems();
+      if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
+      success = await printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
+      reason = success ? "full_success" : "print_failed";
+    } else if (printType === "extra") {
+      if (!deltaItems || deltaItems.length === 0) {
+        await failPrint(order.id, "no_delta_items");
+        return { printed: false, reason: "no_delta" };
+      }
+      success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
+      reason = success ? "delta_success" : "print_failed";
+    } else {
+      // Fallback legado
+      if (deltaItems && deltaItems.length > 0) {
+        success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
+        reason = success ? "delta_success" : "print_failed";
+      } else {
+        const items = await fetchAllItems();
+        if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
+        success = await printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
+        reason = success ? "full_fallback" : "print_failed";
+      }
     }
-    success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
-    return success ? { printed: true, reason: "delta_success" } : { printed: false, reason: "print_failed" };
+  } catch (err) {
+    await failPrint(order.id, String(err));
+    return { printed: false, reason: "print_error" };
   }
 
-  if (deltaItems && deltaItems.length > 0) {
-    success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
-    return success ? { printed: true, reason: "delta_success" } : { printed: false, reason: "print_failed" };
+  if (success) {
+    await completePrint(order.id);
+  } else {
+    await failPrint(order.id, reason);
   }
 
-  const items = await fetchAllItems();
-  if (items.length === 0) return { printed: false, reason: "no_items" };
-  success = await printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
-  return success ? { printed: true, reason: "full_fallback" } : { printed: false, reason: "print_failed" };
+  return { printed: success, reason };
 }
 
-// Keep old name for backward compat
+// Backward compat
 export const autoPrintDelta = autoPrintUpdate;
 
 /**
