@@ -323,7 +323,7 @@ const Pdv = () => {
             orders.map((order) => {
               const s = statusConfig[order.status] || statusConfig.new;
               const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-              const wasPrinted = !!(order as any).printed_at;
+              const wasPrinted = (order as any).print_status === 'printed';
               return (
                 <button
                   key={order.id}
