@@ -86,7 +86,8 @@ export class EscPosBuilder {
  * Sends a raw payload to the local printing bridge.
  */
 export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
-  console.log(`[thermal-printer] Enviando payload (${payload.length} bytes) para ${url}`);
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`[thermal-bridge ${timestamp}] Enviando payload (${payload.length} bytes)`);
   
   // Convert binary to base64 for JSON transmission
   const base64 = btoa(String.fromCharCode(...payload));
@@ -98,15 +99,19 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
       body: JSON.stringify({ 
         payload: base64,
         format: "escpos",
+        source: "Plano B Espetaria PDV",
         timestamp: new Date().toISOString()
       }),
     });
     
-    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
-    console.log("[thermal-printer] Sucesso ao enviar para a ponte.");
+    if (!response.ok) {
+      console.error(`[thermal-bridge] Erro HTTP: ${response.status}`);
+      return false;
+    }
+    console.log("[thermal-bridge] Sucesso! Cupom enviado para a impressora.");
     return true;
   } catch (e) {
-    console.error("[thermal-printer] Falha ao comunicar com a ponte:", e);
+    console.error("[thermal-bridge] Falha de conexão. A ponte local está rodando?");
     return false;
   }
 }
