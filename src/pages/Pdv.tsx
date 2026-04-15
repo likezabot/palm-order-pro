@@ -297,7 +297,7 @@ const Pdv = () => {
                   <Button 
                     variant="outline" 
                     className="w-full gap-2 font-bold"
-                    onClick={() => {
+                    onClick={async () => {
                       const ok = await printTest();
                       if (ok) {
                         toast({ title: "Teste enviado!", description: "Verifique o cupom na impressora." });
