@@ -5,7 +5,7 @@
  * Layout profissional otimizado para impressoras 58mm/80mm.
  */
 
-import { loadPrintConfig, getFontSizes, type PrintConfig, type PaperWidth } from "./print-config";
+import { loadPrintConfig, savePrintConfig, getFontSizes, type PrintConfig, type PaperWidth } from "./print-config";
 
 export type { PaperWidth };
 
@@ -16,7 +16,6 @@ export function getPaperWidth(): PaperWidth {
 export function setPaperWidth(width: PaperWidth) {
   const cfg = loadPrintConfig();
   cfg.paperWidth = width;
-  const { savePrintConfig } = require("./print-config");
   savePrintConfig(cfg);
 }
 
