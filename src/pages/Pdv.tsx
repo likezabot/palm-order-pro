@@ -141,7 +141,7 @@ const Pdv = () => {
         const old = payload.old as Partial<Order>;
         // Com REPLICA IDENTITY FULL, old tem todos os campos
         const totalChanged = updated.total !== old.total;
-        const printReset = (updated as any).print_status === 'pending' && (old as any).print_status !== 'pending';
+        const printReset = updated.print_status === 'pending' && (old as Partial<Order>).print_status !== 'pending';
         
         if (totalChanged || printReset) {
           console.log(`[PDV Realtime] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name} (totalChanged=${totalChanged}, printReset=${printReset})`);
@@ -323,7 +323,7 @@ const Pdv = () => {
             orders.map((order) => {
               const s = statusConfig[order.status] || statusConfig.new;
               const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-              const wasPrinted = (order as any).print_status === 'printed';
+              const wasPrinted = order.print_status === 'printed';
               return (
                 <button
                   key={order.id}
@@ -465,11 +465,25 @@ const Pdv = () => {
                   {" — "}
                   {new Date(selectedOrder.created_at).toLocaleDateString("pt-BR")}
                 </span></div>
-                {(selectedOrder as any).printed_at && (
+                {selectedOrder.print_status === 'printed' && selectedOrder.printed_at && (
                   <div className="flex items-center gap-1 text-emerald-600">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span className="font-semibold text-xs">
-                      Impresso às {new Date((selectedOrder as any).printed_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      Impresso às {new Date(selectedOrder.printed_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                )}
+                {selectedOrder.print_status === 'pending' && (
+                  <div className="flex items-center gap-1 text-amber-500">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span className="font-semibold text-xs">Aguardando impressão</span>
+                  </div>
+                )}
+                {selectedOrder.print_status === 'failed' && (
+                  <div className="flex items-center gap-1 text-destructive">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span className="font-semibold text-xs">
+                      Falha na impressão{selectedOrder.print_last_error ? `: ${selectedOrder.print_last_error}` : ''}
                     </span>
                   </div>
                 )}
@@ -501,7 +515,7 @@ const Pdv = () => {
               {/* Print buttons */}
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-3 gap-2">
-                  {(selectedOrder as any).delta_items && (
+                  {selectedOrder.delta_items && (
                     <button
                       onClick={async () => {
                         const ok = await manualPrintDelta(selectedOrder);
