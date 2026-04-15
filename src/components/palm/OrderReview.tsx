@@ -56,14 +56,35 @@ const OrderReview = ({
           note: item.note || null,
           subtotal: item.product.price * item.quantity,
         }));
-        const { error: rpcError } = await supabase.rpc("update_order_items", {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc("update_order_items", {
           p_order_id: existingOrderId,
           p_total: total,
           p_items: items,
           p_delta_items: delta.length > 0 ? delta : null,
           p_print_type: printType,
         } as any);
-        if (rpcError) throw rpcError;
+        if (rpcError) {
+          const msg = rpcError.message || "";
+          if (msg.includes("version_conflict")) {
+            toast({
+              title: "Mesa alterada por outro aparelho",
+              description: "Recarregue a mesa e tente de novo.",
+              variant: "destructive",
+            });
+            setSending(false);
+            return;
+          }
+          if (msg.includes("order_not_editable")) {
+            toast({
+              title: "Pedido já fechado",
+              description: "Esse pedido não pode mais ser editado.",
+              variant: "destructive",
+            });
+            setSending(false);
+            return;
+          }
+          throw rpcError;
+        }
       } else {
         // Count today's balcão orders for senha
         let newSenha = senha || "";
@@ -78,17 +99,8 @@ const OrderReview = ({
           newSenha = `#${((count || 0) + 1).toString().padStart(3, "0")}`;
         }
 
-        const { data: order, error: orderError } = await supabase
-          .from("orders")
-          .insert({ table_name: tableName, waiter_name: waiterName, total, status: "new" })
-          .select()
-          .single();
-
-        if (orderError || !order) throw orderError;
-
-        const items = cart.map((item) => ({
-          order_id: order.id,
-          product_id: item.product.id,
+        const rpcItems = cart.map((item) => ({
+          product_id: item.product.id.length === 36 ? item.product.id : null,
           product_name: item.product.name,
           product_price: item.product.price,
           quantity: item.quantity,
@@ -96,8 +108,13 @@ const OrderReview = ({
           subtotal: item.product.price * item.quantity,
         }));
 
-        const { error: itemsError } = await supabase.from("order_items").insert(items);
-        if (itemsError) throw itemsError;
+        const { error: createError } = await supabase.rpc("create_order", {
+          p_table_name: tableName,
+          p_waiter_name: waiterName,
+          p_total: total,
+          p_items: rpcItems,
+        } as any);
+        if (createError) throw createError;
 
         playFeedback("success");
         onSuccess(newSenha);
