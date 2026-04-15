@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Minus, Plus, Trash2, Printer, FileText, Receipt } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
+import { printReceipt, printDelta, printBill } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
   tableName: string;
+  waiterName: string;
   waiterName: string;
   cart: CartItem[];
   originalCart?: CartItem[];
