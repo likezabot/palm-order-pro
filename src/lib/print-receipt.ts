@@ -16,8 +16,7 @@ export function getPaperWidth(): PaperWidth {
 export function setPaperWidth(width: PaperWidth) {
   const cfg = loadPrintConfig();
   cfg.paperWidth = width;
-  const { savePrintConfig } = require("./print-config");
-  savePrintConfig(cfg);
+  import("./print-config").then(m => m.savePrintConfig(cfg));
 }
 
 // ============================================================
