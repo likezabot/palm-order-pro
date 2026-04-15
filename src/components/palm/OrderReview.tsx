@@ -15,6 +15,7 @@ interface Props {
   originalCart?: CartItem[];
   total: number;
   existingOrderId?: string | null;
+  orderVersion?: number | null;
   senha?: string;
   onBack: () => void;
   onUpdateQuantity: (productId: string, delta: number) => void;
@@ -30,7 +31,7 @@ const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; des
 ];
 
 const OrderReview = ({
-  tableName, waiterName, cart, originalCart = [], total, existingOrderId, senha, onBack,
+  tableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess,
 }: Props) => {
   const [sending, setSending] = useState(false);
@@ -62,6 +63,7 @@ const OrderReview = ({
           p_items: items,
           p_delta_items: delta.length > 0 ? delta : null,
           p_print_type: printType,
+          p_expected_version: orderVersion ?? undefined,
         } as any);
         if (rpcError) {
           const msg = rpcError.message || "";

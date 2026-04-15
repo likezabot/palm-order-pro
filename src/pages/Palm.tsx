@@ -18,6 +18,7 @@ const Palm = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [originalCart, setOriginalCart] = useState<CartItem[]>([]);
   const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
+  const [orderVersion, setOrderVersion] = useState<number | null>(null);
   const [senha, setSenha] = useState("");
   const { playFeedback } = useFeedback();
 
@@ -31,8 +32,19 @@ const Palm = () => {
     setCart([]);
     setOriginalCart([]);
     setExistingOrderId(orderId ?? null);
+    setOrderVersion(null);
 
     if (orderId) {
+      // Load version from order
+      const { data: orderData } = await supabase
+        .from("orders")
+        .select("version")
+        .eq("id", orderId)
+        .single();
+      if (orderData) {
+        setOrderVersion(orderData.version);
+      }
+
       // Load existing order items into cart
       const { data: items } = await supabase
         .from("order_items")
@@ -114,6 +126,7 @@ const Palm = () => {
     setOriginalCart([]);
     setTableName("");
     setExistingOrderId(null);
+    setOrderVersion(null);
     setSenha("");
     setStep("grid");
   };
@@ -138,6 +151,7 @@ const Palm = () => {
         originalCart={originalCart}
         total={total}
         existingOrderId={existingOrderId}
+        orderVersion={orderVersion}
         senha={senha}
         onBack={() => setStep("menu")}
         onUpdateQuantity={updateQuantity}
@@ -165,6 +179,7 @@ const Palm = () => {
           setCart([]);
           setOriginalCart([]);
           setExistingOrderId(null);
+          setOrderVersion(null);
           setSenha("");
         }}
       />
