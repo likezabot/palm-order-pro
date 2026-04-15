@@ -74,64 +74,78 @@ const Pdv = () => {
     }
   }, [toast]);
 
-  // Guard de idempotência: rastreia "orderId:updated_at" já processados
+  // Guard de idempotência
   const printedEventsRef = useRef<Set<string>>(new Set());
   const printingNowRef = useRef<Set<string>>(new Set());
+  const toastRef = useRef(toast);
+  const playFeedbackRef = useRef(playFeedback);
 
-  const tryAutoPrint = useCallback(async (order: Order, eventKey: string) => {
-    // Já processou este evento exato
+  useEffect(() => { toastRef.current = toast; }, [toast]);
+  useEffect(() => { playFeedbackRef.current = playFeedback; }, [playFeedback]);
+
+  // Ref-based auto-print — never changes identity, so Realtime subscription stays stable
+  const tryAutoPrintRef = useRef(async (order: Order, eventKey: string) => {
     if (printedEventsRef.current.has(eventKey)) return;
-    // Já está imprimindo este pedido
     if (printingNowRef.current.has(order.id)) return;
 
     printedEventsRef.current.add(eventKey);
     printingNowRef.current.add(order.id);
 
+    console.log(`[PDV AutoPrint] Aguardando itens do pedido ${order.id} (Mesa ${order.table_name})...`);
     // Delay para itens chegarem ao banco
-    await new Promise((r) => setTimeout(r, 1200));
+    await new Promise((r) => setTimeout(r, 2000));
 
     const result = await autoPrintOrder(order);
     printingNowRef.current.delete(order.id);
 
     if (result.printed) {
-      toast({ title: `Impresso automaticamente — Mesa ${order.table_name}` });
+      console.log(`[PDV AutoPrint] Impresso com sucesso — Mesa ${order.table_name}`);
+      toastRef.current({ title: `Impresso automaticamente — Mesa ${order.table_name}` });
+    } else {
+      console.warn(`[PDV AutoPrint] Não imprimiu: ${result.reason}`);
     }
-  }, [toast]);
+  });
 
-  // Realtime — autoimpressão em INSERT e UPDATE
+  // Realtime — subscription estável (sem dependências instáveis)
   useEffect(() => {
+    console.log("[PDV] Inscrevendo canal Realtime...");
+
     const channel = supabase
-      .channel("pdv-realtime")
+      .channel("pdv-realtime-v3")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
         queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
         const newOrder = payload.new as Order;
-        playFeedback("notification");
-        toast({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
+        console.log(`[PDV Realtime] INSERT recebido: ${newOrder.id} — Mesa ${newOrder.table_name}`);
+        playFeedbackRef.current("notification");
+        toastRef.current({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
         const eventKey = `${newOrder.id}:insert`;
-        tryAutoPrint(newOrder, eventKey);
+        tryAutoPrintRef.current(newOrder, eventKey);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
         const updated = payload.new as Order;
         const old = payload.old as Partial<Order>;
-        // Auto-imprimir se total ou status mudou (indica alteração relevante)
+        // Com REPLICA IDENTITY FULL, old tem todos os campos
         const totalChanged = updated.total !== old.total;
-        const statusChanged = updated.status !== old.status;
-        if (totalChanged || statusChanged) {
+        const printedAtReset = (old as any).printed_at !== null && (updated as any).printed_at === null;
+        
+        if (totalChanged || printedAtReset) {
+          console.log(`[PDV Realtime] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name} (totalChanged=${totalChanged}, printedReset=${printedAtReset})`);
           const eventKey = `${updated.id}:upd:${updated.updated_at}`;
-          tryAutoPrint(updated, eventKey);
+          tryAutoPrintRef.current(updated, eventKey);
         }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
         queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
       })
       .subscribe((status) => {
+        console.log(`[PDV Realtime] Status: ${status}`);
         setRealtimeStatus(status === "SUBSCRIBED" ? "online" : "offline");
       });
 
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient, toast, playFeedback, tryAutoPrint]);
+  }, [queryClient]); // Apenas queryClient — estável
 
   const selectedOrder = orders.find((o) => o.id === selectedId) || null;
   const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
