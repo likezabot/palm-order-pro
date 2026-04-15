@@ -77,7 +77,7 @@ export async function autoPrintOrder(order: {
   let items: PrintableItem[] = [];
   console.log(`[print-service] AutoPrint: Buscando itens para pedido ${order.id}...`);
   
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     const { data, error } = await supabase
       .from("order_items")
       .select("*")
@@ -93,9 +93,8 @@ export async function autoPrintOrder(order: {
       break;
     }
     
-    console.log(`[print-service] AutoPrint: Itens não encontrados na tentativa ${attempt + 1}, aguardando...`);
-    // Esperar 800ms antes de tentar novamente (aumentado de 500ms)
-    await new Promise((r) => setTimeout(r, 800));
+    console.log(`[print-service] AutoPrint: Itens não encontrados na tentativa ${attempt + 1}/6, aguardando...`);
+    await new Promise((r) => setTimeout(r, 1000));
   }
 
   if (items.length === 0) {
