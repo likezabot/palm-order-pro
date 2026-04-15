@@ -391,13 +391,10 @@ function doPrint(html: string, expectedItemCount: number): void {
 export async function printSenha(
   senha: string,
   items: { product_name: string; quantity: number }[]
-) {
+): Promise<boolean> {
   const cfg = loadPrintConfig();
   if (cfg.printMode === "bridge") {
     console.log("[print] Usando ponte térmica para senha");
-    // Adapt for bridge if needed - for now fallback to browser or implement similar to receipt
-    // In this context, we usually want the bridge for everything.
-    // For simplicity, let's just use receipt logic with senha format.
     const payload = buildEscPosReceipt(
       `SENHA ${senha}`,
       "BALCÃO",
@@ -409,6 +406,7 @@ export async function printSenha(
   }
   
   doPrint(buildSenhaHtml(senha, items), items.length);
+  return true;
 }
 
 export async function printReceipt(
