@@ -533,6 +533,77 @@ export async function printBill(
   return true;
 }
 
+export async function printCustomerReceipt(
+  tableName: string,
+  waiterName: string,
+  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  total: number,
+  paymentMethod: string,
+  amountPaid: number,
+  customerData?: { name?: string; document?: string } | null
+): Promise<boolean> {
+  const cfg = loadPrintConfig();
+  const f = getFontSizes(cfg.printSize);
+  const now = new Date();
+  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString("pt-BR");
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const change = amountPaid - total;
+  const COMPANY_CNPJ = "38.000.368/0001-22";
+
+  const payLabel: Record<string, string> = { cash: "DINHEIRO", pix: "PIX", card: "CARTÃO" };
+
+  const itemsHtml = items.map((item) => {
+    const sub = (item.product_price * item.quantity).toFixed(2);
+    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>`;
+  }).join("");
+
+  const customerHtml = customerData?.name || customerData?.document
+    ? `<hr class="sep">
+       ${customerData.name ? `<div class="info-row"><span class="info-label">Cliente:</span> <span class="info-value">${customerData.name}</span></div>` : ""}
+       ${customerData.document ? `<div class="info-row"><span class="info-label">CPF/CNPJ:</span> <span class="info-value">${customerData.document}</span></div>` : ""}`
+    : "";
+
+  const changeHtml = paymentMethod === "cash" && change > 0
+    ? `<div class="info-row"><span class="info-label">Troco:</span> <span class="info-value">R$ ${change.toFixed(2)}</span></div>`
+    : "";
+
+  const html = wrapHtml("Comprovante", cfg, `
+<div class="receipt">
+  <div class="header-text">${cfg.headerText}</div>
+  <div class="center" style="font-size:${f.base - 1}px;color:#555;">CNPJ: ${COMPANY_CNPJ}</div>
+  <hr class="sep-bold">
+  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** COMPROVANTE ***</div>
+  <hr class="sep-bold">
+  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
+  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
+  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
+  ${customerHtml}
+  <hr class="sep">
+  ${itemsHtml}
+  <hr class="sep-bold">
+  <div class="total-block"><div class="total-row"><span>TOTAL</span><span>R$ ${total.toFixed(2)}</span></div></div>
+  <hr class="sep">
+  <div class="info-row"><span class="info-label">Pagamento:</span> <span class="info-value">${payLabel[paymentMethod] || paymentMethod}</span></div>
+  <div class="info-row"><span class="info-label">Valor pago:</span> <span class="info-value">R$ ${amountPaid.toFixed(2)}</span></div>
+  ${changeHtml}
+  <hr class="sep">
+  <div class="qty-line">Qtd itens: ${totalQty}</div>
+  <div class="footer">${cfg.footerText}</div>
+  <div class="center" style="font-size:${f.footer}px;margin-top:4px;color:#555;">Obrigado pela preferência!</div>
+  <div class="cut">✂ --------------------------------</div>
+</div>`);
+
+  if (cfg.printMode === "bridge") {
+    // Build ESC/POS for bridge
+    const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg);
+    return await sendToBridge(payload, cfg.bridgeUrl);
+  }
+
+  doPrint(html, items.length);
+  return true;
+}
+
 export async function printTest() {
   const items = [
     { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
