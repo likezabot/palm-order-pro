@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import CloseOrder from "@/components/cashier/CloseOrder";
+import { manualPrintOrder } from "@/lib/print-service";
+import { useToast } from "@/hooks/use-toast";
+import { useFeedback } from "@/hooks/use-feedback";
 
 const Cashier = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { playFeedback } = useFeedback();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const { data: orders = [] } = useQuery({
@@ -24,6 +29,21 @@ const Cashier = () => {
     },
     refetchInterval: 5000,
   });
+
+  const handlePrint = async (order: Order) => {
+    playFeedback("click");
+    const success = await manualPrintOrder(order);
+    if (success) {
+      toast({ title: `Cupom enviado para Mesa ${order.table_name}` });
+    } else {
+      toast({ title: "Erro ao imprimir", variant: "destructive" });
+    }
+  };
+
+  const handleEdit = (order: Order) => {
+    playFeedback("click");
+    navigate(`/palm?orderId=${order.id}&tableName=${order.table_name}`);
+  };
 
   if (selectedOrder) {
     return (
@@ -44,7 +64,7 @@ const Cashier = () => {
         <button onClick={() => navigate("/")} className="text-muted-foreground">
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold">CAIXA</h1>
+        <h1 className="text-xl font-bold uppercase tracking-tight">CAIXA</h1>
       </div>
 
       <div className="flex-1 p-4 space-y-3">
@@ -54,18 +74,37 @@ const Cashier = () => {
         {orders.map((order) => (
           <div
             key={order.id}
-            className="flex items-center justify-between rounded-lg bg-card border border-border p-4"
+            className="flex items-center justify-between rounded-xl bg-card border-2 border-border p-4 shadow-sm"
           >
-            <div>
-              <p className="font-bold text-lg">{order.table_name}</p>
-              <p className="text-primary font-bold">R$ {(order.total || 0).toFixed(2)}</p>
+            <div className="flex-1">
+              <p className="font-black text-xl text-foreground">Mesa {order.table_name}</p>
+              <p className="text-primary font-black text-lg">R$ {(order.total || 0).toFixed(2)}</p>
             </div>
-            <button
-              onClick={() => setSelectedOrder(order)}
-              className="rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground active:scale-95 transition-transform min-h-[48px]"
-            >
-              FECHAR
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePrint(order)}
+                className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform"
+                title="Imprimir"
+              >
+                <Printer size={20} />
+              </button>
+              <button
+                onClick={() => handleEdit(order)}
+                className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform"
+                title="Editar"
+              >
+                <Pencil size={20} />
+              </button>
+              <button
+                onClick={() => {
+                  playFeedback("click");
+                  setSelectedOrder(order);
+                }}
+                className="rounded-lg bg-primary px-5 py-3 font-black text-primary-foreground active:scale-95 transition-transform min-h-[48px]"
+              >
+                FECHAR
+              </button>
+            </div>
           </div>
         ))}
       </div>
