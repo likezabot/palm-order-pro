@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
-import { manualPrintOrder, autoPrintOrder } from "@/lib/print-service";
+import { manualPrintOrder, manualPrintDelta, manualPrintBill, autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
 import { printTest, getPaperWidth, setPaperWidth } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -84,7 +84,7 @@ const Pdv = () => {
   useEffect(() => { playFeedbackRef.current = playFeedback; }, [playFeedback]);
 
   // Ref-based auto-print — never changes identity, so Realtime subscription stays stable
-  const tryAutoPrintRef = useRef(async (order: Order, eventKey: string) => {
+  const tryAutoPrintRef = useRef(async (order: Order, eventKey: string, isUpdate: boolean) => {
     if (printedEventsRef.current.has(eventKey)) return;
     if (printingNowRef.current.has(order.id)) return;
 
@@ -92,15 +92,19 @@ const Pdv = () => {
     printingNowRef.current.add(order.id);
 
     console.log(`[PDV AutoPrint] Aguardando itens do pedido ${order.id} (Mesa ${order.table_name})...`);
-    // Delay para itens chegarem ao banco
     await new Promise((r) => setTimeout(r, 2000));
 
-    const result = await autoPrintOrder(order);
+    const result = isUpdate
+      ? await autoPrintDelta(order)
+      : await autoPrintOrder(order);
     printingNowRef.current.delete(order.id);
 
     if (result.printed) {
-      console.log(`[PDV AutoPrint] Impresso com sucesso — Mesa ${order.table_name}`);
-      toastRef.current({ title: `Impresso automaticamente — Mesa ${order.table_name}` });
+      const msg = result.reason === "delta_success"
+        ? `Acréscimo impresso — Mesa ${order.table_name}`
+        : `Impresso automaticamente — Mesa ${order.table_name}`;
+      console.log(`[PDV AutoPrint] ${msg}`);
+      toastRef.current({ title: msg });
     } else {
       console.warn(`[PDV AutoPrint] Não imprimiu: ${result.reason}`);
     }
@@ -120,7 +124,7 @@ const Pdv = () => {
         playFeedbackRef.current("notification");
         toastRef.current({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
         const eventKey = `${newOrder.id}:insert`;
-        tryAutoPrintRef.current(newOrder, eventKey);
+        tryAutoPrintRef.current(newOrder, eventKey, false);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
@@ -133,7 +137,7 @@ const Pdv = () => {
         if (totalChanged || printedAtReset) {
           console.log(`[PDV Realtime] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name} (totalChanged=${totalChanged}, printedReset=${printedAtReset})`);
           const eventKey = `${updated.id}:upd:${updated.updated_at}`;
-          tryAutoPrintRef.current(updated, eventKey);
+          tryAutoPrintRef.current(updated, eventKey, true); // isUpdate=true → imprime delta
         }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
@@ -434,14 +438,39 @@ const Pdv = () => {
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
               </div>
 
-              {/* Action buttons */}
+              {/* Print buttons */}
               <div className="space-y-3 pt-2">
-                <button
-                  onClick={() => handlePrint(selectedOrder)}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card p-4 font-bold text-foreground hover:bg-secondary transition-colors min-h-[56px]"
-                >
-                  <Printer size={20} /> REIMPRIMIR CUPOM
-                </button>
+                <div className="grid grid-cols-3 gap-2">
+                  {(selectedOrder as any).delta_items && (
+                    <button
+                      onClick={async () => {
+                        const ok = await manualPrintDelta(selectedOrder);
+                        toast({ title: ok ? "Acréscimo impresso!" : "Sem acréscimo para imprimir", variant: ok ? "default" : "destructive" });
+                      }}
+                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                    >
+                      <FilePlus size={16} />
+                      ACRÉSCIMO
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handlePrint(selectedOrder)}
+                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                  >
+                    <FileText size={16} />
+                    PEDIDO
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const ok = await manualPrintBill(selectedOrder);
+                      toast({ title: ok ? "Conta impressa!" : "Sem itens para imprimir", variant: ok ? "default" : "destructive" });
+                    }}
+                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                  >
+                    <Receipt size={16} />
+                    CONTA
+                  </button>
+                </div>
 
                 {cfg?.next && (
                   <button
