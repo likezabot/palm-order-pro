@@ -179,6 +179,7 @@ const Palm = () => {
           setCart([]);
           setOriginalCart([]);
           setExistingOrderId(null);
+          setOrderVersion(null);
           setSenha("");
         }}
       />
