@@ -212,7 +212,7 @@ export default function PrintConfigPanel() {
 
               <div className="pt-1">
                 <Button variant="link" className="h-auto p-0 text-[10px] gap-1 text-primary font-bold" asChild>
-                  <a href="/BRIDGE_INSTRUCTIONS.md" target="_blank">
+                  <a href="/bridge/BRIDGE_INSTRUCTIONS.md" target="_blank">
                     <Download className="w-3 h-3" /> VER INSTRUÇÕES DE INSTALAÇÃO
                   </a>
                 </Button>
