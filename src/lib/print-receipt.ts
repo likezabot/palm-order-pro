@@ -435,6 +435,104 @@ export async function printReceipt(
   return true;
 }
 
+export async function printDelta(
+  tableName: string,
+  waiterName: string,
+  deltaItems: { product_name: string; quantity: number; product_price: number; note?: string | null }[]
+): Promise<boolean> {
+  const cfg = loadPrintConfig();
+  console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
+
+  if (cfg.printMode === "bridge") {
+    const payload = buildEscPosDelta(tableName, waiterName, deltaItems, cfg);
+    return await sendToBridge(payload, cfg.bridgeUrl);
+  }
+
+  const deltaTotal = deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0);
+  // Reuse receipt HTML but with ACRÉSCIMO header
+  const f = getFontSizes(cfg.printSize);
+  const now = new Date();
+  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString("pt-BR");
+
+  const itemsHtml = deltaItems.map((item) => {
+    const sub = (item.product_price * item.quantity).toFixed(2);
+    const noteHtml = item.note ? `<div class="item-note">↳ ${item.note}</div>` : "";
+    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>${noteHtml}`;
+  }).join("");
+
+  const html = wrapHtml("Acréscimo", cfg, `
+<div class="receipt">
+  <div class="header-text">${cfg.headerText}</div>
+  <hr class="sep-bold">
+  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** ACRÉSCIMO ***</div>
+  <hr class="sep-bold">
+  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
+  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
+  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
+  <hr class="sep">
+  ${itemsHtml}
+  <hr class="sep-bold">
+  <div class="total-block"><div class="total-row"><span>SUBTOTAL</span><span>R$ ${deltaTotal.toFixed(2)}</span></div></div>
+  <hr class="sep">
+  <div class="footer">${cfg.footerText}</div>
+  <div class="cut">✂ --------------------------------</div>
+</div>`);
+
+  doPrint(html, deltaItems.length);
+  return true;
+}
+
+export async function printBill(
+  tableName: string,
+  waiterName: string,
+  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  total: number
+): Promise<boolean> {
+  const cfg = loadPrintConfig();
+  console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
+
+  if (cfg.printMode === "bridge") {
+    const payload = buildEscPosBill(tableName, waiterName, items, total, cfg);
+    return await sendToBridge(payload, cfg.bridgeUrl);
+  }
+
+  // Reuse receipt HTML but with CONTA header
+  const f = getFontSizes(cfg.printSize);
+  const now = new Date();
+  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString("pt-BR");
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+
+  const itemsHtml = items.map((item) => {
+    const sub = (item.product_price * item.quantity).toFixed(2);
+    const noteHtml = item.note ? `<div class="item-note">↳ ${item.note}</div>` : "";
+    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>${noteHtml}`;
+  }).join("");
+
+  const html = wrapHtml("Conta", cfg, `
+<div class="receipt">
+  <div class="header-text">${cfg.headerText}</div>
+  <hr class="sep-bold">
+  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** CONTA ***</div>
+  <hr class="sep-bold">
+  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
+  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
+  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
+  <hr class="sep">
+  ${itemsHtml}
+  <hr class="sep-bold">
+  <div class="total-block"><div class="total-row"><span>TOTAL</span><span>R$ ${total.toFixed(2)}</span></div></div>
+  <hr class="sep">
+  <div class="qty-line">Qtd itens: ${totalQty}</div>
+  <div class="footer">${cfg.footerText}</div>
+  <div class="cut">✂ --------------------------------</div>
+</div>`);
+
+  doPrint(html, items.length);
+  return true;
+}
+
 export async function printTest() {
   const items = [
     { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
