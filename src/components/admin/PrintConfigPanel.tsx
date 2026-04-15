@@ -63,19 +63,31 @@ export default function PrintConfigPanel() {
 
   const handleTestPrint = async () => {
     let success = false;
-    if (previewMode === "senha") {
-      await printSenha("042", SAMPLE_ITEMS);
-      success = true;
-    } else {
-      success = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL);
+    let errorMsg = "";
+
+    try {
+      if (previewMode === "senha") {
+        success = await printSenha("042", SAMPLE_ITEMS);
+      } else {
+        success = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL);
+      }
+    } catch (e: any) {
+      success = false;
+      errorMsg = e.message;
     }
 
     if (success) {
-      toast({ title: "Teste enviado com sucesso!" });
-    } else if (cfg.printMode === "bridge") {
       toast({ 
-        title: "Falha na ponte local", 
-        description: "Verifique se o serviço lp-bridge está rodando.",
+        title: "Impressão enviada!", 
+        description: "O comando foi processado com sucesso pela ponte.",
+        className: "bg-emerald-50 border-emerald-200"
+      });
+    } else {
+      toast({ 
+        title: "Erro na Impressão", 
+        description: cfg.printMode === "bridge" 
+          ? (errorMsg || "Ponte local indisponível ou impressora desconectada.")
+          : "Falha ao abrir janela de impressão do navegador.",
         variant: "destructive"
       });
     }
@@ -200,7 +212,7 @@ export default function PrintConfigPanel() {
 
               <div className="pt-1">
                 <Button variant="link" className="h-auto p-0 text-[10px] gap-1 text-primary font-bold" asChild>
-                  <a href="/BRIDGE_INSTRUCTIONS.md" target="_blank">
+                  <a href="/bridge/BRIDGE_INSTRUCTIONS.md" target="_blank">
                     <Download className="w-3 h-3" /> VER INSTRUÇÕES DE INSTALAÇÃO
                   </a>
                 </Button>

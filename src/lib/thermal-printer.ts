@@ -89,7 +89,7 @@ export async function checkBridgeStatus(url: string): Promise<{ online: boolean;
   const healthUrl = url.replace(/\/print$/, "/health");
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 2000); // 2s timeout
+    const id = setTimeout(() => controller.abort(), 1500); // Fast timeout
     
     const response = await fetch(healthUrl, { 
       signal: controller.signal,
@@ -97,7 +97,7 @@ export async function checkBridgeStatus(url: string): Promise<{ online: boolean;
     });
     clearTimeout(id);
 
-    if (!response.ok) return { online: false, printer_connected: false, error: `HTTP ${response.status}` };
+    if (!response.ok) return { online: false, printer_connected: false, error: `Serviço retornou erro HTTP ${response.status}` };
     
     const data = await response.json();
     return { 
@@ -106,7 +106,11 @@ export async function checkBridgeStatus(url: string): Promise<{ online: boolean;
       error: data.printer_connected ? undefined : "Impressora USB não detectada na ponte"
     };
   } catch (e) {
-    return { online: false, printer_connected: false, error: "Ponte local offline (localhost:9100)" };
+    return { 
+      online: false, 
+      printer_connected: false, 
+      error: "Ponte local indisponível (Certifique-se que o serviço lp-bridge está rodando em localhost:9100)" 
+    };
   }
 }
 
@@ -132,13 +136,14 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
       }),
     });
     
-    const result = await response.json();
-    
     if (!response.ok) {
-      console.error(`[thermal-bridge] Erro: ${result.error || response.statusText}`);
+      const result = await response.json().catch(() => ({ error: "Erro desconhecido no servidor" }));
+      console.error(`[thermal-bridge] Erro HTTP ${response.status}: ${result.error || response.statusText}`);
       return false;
     }
 
+    const result = await response.json();
+    
     if (result.success) {
       console.log("[thermal-bridge] Sucesso! Cupom enviado para a impressora.");
       return true;
@@ -146,8 +151,8 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
       console.error(`[thermal-bridge] Falha no serviço local: ${result.error}`);
       return false;
     }
-  } catch (e) {
-    console.error("[thermal-bridge] Falha de conexão. A ponte local está rodando?");
+  } catch (e: any) {
+    console.error("[thermal-bridge] Falha de conexão:", e.message);
     return false;
   }
 }
