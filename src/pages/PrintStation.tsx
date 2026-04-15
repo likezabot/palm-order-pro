@@ -35,11 +35,11 @@ const PrintStation = () => {
     if (error) {
       console.error(error);
       } else {
-        const orderList = (data || []) as unknown as Order[];
+      const orderList = (data || []) as unknown as Order[];
         setOrders(orderList);
         const printed = new Set<string>();
         orderList.forEach((o) => {
-          if (o.printed_at) printed.add(o.id);
+          if ((o as any).print_status === "printed") printed.add(o.id);
         });
         setPrintedIds(printed);
       }
@@ -115,11 +115,11 @@ const PrintStation = () => {
           // Atualizar lista local
           setOrders((prev) => prev.map(o => o.id === updated.id ? updated : o));
 
-          // Re-imprimir se printed_at foi resetado (indica edição relevante)
-          const printedAtReset = (old as any).printed_at !== null && (updated as any).printed_at === null;
+          // Re-imprimir se print_status voltou para pending (indica edição)
+          const printReset = (updated as any).print_status === 'pending' && (old as any).print_status !== 'pending';
           const totalChanged = updated.total !== old.total;
 
-          if (autoPrintRef.current && (printedAtReset || totalChanged)) {
+          if (autoPrintRef.current && (printReset || totalChanged)) {
             if (printingRef.current.has(updated.id)) return;
             printingRef.current.add(updated.id);
             try {
