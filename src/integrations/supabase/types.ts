@@ -146,12 +146,16 @@ export type Database = {
           id: string
           is_printed: boolean | null
           payment_method: string | null
+          print_claimed_at: string | null
+          print_last_error: string | null
+          print_status: string
           print_type: string | null
           printed_at: string | null
           status: string
           table_name: string
           total: number | null
           updated_at: string
+          version: number
           waiter_name: string | null
         }
         Insert: {
@@ -161,12 +165,16 @@ export type Database = {
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
+          print_claimed_at?: string | null
+          print_last_error?: string | null
+          print_status?: string
           print_type?: string | null
           printed_at?: string | null
           status?: string
           table_name: string
           total?: number | null
           updated_at?: string
+          version?: number
           waiter_name?: string | null
         }
         Update: {
@@ -176,12 +184,16 @@ export type Database = {
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
+          print_claimed_at?: string | null
+          print_last_error?: string | null
+          print_status?: string
           print_type?: string | null
           printed_at?: string | null
           status?: string
           table_name?: string
           total?: number | null
           updated_at?: string
+          version?: number
           waiter_name?: string | null
         }
         Relationships: []
@@ -307,14 +319,53 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      update_order_items: {
+      claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
+      complete_order_print: { Args: { p_order_id: string }; Returns: undefined }
+      create_order: {
         Args: {
-          p_delta_items?: Json
           p_items: Json
-          p_order_id: string
-          p_print_type?: string
+          p_table_name: string
           p_total: number
+          p_waiter_name: string
         }
+        Returns: Json
+      }
+      fail_order_print: {
+        Args: { p_error?: string; p_order_id: string }
+        Returns: undefined
+      }
+      pay_order: {
+        Args: {
+          p_amount_paid: number
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: undefined
+      }
+      update_order_items:
+        | {
+            Args: {
+              p_delta_items?: Json
+              p_items: Json
+              p_order_id: string
+              p_print_type?: string
+              p_total: number
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_delta_items?: Json
+              p_expected_version?: number
+              p_items: Json
+              p_order_id: string
+              p_print_type?: string
+              p_total: number
+            }
+            Returns: Json
+          }
+      update_order_status: {
+        Args: { p_order_id: string; p_status: string }
         Returns: undefined
       }
     }
