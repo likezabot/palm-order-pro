@@ -5,9 +5,8 @@ import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", icon: Smartphone, path: "/palm", emoji: "📱" },
-  { label: "PDV / IMPRESSÃO", icon: Monitor, path: "/pdv", emoji: "🖥️" },
+  { label: "PDV / CAIXA", icon: Monitor, path: "/pdv", emoji: "🖥️" },
   { label: "PAINEL COZINHA", icon: Monitor, path: "/kitchen", emoji: "👨‍🍳" },
-  { label: "CAIXA", icon: DollarSign, path: "/cashier", emoji: "💰" },
   { label: "ADMIN", icon: Settings, path: "/admin", emoji: "⚙️" },
 ];
 
