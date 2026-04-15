@@ -19,11 +19,11 @@ const PrintStation = () => {
 
   // Refs estáveis para uso dentro do listener Realtime
   const autoPrintRef = useRef(autoPrint);
-  const printingRef = useRef<Set<string>>(new Set()); // guard local contra re-entrada
+  const printingRef = useRef<Set<string>>(new Set());
+  const toastRef = useRef(toast);
 
-  useEffect(() => {
-    autoPrintRef.current = autoPrint;
-  }, [autoPrint]);
+  useEffect(() => { autoPrintRef.current = autoPrint; }, [autoPrint]);
+  useEffect(() => { toastRef.current = toast; }, [toast]);
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -36,7 +36,6 @@ const PrintStation = () => {
       console.error(error);
     } else {
       setOrders(data || []);
-      // Marcar pedidos que já têm printed_at
       const printed = new Set<string>();
       (data || []).forEach((o: any) => {
         if (o.printed_at) printed.add(o.id);
@@ -56,9 +55,10 @@ const PrintStation = () => {
 
   useEffect(() => {
     fetchOrders();
+    console.log("[PrintStation] Inscrevendo canal Realtime...");
 
     const channel = supabase
-      .channel("print-station-v2")
+      .channel("print-station-v3")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "orders" },
@@ -66,45 +66,77 @@ const PrintStation = () => {
           const newOrder = payload.new as Order;
           setOrders((prev) => [newOrder, ...prev.slice(0, 19)]);
 
-          // Guard: não re-entrar se já estamos processando este pedido
           if (printingRef.current.has(newOrder.id)) return;
 
           if (autoPrintRef.current) {
             printingRef.current.add(newOrder.id);
-            console.log(`[PrintStation] Pedido recebido via Realtime: ${newOrder.id} - Mesa ${newOrder.table_name}`);
+            console.log(`[PrintStation] INSERT recebido: ${newOrder.id} — Mesa ${newOrder.table_name}`);
 
-            // Pequeno delay para garantir que todos os itens do pedido foram salvos
-            // no banco de dados pela API antes de iniciarmos a busca.
-            await new Promise((r) => setTimeout(r, 1500));
+            // Delay para itens chegarem ao banco
+            await new Promise((r) => setTimeout(r, 2000));
 
             const result = await autoPrintOrder(newOrder);
 
             if (result.printed) {
               setPrintedIds((prev) => new Set(prev).add(newOrder.id));
-              toast({
+              console.log(`[PrintStation] Impresso com sucesso — Mesa ${newOrder.table_name}`);
+              toastRef.current({
                 title: "Pedido impresso!",
                 description: `Mesa ${newOrder.table_name} — impressão automática.`,
               });
             } else if (result.reason === "already_printed") {
               setPrintedIds((prev) => new Set(prev).add(newOrder.id));
+              console.log(`[PrintStation] Já impresso por outra instância: ${newOrder.id}`);
+            } else {
+              console.warn(`[PrintStation] Não imprimiu: ${result.reason}`);
             }
-            // Não remover de printingRef - é um guard de sessão
           } else {
-            toast({
+            toastRef.current({
               title: "Novo pedido recebido!",
               description: `Mesa ${newOrder.table_name} — impressão automática desligada.`,
             });
           }
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders" },
+        async (payload) => {
+          const updated = payload.new as Order;
+          const old = payload.old as Partial<Order>;
+          
+          // Atualizar lista local
+          setOrders((prev) => prev.map(o => o.id === updated.id ? updated : o));
+
+          // Re-imprimir se printed_at foi resetado (indica edição relevante)
+          const printedAtReset = (old as any).printed_at !== null && (updated as any).printed_at === null;
+          const totalChanged = updated.total !== old.total;
+
+          if (autoPrintRef.current && (printedAtReset || totalChanged)) {
+            if (printingRef.current.has(updated.id)) return;
+            printingRef.current.add(updated.id);
+            console.log(`[PrintStation] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name}`);
+            
+            await new Promise((r) => setTimeout(r, 2000));
+            const result = await autoPrintOrder(updated);
+            printingRef.current.delete(updated.id);
+            
+            if (result.printed) {
+              setPrintedIds((prev) => new Set(prev).add(updated.id));
+              toastRef.current({ title: `Reimpresso — Mesa ${updated.table_name}` });
+            }
+          }
+        }
+      )
       .subscribe((s) => {
+        console.log(`[PrintStation] Realtime status: ${s}`);
         setStatus(s === "SUBSCRIBED" ? "online" : "offline");
       });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchOrders, toast]);
+  }, [fetchOrders]); // Apenas fetchOrders — estável
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
