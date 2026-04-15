@@ -64,7 +64,7 @@ const Pdv = () => {
     refetchInterval: 10000,
   });
 
-  // Impressão MANUAL — sem auto-print, sem claim
+  // Impressão MANUAL — reimpressão sob demanda
   const handlePrint = useCallback(async (order: Order) => {
     const success = await manualPrintOrder(order);
     if (!success) {
@@ -74,18 +74,53 @@ const Pdv = () => {
     }
   }, [toast]);
 
-  // Realtime — apenas notificação, SEM autoimpressão
+  // Guard de idempotência: rastreia "orderId:updated_at" já processados
+  const printedEventsRef = useRef<Set<string>>(new Set());
+  const printingNowRef = useRef<Set<string>>(new Set());
+
+  const tryAutoPrint = useCallback(async (order: Order, eventKey: string) => {
+    // Já processou este evento exato
+    if (printedEventsRef.current.has(eventKey)) return;
+    // Já está imprimindo este pedido
+    if (printingNowRef.current.has(order.id)) return;
+
+    printedEventsRef.current.add(eventKey);
+    printingNowRef.current.add(order.id);
+
+    // Delay para itens chegarem ao banco
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const result = await autoPrintOrder(order);
+    printingNowRef.current.delete(order.id);
+
+    if (result.printed) {
+      toast({ title: `Impresso automaticamente — Mesa ${order.table_name}` });
+    }
+  }, [toast]);
+
+  // Realtime — autoimpressão em INSERT e UPDATE
   useEffect(() => {
     const channel = supabase
       .channel("pdv-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
-        if (payload.eventType === "INSERT") {
-          queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
-          const newOrder = payload.new as Order;
-          playFeedback("notification");
-          toast({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
-          // NÃO auto-imprime — isso é responsabilidade da PrintStation
+        queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
+        const newOrder = payload.new as Order;
+        playFeedback("notification");
+        toast({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
+        const eventKey = `${newOrder.id}:insert`;
+        tryAutoPrint(newOrder, eventKey);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+        queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+        const updated = payload.new as Order;
+        const old = payload.old as Partial<Order>;
+        // Auto-imprimir se total ou status mudou (indica alteração relevante)
+        const totalChanged = updated.total !== old.total;
+        const statusChanged = updated.status !== old.status;
+        if (totalChanged || statusChanged) {
+          const eventKey = `${updated.id}:upd:${updated.updated_at}`;
+          tryAutoPrint(updated, eventKey);
         }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
@@ -96,7 +131,7 @@ const Pdv = () => {
       });
 
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient, toast, playFeedback]);
+  }, [queryClient, toast, playFeedback, tryAutoPrint]);
 
   const selectedOrder = orders.find((o) => o.id === selectedId) || null;
   const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
