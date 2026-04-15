@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import { manualPrintOrder, manualPrintDelta, manualPrintBill, autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
 import { printTest, getPaperWidth, setPaperWidth, printCustomerReceipt } from "@/lib/print-receipt";
+import { loadPrintConfig } from "@/lib/print-config";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -172,15 +173,18 @@ const Pdv = () => {
   const handlePayment = async () => {
     if (!selectedOrder || !payMethod || sending) return;
     setSending(true);
+    const printConfig = loadPrintConfig();
     const total = selectedOrder.total || 0;
     const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
     await supabase.rpc("pay_order", { p_order_id: selectedOrder.id, p_payment_method: payMethod, p_amount_paid: paid } as any);
     
-    // Print customer receipt
+    // Print customer receipt only if in bridge mode
     const items = allItems.filter((i) => i.order_id === selectedOrder.id);
-    if (items.length > 0) {
+    let printed = false;
+
+    if (items.length > 0 && printConfig.printMode === "bridge") {
       const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
-      await printCustomerReceipt(
+      printed = await printCustomerReceipt(
         selectedOrder.table_name,
         selectedOrder.waiter_name || "N/A",
         items,
@@ -192,7 +196,14 @@ const Pdv = () => {
     }
 
     playFeedback("success");
-    toast({ title: "Pagamento confirmado! Comprovante impresso." });
+    if (printConfig.printMode === "bridge") {
+      toast({ title: "Pagamento confirmado! Comprovante impresso." });
+    } else {
+      toast({ 
+        title: "Mesa fechada com sucesso!", 
+        description: "No navegador/celular, o comprovante não é impresso. Use o app desktop para imprimir." 
+      });
+    }
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
     setShowPayment(false);
     setPayMethod("");
@@ -286,9 +297,17 @@ const Pdv = () => {
                   <Button 
                     variant="outline" 
                     className="w-full gap-2 font-bold"
-                    onClick={() => {
-                      printTest();
-                      toast({ title: "Teste enviado!", description: "Verifique o cupom na impressora." });
+                    onClick={async () => {
+                      const ok = await printTest();
+                      if (ok) {
+                        toast({ title: "Teste enviado!", description: "Verifique o cupom na impressora." });
+                      } else {
+                        toast({ 
+                          title: "Impressão bloqueada", 
+                          description: "O modo navegador não permite imprimir. Mude para o modo app desktop/ponte.",
+                          variant: "destructive"
+                        });
+                      }
                     }}
                   >
                     <Printer className="w-4 h-4" />
@@ -447,7 +466,7 @@ const Pdv = () => {
                   disabled={!payMethod || sending || (payMethod === "cash" && paid < total)}
                   className="flex-1 rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
                 >
-                  {sending ? "PROCESSANDO..." : "✅ CONFIRMAR"}
+                  {sending ? "PROCESSANDO..." : "✅ FECHAR MESA"}
                 </button>
               </div>
             </div>
@@ -564,7 +583,7 @@ const Pdv = () => {
                     onClick={() => { setShowPayment(true); setPayMethod(""); setAmountPaid(""); }}
                     className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary p-4 font-bold text-primary-foreground min-h-[56px]"
                   >
-                    <DollarSign size={20} /> FECHAR CONTA
+                    <DollarSign size={20} /> FECHAR MESA
                   </button>
                 )}
               </div>

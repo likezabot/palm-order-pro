@@ -405,8 +405,9 @@ export async function printSenha(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
   
-  doPrint(buildSenhaHtml(senha, items), items.length);
-  return true;
+  // No navegador/celular, não imprimir senha para evitar PDF
+  console.log("[print] Senha ignorada no modo browser.");
+  return false;
 }
 
 export async function printReceipt(
@@ -431,8 +432,9 @@ export async function printReceipt(
     return true;
   }
 
-  doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);
-  return true;
+  // No navegador/celular, não imprimir pedido para evitar PDF
+  console.log("[print] Pedido ignorado no modo browser.");
+  return false;
 }
 
 export async function printDelta(
@@ -479,8 +481,9 @@ export async function printDelta(
   <div class="cut">✂ --------------------------------</div>
 </div>`);
 
-  doPrint(html, deltaItems.length);
-  return true;
+  // No navegador/celular, não imprimir acréscimo para evitar PDF
+  console.log("[print] Acréscimo ignorado no modo browser.");
+  return false;
 }
 
 export async function printBill(
@@ -529,8 +532,9 @@ export async function printBill(
   <div class="cut">✂ --------------------------------</div>
 </div>`);
 
-  doPrint(html, items.length);
-  return true;
+  // No navegador/celular, não imprimir conta para evitar PDF
+  console.log("[print] Conta ignorada no modo browser.");
+  return false;
 }
 
 export async function printCustomerReceipt(
@@ -600,8 +604,9 @@ export async function printCustomerReceipt(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  doPrint(html, items.length);
-  return true;
+  // No navegador/celular, não imprimir comprovante do cliente para evitar PDF
+  console.log("[print] Comprovante do cliente ignorado no modo browser.");
+  return false;
 }
 
 export async function printTest() {
@@ -610,5 +615,10 @@ export async function printTest() {
     { product_name: "Refrigerante Lata", quantity: 1, product_price: 8.5, note: null },
     { product_name: "Cerveja Original", quantity: 3, product_price: 12.0, note: "Bem gelada" },
   ];
-  return await printReceipt("TESTE", "Admin", items, 78.5);
+  const ok = await printReceipt("TESTE", "Admin", items, 78.5);
+  if (!ok && loadPrintConfig().printMode !== "bridge") {
+    // Se falhou por estar no modo browser, avisar no log mas não lançar erro
+    console.warn("[print] Teste de impressão bloqueado no navegador.");
+  }
+  return ok;
 }
