@@ -141,10 +141,10 @@ const Pdv = () => {
         const old = payload.old as Partial<Order>;
         // Com REPLICA IDENTITY FULL, old tem todos os campos
         const totalChanged = updated.total !== old.total;
-        const printedAtReset = (old as any).printed_at !== null && (updated as any).printed_at === null;
+        const printReset = (updated as any).print_status === 'pending' && (old as any).print_status !== 'pending';
         
-        if (totalChanged || printedAtReset) {
-          console.log(`[PDV Realtime] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name} (totalChanged=${totalChanged}, printedReset=${printedAtReset})`);
+        if (totalChanged || printReset) {
+          console.log(`[PDV Realtime] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name} (totalChanged=${totalChanged}, printReset=${printReset})`);
           const eventKey = `${updated.id}:upd:${updated.updated_at}`;
           tryAutoPrintRef.current(updated, eventKey, true); // isUpdate=true → imprime delta
         }
