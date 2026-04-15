@@ -188,6 +188,62 @@ const OrderReview = ({
           <span className="text-lg font-bold">Total:</span>
           <span className="text-xl font-bold text-primary">R$ {total.toFixed(2)}</span>
         </div>
+
+        {/* Botões de impressão manual — só para mesa existente */}
+        {existingOrderId && (
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={async () => {
+                playFeedback("click");
+                const delta = calculateDelta(originalCart, cart);
+                if (delta.length === 0) {
+                  toast({ title: "Sem acréscimos", description: "Nenhum item novo para imprimir.", variant: "destructive" });
+                  return;
+                }
+                const deltaTotal = delta.reduce((s, i) => s + i.product_price * i.quantity, 0);
+                await printDelta(tableName, waiterName, delta, deltaTotal);
+                toast({ title: "Acréscimo enviado para impressão" });
+              }}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-foreground active:scale-95 transition-transform min-h-[44px]"
+            >
+              <Plus size={16} /> Acréscimo
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                playFeedback("click");
+                await printReceipt(tableName, waiterName, cart.map(i => ({
+                  product_name: i.product.name,
+                  quantity: i.quantity,
+                  product_price: i.product.price,
+                  note: i.note || null,
+                })), total);
+                toast({ title: "Pedido enviado para impressão" });
+              }}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-foreground active:scale-95 transition-transform min-h-[44px]"
+            >
+              <FileText size={16} /> Pedido
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                playFeedback("click");
+                await printBill(tableName, waiterName, cart.map(i => ({
+                  product_name: i.product.name,
+                  quantity: i.quantity,
+                  product_price: i.product.price,
+                  note: i.note || null,
+                })), total);
+                toast({ title: "Conta enviada para impressão" });
+              }}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-foreground active:scale-95 transition-transform min-h-[44px]"
+            >
+              <Receipt size={16} /> Conta
+            </button>
+          </div>
+        )}
+
         <button
           onClick={handleFinalize}
           disabled={sending || cart.length === 0}
