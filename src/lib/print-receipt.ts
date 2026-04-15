@@ -391,13 +391,10 @@ function doPrint(html: string, expectedItemCount: number): void {
 export async function printSenha(
   senha: string,
   items: { product_name: string; quantity: number }[]
-) {
+): Promise<boolean> {
   const cfg = loadPrintConfig();
   if (cfg.printMode === "bridge") {
     console.log("[print] Usando ponte térmica para senha");
-    // Adapt for bridge if needed - for now fallback to browser or implement similar to receipt
-    // In this context, we usually want the bridge for everything.
-    // For simplicity, let's just use receipt logic with senha format.
     const payload = buildEscPosReceipt(
       `SENHA ${senha}`,
       "BALCÃO",
@@ -409,6 +406,7 @@ export async function printSenha(
   }
   
   doPrint(buildSenhaHtml(senha, items), items.length);
+  return true;
 }
 
 export async function printReceipt(
@@ -423,11 +421,14 @@ export async function printReceipt(
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg);
     const success = await sendToBridge(payload, cfg.bridgeUrl);
+    
     if (!success) {
-      console.warn("[print] Falha na ponte, tentando fallback para navegador");
-      doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);
+      console.warn("[print] Falha na ponte térmica.");
+      // Opcional: só faz fallback se o usuário não exigir erro real
+      // Mas o usuário pediu "sem falsa confirmação", então vamos retornar o erro.
+      return false;
     }
-    return success;
+    return true;
   }
 
   doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);

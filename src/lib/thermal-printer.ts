@@ -83,6 +83,34 @@ export class EscPosBuilder {
 }
 
 /**
+ * Checks if the bridge is online and if a printer is connected.
+ */
+export async function checkBridgeStatus(url: string): Promise<{ online: boolean; printer_connected: boolean; error?: string }> {
+  const healthUrl = url.replace(/\/print$/, "/health");
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 2000); // 2s timeout
+    
+    const response = await fetch(healthUrl, { 
+      signal: controller.signal,
+      cache: 'no-cache'
+    });
+    clearTimeout(id);
+
+    if (!response.ok) return { online: false, printer_connected: false, error: `HTTP ${response.status}` };
+    
+    const data = await response.json();
+    return { 
+      online: true, 
+      printer_connected: !!data.printer_connected,
+      error: data.printer_connected ? undefined : "Impressora USB não detectada na ponte"
+    };
+  } catch (e) {
+    return { online: false, printer_connected: false, error: "Ponte local offline (localhost:9100)" };
+  }
+}
+
+/**
  * Sends a raw payload to the local printing bridge.
  */
 export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
@@ -104,12 +132,20 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
       }),
     });
     
+    const result = await response.json();
+    
     if (!response.ok) {
-      console.error(`[thermal-bridge] Erro HTTP: ${response.status}`);
+      console.error(`[thermal-bridge] Erro: ${result.error || response.statusText}`);
       return false;
     }
-    console.log("[thermal-bridge] Sucesso! Cupom enviado para a impressora.");
-    return true;
+
+    if (result.success) {
+      console.log("[thermal-bridge] Sucesso! Cupom enviado para a impressora.");
+      return true;
+    } else {
+      console.error(`[thermal-bridge] Falha no serviço local: ${result.error}`);
+      return false;
+    }
   } catch (e) {
     console.error("[thermal-bridge] Falha de conexão. A ponte local está rodando?");
     return false;
