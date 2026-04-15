@@ -14,6 +14,8 @@ export interface PrintConfig {
   printSize: PrintSize;
   headerText: string;
   footerText: string;
+  printMode: "browser" | "bridge";
+  bridgeUrl: string;
 }
 
 const STORAGE_KEY = "print_config";
@@ -24,6 +26,8 @@ export const DEFAULT_CONFIG: PrintConfig = {
   printSize: "grande",
   headerText: "PLANO B ESPETARIA",
   footerText: "Obrigado pela preferência!",
+  printMode: "browser",
+  bridgeUrl: "http://localhost:9100/print",
 };
 
 /** Font sizes derived from printSize preset */

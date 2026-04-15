@@ -6,6 +6,7 @@
  */
 
 import { loadPrintConfig, savePrintConfig, getFontSizes, type PrintConfig, type PaperWidth } from "./print-config";
+import { buildEscPosReceipt, sendToBridge } from "./thermal-printer";
 
 export type { PaperWidth };
 
@@ -387,32 +388,57 @@ function doPrint(html: string, expectedItemCount: number): void {
 // PUBLIC API
 // ============================================================
 
-export function printSenha(
+export async function printSenha(
   senha: string,
   items: { product_name: string; quantity: number }[]
 ) {
+  const cfg = loadPrintConfig();
+  if (cfg.printMode === "bridge") {
+    console.log("[print] Usando ponte térmica para senha");
+    // Adapt for bridge if needed - for now fallback to browser or implement similar to receipt
+    // In this context, we usually want the bridge for everything.
+    // For simplicity, let's just use receipt logic with senha format.
+    const payload = buildEscPosReceipt(
+      `SENHA ${senha}`,
+      "BALCÃO",
+      items.map(i => ({ ...i, product_price: 0, note: null })),
+      0,
+      cfg
+    );
+    return await sendToBridge(payload, cfg.bridgeUrl);
+  }
+  
   doPrint(buildSenhaHtml(senha, items), items.length);
 }
 
-export function printReceipt(
+export async function printReceipt(
   tableName: string,
   waiterName: string,
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number
 ) {
-  console.log(`[print] Preparando cupom para Mesa ${tableName}. Itens: ${items.length}`);
+  const cfg = loadPrintConfig();
+  console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
+
+  if (cfg.printMode === "bridge") {
+    const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg);
+    const success = await sendToBridge(payload, cfg.bridgeUrl);
+    if (!success) {
+      console.warn("[print] Falha na ponte, tentando fallback para navegador");
+      doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);
+    }
+    return success;
+  }
+
   doPrint(buildReceiptHtml(tableName, waiterName, items, total), items.length);
+  return true;
 }
 
-export function printTest() {
-  printReceipt(
-    "TESTE",
-    "Admin",
-    [
-      { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
-      { product_name: "Refrigerante Lata", quantity: 1, product_price: 8.5, note: null },
-      { product_name: "Cerveja Original", quantity: 3, product_price: 12.0, note: "Bem gelada" },
-    ],
-    78.5
-  );
+export async function printTest() {
+  const items = [
+    { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
+    { product_name: "Refrigerante Lata", quantity: 1, product_price: 8.5, note: null },
+    { product_name: "Cerveja Original", quantity: 3, product_price: 12.0, note: "Bem gelada" },
+  ];
+  return await printReceipt("TESTE", "Admin", items, 78.5);
 }
