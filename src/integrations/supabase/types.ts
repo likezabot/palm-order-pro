@@ -146,6 +146,7 @@ export type Database = {
           id: string
           is_printed: boolean | null
           payment_method: string | null
+          print_type: string | null
           printed_at: string | null
           status: string
           table_name: string
@@ -160,6 +161,7 @@ export type Database = {
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
+          print_type?: string | null
           printed_at?: string | null
           status?: string
           table_name: string
@@ -174,6 +176,7 @@ export type Database = {
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
+          print_type?: string | null
           printed_at?: string | null
           status?: string
           table_name?: string
@@ -304,20 +307,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      update_order_items:
-        | {
-            Args: { p_items: Json; p_order_id: string; p_total: number }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_delta_items?: Json
-              p_items: Json
-              p_order_id: string
-              p_total: number
-            }
-            Returns: undefined
-          }
+      update_order_items: {
+        Args: {
+          p_delta_items?: Json
+          p_items: Json
+          p_order_id: string
+          p_print_type?: string
+          p_total: number
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

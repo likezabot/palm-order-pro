@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { ArrowLeft, Minus, Plus, Trash2, Printer, FileText, Receipt } from "lucide-react";
+import { ArrowLeft, Minus, Plus, Trash2, FileText, Receipt, FilePlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
-import { printReceipt, printDelta, printBill } from "@/lib/print-receipt";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
+
+type PrintType = "extra" | "full" | "bill";
 
 interface Props {
   tableName: string;
@@ -22,11 +23,18 @@ interface Props {
   onSuccess: (senha: string) => void;
 }
 
+const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; desc: string }[] = [
+  { key: "extra", label: "Acréscimo", icon: FilePlus, desc: "Só itens novos" },
+  { key: "full", label: "Pedido", icon: FileText, desc: "Comanda completa" },
+  { key: "bill", label: "Conta", icon: Receipt, desc: "Conta final" },
+];
+
 const OrderReview = ({
   tableName, waiterName, cart, originalCart = [], total, existingOrderId, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess,
 }: Props) => {
   const [sending, setSending] = useState(false);
+  const [printType, setPrintType] = useState<PrintType>("extra");
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
 
@@ -36,11 +44,10 @@ const OrderReview = ({
 
     try {
       if (existingOrderId) {
-        // Calcular delta (acréscimos)
         const delta = calculateDelta(originalCart, cart);
         console.log("[OrderReview] Delta calculado:", delta);
+        console.log("[OrderReview] Print type selecionado:", printType);
 
-        // Atomic update via RPC — delete + insert in a single transaction
         const items = cart.map((item) => ({
           product_id: item.product.id.length === 36 ? item.product.id : null,
           product_name: item.product.name,
@@ -54,6 +61,7 @@ const OrderReview = ({
           p_total: total,
           p_items: items,
           p_delta_items: delta.length > 0 ? delta : null,
+          p_print_type: printType,
         } as any);
         if (rpcError) throw rpcError;
       } else {
@@ -70,7 +78,6 @@ const OrderReview = ({
           newSenha = `#${((count || 0) + 1).toString().padStart(3, "0")}`;
         }
 
-        // Create new order
         const { data: order, error: orderError } = await supabase
           .from("orders")
           .insert({ table_name: tableName, waiter_name: waiterName, total, status: "new" })
@@ -189,57 +196,36 @@ const OrderReview = ({
           <span className="text-xl font-bold text-primary">R$ {total.toFixed(2)}</span>
         </div>
 
-        {/* Botões de impressão manual — só para mesa existente */}
+        {/* Seletor de tipo de impressão — só para mesa existente */}
         {existingOrderId && (
-          <div className="flex gap-2 mb-3">
-            <button
-              type="button"
-              onClick={async () => {
-                playFeedback("click");
-                const delta = calculateDelta(originalCart, cart);
-                if (delta.length === 0) {
-                  toast({ title: "Sem acréscimos", description: "Nenhum item novo para imprimir.", variant: "destructive" });
-                  return;
-                }
-                await printDelta(tableName, waiterName, delta);
-                toast({ title: "Acréscimo enviado para impressão" });
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-foreground active:scale-95 transition-transform min-h-[44px]"
-            >
-              <Plus size={16} /> Acréscimo
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                playFeedback("click");
-                await printReceipt(tableName, waiterName, cart.map(i => ({
-                  product_name: i.product.name,
-                  quantity: i.quantity,
-                  product_price: i.product.price,
-                  note: i.note || null,
-                })), total);
-                toast({ title: "Pedido enviado para impressão" });
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-foreground active:scale-95 transition-transform min-h-[44px]"
-            >
-              <FileText size={16} /> Pedido
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                playFeedback("click");
-                await printBill(tableName, waiterName, cart.map(i => ({
-                  product_name: i.product.name,
-                  quantity: i.quantity,
-                  product_price: i.product.price,
-                  note: i.note || null,
-                })), total);
-                toast({ title: "Conta enviada para impressão" });
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-foreground active:scale-95 transition-transform min-h-[44px]"
-            >
-              <Receipt size={16} /> Conta
-            </button>
+          <div className="mb-3">
+            <p className="text-xs text-muted-foreground font-semibold mb-2 uppercase tracking-wide">
+              O que imprimir:
+            </p>
+            <div className="flex gap-2">
+              {PRINT_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                const active = printType === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => {
+                      playFeedback("click");
+                      setPrintType(opt.key);
+                    }}
+                    className={`flex-1 flex flex-col items-center gap-1 rounded-lg border p-3 text-sm font-semibold transition-all active:scale-95 min-h-[56px] ${
+                      active
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border bg-secondary text-muted-foreground"
+                    }`}
+                  >
+                    <Icon size={18} />
+                    <span className="text-xs font-bold">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
