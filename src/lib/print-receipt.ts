@@ -622,4 +622,3 @@ export async function printTest() {
   }
   return ok;
 }
-}
