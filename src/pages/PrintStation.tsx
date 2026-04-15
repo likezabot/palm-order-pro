@@ -34,14 +34,15 @@ const PrintStation = () => {
 
     if (error) {
       console.error(error);
-    } else {
-      setOrders(data || []);
-      const printed = new Set<string>();
-      (data || []).forEach((o: any) => {
-        if (o.printed_at) printed.add(o.id);
-      });
-      setPrintedIds(printed);
-    }
+      } else {
+        const orderList = (data || []) as unknown as Order[];
+        setOrders(orderList);
+        const printed = new Set<string>();
+        orderList.forEach((o) => {
+          if (o.printed_at) printed.add(o.id);
+        });
+        setPrintedIds(printed);
+      }
   }, []);
 
   const handleManualPrint = useCallback(async (order: Order) => {

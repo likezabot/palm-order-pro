@@ -196,11 +196,11 @@ const OrderReview = ({
           <span className="text-xl font-bold text-primary">R$ {total.toFixed(2)}</span>
         </div>
 
-        {/* Seletor de tipo de impressão — só para mesa existente */}
+        {/* Seletor do que a central vai imprimir — só para mesa existente */}
         {existingOrderId && (
           <div className="mb-3">
             <p className="text-xs text-muted-foreground font-semibold mb-2 uppercase tracking-wide">
-              O que imprimir:
+              Na central imprimir:
             </p>
             <div className="flex gap-2">
               {PRINT_OPTIONS.map((opt) => {
