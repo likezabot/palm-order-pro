@@ -125,15 +125,23 @@ export async function manualPrintOrder(order: {
   waiter_name: string | null;
   total: number | null;
 }): Promise<boolean> {
-  const { data: items } = await supabase
+  console.log(`[print-service] ManualPrint: Recebido pedido ${order.id} para Mesa ${order.table_name}`);
+
+  const { data: items, error } = await supabase
     .from("order_items")
     .select("*")
     .eq("order_id", order.id);
 
+  if (error) {
+    console.error(`[print-service] ManualPrint: Erro ao buscar itens:`, error);
+  }
+
   if (!items || items.length === 0) {
+    console.error(`[print-service] ManualPrint: Pedido ${order.id} sem itens encontrados. Abortando.`);
     return false;
   }
 
+  console.log(`[print-service] ManualPrint: Imprimindo ${items.length} itens para Mesa ${order.table_name}`);
   printReceipt(
     order.table_name,
     order.waiter_name || "N/A",
