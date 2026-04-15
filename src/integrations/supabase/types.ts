@@ -142,6 +142,7 @@ export type Database = {
         Row: {
           amount_paid: number | null
           created_at: string
+          delta_items: Json | null
           id: string
           is_printed: boolean | null
           payment_method: string | null
@@ -155,6 +156,7 @@ export type Database = {
         Insert: {
           amount_paid?: number | null
           created_at?: string
+          delta_items?: Json | null
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
@@ -168,6 +170,7 @@ export type Database = {
         Update: {
           amount_paid?: number | null
           created_at?: string
+          delta_items?: Json | null
           id?: string
           is_printed?: boolean | null
           payment_method?: string | null
@@ -301,10 +304,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      update_order_items: {
-        Args: { p_items: Json; p_order_id: string; p_total: number }
-        Returns: undefined
-      }
+      update_order_items:
+        | {
+            Args: { p_items: Json; p_order_id: string; p_total: number }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_delta_items?: Json
+              p_items: Json
+              p_order_id: string
+              p_total: number
+            }
+            Returns: undefined
+          }
     }
     Enums: {
       [_ in never]: never
