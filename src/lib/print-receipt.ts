@@ -1,51 +1,40 @@
 /**
  * Sistema de Impressão Térmica — Plano B Espetaria
  * 
- * Estratégia: iframe oculto com documento HTML completamente isolado.
- * O iframe tem dimensões reais (não 0x0) para que o Chrome calcule
- * o layout corretamente no preview de impressão.
- * 
- * Por que o preview ficava errado:
- * - iframe com width:0 height:0 → Chrome assume página A4
- * - @page size sozinho não basta se o documento não tem dimensões reais
- * - O preview mostra o cupom minúsculo no canto de uma folha grande
- * 
- * Solução:
- * - iframe com largura real do papel (58mm/80mm)
- * - HTML/body com largura fixa em mm
- * - @page com size explícito
- * - Nenhum estilo herdado do app
+ * Usa iframe oculto com documento HTML isolado.
+ * Configurações dinâmicas via PrintConfig.
  */
 
-type PaperWidth = "58mm" | "80mm";
+import { loadPrintConfig, savePrintConfig, type PrintConfig } from "./print-config";
+
+export type PaperWidth = "58mm" | "80mm";
 
 export function getPaperWidth(): PaperWidth {
-  return (localStorage.getItem("paper_width") as PaperWidth) || "80mm";
+  return loadPrintConfig().paperWidth;
 }
 
 export function setPaperWidth(width: PaperWidth) {
-  localStorage.setItem("paper_width", width);
+  const cfg = loadPrintConfig();
+  cfg.paperWidth = width;
+  savePrintConfig(cfg);
 }
 
-// Largura útil do conteúdo (descontando margens mecânicas da bobina)
+// ============================================================
+// CSS GENERATION
+// ============================================================
+
 function contentWidth(paper: PaperWidth): string {
   return paper === "58mm" ? "48mm" : "72mm";
 }
 
-// Padding lateral para centralizar na bobina
-function sidePad(paper: PaperWidth): string {
-  return paper === "58mm" ? "5mm" : "4mm";
+function sidePad(paper: PaperWidth, paddingMm: number): string {
+  return `${paddingMm}mm`;
 }
 
-function thermalCSS(paper: PaperWidth): string {
+export function thermalCSS(cfg: PrintConfig): string {
+  const paper = cfg.paperWidth;
   const cw = contentWidth(paper);
-  const sp = sidePad(paper);
-  const baseFontSize = paper === "58mm" ? "11px" : "13px";
-  const titleSize = paper === "58mm" ? "14px" : "16px";
-  const senhaSize = paper === "58mm" ? "48px" : "64px";
-  const totalSize = paper === "58mm" ? "13px" : "15px";
-  const noteSize = paper === "58mm" ? "9px" : "11px";
-  const footerSize = paper === "58mm" ? "8px" : "10px";
+  const sp = sidePad(paper, cfg.receiptPadding);
 
   return `
     @page {
@@ -81,8 +70,8 @@ function thermalCSS(paper: PaperWidth): string {
       background: #fff !important;
       color: #000 !important;
       font-family: 'Courier New', Courier, monospace !important;
-      font-size: ${baseFontSize} !important;
-      line-height: 1.3 !important;
+      font-size: ${cfg.baseFontSize}px !important;
+      line-height: ${cfg.lineSpacing} !important;
       overflow: hidden !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -91,7 +80,7 @@ function thermalCSS(paper: PaperWidth): string {
     .receipt {
       width: ${cw} !important;
       max-width: ${cw} !important;
-      padding: 2mm ${sp} 4mm ${sp} !important;
+      padding: 3mm ${sp} 4mm ${sp} !important;
       margin: 0 auto !important;
     }
 
@@ -101,7 +90,14 @@ function thermalCSS(paper: PaperWidth): string {
     .separator {
       border: none !important;
       border-top: 1px dashed #000 !important;
-      margin: 2px 0 !important;
+      margin: 4px 0 !important;
+      padding: 0 !important;
+    }
+
+    .separator-double {
+      border: none !important;
+      border-top: 2px solid #000 !important;
+      margin: 4px 0 !important;
       padding: 0 !important;
     }
 
@@ -109,8 +105,9 @@ function thermalCSS(paper: PaperWidth): string {
       display: flex !important;
       justify-content: space-between !important;
       align-items: flex-start !important;
-      gap: 2px !important;
+      gap: 4px !important;
       width: 100% !important;
+      padding: 2px 0 !important;
     }
 
     .row .left {
@@ -124,40 +121,75 @@ function thermalCSS(paper: PaperWidth): string {
       flex-shrink: 0 !important;
       text-align: right !important;
       white-space: nowrap !important;
+      font-weight: bold !important;
     }
 
     .item-note {
-      padding-left: 8px !important;
-      font-size: ${noteSize} !important;
+      padding-left: 12px !important;
+      font-size: ${cfg.noteFontSize}px !important;
       color: #333 !important;
+      font-style: italic !important;
+      margin-bottom: 2px !important;
     }
 
-    .title {
-      font-size: ${titleSize} !important;
-      font-weight: 900 !important;
-    }
-
-    .senha-num {
-      font-size: ${senhaSize} !important;
+    .header-text {
+      font-size: ${cfg.titleFontSize}px !important;
       font-weight: 900 !important;
       text-align: center !important;
-      line-height: 1.1 !important;
-      margin: 4px 0 !important;
+      letter-spacing: 1px !important;
+      padding: 4px 0 !important;
     }
 
-    .total-row {
-      font-size: ${totalSize} !important;
-      font-weight: 900 !important;
+    .info-line {
+      font-size: ${cfg.baseFontSize - 1}px !important;
+      padding: 1px 0 !important;
     }
 
-    .footer {
-      font-size: ${footerSize} !important;
-      text-align: center !important;
-      margin-top: 4px !important;
+    .info-label {
+      font-weight: bold !important;
+      text-transform: uppercase !important;
+      font-size: ${cfg.baseFontSize - 2}px !important;
       color: #555 !important;
     }
 
-    /* Corte visual simulado */
+    .info-value {
+      font-weight: bold !important;
+    }
+
+    .senha-num {
+      font-size: ${cfg.senhaFontSize}px !important;
+      font-weight: 900 !important;
+      text-align: center !important;
+      line-height: 1.1 !important;
+      margin: 6px 0 !important;
+      letter-spacing: 2px !important;
+    }
+
+    .total-block {
+      padding: 6px 0 !important;
+    }
+
+    .total-row {
+      font-size: ${cfg.totalFontSize}px !important;
+      font-weight: 900 !important;
+      display: flex !important;
+      justify-content: space-between !important;
+    }
+
+    .item-qty {
+      font-weight: 900 !important;
+      min-width: 24px !important;
+      display: inline-block !important;
+    }
+
+    .footer {
+      font-size: ${cfg.footerFontSize}px !important;
+      text-align: center !important;
+      margin-top: 6px !important;
+      color: #555 !important;
+      padding: 2px 0 !important;
+    }
+
     .cut {
       text-align: center !important;
       font-size: 8px !important;
@@ -183,7 +215,107 @@ function thermalCSS(paper: PaperWidth): string {
 }
 
 // ============================================================
-// IMPRESSÃO VIA IFRAME ISOLADO
+// HTML GENERATION (public, used by preview)
+// ============================================================
+
+function wrapHtml(title: string, cfg: PrintConfig, body: string): string {
+  const paper = cfg.paperWidth;
+  const pxWidth = paper === "58mm" ? 219 : 302;
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=${pxWidth}">
+  <title>${title}</title>
+  <style>${thermalCSS(cfg)}</style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+}
+
+export function buildSenhaHtml(
+  senha: string,
+  items: { product_name: string; quantity: number }[],
+  configOverride?: PrintConfig
+): string {
+  const cfg = configOverride || loadPrintConfig();
+  const time = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  const itemsHtml = items
+    .map((i) => `<div class="row"><span class="left"><span class="item-qty">${i.quantity}x</span> ${i.product_name}</span></div>`)
+    .join("");
+
+  return wrapHtml("Senha", cfg, `
+<div class="receipt">
+  ${cfg.showEstablishment ? `<div class="header-text">${cfg.headerText}</div>` : ""}
+  <hr class="separator-double">
+  ${cfg.showDateTime ? `<div class="center info-line">${time}</div>` : ""}
+  <div class="center info-line" style="font-size:${cfg.baseFontSize - 2}px;color:#555;">BALCÃO</div>
+  <div class="senha-num">${senha}</div>
+  <hr class="separator">
+  ${itemsHtml}
+  <hr class="separator">
+  ${cfg.showFooter ? `<div class="footer">${cfg.footerText}</div>` : ""}
+  ${cfg.showCutLine ? `<div class="cut">✂ --------------------------------</div>` : ""}
+</div>`);
+}
+
+export function buildReceiptHtml(
+  tableName: string,
+  waiterName: string,
+  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  total: number,
+  configOverride?: PrintConfig
+): string {
+  const cfg = configOverride || loadPrintConfig();
+  const now = new Date();
+  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString("pt-BR");
+
+  const itemsHtml = items
+    .map((item) => {
+      const sub = (item.product_price * item.quantity).toFixed(2);
+      const noteHtml = (item.note && cfg.showNotes)
+        ? `<div class="item-note">↳ ${item.note}</div>`
+        : "";
+      return `
+      <div class="row">
+        <span class="left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span>
+        <span class="right">R$${sub}</span>
+      </div>${noteHtml}`;
+    })
+    .join("");
+
+  const infoLines: string[] = [];
+  if (cfg.showTable) infoLines.push(`<div class="info-line"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>`);
+  if (cfg.showWaiter) infoLines.push(`<div class="info-line"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>`);
+  if (cfg.showDateTime) infoLines.push(`<div class="info-line"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>`);
+
+  return wrapHtml("Cupom", cfg, `
+<div class="receipt">
+  ${cfg.showEstablishment ? `<div class="header-text">${cfg.headerText}</div>` : ""}
+  <hr class="separator-double">
+  ${infoLines.join("\n  ")}
+  <hr class="separator">
+  ${itemsHtml}
+  <hr class="separator-double">
+  <div class="total-block">
+    <div class="total-row">
+      <span>TOTAL</span>
+      <span>R$ ${total.toFixed(2)}</span>
+    </div>
+  </div>
+  <hr class="separator">
+  <div class="center info-line" style="font-size:${cfg.baseFontSize - 2}px;color:#777;">Qtd itens: ${items.reduce((s, i) => s + i.quantity, 0)}</div>
+  ${cfg.showFooter ? `<div class="footer">${cfg.footerText}</div>` : ""}
+  ${cfg.showCutLine ? `<div class="cut">✂ --------------------------------</div>` : ""}
+</div>`);
+}
+
+// ============================================================
+// PRINTING VIA HIDDEN IFRAME
 // ============================================================
 
 let printLock = false;
@@ -195,17 +327,15 @@ function doPrint(html: string): void {
   }
   printLock = true;
 
-  // Remove iframe anterior
   const old = document.getElementById("__thermal_print_frame");
   if (old) old.remove();
 
-  const paper = getPaperWidth();
-  // Converter mm para px aprox (1mm ≈ 3.78px em 96dpi)
+  const cfg = loadPrintConfig();
+  const paper = cfg.paperWidth;
   const pxWidth = paper === "58mm" ? 219 : 302;
 
   const iframe = document.createElement("iframe");
   iframe.id = "__thermal_print_frame";
-  // Iframe com tamanho REAL do papel — essencial para o Chrome calcular layout correto
   iframe.style.cssText = `
     position: fixed;
     right: -9999px;
@@ -237,19 +367,13 @@ function doPrint(html: string): void {
     }, 1000);
   };
 
-  // Aguardar renderização completa e disparar print
   setTimeout(() => {
     try {
       iframe.contentWindow?.focus();
-      
-      // Listener para liberar lock após impressão
       if (iframe.contentWindow) {
         iframe.contentWindow.onafterprint = cleanup;
       }
-      
       iframe.contentWindow?.print();
-      
-      // Fallback: liberar lock após timeout se onafterprint não disparar
       setTimeout(() => {
         if (printLock) cleanup();
       }, 15000);
@@ -261,95 +385,7 @@ function doPrint(html: string): void {
 }
 
 // ============================================================
-// GERAÇÃO DE HTML
-// ============================================================
-
-function wrapHtml(title: string, paper: PaperWidth, body: string): string {
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=${paper === "58mm" ? 219 : 302}">
-  <title>${title}</title>
-  <style>${thermalCSS(paper)}</style>
-</head>
-<body>
-${body}
-</body>
-</html>`;
-}
-
-export function buildSenhaHtml(
-  senha: string,
-  items: { product_name: string; quantity: number }[]
-): string {
-  const paper = getPaperWidth();
-  const time = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
-  const itemsHtml = items
-    .map((i) => `<div>${i.quantity}x ${i.product_name}</div>`)
-    .join("");
-
-  return wrapHtml("Senha", paper, `
-<div class="receipt">
-  <div class="center title">PLANO B ESPETARIA</div>
-  <hr class="separator">
-  <div class="center">BALCÃO — ${time}</div>
-  <div class="senha-num">${senha}</div>
-  <hr class="separator">
-  ${itemsHtml}
-  <hr class="separator">
-  <div class="footer">Aguarde sua senha ser chamada</div>
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
-}
-
-export function buildReceiptHtml(
-  tableName: string,
-  waiterName: string,
-  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
-  total: number
-): string {
-  const paper = getPaperWidth();
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-
-  const itemsHtml = items
-    .map((item) => {
-      const sub = (item.product_price * item.quantity).toFixed(2);
-      const noteHtml = item.note ? `<div class="item-note">OBS: ${item.note}</div>` : "";
-      return `
-      <div class="row">
-        <span class="left">${item.quantity}x ${item.product_name}</span>
-        <span class="right">R$${sub}</span>
-      </div>${noteHtml}`;
-    })
-    .join("");
-
-  return wrapHtml("Cupom", paper, `
-<div class="receipt">
-  <hr class="separator">
-  <div class="center title">PLANO B ESPETARIA</div>
-  <hr class="separator">
-  <div>Garçom: ${waiterName}</div>
-  <div>Mesa: ${tableName}</div>
-  <div>${time} — ${date}</div>
-  <hr class="separator">
-  ${itemsHtml}
-  <hr class="separator">
-  <div class="row total-row">
-    <span class="left">TOTAL:</span>
-    <span class="right">R$${total.toFixed(2)}</span>
-  </div>
-  <hr class="separator">
-  <div class="footer">Plano B Espetaria</div>
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
-}
-
-// ============================================================
-// FUNÇÕES PÚBLICAS
+// PUBLIC API
 // ============================================================
 
 export function printSenha(
@@ -373,10 +409,10 @@ export function printTest() {
     "TESTE",
     "Admin",
     [
-      { product_name: "Item Teste 1", quantity: 2, product_price: 15.0, note: "Sem cebola" },
-      { product_name: "Item Teste 2", quantity: 1, product_price: 8.5, note: null },
-      { product_name: "Cerveja Teste", quantity: 3, product_price: 10.0, note: null },
+      { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
+      { product_name: "Refrigerante Lata", quantity: 1, product_price: 8.5, note: null },
+      { product_name: "Cerveja Original", quantity: 3, product_price: 12.0, note: "Bem gelada" },
     ],
-    68.5
+    78.5
   );
 }

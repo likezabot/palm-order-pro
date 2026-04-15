@@ -1,17 +1,18 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Pencil, Trash2, Eye, EyeOff, Settings, AlertCircle, Printer, RefreshCw } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
+import { Product, CATEGORY_LABELS } from "@/lib/types";
 import ProductForm from "@/components/admin/ProductForm";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { printReceipt } from "@/lib/print-receipt";
 import { useFeedback } from "@/hooks/use-feedback";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ const Admin = () => {
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("pdv_autoprint") !== "false");
   const [tableCount, setTableCount] = useState(10);
   const [savingTables, setSavingTables] = useState(false);
+  const [activeTab, setActiveTab] = useState("products");
 
   useEffect(() => {
     supabase.from("settings").select("value").eq("key", "table_count").single().then(({ data }) => {
@@ -128,7 +130,7 @@ const Admin = () => {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Settings className="w-5 h-5" />
-                  Configurações
+                  Configurações Gerais
                 </DialogTitle>
                 <DialogDescription>
                   Configure mesas e impressão do sistema.
@@ -162,7 +164,6 @@ const Admin = () => {
                   </div>
                 </div>
 
-              {/* Número de Mesas */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
                     Mesas do Restaurante
@@ -201,28 +202,14 @@ const Admin = () => {
                   </Button>
                 </div>
 
-                <div className="space-y-3">
-                  <Button 
-                    variant="outline" 
-                    className="w-full gap-2 font-bold"
-                    onClick={() => {
-                      printReceipt("Mesa TESTE", "Admin", [{ product_name: "Item de Teste", quantity: 1, product_price: 10, note: "Teste de impressão" }], 10);
-                      toast({ title: "Teste enviado", description: "Verifique se o cupom abriu corretamente." });
-                    }}
-                  >
-                    <Printer className="w-4 h-4" />
-                    TESTAR IMPRESSÃO
-                  </Button>
-                  
-                  <Button 
-                    variant="secondary" 
-                    className="w-full gap-2 font-bold"
-                    onClick={() => navigate("/print-station")}
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    ABRIR ESTAÇÃO DE IMPRESSÃO
-                  </Button>
-                </div>
+                <Button 
+                  variant="secondary" 
+                  className="w-full gap-2 font-bold"
+                  onClick={() => navigate("/print-station")}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  ABRIR ESTAÇÃO DE IMPRESSÃO
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -238,49 +225,67 @@ const Admin = () => {
         </div>
       </div>
 
-      <div className="flex-1 p-4 space-y-2 pb-10">
-        {products.map((product) => (
-          <div
-            key={product.id}
-            className={`flex items-center justify-between rounded-lg bg-card border border-border p-4 transition-all ${
-              !product.active ? "opacity-60 bg-secondary/50 grayscale-[0.5]" : ""
-            }`}
-          >
-            <div className="flex-1 min-w-0 pr-2">
-              <p className="font-semibold text-base truncate">{product.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {CATEGORY_LABELS[product.category]} • R$ {product.price.toFixed(2)}
-                {!product.active && <span className="text-destructive font-medium ml-1">• OFF</span>}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center gap-1">
-                <Switch
-                  checked={product.active}
-                  onCheckedChange={() => handleToggleActive(product.id, !!product.active)}
-                />
-                <span className={`text-[9px] font-bold uppercase ${product.active ? "text-primary" : "text-muted-foreground"}`}>
-                  {product.active ? "NO MENU" : "FORA"}
-                </span>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+        <div className="border-b border-border px-4">
+          <TabsList className="bg-transparent h-12">
+            <TabsTrigger value="products" className="font-bold text-sm data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              Produtos
+            </TabsTrigger>
+            <TabsTrigger value="print" className="font-bold text-sm gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              <Printer className="w-4 h-4" /> Editor de Cupom
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="products" className="flex-1 p-4 space-y-2 pb-10 mt-0">
+          {products.map((product) => (
+            <div
+              key={product.id}
+              className={`flex items-center justify-between rounded-lg bg-card border border-border p-4 transition-all ${
+                !product.active ? "opacity-60 bg-secondary/50 grayscale-[0.5]" : ""
+              }`}
+            >
+              <div className="flex-1 min-w-0 pr-2">
+                <p className="font-semibold text-base truncate">{product.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {CATEGORY_LABELS[product.category]} • R$ {product.price.toFixed(2)}
+                  {!product.active && <span className="text-destructive font-medium ml-1">• OFF</span>}
+                </p>
               </div>
-              <div className="flex items-center gap-2 border-l border-border pl-3">
-                <button
-                  onClick={() => handleEdit(product)}
-                  className="p-2 rounded-lg bg-secondary text-foreground active:scale-90 transition-transform"
-                >
-                  <Pencil size={16} />
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="p-2 rounded-lg bg-destructive/20 text-destructive active:scale-90 transition-transform"
-                >
-                  <Trash2 size={16} />
-                </button>
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center gap-1">
+                  <Switch
+                    checked={product.active}
+                    onCheckedChange={() => handleToggleActive(product.id, !!product.active)}
+                  />
+                  <span className={`text-[9px] font-bold uppercase ${product.active ? "text-primary" : "text-muted-foreground"}`}>
+                    {product.active ? "NO MENU" : "FORA"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 border-l border-border pl-3">
+                  <button
+                    onClick={() => handleEdit(product)}
+                    className="p-2 rounded-lg bg-secondary text-foreground active:scale-90 transition-transform"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="p-2 rounded-lg bg-destructive/20 text-destructive active:scale-90 transition-transform"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="print" className="flex-1 p-4 mt-0">
+          <PrintConfigPanel />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
