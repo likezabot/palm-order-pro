@@ -201,8 +201,7 @@ const OrderReview = ({
                   toast({ title: "Sem acréscimos", description: "Nenhum item novo para imprimir.", variant: "destructive" });
                   return;
                 }
-                const deltaTotal = delta.reduce((s, i) => s + i.product_price * i.quantity, 0);
-                await printDelta(tableName, waiterName, delta, deltaTotal);
+                await printDelta(tableName, waiterName, delta);
                 toast({ title: "Acréscimo enviado para impressão" });
               }}
               className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-foreground active:scale-95 transition-transform min-h-[44px]"
