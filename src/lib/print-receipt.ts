@@ -5,7 +5,7 @@
  * Configurações dinâmicas via PrintConfig.
  */
 
-import { loadPrintConfig, type PrintConfig } from "./print-config";
+import { loadPrintConfig, savePrintConfig, type PrintConfig } from "./print-config";
 
 export type PaperWidth = "58mm" | "80mm";
 
@@ -16,7 +16,7 @@ export function getPaperWidth(): PaperWidth {
 export function setPaperWidth(width: PaperWidth) {
   const cfg = loadPrintConfig();
   cfg.paperWidth = width;
-  import("./print-config").then(m => m.savePrintConfig(cfg));
+  savePrintConfig(cfg);
 }
 
 // ============================================================
