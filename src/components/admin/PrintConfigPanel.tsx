@@ -42,8 +42,8 @@ export default function PrintConfigPanel() {
 
   const handleTestPrint = () => {
     if (previewMode === "senha") {
-      // Import printSenha inline
-      const { printSenha } = require("@/lib/print-receipt");
+      import("@/lib/print-receipt").then(m => m.printSenha("042", SAMPLE_ITEMS));
+    } else {
       printSenha("042", SAMPLE_ITEMS);
     } else {
       printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL);
