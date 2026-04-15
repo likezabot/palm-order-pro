@@ -161,13 +161,12 @@ const PrintStation = () => {
               <div className="text-sm text-blue-800 space-y-1">
                 <p className="font-semibold">Sobre impressão automática:</p>
                 <p>
-                  O navegador sempre exibirá o diálogo de impressão. Impressão totalmente
-                  silenciosa (sem diálogo) <strong>não é suportada por navegadores comuns</strong>.
-                  Para isso é necessário modo kiosk do Chrome, app desktop (Electron) ou
-                  integrador local de impressão.
+                  Para impressão <strong>sem diálogo e robusta</strong>, recomendamos o uso do 
+                  <strong> Modo Ponte Local</strong> nas configurações do Admin. 
+                  Isso permite enviar comandos diretos (ESC/POS) para sua impressora térmica.
                 </p>
                 <p className="text-xs text-blue-600 mt-1">
-                  💡 Dica: defina sua impressora térmica como padrão e desmarque "Cabeçalhos e rodapés" nas configurações de impressão do navegador.
+                  💡 No modo Ponte, o sistema envia o cupom diretamente para um integrador local (ex: QZ Tray ou Raw Print Hub).
                 </p>
               </div>
             </div>
