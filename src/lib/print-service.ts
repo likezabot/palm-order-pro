@@ -64,34 +64,47 @@ export async function autoPrintOrder(order: {
   waiter_name: string | null;
   total: number | null;
 }): Promise<{ printed: boolean; reason: string }> {
+  console.log(`[print-service] AutoPrint: Recebido pedido ${order.id} para Mesa ${order.table_name}`);
+
   // 1. Tentar claim atômico
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) {
+    console.log(`[print-service] AutoPrint: Pedido ${order.id} já foi clamo por outra instância`);
     return { printed: false, reason: "already_printed" };
   }
 
-  // 2. Buscar itens com retry (podem demorar a chegar)
+  // 2. Buscar itens com retry (podem demorar a chegar ao banco)
   let items: PrintableItem[] = [];
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { data } = await supabase
+  console.log(`[print-service] AutoPrint: Buscando itens para pedido ${order.id}...`);
+  
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data, error } = await supabase
       .from("order_items")
       .select("*")
       .eq("order_id", order.id);
 
+    if (error) {
+      console.error(`[print-service] Erro ao buscar itens (tentativa ${attempt + 1}):`, error);
+    }
+
     if (data && data.length > 0) {
       items = data;
+      console.log(`[print-service] AutoPrint: Encontrados ${items.length} itens na tentativa ${attempt + 1}`);
       break;
     }
-    // Esperar 500ms antes de tentar novamente
-    await new Promise((r) => setTimeout(r, 500));
+    
+    console.log(`[print-service] AutoPrint: Itens não encontrados na tentativa ${attempt + 1}, aguardando...`);
+    // Esperar 800ms antes de tentar novamente (aumentado de 500ms)
+    await new Promise((r) => setTimeout(r, 800));
   }
 
   if (items.length === 0) {
-    console.warn("[print-service] Pedido sem itens, não será impresso:", order.id);
+    console.error(`[print-service] ERRO: Pedido ${order.id} sem itens após retries. Abortando impressão.`);
     return { printed: false, reason: "no_items" };
   }
 
   // 3. Imprimir
+  console.log(`[print-service] AutoPrint: Disparando impressão final para Mesa ${order.table_name}`);
   printReceipt(
     order.table_name,
     order.waiter_name || "N/A",
@@ -112,15 +125,23 @@ export async function manualPrintOrder(order: {
   waiter_name: string | null;
   total: number | null;
 }): Promise<boolean> {
-  const { data: items } = await supabase
+  console.log(`[print-service] ManualPrint: Recebido pedido ${order.id} para Mesa ${order.table_name}`);
+
+  const { data: items, error } = await supabase
     .from("order_items")
     .select("*")
     .eq("order_id", order.id);
 
+  if (error) {
+    console.error(`[print-service] ManualPrint: Erro ao buscar itens:`, error);
+  }
+
   if (!items || items.length === 0) {
+    console.error(`[print-service] ManualPrint: Pedido ${order.id} sem itens encontrados. Abortando.`);
     return false;
   }
 
+  console.log(`[print-service] ManualPrint: Imprimindo ${items.length} itens para Mesa ${order.table_name}`);
   printReceipt(
     order.table_name,
     order.waiter_name || "N/A",

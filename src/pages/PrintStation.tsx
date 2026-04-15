@@ -71,9 +71,11 @@ const PrintStation = () => {
 
           if (autoPrintRef.current) {
             printingRef.current.add(newOrder.id);
+            console.log(`[PrintStation] Pedido recebido via Realtime: ${newOrder.id} - Mesa ${newOrder.table_name}`);
 
-            // Pequeno delay para itens chegarem ao banco
-            await new Promise((r) => setTimeout(r, 1200));
+            // Pequeno delay para garantir que todos os itens do pedido foram salvos
+            // no banco de dados pela API antes de iniciarmos a busca.
+            await new Promise((r) => setTimeout(r, 1500));
 
             const result = await autoPrintOrder(newOrder);
 
