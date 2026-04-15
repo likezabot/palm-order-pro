@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Printer, RefreshCw, AlertCircle, CheckCircle2, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { autoPrintOrder, manualPrintOrder } from "@/lib/print-service";
+import { autoPrintOrder, autoPrintDelta, manualPrintOrder } from "@/lib/print-service";
 import { Order } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -118,7 +118,7 @@ const PrintStation = () => {
             console.log(`[PrintStation] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name}`);
             
             await new Promise((r) => setTimeout(r, 2000));
-            const result = await autoPrintOrder(updated);
+            const result = await autoPrintDelta(updated);
             printingRef.current.delete(updated.id);
             
             if (result.printed) {
