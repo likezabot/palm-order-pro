@@ -27,6 +27,10 @@ const Palm = () => {
 
   const handleSelectTable = useCallback(async (name: string, orderId?: string) => {
     setTableName(name);
+    setSenha("");
+    setCart([]);
+    setOriginalCart([]);
+    setExistingOrderId(orderId ?? null);
 
     if (orderId) {
       // Load existing order items into cart
@@ -53,8 +57,6 @@ const Palm = () => {
         setOriginalCart(loadedCart.map(i => ({ ...i, product: { ...i.product } })));
         setExistingOrderId(orderId);
       }
-    } else {
-      setOriginalCart([]);
     }
 
     setStep("menu");
@@ -117,7 +119,14 @@ const Palm = () => {
   };
 
   if (step === "success") {
-    return <OrderSuccess onReset={resetOrder} senha={senha} cart={cart} />;
+    return (
+      <OrderSuccess
+        onReset={resetOrder}
+        senha={senha}
+        cart={cart}
+        allowLocalPrint={tableName === "BALCÃO" && !existingOrderId}
+      />
+    );
   }
 
   if (step === "review") {
@@ -156,6 +165,7 @@ const Palm = () => {
           setCart([]);
           setOriginalCart([]);
           setExistingOrderId(null);
+          setSenha("");
         }}
       />
     );
