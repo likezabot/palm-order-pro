@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import MenuView from "@/components/palm/MenuView";
 import OrderReview from "@/components/palm/OrderReview";
 import OrderSuccess from "@/components/palm/OrderSuccess";
@@ -10,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 type Step = "grid" | "menu" | "review" | "success";
 
 const Palm = () => {
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>("grid");
   const [tableName, setTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
@@ -21,6 +23,14 @@ const Palm = () => {
   useEffect(() => {
     localStorage.setItem("waiter_name", waiterName);
   }, [waiterName]);
+
+  useEffect(() => {
+    const orderId = searchParams.get("orderId");
+    const table = searchParams.get("tableName");
+    if (orderId && table) {
+      handleSelectTable(table, orderId);
+    }
+  }, [searchParams]);
 
   const addToCart = (product: CartItem["product"]) => {
     playFeedback("click");
