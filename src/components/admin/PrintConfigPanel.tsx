@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { loadPrintConfig, savePrintConfig, resetPrintConfig, getFontSizes, type PrintConfig } from "@/lib/print-config";
+import { useState, useEffect, useMemo } from "react";
+import { loadPrintConfig, savePrintConfig, resetPrintConfig, syncPrintConfigFromDb, getFontSizes, type PrintConfig } from "@/lib/print-config";
 import { buildReceiptHtml, buildSenhaHtml, printReceipt, printSenha } from "@/lib/print-receipt";
 import { Button } from "@/components/ui/button";
 import { Printer, RotateCcw } from "lucide-react";
@@ -19,6 +19,11 @@ export default function PrintConfigPanel() {
   const { toast } = useToast();
   const [cfg, setCfg] = useState<PrintConfig>(loadPrintConfig);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("receipt");
+
+  // Sync from DB on mount
+  useEffect(() => {
+    syncPrintConfigFromDb().then(setCfg);
+  }, []);
 
   const update = <K extends keyof PrintConfig>(key: K, value: PrintConfig[K]) => {
     setCfg((prev) => {
