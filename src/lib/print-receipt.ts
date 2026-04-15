@@ -600,8 +600,9 @@ export async function printCustomerReceipt(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  doPrint(html, items.length);
-  return true;
+  // No navegador/celular, não imprimir comprovante do cliente para evitar PDF
+  console.log("[print] Comprovante do cliente ignorado no modo browser.");
+  return false;
 }
 
 export async function printTest() {
