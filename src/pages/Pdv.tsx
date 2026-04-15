@@ -397,10 +397,42 @@ const Pdv = () => {
                   )}
                 </div>
               )}
+              {/* Customer data section */}
+              <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="customer-data"
+                    checked={wantCustomerData}
+                    onCheckedChange={(v) => setWantCustomerData(!!v)}
+                  />
+                  <label htmlFor="customer-data" className="text-base font-semibold cursor-pointer flex items-center gap-2">
+                    <User size={16} />
+                    Identificar cliente no comprovante?
+                  </label>
+                </div>
+                {wantCustomerData && (
+                  <div className="space-y-2 pl-7">
+                    <input
+                      type="text"
+                      placeholder="Nome / Razão Social"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background p-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <input
+                      type="text"
+                      placeholder="CPF / CNPJ"
+                      value={customerDoc}
+                      onChange={(e) => setCustomerDoc(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background p-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                )}
+              </div>
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowPayment(false)}
+                  onClick={() => { setShowPayment(false); setWantCustomerData(false); setCustomerName(""); setCustomerDoc(""); }}
                   className="flex-1 rounded-lg border border-border p-4 font-bold text-foreground"
                 >
                   VOLTAR
