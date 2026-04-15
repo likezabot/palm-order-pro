@@ -298,8 +298,16 @@ const Pdv = () => {
                     variant="outline" 
                     className="w-full gap-2 font-bold"
                     onClick={() => {
-                      printTest();
-                      toast({ title: "Teste enviado!", description: "Verifique o cupom na impressora." });
+                      const ok = await printTest();
+                      if (ok) {
+                        toast({ title: "Teste enviado!", description: "Verifique o cupom na impressora." });
+                      } else {
+                        toast({ 
+                          title: "Impressão bloqueada", 
+                          description: "O modo navegador não permite imprimir. Mude para o modo app desktop/ponte.",
+                          variant: "destructive"
+                        });
+                      }
                     }}
                   >
                     <Printer className="w-4 h-4" />
