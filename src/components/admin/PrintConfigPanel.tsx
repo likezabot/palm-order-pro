@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { loadPrintConfig, savePrintConfig, resetPrintConfig, type PrintConfig } from "@/lib/print-config";
-import { buildReceiptHtml, buildSenhaHtml, printTest, printReceipt } from "@/lib/print-receipt";
+import { buildReceiptHtml, buildSenhaHtml, printReceipt, printSenha } from "@/lib/print-receipt";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -42,8 +42,6 @@ export default function PrintConfigPanel() {
 
   const handleTestPrint = () => {
     if (previewMode === "senha") {
-      import("@/lib/print-receipt").then(m => m.printSenha("042", SAMPLE_ITEMS));
-    } else {
       printSenha("042", SAMPLE_ITEMS);
     } else {
       printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL);
