@@ -26,6 +26,8 @@ export const DEFAULT_CONFIG: PrintConfig = {
   printSize: "grande",
   headerText: "PLANO B ESPETARIA",
   footerText: "Obrigado pela preferência!",
+  printMode: "browser",
+  bridgeUrl: "http://localhost:9100/print",
 };
 
 /** Font sizes derived from printSize preset */
