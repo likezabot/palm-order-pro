@@ -14,6 +14,8 @@ export interface PrintConfig {
   printSize: PrintSize;
   headerText: string;
   footerText: string;
+  printMode: "browser" | "bridge";
+  bridgeUrl: string;
 }
 
 const STORAGE_KEY = "print_config";
