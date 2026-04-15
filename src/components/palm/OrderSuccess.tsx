@@ -34,8 +34,8 @@ const OrderSuccess = ({ onReset, senha, cart }: Props) => {
   }, [handlePrint, senha]);
 
   useEffect(() => {
-    // Increase reset timer to 15s to give time for printing/viewing
-    const timer = setTimeout(onReset, 15000);
+    const delay = senha ? 5000 : 3000;
+    const timer = setTimeout(onReset, delay);
     return () => clearTimeout(timer);
   }, [onReset]);
 

@@ -301,7 +301,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      update_order_items: {
+        Args: { p_items: Json; p_order_id: string; p_total: number }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
