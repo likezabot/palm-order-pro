@@ -196,10 +196,10 @@ const Pdv = () => {
               
               <div className="space-y-6 pt-4">
                 {/* Info: auto-print centralizado */}
-                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50">
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>ℹ️ Impressão automática</strong> é gerenciada exclusivamente pela <strong>Estação de Impressão</strong>.
-                    Aqui no PDV você pode reimprimir pedidos manualmente.
+                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/50">
+                  <p className="text-sm text-emerald-800 dark:text-emerald-200">
+                    <strong>✅ Impressão automática ATIVA</strong> — pedidos novos e atualizações são impressos automaticamente nesta tela.
+                    O botão abaixo serve apenas para reimpressão manual.
                   </p>
                 </div>
 
