@@ -1,105 +1,73 @@
 
 
-## Causa Raiz
+## Diagnóstico
 
-O `update_order_items` RPC faz `DELETE all + INSERT all`, ou seja, substitui todos os itens. O PDV detecta a mudança (via `printed_at = NULL` reset) e chama `autoPrintOrder`, que busca **todos** os itens e imprime a comanda completa. Não existe conceito de "delta" — o sistema não sabe quais itens são novos vs. antigos.
+**Causa raiz: funções duplicadas (overloads) no banco de dados.**
 
-## Plano de Implementação
-
-### 1. Salvar snapshot dos itens antigos antes de atualizar (OrderReview + Palm)
-
-**`src/pages/Palm.tsx`**: Ao carregar mesa existente (`handleSelectTable`), guardar os itens originais num estado separado `originalCart: CartItem[]`.
-
-**`src/components/palm/OrderReview.tsx`**: Receber `originalCart` como prop. No `handleFinalize` para pedidos existentes:
-- Calcular o delta (itens novos ou com quantidade aumentada)
-- Enviar o delta como metadado junto com a atualização
-- Salvar o delta em `localStorage` com chave `delta:{orderId}` para o PDV consumir na autoimpressão
-
-### 2. Criar função de cálculo de delta (`src/lib/order-delta.ts`)
-
-```typescript
-interface DeltaItem {
-  product_name: string;
-  quantity: number;      // quantidade ADICIONADA (não total)
-  product_price: number;
-  note?: string | null;
-}
-
-function calculateDelta(oldCart: CartItem[], newCart: CartItem[]): DeltaItem[]
-```
-
-Lógica:
-- Para cada item no `newCart`, verificar se existe no `oldCart` (por `product.id`)
-- Se não existia → item inteiro é delta
-- Se existia mas qty aumentou → delta = diferença de qty
-- Se qty diminuiu ou item removido → ignorar (não é acréscimo)
-
-### 3. Persistir delta no banco para o PDV consumir
-
-Criar uma coluna `delta_items` (jsonb, nullable) na tabela `orders`, ou usar uma abordagem mais simples: salvar numa tabela `order_deltas` ou no próprio RPC.
-
-**Abordagem escolhida**: Adicionar campo `delta_items jsonb` na tabela `orders`. O RPC `update_order_items` receberá um parâmetro extra `p_delta_items jsonb` e salvará no pedido. Isso é mais simples que localStorage (funciona cross-device).
-
-**Migration SQL**:
-```sql
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delta_items jsonb;
-```
-
-**Atualizar RPC** para aceitar e salvar `p_delta_items`.
-
-### 4. Impressão automática de delta no PDV (`src/lib/print-service.ts`)
-
-Criar `autoPrintDelta(order)`:
-- Ao detectar UPDATE relevante, buscar `delta_items` do pedido
-- Se existir delta → imprimir apenas o delta com layout "ACRESCIMO"
-- Se não existir delta (ex: edição manual) → imprimir completo como fallback
-
-### 5. Criar layout de impressão "ACRESCIMO" (`src/lib/thermal-printer.ts` + `print-receipt.ts`)
-
-Novo builder `buildEscPosDelta` e `buildDeltaHtml`:
-- Cabeçalho: nome do estabelecimento
-- Título destacado: `*** ACRESCIMO ***`
-- Mesa + Garçom + Data/Hora
-- Apenas os itens do delta
-- Sem total geral (ou total do acréscimo apenas)
-
-### 6. Botões manuais no PDV (`src/pages/Pdv.tsx`)
-
-Substituir o botão único "REIMPRIMIR CUPOM" por 3 botões discretos:
-- **Imprimir Acréscimo** (só aparece se `delta_items` existe) — imprime delta
-- **Imprimir Pedido** — imprime comanda completa
-- **Imprimir Conta** — imprime conta final com layout de conta
-
-### 7. Arquivos alterados
-
-| Arquivo | Mudança |
-|---|---|
-| `supabase/migrations/` | ADD `delta_items jsonb` + atualizar RPC |
-| `src/lib/order-delta.ts` | **Novo** — cálculo de delta |
-| `src/lib/thermal-printer.ts` | `buildEscPosDelta` |
-| `src/lib/print-receipt.ts` | `printDelta`, `printBill`, `buildDeltaHtml` |
-| `src/lib/print-service.ts` | `autoPrintDelta`, lógica de UPDATE usa delta |
-| `src/pages/Palm.tsx` | Estado `originalCart` |
-| `src/components/palm/OrderReview.tsx` | Prop `originalCart`, calcular e enviar delta |
-| `src/pages/Pdv.tsx` | 3 botões de impressão, autoprint usa delta |
-| `src/lib/types.ts` | Adicionar `delta_items` ao type `Order` |
-
-### Fluxo final
+O banco possui **múltiplas versões** da mesma função com assinaturas diferentes:
 
 ```text
-Palm (garçom edita mesa)
-  → calcula delta (newCart vs originalCart)
-  → chama RPC com p_delta_items = delta
-  → banco salva delta_items + reseta printed_at
+create_order:
+  1. (text, text, numeric, jsonb)                              ← ANTIGA
+  2. (text, text, numeric, jsonb, boolean)                     ← NOVA
 
-PDV (realtime detecta UPDATE)
-  → busca order com delta_items
-  → se delta_items existe → imprime layout ACRESCIMO
-  → se não → imprime completo (fallback)
-
-Botões manuais:
-  → "Imprimir Acréscimo" → usa delta_items salvo
-  → "Imprimir Pedido" → comanda completa
-  → "Imprimir Conta" → layout de conta final
+update_order_items:
+  1. (uuid, numeric, jsonb, jsonb, text)                       ← ANTIGA
+  2. (uuid, numeric, jsonb, jsonb, text, integer)              ← ANTIGA
+  3. (uuid, numeric, jsonb, jsonb, text, integer, boolean)     ← NOVA
 ```
+
+Quando o frontend chama `create_order` com 5 parâmetros (incluindo `p_should_print`), o PostgreSQL pode resolver para a versão correta. Mas com `update_order_items`, os parâmetros opcionais (`DEFAULT NULL`) criam ambiguidade entre as 3 overloads — o PostgreSQL não consegue decidir qual chamar e retorna erro.
+
+O PostgREST (API do banco) pode também falhar ao tentar resolver a função correta quando existem overloads com parâmetros default.
+
+## Plano de Correção
+
+### 1. Migration SQL — Limpar overloads antigos
+Criar uma migration que:
+- Remove as versões antigas das funções (sem `p_should_print`)
+- Mantém apenas a versão mais completa de cada função
+- Garante que `p_should_print` tem `DEFAULT true` para compatibilidade
+
+```sql
+-- Dropar overloads antigos de create_order
+DROP FUNCTION IF EXISTS public.create_order(text, text, numeric, jsonb);
+
+-- Dropar overloads antigos de update_order_items
+DROP FUNCTION IF EXISTS public.update_order_items(uuid, numeric, jsonb, jsonb, text);
+DROP FUNCTION IF EXISTS public.update_order_items(uuid, numeric, jsonb, jsonb, text, integer);
+
+-- Recriar as funções finais (versão única de cada)
+-- create_order com p_should_print boolean DEFAULT true
+-- update_order_items com p_should_print boolean DEFAULT true
+```
+
+Também limpar overloads de `pay_order`:
+```sql
+DROP FUNCTION IF EXISTS public.pay_order(uuid, text, numeric);
+```
+
+### 2. OrderReview.tsx — Logs completos e erro real
+Alterações no `catch`:
+- Substituir mensagem genérica por `err.message`, `err.details`, `err.hint`
+- Adicionar `console.log` detalhado antes de cada RPC com: mesa, garçom, versão, shouldPrint, printType, payload completo
+- Adicionar `console.log` da resposta/erro completo após cada RPC
+
+### 3. Arquivos alterados
+| Arquivo | Alteração |
+|---|---|
+| Migration SQL (nova) | Remove overloads antigos, mantém versão única com `p_should_print` |
+| `src/components/palm/OrderReview.tsx` | Logs detalhados + erro real no toast |
+
+### Detalhes técnicos
+
+**Migration final** recria `create_order` e `update_order_items` como função única cada, eliminando ambiguidade de overloads. Os defaults (`p_should_print DEFAULT true`, `p_expected_version DEFAULT NULL`, etc.) permitem chamadas com ou sem esses parâmetros.
+
+**Erro real no toast** — o `catch` passa a exibir:
+```
+title: "Erro ao enviar pedido"
+description: `${err.message}${err.details ? ' — ' + err.details : ''}${err.hint ? ' (Dica: ' + err.hint + ')' : ''}`
+```
+
+**Modal** já está implementado corretamente no código atual — o problema era apenas o backend falhando.
 
