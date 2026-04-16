@@ -58,10 +58,6 @@ const OrderReview = ({
     try {
       if (existingOrderId) {
         const delta = calculateDelta(originalCart, cart);
-        console.log("[OrderReview] Delta calculado:", delta);
-        console.log("[OrderReview] Print type selecionado:", printType);
-        console.log("[OrderReview] Should print:", shouldPrint);
-
         const items = cart.map((item) => ({
           product_id: item.product.id.length === 36 ? item.product.id : null,
           product_name: item.product.name,
@@ -70,8 +66,8 @@ const OrderReview = ({
           note: item.note || null,
           subtotal: item.product.price * item.quantity,
         }));
-        
-        const { data: rpcResult, error: rpcError } = await supabase.rpc("update_order_items", {
+
+        const payload = {
           p_order_id: existingOrderId,
           p_total: total,
           p_items: items,
@@ -79,34 +75,29 @@ const OrderReview = ({
           p_print_type: printType,
           p_expected_version: orderVersion ?? undefined,
           p_should_print: shouldPrint,
-        } as any);
+        };
+        console.log("[OrderReview] UPDATE payload:", JSON.stringify(payload, null, 2));
+        
+        const { data: rpcResult, error: rpcError } = await supabase.rpc("update_order_items", payload as any);
+        console.log("[OrderReview] UPDATE result:", rpcResult, "error:", rpcError);
 
         if (rpcError) {
           const msg = rpcError.message || "";
           if (msg.includes("version_conflict")) {
-            toast({
-              title: "Mesa alterada por outro aparelho",
-              description: "Recarregue a mesa e tente de novo.",
-              variant: "destructive",
-            });
+            toast({ title: "Mesa alterada por outro aparelho", description: "Recarregue a mesa e tente de novo.", variant: "destructive" });
             setSending(false);
             return;
           }
           if (msg.includes("order_not_editable")) {
-            toast({
-              title: "Pedido já fechado",
-              description: "Esse pedido não pode mais ser editado.",
-              variant: "destructive",
-            });
+            toast({ title: "Pedido já fechado", description: "Esse pedido não pode mais ser editado.", variant: "destructive" });
             setSending(false);
             return;
           }
           throw rpcError;
         }
       } else {
-        // Count today's balcão orders for senha
         let newSenha = senha || "";
-        if (tableName === "BALCÃO" && !existingOrderId) {
+        if (tableName === "BALCÃO") {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const { count } = await supabase
@@ -126,13 +117,17 @@ const OrderReview = ({
           subtotal: item.product.price * item.quantity,
         }));
 
-        const { error: createError } = await supabase.rpc("create_order", {
+        const payload = {
           p_table_name: tableName,
           p_waiter_name: waiterName,
           p_total: total,
           p_items: rpcItems,
           p_should_print: shouldPrint,
-        } as any);
+        };
+        console.log("[OrderReview] CREATE payload:", JSON.stringify(payload, null, 2));
+
+        const { data: createData, error: createError } = await supabase.rpc("create_order", payload as any);
+        console.log("[OrderReview] CREATE result:", createData, "error:", createError);
         if (createError) throw createError;
 
         playFeedback("success");
@@ -142,12 +137,13 @@ const OrderReview = ({
 
       playFeedback("success");
       onSuccess("");
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("[OrderReview] Erro completo:", err);
       playFeedback("error");
+      const desc = [err?.message, err?.details, err?.hint].filter(Boolean).join(" — ") || "Tente novamente.";
       toast({
         title: "Erro ao enviar pedido",
-        description: "Tente novamente.",
+        description: desc,
         variant: "destructive",
       });
       setSending(false);
