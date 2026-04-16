@@ -31,7 +31,7 @@ function contentWidth(paper: PaperWidth): string {
 function thermalCSS(cfg: PrintConfig): string {
   const paper = cfg.paperWidth;
   const cw = contentWidth(paper);
-  const f = getFontSizes(cfg.printSize);
+  const f = getFontSizes(cfg);
   const pad = paper === "58mm" ? "2mm" : "4mm";
 
   return `
@@ -215,6 +215,7 @@ export function buildSenhaHtml(
 ): string {
   const cfg = configOverride || loadPrintConfig();
   const time = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const v = cfg.visibleSections;
 
   const itemsHtml = items
     .map((i) => `<div class="item-row"><span class="item-left"><span class="item-qty">${i.quantity}x</span> ${i.product_name}</span></div>`)
@@ -222,14 +223,13 @@ export function buildSenhaHtml(
 
   return wrapHtml("Senha", cfg, `
 <div class="receipt">
-  <div class="header-text">${cfg.headerText}</div>
-  <hr class="sep-bold">
-  <div class="center" style="font-size:${getFontSizes(cfg.printSize).base - 1}px;color:#555;">BALCÃO • ${time}</div>
+  ${v.title ? `<div class="header-text">${cfg.headerText}</div><hr class="sep-bold">` : ""}
+  ${v.date ? `<div class="center" style="font-size:${getFontSizes(cfg).base - 1}px;color:#555;">BALCÃO • ${time}</div>` : ""}
   <div class="senha-num">${senha}</div>
   <hr class="sep">
   ${itemsHtml}
   <hr class="sep">
-  <div class="footer">${cfg.footerText}</div>
+  ${v.footer ? `<div class="footer">${cfg.footerText}</div>` : ""}
   <div class="cut">✂ --------------------------------</div>
 </div>`);
 }
@@ -242,16 +242,17 @@ export function buildReceiptHtml(
   configOverride?: PrintConfig
 ): string {
   const cfg = configOverride || loadPrintConfig();
-  const f = getFontSizes(cfg.printSize);
+  getFontSizes(cfg);
   const now = new Date();
   const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("pt-BR");
   const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const v = cfg.visibleSections;
 
   const itemsHtml = items
     .map((item) => {
       const sub = (item.product_price * item.quantity).toFixed(2);
-      const noteHtml = item.note
+      const noteHtml = v.notes && item.note
         ? `<div class="item-note">↳ ${item.note}</div>`
         : "";
       return `
@@ -264,11 +265,10 @@ export function buildReceiptHtml(
 
   return wrapHtml("Cupom", cfg, `
 <div class="receipt" id="receipt-root">
-  <div class="header-text">${cfg.headerText}</div>
-  <hr class="sep-bold">
+  ${v.title ? `<div class="header-text">${cfg.headerText}</div><hr class="sep-bold">` : ""}
   <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
-  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
-  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
+  ${v.waiter ? `<div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>` : ""}
+  ${v.date ? `<div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>` : ""}
   <hr class="sep">
   ${itemsHtml}
   <hr class="sep-bold">
@@ -280,7 +280,7 @@ export function buildReceiptHtml(
   </div>
   <hr class="sep">
   <div class="qty-line">Qtd itens: ${totalQty}</div>
-  <div class="footer">${cfg.footerText}</div>
+  ${v.footer ? `<div class="footer">${cfg.footerText}</div>` : ""}
   <div class="cut">✂ --------------------------------</div>
 </div>`);
 }
