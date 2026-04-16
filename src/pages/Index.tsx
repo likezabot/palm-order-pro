@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Smartphone, Monitor, DollarSign, Settings, Download, Share } from "lucide-react";
 import { useFeedback } from "@/hooks/use-feedback";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { getAppVersion } from "@/lib/version-check";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", icon: Smartphone, path: "/palm", emoji: "📱" },
@@ -71,6 +72,10 @@ const Index = () => {
           </button>
         ))}
       </div>
+
+      <p className="mt-6 text-[10px] text-muted-foreground/50 select-none">
+        v{getAppVersion().slice(0, 16).replace("T", " ")}
+      </p>
     </div>
   );
 };
