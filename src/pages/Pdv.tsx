@@ -2,6 +2,15 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import { manualPrintOrder, manualPrintDelta, manualPrintBill, autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
@@ -41,6 +50,9 @@ const Pdv = () => {
   const [sending, setSending] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState<"online" | "offline">("offline");
   const [wantCustomerData, setWantCustomerData] = useState(false);
+  const [showPayConfirm, setShowPayConfirm] = useState(false);
+  const [pendingPrint, setPendingPrint] = useState<(() => Promise<void>) | null>(null);
+  const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerDoc, setCustomerDoc] = useState("");
 
@@ -170,40 +182,33 @@ const Pdv = () => {
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
   };
 
-  const handlePayment = async () => {
+  const handlePayment = async (shouldPrint: boolean) => {
     if (!selectedOrder || !payMethod || sending) return;
     setSending(true);
-    const printConfig = loadPrintConfig();
+    setShowPayConfirm(false);
     const total = selectedOrder.total || 0;
     const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
-    await supabase.rpc("pay_order", { p_order_id: selectedOrder.id, p_payment_method: payMethod, p_amount_paid: paid } as any);
+    await supabase.rpc("pay_order", { p_order_id: selectedOrder.id, p_payment_method: payMethod, p_amount_paid: paid, p_should_print: shouldPrint } as any);
     
-    // Print customer receipt only if in bridge mode
-    const items = allItems.filter((i) => i.order_id === selectedOrder.id);
-    let printed = false;
-
-    if (items.length > 0 && printConfig.printMode === "bridge") {
-      const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
-      printed = await printCustomerReceipt(
-        selectedOrder.table_name,
-        selectedOrder.waiter_name || "N/A",
-        items,
-        total,
-        payMethod,
-        paid,
-        custData
-      );
+    if (shouldPrint) {
+      const printConfig = loadPrintConfig();
+      const items = allItems.filter((i) => i.order_id === selectedOrder.id);
+      if (items.length > 0 && printConfig.printMode === "bridge") {
+        const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
+        await printCustomerReceipt(
+          selectedOrder.table_name,
+          selectedOrder.waiter_name || "N/A",
+          items,
+          total,
+          payMethod,
+          paid,
+          custData
+        );
+      }
     }
 
     playFeedback("success");
-    if (printConfig.printMode === "bridge") {
-      toast({ title: "Pagamento confirmado! Comprovante impresso." });
-    } else {
-      toast({ 
-        title: "Mesa fechada com sucesso!", 
-        description: "No navegador/celular, o comprovante não é impresso. Use o app desktop para imprimir." 
-      });
-    }
+    toast({ title: shouldPrint ? "Mesa fechada! Comprovante impresso." : "Mesa fechada com sucesso!" });
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
     setShowPayment(false);
     setPayMethod("");
@@ -213,6 +218,19 @@ const Pdv = () => {
     setCustomerDoc("");
     setSending(false);
     setSelectedId(null);
+  };
+
+  const confirmPrintAction = (action: () => Promise<void>) => {
+    setPendingPrint(() => action);
+    setShowPrintConfirm(true);
+  };
+
+  const executePendingPrint = async () => {
+    setShowPrintConfirm(false);
+    if (pendingPrint) {
+      await pendingPrint();
+      setPendingPrint(null);
+    }
   };
 
   const total = selectedOrder?.total || 0;
@@ -462,7 +480,7 @@ const Pdv = () => {
                   VOLTAR
                 </button>
                 <button
-                  onClick={handlePayment}
+                  onClick={() => setShowPayConfirm(true)}
                   disabled={!payMethod || sending || (payMethod === "cash" && paid < total)}
                   className="flex-1 rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
                 >
@@ -536,10 +554,10 @@ const Pdv = () => {
                 <div className="grid grid-cols-3 gap-2">
                   {selectedOrder.delta_items && (
                     <button
-                      onClick={async () => {
+                      onClick={() => confirmPrintAction(async () => {
                         const ok = await manualPrintDelta(selectedOrder);
                         toast({ title: ok ? "Acréscimo impresso!" : "Sem acréscimo para imprimir", variant: ok ? "default" : "destructive" });
-                      }}
+                      })}
                       className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
                     >
                       <FilePlus size={16} />
@@ -547,17 +565,21 @@ const Pdv = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => handlePrint(selectedOrder)}
+                    onClick={() => confirmPrintAction(async () => {
+                      const ok = await manualPrintOrder(selectedOrder);
+                      if (!ok) toast({ title: "Sem itens para imprimir", variant: "destructive" });
+                      else toast({ title: "Cupom enviado para impressão!" });
+                    })}
                     className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
                   >
                     <FileText size={16} />
                     PEDIDO
                   </button>
                   <button
-                    onClick={async () => {
+                    onClick={() => confirmPrintAction(async () => {
                       const ok = await manualPrintBill(selectedOrder);
                       toast({ title: ok ? "Conta impressa!" : "Sem itens para imprimir", variant: ok ? "default" : "destructive" });
-                    }}
+                    })}
                     className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
                   >
                     <Receipt size={16} />
@@ -591,6 +613,57 @@ const Pdv = () => {
           )}
         </div>
       </div>
+      {/* Payment print confirmation */}
+      <AlertDialog open={showPayConfirm} onOpenChange={setShowPayConfirm}>
+        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Escolha se deseja fechar a conta com ou sem impressão do comprovante.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <button
+              onClick={() => handlePayment(true)}
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+            >
+              <Printer size={20} /> Fechar e imprimir
+            </button>
+            <button
+              onClick={() => handlePayment(false)}
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-secondary p-4 text-lg font-bold text-secondary-foreground active:scale-[0.98] transition-all"
+            >
+              <CheckCircle2 size={20} /> Fechar sem imprimir
+            </button>
+            <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reprint confirmation */}
+      <AlertDialog open={showPrintConfirm} onOpenChange={(open) => { setShowPrintConfirm(open); if (!open) setPendingPrint(null); }}>
+        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirme para enviar a impressão.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <button
+              onClick={executePendingPrint}
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+            >
+              <Printer size={20} /> Sim, imprimir
+            </button>
+            <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
