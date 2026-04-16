@@ -203,15 +203,18 @@ function buildEscPosGeneric(
   const now = new Date();
   const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("pt-BR");
+  const v = config.visibleSections;
 
-  // Header
-  b.align("center")
-   .bold(true)
-   .size(true, true)
-   .line(config.headerText)
-   .size(false, false)
-   .bold(false)
-   .feed(1);
+  // Header (título)
+  if (v.title) {
+    b.align("center")
+     .bold(true)
+     .size(true, true)
+     .line(config.headerText)
+     .size(false, false)
+     .bold(false)
+     .feed(1);
+  }
 
   // Document type banner
   if (docType !== "PEDIDO") {
@@ -225,11 +228,10 @@ function buildEscPosGeneric(
   }
 
   // Info
-  b.align("left")
-   .line(`MESA: ${tableName}`)
-   .line(`GARCOM: ${waiterName}`)
-   .line(`DATA: ${date} ${time}`)
-   .hr(config.paperWidth, "-");
+  b.align("left").line(`MESA: ${tableName}`);
+  if (v.waiter) b.line(`GARCOM: ${waiterName}`);
+  if (v.date) b.line(`DATA: ${date} ${time}`);
+  b.hr(config.paperWidth, "-");
 
   // Items
   items.forEach((item) => {
@@ -250,7 +252,7 @@ function buildEscPosGeneric(
     
     b.bold(true).text(qtyStr).bold(false).text(displayName).text(" ").line(priceStr);
     
-    if (item.note) {
+    if (v.notes && item.note) {
       b.line(`  (${item.note})`);
     }
   });
@@ -267,11 +269,10 @@ function buildEscPosGeneric(
    .bold(false);
 
   // Footer
-  b.feed(1)
-   .align("center")
-   .line(config.footerText)
-   .feed(4)
-   .cut();
+  if (v.footer) {
+    b.feed(1).align("center").line(config.footerText);
+  }
+  b.feed(4).cut();
 
   return b.getPayload();
 }
