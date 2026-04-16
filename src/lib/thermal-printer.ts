@@ -1,11 +1,18 @@
 /**
  * ESC/POS Thermal Printing Service
- * For direct communication with local thermal printers via an HTTP bridge.
+ *
+ * Renderiza ESC/POS a partir do MESMO modelo de layout usado pelo preview HTML
+ * (`createReceiptLayoutModel`). Garante que preview e papel real fiquem iguais.
  */
 
-import { type PrintConfig } from "./print-config";
+import { type PrintConfig, getFontSizes } from "./print-config";
+import {
+  createReceiptLayoutModel,
+  type LayoutBlock,
+  type ReceiptItem,
+} from "./receipt-layout";
 
-// ESC/POS Commands (Decimal values for easier Uint8Array construction)
+// ESC/POS Commands
 const ESC = 27;
 const GS = 29;
 const LF = 10;
@@ -18,18 +25,18 @@ export class EscPosBuilder {
   }
 
   reset() {
-    this.buffer.push(ESC, 64); // ESC @ (Initialize)
+    this.buffer.push(ESC, 64); // ESC @
     return this;
   }
 
   align(pos: "left" | "center" | "right") {
     const val = pos === "center" ? 1 : pos === "right" ? 2 : 0;
-    this.buffer.push(ESC, 97, val); // ESC a n
+    this.buffer.push(ESC, 97, val);
     return this;
   }
 
   bold(on: boolean) {
-    this.buffer.push(ESC, 69, on ? 1 : 0); // ESC E n
+    this.buffer.push(ESC, 69, on ? 1 : 0);
     return this;
   }
 
@@ -37,17 +44,15 @@ export class EscPosBuilder {
     let val = 0;
     if (doubleWidth) val |= 0x20;
     if (doubleHeight) val |= 0x10;
-    this.buffer.push(ESC, 33, val); // ESC ! n
+    this.buffer.push(ESC, 33, val);
     return this;
   }
 
   text(t: string) {
-    // Basic normalization for thermal printers
     const normalized = t
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^\x20-\x7E\n\r]/g, "?");
-    
     for (let i = 0; i < normalized.length; i++) {
       this.buffer.push(normalized.charCodeAt(i));
     }
@@ -66,14 +71,19 @@ export class EscPosBuilder {
     return this;
   }
 
-  feed(n: number = 3) {
+  feed(n: number = 1) {
     for (let i = 0; i < n; i++) this.buffer.push(LF);
     return this;
   }
 
   cut() {
-    // Feed and cut (GS V 65 3)
     this.buffer.push(GS, 86, 65, 3);
+    return this;
+  }
+
+  /** Reset completo de estilo entre blocos para evitar “vazamento”. */
+  resetStyle() {
+    this.bold(false).size(false, false).align("left");
     return this;
   }
 
@@ -82,197 +92,226 @@ export class EscPosBuilder {
   }
 }
 
-/**
- * Checks if the bridge is online and if a printer is connected.
- */
-export async function checkBridgeStatus(url: string): Promise<{ online: boolean; printer_connected: boolean; error?: string }> {
+// ============================================================
+// Bridge status / send
+// ============================================================
+
+export async function checkBridgeStatus(
+  url: string
+): Promise<{ online: boolean; printer_connected: boolean; error?: string }> {
   const healthUrl = url.replace(/\/print$/, "/health");
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 1500); // Fast timeout
-    
-    const response = await fetch(healthUrl, { 
-      signal: controller.signal,
-      cache: 'no-cache'
-    });
+    const id = setTimeout(() => controller.abort(), 1500);
+
+    const response = await fetch(healthUrl, { signal: controller.signal, cache: "no-cache" });
     clearTimeout(id);
 
-    if (!response.ok) return { online: false, printer_connected: false, error: `Serviço retornou erro HTTP ${response.status}` };
-    
+    if (!response.ok)
+      return { online: false, printer_connected: false, error: `HTTP ${response.status}` };
+
     const data = await response.json();
-    return { 
-      online: true, 
+    return {
+      online: true,
       printer_connected: !!data.printer_connected,
-      error: data.printer_connected ? undefined : "Impressora USB não detectada na ponte"
+      error: data.printer_connected ? undefined : "Impressora USB nao detectada na ponte",
     };
-  } catch (e) {
-    return { 
-      online: false, 
-      printer_connected: false, 
-      error: "Ponte local indisponível (Certifique-se que o serviço lp-bridge está rodando em localhost:9100)" 
+  } catch {
+    return {
+      online: false,
+      printer_connected: false,
+      error: "Ponte local indisponivel (lp-bridge em localhost:9100)",
     };
   }
 }
 
-/**
- * Sends a raw payload to the local printing bridge.
- */
 export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
-  const timestamp = new Date().toLocaleTimeString();
-  console.log(`[thermal-bridge ${timestamp}] Enviando payload (${payload.length} bytes)`);
-  
-  // Convert binary to base64 for JSON transmission
+  const ts = new Date().toLocaleTimeString();
+  console.log(`[thermal-bridge ${ts}] Enviando payload (${payload.length} bytes)`);
   const base64 = btoa(String.fromCharCode(...payload));
 
   try {
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         payload: base64,
         format: "escpos",
         source: "Plano B Espetaria PDV",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       }),
     });
-    
+
     if (!response.ok) {
-      const result = await response.json().catch(() => ({ error: "Erro desconhecido no servidor" }));
-      console.error(`[thermal-bridge] Erro HTTP ${response.status}: ${result.error || response.statusText}`);
+      const result = await response.json().catch(() => ({ error: "?" }));
+      console.error(`[thermal-bridge] HTTP ${response.status}: ${result.error}`);
       return false;
     }
 
     const result = await response.json();
-    
     if (result.success) {
-      console.log("[thermal-bridge] Sucesso! Cupom enviado para a impressora.");
+      console.log("[thermal-bridge] Cupom enviado para a impressora.");
       return true;
-    } else {
-      console.error(`[thermal-bridge] Falha no serviço local: ${result.error}`);
-      return false;
     }
+    console.error(`[thermal-bridge] Falha: ${result.error}`);
+    return false;
   } catch (e: any) {
-    console.error("[thermal-bridge] Falha de conexão:", e.message);
+    console.error("[thermal-bridge] Falha de conexao:", e.message);
     return false;
   }
 }
 
+// ============================================================
+// Renderer ESC/POS a partir do layout model
+// ============================================================
+
+function paperColumns(paper: "58mm" | "80mm"): number {
+  return paper === "58mm" ? 32 : 48;
+}
+
 /**
- * Generates the full ESC/POS receipt for an order.
+ * Mapeia overrides de fontSizes (px) -> intensidade no ESC/POS (double width/height).
+ * O ESC/POS não tem fontes contínuas; usamos thresholds estáveis.
  */
+function isLarge(px: number | undefined, baselinePx: number): boolean {
+  if (px == null) return false;
+  return px >= baselinePx + 4;
+}
+
+function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Array {
+  const b = new EscPosBuilder();
+  const cols = paperColumns(cfg.paperWidth);
+  const f = getFontSizes(cfg);
+  // baselines para decidir “grande”
+  const titleLarge = isLarge(cfg.fontSizes?.title, f.title - 4) || f.title >= 18;
+  const totalLarge = isLarge(cfg.fontSizes?.total, f.total - 4) || f.total >= 18;
+  const itemsLarge = isLarge(cfg.fontSizes?.items, f.base);
+  const headerLarge = isLarge(cfg.fontSizes?.header, f.base);
+  const notesLarge = isLarge(cfg.fontSizes?.notes, f.note);
+
+  for (const blk of blocks) {
+    switch (blk.kind) {
+      case "title": {
+        b.resetStyle().align("center").bold(true).size(titleLarge, titleLarge).line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "banner": {
+        b.resetStyle().align("center").bold(true).size(true, true).line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "sep": {
+        b.resetStyle().align("left").line((blk.bold ? "=" : "-").repeat(cols));
+        break;
+      }
+      case "info": {
+        b.resetStyle().align("left").size(headerLarge, false);
+        b.bold(true).text(`${blk.label.toUpperCase()}: `).bold(false).line(blk.value);
+        b.resetStyle();
+        break;
+      }
+      case "item": {
+        b.resetStyle().align("left").size(itemsLarge, false);
+        const qtyStr = `${blk.quantity}x `;
+        const priceStr = blk.subtotal > 0 ? `R$${blk.subtotal.toFixed(2)}` : "";
+        const name = blk.name.toUpperCase();
+        // colunas efetivas (double width consome 2x por char — mas para simplicidade
+        // mantemos contagem em chars normais; double width é só para destaque visual).
+        const effectiveCols = itemsLarge ? Math.floor(cols / 2) : cols;
+        const nameSpace = effectiveCols - qtyStr.length - priceStr.length - 1;
+        let displayName = name;
+        if (nameSpace > 0 && name.length > nameSpace) {
+          displayName = name.substring(0, nameSpace - 2) + "..";
+        } else if (nameSpace > 0) {
+          displayName = name.padEnd(nameSpace);
+        }
+        b.bold(true).text(qtyStr).bold(false).text(displayName);
+        if (priceStr) b.text(" ").line(priceStr);
+        else b.line("");
+        b.resetStyle();
+
+        if (blk.note) {
+          b.size(notesLarge, false).align("left").line(`  (${blk.note})`);
+          b.resetStyle();
+        }
+        break;
+      }
+      case "total": {
+        b.resetStyle().align("right").bold(true).size(totalLarge, totalLarge);
+        b.line(`${blk.label}: ${blk.value}`);
+        b.resetStyle();
+        break;
+      }
+      case "qtyLine": {
+        b.resetStyle().align("center").line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "senha": {
+        b.resetStyle().align("center").bold(true).size(true, true);
+        b.line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "footer": {
+        b.resetStyle().align("center").line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "cutMark": {
+        // No ESC/POS o "cut mark" vira o feed + cut físico, não imprimimos os tracinhos.
+        b.feed(3).cut();
+        break;
+      }
+    }
+  }
+
+  return b.getPayload();
+}
+
+// ============================================================
+// API pública (mantém assinaturas usadas pelo print-receipt.ts)
+// ============================================================
+
 export function buildEscPosReceipt(
   tableName: string,
   waiterName: string,
-  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  items: ReceiptItem[],
   total: number,
   config: PrintConfig
 ): Uint8Array {
-  return buildEscPosGeneric(tableName, waiterName, items, total, config, "PEDIDO");
+  const layout = createReceiptLayoutModel(
+    { docType: "PEDIDO", tableName, waiterName, items, total },
+    config
+  );
+  return renderLayout(layout.blocks, config);
 }
 
 export function buildEscPosDelta(
   tableName: string,
   waiterName: string,
-  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  items: ReceiptItem[],
   config: PrintConfig
 ): Uint8Array {
-  const deltaTotal = items.reduce((s, i) => s + i.product_price * i.quantity, 0);
-  return buildEscPosGeneric(tableName, waiterName, items, deltaTotal, config, "ACRESCIMO");
+  const total = items.reduce((s, i) => s + i.product_price * i.quantity, 0);
+  const layout = createReceiptLayoutModel(
+    { docType: "ACRESCIMO", tableName, waiterName, items, total },
+    config
+  );
+  return renderLayout(layout.blocks, config);
 }
 
 export function buildEscPosBill(
   tableName: string,
   waiterName: string,
-  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  items: ReceiptItem[],
   total: number,
   config: PrintConfig
 ): Uint8Array {
-  return buildEscPosGeneric(tableName, waiterName, items, total, config, "CONTA");
-}
-
-function buildEscPosGeneric(
-  tableName: string,
-  waiterName: string,
-  items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
-  total: number,
-  config: PrintConfig,
-  docType: "PEDIDO" | "ACRESCIMO" | "CONTA"
-): Uint8Array {
-  const b = new EscPosBuilder();
-  const is80 = config.paperWidth === "80mm";
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-  const v = config.visibleSections;
-
-  // Header (título)
-  if (v.title) {
-    b.align("center")
-     .bold(true)
-     .size(true, true)
-     .line(config.headerText)
-     .size(false, false)
-     .bold(false)
-     .feed(1);
-  }
-
-  // Document type banner
-  if (docType !== "PEDIDO") {
-    b.align("center")
-     .bold(true)
-     .size(true, true)
-     .line(`*** ${docType} ***`)
-     .size(false, false)
-     .bold(false)
-     .feed(1);
-  }
-
-  // Info
-  b.align("left").line(`MESA: ${tableName}`);
-  if (v.waiter) b.line(`GARCOM: ${waiterName}`);
-  if (v.date) b.line(`DATA: ${date} ${time}`);
-  b.hr(config.paperWidth, "-");
-
-  // Items
-  items.forEach((item) => {
-    const qtyStr = `${item.quantity}x `.padEnd(4);
-    const priceStr = `R$${(item.product_price * item.quantity).toFixed(2)}`;
-    const name = item.product_name.toUpperCase();
-    
-    const maxChars = is80 ? 48 : 32;
-    const priceLen = priceStr.length;
-    const nameSpace = maxChars - qtyStr.length - priceLen - 1;
-    
-    let displayName = name;
-    if (name.length > nameSpace) {
-      displayName = name.substring(0, nameSpace - 2) + "..";
-    } else {
-      displayName = name.padEnd(nameSpace);
-    }
-    
-    b.bold(true).text(qtyStr).bold(false).text(displayName).text(" ").line(priceStr);
-    
-    if (v.notes && item.note) {
-      b.line(`  (${item.note})`);
-    }
-  });
-
-  b.hr(config.paperWidth, "=");
-
-  // Total
-  const totalLabel = docType === "ACRESCIMO" ? "SUBTOTAL ACRESCIMO" : "TOTAL";
-  b.align("right")
-   .size(true, true)
-   .bold(true)
-   .line(`${totalLabel}: R$ ${total.toFixed(2)}`)
-   .size(false, false)
-   .bold(false);
-
-  // Footer
-  if (v.footer) {
-    b.feed(1).align("center").line(config.footerText);
-  }
-  b.feed(4).cut();
-
-  return b.getPayload();
+  const layout = createReceiptLayoutModel(
+    { docType: "CONTA", tableName, waiterName, items, total },
+    config
+  );
+  return renderLayout(layout.blocks, config);
 }
