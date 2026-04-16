@@ -1,32 +1,37 @@
-const CACHE_NAME = "plano-b-v3";
+// BUILD_STAMP: __WILL_CHANGE_EACH_DEPLOY__
+const CACHE_NAME = "plano-b-v4";
 
-// Only cache static assets, NOT the HTML shell
 const ASSETS = [
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png"
 ];
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("install", (event) => {
-  self.skipWaiting(); // Activate immediately
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
 });
 
 self.addEventListener("activate", (event) => {
-  // Delete ALL old caches
   event.waitUntil(
     caches.keys().then((names) =>
       Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
-    ).then(() => self.clients.claim()) // Take control of all tabs immediately
+    ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Navigation requests (HTML pages): ALWAYS go to network
+  // Navigation: always network-first
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => caches.match("/index.html"))
@@ -34,7 +39,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // For cached static assets: cache-first
+  // Static assets: cache-first
   if (ASSETS.some((a) => url.pathname === a)) {
     event.respondWith(
       caches.match(event.request).then((r) => r || fetch(event.request))
@@ -42,7 +47,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else (JS bundles, CSS, API calls): network-first
+  // Everything else: network-first
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   );
