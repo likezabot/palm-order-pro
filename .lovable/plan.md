@@ -1,39 +1,37 @@
 
+O usuário pede para "publicar" a nova versão da aba Impressão. Preciso ser claro: **eu não tenho como executar Publish em produção** — só o usuário pode clicar no botão Publish/Update no Lovable. As alterações de código já foram feitas (PrintConfigPanel reescrito, print-config.ts expandido, etc.), mas só vão para produção quando o usuário clicar Update.
 
-## Plano: Atualizar indicador de versão para refletir o histórico real
+Vou verificar se o código atual no projeto realmente contém o que foi prometido (sem JSON, com presets, com sliders) — porque se houver resquício antigo, precisa corrigir antes do Publish.
 
-### Histórico de versões baseado nas mudanças reais do projeto
+## Plano
 
-| Versão | Data | Descrição |
-|---|---|---|
-| **1.0.0** | 14/04 | Sistema completo inicial: Palm, Cozinha, PDV, Admin, banco de dados, Realtime, tema escuro |
-| **1.1.0** | 14/04 | Teclado numérico corrigido, fluxo de impressão com PrintStation, toggle ativo/inativo no Admin |
-| **1.2.0** | 14/04 | Garçom persistente (localStorage), PDV Desktop unificado |
-| **1.3.0** | 14/04 | Feedback tátil/sonoro (vibração + bips), tela de seleção de atendimento |
-| **1.4.0** | 14/04 | Grid visual de mesas (substitui fluxo de 3 telas), otimização UX |
-| **1.5.0** | 14/04 | Balcão multi-pedido, redução para 10 mesas, config de mesas no Admin |
-| **1.6.0** | 14/04 | PWA instalável (ícones, manifest, banner de instalação), edição de pedidos do balcão, senhas sequenciais (#001, #002...) |
-| **1.7.0** | 14/04 | Impressão térmica reescrita do zero (ESC/POS, 58mm/80mm, popup isolado) |
-| **1.8.0** | 15/04 | Ponte local USB (bridge Node.js), impressão automática via Realtime |
-| **1.9.0** | 15/04 | Sistema de delta/acréscimo (imprime só itens novos), 3 botões manuais (Acréscimo/Pedido/Conta) |
-| **1.10.0** | 15/04 | PDV e Caixa unificados, comprovante com CNPJ, modal de dados do cliente |
-| **1.10.1** | 15/04 | Correção: botões do Palm viram toggle (não imprimem no celular), print_type salvo no banco |
-| **1.10.2** | 15/04 | Correção: impressão web bloqueada (só bridge imprime), mensagens contextuais |
-| **1.10.3** | 15/04 | Correção PWA: ícones regenerados, service worker corrigido |
-| **1.11.0** | 16/04 | Modal "Enviar e imprimir / sem imprimir" unificado Palm + CloseOrder, p_should_print no RPC |
-| **1.11.1** | 16/04 | Correção: overloads de RPC removidos, erro real no toast, logs detalhados |
-| **1.12.0** | 16/04 | Fechar conta no Palm + PDV com confirmação de impressão |
-| **1.13.0** | 16/04 | Sistema de atualização automática de versão (cache-busting, SW v4, UpdateBanner) |
+### 1. Auditoria do código atual
+Verificar `src/components/admin/PrintConfigPanel.tsx`:
+- confirmar que NÃO existe mais campo "Template JSON do cupom"
+- confirmar que NÃO existe mais "Cabeçalho base" / "Rodapé base" (como editor de template)
+- confirmar que existe seletor de presets (Mesa simples / Clássico / Conta destacada)
+- confirmar sliders de fonte (título, cabeçalho, itens, observações, total)
+- confirmar switches de visibilidade (título, garçom, data, observações, rodapé)
 
-**Versão atual: v1.13.0**
+Se algum resquício antigo aparecer, corrigir.
 
-### Alteração
+### 2. Explicar ao usuário o passo de Publish
+A produção em `palm-order-pro.lovable.app` só atualiza quando o **usuário** clica em **Publish → Update** no canto superior direito do editor (ou no botão `...` no mobile). O bundle `index-TDDoQuIN.js` é antigo justamente porque o último Publish foi feito antes da reescrita.
 
-Atualizar `src/pages/Index.tsx` para exibir `v1.13.0` em vez de `v1.0`, mantendo a data do build entre parênteses:
+Não posso gerar/forçar um novo hash — isso acontece automaticamente no build do Publish.
 
-```
-v1.13.0 (2026-04-16)
-```
+### 3. Após o usuário publicar
+Quando o usuário confirmar que clicou Update, eu posso usar `fetch_website` em `https://palm-order-pro.lovable.app/` para confirmar:
+- novo hash do bundle
+- ausência dos textos antigos
+- presença dos novos controles
 
-Arquivo alterado: `src/pages/Index.tsx` — uma linha.
+### Arquivos a revisar (read-only nesta etapa)
+- `src/components/admin/PrintConfigPanel.tsx` — garantir limpeza completa
+- `src/pages/Admin.tsx` — garantir que está usando o painel novo
 
+### Se encontrar resquícios
+Sair do modo plano e remover qualquer referência a JSON/template manual antes do Publish.
+
+### Mensagem final ao usuário
+Instruções claras de como clicar Publish → Update (desktop e mobile), e me avisar para eu validar o bundle publicado.
