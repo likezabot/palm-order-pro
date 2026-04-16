@@ -3,8 +3,6 @@ import { Smartphone, Monitor, DollarSign, Settings, Download, Share } from "luci
 import { useFeedback } from "@/hooks/use-feedback";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { getAppVersion } from "@/lib/version-check";
-import { useFeedback } from "@/hooks/use-feedback";
-import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", icon: Smartphone, path: "/palm", emoji: "📱" },
