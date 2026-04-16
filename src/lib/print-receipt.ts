@@ -85,7 +85,12 @@ function buildHtmlFromLayout(
   cfg: PrintConfig
 ): string {
   const layout = createReceiptLayoutModel({ docType, ...data }, cfg);
-  const body = `<div class="receipt" id="receipt-root">${renderBlocksToHtml(layout.blocks, cfg)}</div>`;
+  return buildHtmlFromBlocks(title, layout.blocks, cfg);
+}
+
+/** Helper: monta HTML completo a partir de blocos JA prontos (preserva extras injetados). */
+function buildHtmlFromBlocks(title: string, blocks: LayoutBlock[], cfg: PrintConfig): string {
+  const body = `<div class="receipt" id="receipt-root">${renderBlocksToHtml(blocks, cfg)}</div>`;
   return wrapHtml(title, cfg, body);
 }
 
