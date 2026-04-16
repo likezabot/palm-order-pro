@@ -2,12 +2,31 @@
  * Configurações persistentes para impressão térmica.
  * Salva no banco (tabela settings) para compartilhar entre dispositivos.
  * Mantém cache em localStorage para acesso síncrono rápido.
+ *
+ * FONTE ÚNICA DE VERDADE: web e .exe (bridge) leem desta config.
  */
 
 import { supabase } from "@/integrations/supabase/client";
 
 export type PaperWidth = "58mm" | "80mm";
 export type PrintSize = "normal" | "grande";
+export type LayoutPreset = "mesa_simples" | "classico" | "conta_destacada";
+
+export interface FontSizesOverride {
+  title?: number;   // cabeçalho do estabelecimento
+  header?: number;  // bloco mesa/garçom/data
+  items?: number;   // linhas de itens
+  notes?: number;   // observações dos itens
+  total?: number;   // bloco do total
+}
+
+export interface VisibleSections {
+  title: boolean;     // header text (PLANO B ESPETARIA)
+  waiter: boolean;    // linha do garçom
+  date: boolean;      // linha de data/hora
+  notes: boolean;     // observações dos itens
+  footer: boolean;    // rodapé "Obrigado..."
+}
 
 export interface PrintConfig {
   paperWidth: PaperWidth;
@@ -16,10 +35,22 @@ export interface PrintConfig {
   footerText: string;
   printMode: "browser" | "bridge";
   bridgeUrl: string;
+  // ----- novo: editor visual unificado -----
+  layoutPreset: LayoutPreset;
+  fontSizes: FontSizesOverride;
+  visibleSections: VisibleSections;
 }
 
 const STORAGE_KEY = "print_config";
 const DB_KEY = "print_config";
+
+const DEFAULT_VISIBLE: VisibleSections = {
+  title: true,
+  waiter: true,
+  date: true,
+  notes: true,
+  footer: true,
+};
 
 export const DEFAULT_CONFIG: PrintConfig = {
   paperWidth: "80mm",
@@ -28,30 +59,56 @@ export const DEFAULT_CONFIG: PrintConfig = {
   footerText: "Obrigado pela preferência!",
   printMode: "browser",
   bridgeUrl: "http://localhost:9100/print",
+  layoutPreset: "classico",
+  fontSizes: {},
+  visibleSections: { ...DEFAULT_VISIBLE },
 };
 
-/** Font sizes derived from printSize preset */
-export function getFontSizes(size: PrintSize) {
-  if (size === "grande") {
-    return {
-      title: 20,
-      base: 15,
-      total: 19,
-      senha: 80,
-      note: 12,
-      footer: 11,
-      lineHeight: 1.5,
-    };
+/** Aplica preset e devolve overrides recomendados (usuário ainda pode ajustar). */
+export function applyPreset(preset: LayoutPreset, base: PrintConfig): PrintConfig {
+  const next: PrintConfig = { ...base, layoutPreset: preset };
+  switch (preset) {
+    case "mesa_simples":
+      next.fontSizes = { title: 18, header: 14, items: 14, notes: 11, total: 18 };
+      next.visibleSections = { title: true, waiter: false, date: false, notes: true, footer: false };
+      break;
+    case "classico":
+      next.fontSizes = {}; // usa defaults do printSize
+      next.visibleSections = { ...DEFAULT_VISIBLE };
+      break;
+    case "conta_destacada":
+      next.fontSizes = { title: 22, header: 15, items: 15, notes: 12, total: 26 };
+      next.visibleSections = { title: true, waiter: true, date: true, notes: true, footer: true };
+      break;
   }
+  return next;
+}
+
+/** Tamanhos base derivados do preset printSize (compat). */
+function baseFontSizes(size: PrintSize) {
+  if (size === "grande") {
+    return { title: 20, base: 15, total: 19, senha: 80, note: 12, footer: 11, lineHeight: 1.5 };
+  }
+  return { title: 16, base: 13, total: 16, senha: 64, note: 10, footer: 9, lineHeight: 1.4 };
+}
+
+/** Tamanhos finais aplicando overrides do editor visual. */
+export function getFontSizes(sizeOrCfg: PrintSize | PrintConfig) {
+  const cfg: PrintConfig | null = typeof sizeOrCfg === "string" ? null : sizeOrCfg;
+  const size: PrintSize = typeof sizeOrCfg === "string" ? sizeOrCfg : sizeOrCfg.printSize;
+  const base = baseFontSizes(size);
+  if (!cfg) return base;
+  const o = cfg.fontSizes || {};
   return {
-    title: 16,
-    base: 13,
-    total: 16,
-    senha: 64,
-    note: 10,
-    footer: 9,
-    lineHeight: 1.4,
-  };
+    ...base,
+    title: o.title ?? base.title,
+    base: o.items ?? base.base,
+    total: o.total ?? base.total,
+    note: o.notes ?? base.note,
+    footer: base.footer,
+    // header não tinha campo dedicado; mapeia em info-row via baseSize secundário
+    headerInfo: o.header ?? base.base,
+  } as ReturnType<typeof baseFontSizes> & { headerInfo: number };
 }
 
 /** Synchronous load from localStorage cache (used by print functions) */
@@ -59,7 +116,13 @@ export function loadPrintConfig(): PrintConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_CONFIG };
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed,
+      fontSizes: { ...(parsed.fontSizes || {}) },
+      visibleSections: { ...DEFAULT_VISIBLE, ...(parsed.visibleSections || {}) },
+    };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -88,9 +151,15 @@ export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
       .single();
 
     if (data?.value) {
-      const parsed = { ...DEFAULT_CONFIG, ...JSON.parse(data.value) };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      return parsed;
+      const parsed = JSON.parse(data.value);
+      const merged: PrintConfig = {
+        ...DEFAULT_CONFIG,
+        ...parsed,
+        fontSizes: { ...(parsed.fontSizes || {}) },
+        visibleSections: { ...DEFAULT_VISIBLE, ...(parsed.visibleSections || {}) },
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      return merged;
     }
   } catch {
     // DB not available, use local
