@@ -482,38 +482,19 @@ export async function printDelta(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  const deltaTotal = deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0);
-  // Reuse receipt HTML but with ACRÉSCIMO header
-  const f = getFontSizes(cfg);
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-  const v = cfg.visibleSections;
+  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
+  buildHtmlFromLayout(
+    "ACRESCIMO",
+    "Acréscimo",
+    {
+      tableName,
+      waiterName,
+      items: deltaItems,
+      total: deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0),
+    },
+    cfg
+  );
 
-  const itemsHtml = deltaItems.map((item) => {
-    const sub = (item.product_price * item.quantity).toFixed(2);
-    const noteHtml = v.notes && item.note ? `<div class="item-note">↳ ${item.note}</div>` : "";
-    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>${noteHtml}`;
-  }).join("");
-
-  const html = wrapHtml("Acréscimo", cfg, `
-<div class="receipt">
-  ${v.title ? `<div class="header-text">${cfg.headerText}</div><hr class="sep-bold">` : ""}
-  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** ACRÉSCIMO ***</div>
-  <hr class="sep-bold">
-  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
-  ${v.waiter ? `<div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>` : ""}
-  ${v.date ? `<div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>` : ""}
-  <hr class="sep">
-  ${itemsHtml}
-  <hr class="sep-bold">
-  <div class="total-block"><div class="total-row"><span>SUBTOTAL</span><span>R$ ${deltaTotal.toFixed(2)}</span></div></div>
-  <hr class="sep">
-  ${v.footer ? `<div class="footer">${cfg.footerText}</div>` : ""}
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
-
-  // No navegador/celular, não imprimir acréscimo para evitar PDF
   console.log("[print] Acréscimo ignorado no modo browser.");
   return false;
 }
