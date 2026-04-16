@@ -482,38 +482,19 @@ export async function printDelta(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  const deltaTotal = deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0);
-  // Reuse receipt HTML but with ACRÉSCIMO header
-  const f = getFontSizes(cfg);
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-  const v = cfg.visibleSections;
+  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
+  buildHtmlFromLayout(
+    "ACRESCIMO",
+    "Acréscimo",
+    {
+      tableName,
+      waiterName,
+      items: deltaItems,
+      total: deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0),
+    },
+    cfg
+  );
 
-  const itemsHtml = deltaItems.map((item) => {
-    const sub = (item.product_price * item.quantity).toFixed(2);
-    const noteHtml = v.notes && item.note ? `<div class="item-note">↳ ${item.note}</div>` : "";
-    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>${noteHtml}`;
-  }).join("");
-
-  const html = wrapHtml("Acréscimo", cfg, `
-<div class="receipt">
-  ${v.title ? `<div class="header-text">${cfg.headerText}</div><hr class="sep-bold">` : ""}
-  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** ACRÉSCIMO ***</div>
-  <hr class="sep-bold">
-  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
-  ${v.waiter ? `<div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>` : ""}
-  ${v.date ? `<div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>` : ""}
-  <hr class="sep">
-  ${itemsHtml}
-  <hr class="sep-bold">
-  <div class="total-block"><div class="total-row"><span>SUBTOTAL</span><span>R$ ${deltaTotal.toFixed(2)}</span></div></div>
-  <hr class="sep">
-  ${v.footer ? `<div class="footer">${cfg.footerText}</div>` : ""}
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
-
-  // No navegador/celular, não imprimir acréscimo para evitar PDF
   console.log("[print] Acréscimo ignorado no modo browser.");
   return false;
 }
@@ -532,39 +513,9 @@ export async function printBill(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Reuse receipt HTML but with CONTA header
-  const f = getFontSizes(cfg.printSize);
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
+  buildHtmlFromLayout("CONTA", "Conta", { tableName, waiterName, items, total }, cfg);
 
-  const itemsHtml = items.map((item) => {
-    const sub = (item.product_price * item.quantity).toFixed(2);
-    const noteHtml = item.note ? `<div class="item-note">↳ ${item.note}</div>` : "";
-    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>${noteHtml}`;
-  }).join("");
-
-  const html = wrapHtml("Conta", cfg, `
-<div class="receipt">
-  <div class="header-text">${cfg.headerText}</div>
-  <hr class="sep-bold">
-  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** CONTA ***</div>
-  <hr class="sep-bold">
-  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
-  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
-  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
-  <hr class="sep">
-  ${itemsHtml}
-  <hr class="sep-bold">
-  <div class="total-block"><div class="total-row"><span>TOTAL</span><span>R$ ${total.toFixed(2)}</span></div></div>
-  <hr class="sep">
-  <div class="qty-line">Qtd itens: ${totalQty}</div>
-  <div class="footer">${cfg.footerText}</div>
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
-
-  // No navegador/celular, não imprimir conta para evitar PDF
   console.log("[print] Conta ignorada no modo browser.");
   return false;
 }
@@ -579,64 +530,47 @@ export async function printCustomerReceipt(
   customerData?: { name?: string; document?: string } | null
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
-  const f = getFontSizes(cfg.printSize);
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
-  const change = amountPaid - total;
   const COMPANY_CNPJ = "38.000.368/0001-22";
-
   const payLabel: Record<string, string> = { cash: "DINHEIRO", pix: "PIX", card: "CARTÃO" };
+  const change = amountPaid - total;
 
-  const itemsHtml = items.map((item) => {
-    const sub = (item.product_price * item.quantity).toFixed(2);
-    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>`;
-  }).join("");
+  // Base estrutural via fonte unica de layout (CONTA: titulo, info, itens, total).
+  const layout = createReceiptLayoutModel(
+    { docType: "CONTA", tableName, waiterName, items, total },
+    cfg
+  );
 
-  const customerHtml = customerData?.name || customerData?.document
-    ? `<hr class="sep">
-       ${customerData.name ? `<div class="info-row"><span class="info-label">Cliente:</span> <span class="info-value">${customerData.name}</span></div>` : ""}
-       ${customerData.document ? `<div class="info-row"><span class="info-label">CPF/CNPJ:</span> <span class="info-value">${customerData.document}</span></div>` : ""}`
-    : "";
+  // Insere blocos extras (cliente / pagamento / troco) imediatamente antes do rodape/cutMark.
+  const extras: LayoutBlock[] = [];
+  if (customerData?.name) extras.push({ kind: "info", label: "Cliente", value: customerData.name });
+  if (customerData?.document) extras.push({ kind: "info", label: "CPF/CNPJ", value: customerData.document });
+  if (customerData?.name || customerData?.document) extras.push({ kind: "sep" });
+  extras.push({ kind: "info", label: "Pagamento", value: payLabel[paymentMethod] || paymentMethod });
+  extras.push({ kind: "info", label: "Valor pago", value: `R$ ${amountPaid.toFixed(2)}` });
+  if (paymentMethod === "cash" && change > 0) {
+    extras.push({ kind: "info", label: "Troco", value: `R$ ${change.toFixed(2)}` });
+  }
 
-  const changeHtml = paymentMethod === "cash" && change > 0
-    ? `<div class="info-row"><span class="info-label">Troco:</span> <span class="info-value">R$ ${change.toFixed(2)}</span></div>`
-    : "";
+  // Insere extras antes do cutMark (e depois do qtyLine, se houver).
+  const cutIdx = layout.blocks.findIndex((b) => b.kind === "cutMark");
+  const insertAt = cutIdx === -1 ? layout.blocks.length : cutIdx;
+  layout.blocks.splice(insertAt, 0, { kind: "sep" }, ...extras);
 
-  const html = wrapHtml("Comprovante", cfg, `
-<div class="receipt">
-  <div class="header-text">${cfg.headerText}</div>
-  <div class="center" style="font-size:${f.base - 1}px;color:#555;">CNPJ: ${COMPANY_CNPJ}</div>
-  <hr class="sep-bold">
-  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** COMPROVANTE ***</div>
-  <hr class="sep-bold">
-  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
-  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
-  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
-  ${customerHtml}
-  <hr class="sep">
-  ${itemsHtml}
-  <hr class="sep-bold">
-  <div class="total-block"><div class="total-row"><span>TOTAL</span><span>R$ ${total.toFixed(2)}</span></div></div>
-  <hr class="sep">
-  <div class="info-row"><span class="info-label">Pagamento:</span> <span class="info-value">${payLabel[paymentMethod] || paymentMethod}</span></div>
-  <div class="info-row"><span class="info-label">Valor pago:</span> <span class="info-value">R$ ${amountPaid.toFixed(2)}</span></div>
-  ${changeHtml}
-  <hr class="sep">
-  <div class="qty-line">Qtd itens: ${totalQty}</div>
-  <div class="footer">${cfg.footerText}</div>
-  <div class="center" style="font-size:${f.footer}px;margin-top:4px;color:#555;">Obrigado pela preferência!</div>
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
+  // CNPJ entra logo apos o titulo (se visivel), como subheader simples.
+  const titleIdx = layout.blocks.findIndex((b) => b.kind === "title");
+  if (titleIdx !== -1) {
+    layout.blocks.splice(titleIdx + 1, 0, { kind: "info", label: "CNPJ", value: COMPANY_CNPJ });
+  }
+
+  // HTML so e gerado para inspecao/log; impressao real ocorre via bridge.
+  buildHtmlFromLayout("CONTA", "Comprovante", { tableName, waiterName, items, total }, cfg);
 
   if (cfg.printMode === "bridge") {
-    // Build ESC/POS for bridge
-    const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg);
+    // Reaproveita a base CONTA para garantir mesma estrutura no papel.
+    const payload = buildEscPosBill(tableName, waiterName, items, total, cfg);
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // No navegador/celular, não imprimir comprovante do cliente para evitar PDF
   console.log("[print] Comprovante do cliente ignorado no modo browser.");
   return false;
 }
