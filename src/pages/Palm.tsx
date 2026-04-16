@@ -141,16 +141,6 @@ const Palm = () => {
       status: "done",
       created_at: "",
       updated_at: "",
-      version: orderVersion || 1,
-      print_status: "pending",
-      is_printed: false,
-      delta_items: null,
-      payment_method: null,
-      amount_paid: null,
-      printed_at: null,
-      print_claimed_at: null,
-      print_last_error: null,
-      print_type: null,
     };
     return (
       <CloseOrder

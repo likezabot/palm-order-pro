@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { manualPrintOrder } from "@/lib/print-service";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import { manualPrintOrder, manualPrintDelta, manualPrintBill, autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
