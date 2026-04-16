@@ -2,57 +2,69 @@
 
 ## Diagnóstico
 
-O problema tem duas partes:
+O SW atual (`plano-b-v3`) já tem `skipWaiting`, `clients.claim`, network-first para navegação, e o `main.tsx` já faz reload no `controllerchange`. Mas o problema persiste porque:
 
-1. **PDV (Pdv.tsx):** O `handlePayment` (fechar mesa) imprime diretamente sem perguntar. Os botões de reimpressão (PEDIDO, CONTA, ACRÉSCIMO) também imprimem sem confirmação.
-
-2. **Palm:** Não tem opção de "fechar conta" — só existe no PDV. O garçom não consegue fechar a mesa pelo celular.
+1. **O `CACHE_NAME` é estático no `sw.js`** — como `sw.js` é servido do `/public` sem hash, o navegador pode usar a cópia em cache do próprio `sw.js` (byte-equal = sem update detectado).
+2. **Não há verificação de versão no app** — se o SW não atualizar, o app não sabe que está desatualizado.
+3. **Falta feedback visual** — o usuário não vê nada quando uma atualização está disponível.
 
 ## Plano
 
-### 1. PDV — Adicionar modal de confirmação de impressão no fechamento
+### 1. Criar `APP_VERSION` via Vite build
 
-No `handlePayment` do `Pdv.tsx`:
-- Trocar o botão "FECHAR MESA" para abrir um modal de confirmação antes de processar
-- Modal com: "Fechar e imprimir" / "Fechar sem imprimir"
-- Passar `shouldPrint` para `pay_order` RPC (já aceita `p_should_print`)
-- Se `shouldPrint = false`, não chamar `printCustomerReceipt`
+No `vite.config.ts`, injetar uma variável global com timestamp do build:
 
-### 2. PDV — Adicionar confirmação nos botões de reimpressão
+```typescript
+define: {
+  __APP_VERSION__: JSON.stringify(new Date().toISOString()),
+}
+```
 
-Os 3 botões (ACRÉSCIMO, PEDIDO, CONTA) na tela de detalhes:
-- Cada um passa a abrir um mini-modal "Deseja imprimir?" antes de executar
-- Usar um estado `pendingPrintAction` para guardar qual ação executar após confirmação
+Isso garante que cada build gera uma versão única, sem precisar alterar manualmente.
 
-### 3. Palm — Adicionar botão "Fechar Conta" na tela de revisão
+### 2. Criar `src/lib/version-check.ts`
 
-No `OrderReview.tsx`, quando há `existingOrderId` (mesa já aberta):
-- Adicionar botão "💰 FECHAR CONTA" abaixo ou ao lado do "ATUALIZAR PEDIDO"
-- Ao clicar, abrir modal perguntando forma de pagamento (Dinheiro/PIX/Cartão)
-- Depois perguntar "Fechar e imprimir" / "Fechar sem imprimir"
-- Chamar `pay_order` RPC direto do Palm
+Módulo que:
+- Compara `__APP_VERSION__` com `localStorage.getItem("app_version")`
+- Se diferente: limpa todos os caches (`caches.keys()` → `caches.delete()`), salva nova versão, retorna `true`
+- Se igual: retorna `false`
 
-### 4. Palm — Adicionar "Fechar Conta" na página Palm.tsx
+### 3. Atualizar `src/main.tsx`
 
-Alternativamente, criar um novo step `"close"` no `Palm.tsx` que renderiza o componente `CloseOrder` existente (que já tem o modal de impressão correto).
+- Importar e executar `checkVersion()` **antes do render**
+- Se versão mudou: limpar caches, desregistrar SW antigo, fazer `location.reload()` uma vez (com flag para evitar loop)
+- Se versão igual: continuar normalmente, registrar SW
 
-**Abordagem escolhida:** Reusar `CloseOrder.tsx` no fluxo do Palm, adicionando um botão na tela de detalhes do pedido para navegar até ele. Isso evita duplicar lógica de pagamento.
+### 4. Criar componente `src/components/UpdateBanner.tsx`
+
+Banner discreto que aparece quando o SW detecta atualização disponível:
+- "Nova versão disponível. Atualizando..."
+- Auto-reload após 2 segundos, ou botão "Atualizar agora" como fallback
+
+### 5. Atualizar `public/sw.js`
+
+- Injetar timestamp como comentário no topo (via Vite plugin simples ou script) para que o arquivo nunca seja byte-equal entre deploys
+- Alternativa mais simples: no `vite.config.ts`, copiar `sw.js` como parte do build com versão injetada
+
+### 6. Integrar `UpdateBanner` no `App.tsx`
+
+Renderizar o banner globalmente, acima das rotas.
 
 ### Arquivos alterados
 
 | Arquivo | Alteração |
 |---|---|
-| `src/pages/Pdv.tsx` | Adicionar modal de confirmação antes de fechar mesa e antes de cada reimpressão |
-| `src/pages/Palm.tsx` | Adicionar step `"close"` que renderiza `CloseOrder` |
-| `src/components/palm/OrderReview.tsx` | Adicionar botão "FECHAR CONTA" visível quando `existingOrderId` existe |
-| `src/components/cashier/CloseOrder.tsx` | Nenhuma alteração necessária — já tem modal de impressão |
+| `vite.config.ts` | Adicionar `define: { __APP_VERSION__ }` |
+| `src/lib/version-check.ts` | **Novo** — lógica de comparação e limpeza |
+| `src/main.tsx` | Verificar versão antes do render, limpar cache se mudou |
+| `src/components/UpdateBanner.tsx` | **Novo** — banner "Nova versão disponível" |
+| `src/App.tsx` | Adicionar `<UpdateBanner />` |
+| `public/sw.js` | Adicionar versão dinâmica no comentário do topo via build |
+| `src/vite-env.d.ts` | Declarar tipo `__APP_VERSION__` |
 
-### Fluxo final
+### Segurança
 
-**Palm (garçom):**
-- Mesa aberta → Revisão → botão "FECHAR CONTA" → Tela de pagamento (CloseOrder) → Modal "Imprimir ou não" → Fecha
-
-**PDV (caixa):**
-- Seleciona pedido → "FECHAR MESA" → Pagamento → Modal "Imprimir ou não" → Fecha
-- Botões PEDIDO/CONTA/ACRÉSCIMO → Modal "Deseja imprimir?" → Imprime ou cancela
+- Não apaga `localStorage` inteiro — apenas a chave `app_version`
+- Não apaga cookies ou dados de autenticação
+- Limpa apenas Cache API (caches do SW)
 
