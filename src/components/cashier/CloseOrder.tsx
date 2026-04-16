@@ -1,10 +1,20 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer, CheckCircle2 } from "lucide-react";
 import { Order, OrderItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Props {
   order: Order;
@@ -22,6 +32,7 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   const [method, setMethod] = useState<string>("");
   const [amountPaid, setAmountPaid] = useState("");
   const [sending, setSending] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
 
@@ -41,26 +52,28 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   const paid = parseFloat(amountPaid) || 0;
   const change = paid - total;
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (shouldPrint: boolean) => {
     if (!method || sending) return;
     setSending(true);
+    setShowConfirm(false);
 
     try {
-      await supabase
-        .from("orders")
-        .update({
-          status: "paid",
-          payment_method: method,
-          amount_paid: method === "cash" ? paid : total,
-        })
-        .eq("id", order.id);
+      const { error } = await supabase.rpc("pay_order", {
+        p_order_id: order.id,
+        p_payment_method: method,
+        p_amount_paid: method === "cash" ? paid : total,
+        p_should_print: shouldPrint,
+      });
+
+      if (error) throw error;
 
       playFeedback("success");
       toast({ title: "Pagamento confirmado!" });
       onClosed();
-    } catch {
+    } catch (err) {
+      console.error(err);
       playFeedback("error");
-      toast({ title: "Erro", variant: "destructive" });
+      toast({ title: "Erro ao fechar conta", variant: "destructive" });
       setSending(false);
     }
   };
@@ -135,13 +148,44 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border">
         <button
-          onClick={handleConfirm}
+          onClick={() => {
+            playFeedback("click");
+            setShowConfirm(true);
+          }}
           disabled={!method || sending || (method === "cash" && paid < total)}
           className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground active:scale-[0.97] transition-transform disabled:opacity-40 min-h-[56px]"
         >
           {sending ? "PROCESSANDO..." : "✅ CONFIRMAR PAGAMENTO"}
         </button>
       </div>
+
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Escolha se deseja fechar a conta com ou sem a impressão do comprovante.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <button
+              onClick={() => handleConfirm(true)}
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+            >
+              <Printer size={20} /> Fechar e imprimir
+            </button>
+            <button
+              onClick={() => handleConfirm(false)}
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-secondary p-4 text-lg font-bold text-secondary-foreground active:scale-[0.98] transition-all"
+            >
+              <CheckCircle2 size={20} /> Fechar sem imprimir
+            </button>
+            <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
