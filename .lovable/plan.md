@@ -1,73 +1,52 @@
+<final-text>Diagnóstico encontrado:
+- O pop-up de “Enviar e imprimir / Enviar sem imprimir” já existe no frontend compartilhado em `src/components/palm/OrderReview.tsx`.
+- `src/pages/Palm.tsx` sempre usa esse mesmo `OrderReview`, sem desvio por navegador.
+- Então o comportamento diferente entre “tela de testes” e Chrome/Brave não indica falta do modal no código atual; indica cliente publicado desatualizado.
+- O ponto mais suspeito é o service worker atual em `public/sw.js`: ele usa cache-first para `/` e `/index.html`, com `CACHE_NAME = "plano-b-v1"` fixo e sem limpeza de caches antigos. Isso pode prender Chrome, Brave e PWA instalado em bundle antigo, que ainda envia direto sem abrir o modal.
 
+Plano de correção:
+1. Corrigir a estratégia de cache do PWA
+- Atualizar `public/sw.js` para não servir HTML antigo indefinidamente.
+- Trocar navegação/`index.html` para network-first ou remover o cache do app shell.
+- Versionar o cache e apagar caches antigos no `activate`.
+- Garantir update imediato do service worker novo.
 
-## Diagnóstico
+2. Forçar o app a adotar a versão nova
+- Ajustar `src/main.tsx` para lidar melhor com atualização do SW.
+- Fazer reload controlado quando uma nova versão assumir controle, evitando Chrome/Brave presos no bundle velho.
 
-**Causa raiz: funções duplicadas (overloads) no banco de dados.**
+3. Blindar o fluxo do Palm
+- Revisar `src/components/palm/OrderReview.tsx` para manter o botão principal abrindo apenas o modal antes de qualquer RPC.
+- Manter a decisão de impressão só depois do clique em:
+  - `Enviar e imprimir`
+  - `Enviar sem imprimir`
 
-O banco possui **múltiplas versões** da mesma função com assinaturas diferentes:
+4. Manter consistência no fechamento
+- Revisar `src/components/cashier/CloseOrder.tsx` para o mesmo padrão de confirmação, evitando divergência entre Palm e fechamento de conta.
 
-```text
-create_order:
-  1. (text, text, numeric, jsonb)                              ← ANTIGA
-  2. (text, text, numeric, jsonb, boolean)                     ← NOVA
+5. Validar sincronismo real
+- Confirmar no navegador comum e no PWA instalado:
+  - `Finalizar pedido` abre modal
+  - `Atualizar pedido` abre modal
+  - escolha com impressão envia com `p_should_print = true`
+  - escolha sem impressão envia com `p_should_print = false`
 
-update_order_items:
-  1. (uuid, numeric, jsonb, jsonb, text)                       ← ANTIGA
-  2. (uuid, numeric, jsonb, jsonb, text, integer)              ← ANTIGA
-  3. (uuid, numeric, jsonb, jsonb, text, integer, boolean)     ← NOVA
-```
+Arquivos que vou ajustar:
+- `public/sw.js`
+- `src/main.tsx`
+- `src/components/palm/OrderReview.tsx`
+- `src/components/cashier/CloseOrder.tsx`
 
-Quando o frontend chama `create_order` com 5 parâmetros (incluindo `p_should_print`), o PostgreSQL pode resolver para a versão correta. Mas com `update_order_items`, os parâmetros opcionais (`DEFAULT NULL`) criam ambiguidade entre as 3 overloads — o PostgreSQL não consegue decidir qual chamar e retorna erro.
+Observação técnica importante:
+- Para este sintoma específico, o problema principal não parece ser a RPC nem o bridge.
+- O bridge/configuração de impressão decide como imprimir depois.
+- Quem decide se o modal aparece é o frontend do Palm — e ele já está correto no código atual.
+- O que precisa ser corrigido é a entrega/atualização da versão publicada para que Chrome e Brave parem de rodar a versão antiga.
 
-O PostgREST (API do banco) pode também falhar ao tentar resolver a função correta quando existem overloads com parâmetros default.
+Validação final que vou garantir após implementar:
+- Chrome: não envia direto; abre modal antes.
+- Brave: não envia direto; abre modal antes.
+- PWA instalado: atualiza para a nova versão e para de usar bundle antigo.
+- O fluxo fica igual no web e no ambiente desktop que usa o mesmo frontend.
 
-## Plano de Correção
-
-### 1. Migration SQL — Limpar overloads antigos
-Criar uma migration que:
-- Remove as versões antigas das funções (sem `p_should_print`)
-- Mantém apenas a versão mais completa de cada função
-- Garante que `p_should_print` tem `DEFAULT true` para compatibilidade
-
-```sql
--- Dropar overloads antigos de create_order
-DROP FUNCTION IF EXISTS public.create_order(text, text, numeric, jsonb);
-
--- Dropar overloads antigos de update_order_items
-DROP FUNCTION IF EXISTS public.update_order_items(uuid, numeric, jsonb, jsonb, text);
-DROP FUNCTION IF EXISTS public.update_order_items(uuid, numeric, jsonb, jsonb, text, integer);
-
--- Recriar as funções finais (versão única de cada)
--- create_order com p_should_print boolean DEFAULT true
--- update_order_items com p_should_print boolean DEFAULT true
-```
-
-Também limpar overloads de `pay_order`:
-```sql
-DROP FUNCTION IF EXISTS public.pay_order(uuid, text, numeric);
-```
-
-### 2. OrderReview.tsx — Logs completos e erro real
-Alterações no `catch`:
-- Substituir mensagem genérica por `err.message`, `err.details`, `err.hint`
-- Adicionar `console.log` detalhado antes de cada RPC com: mesa, garçom, versão, shouldPrint, printType, payload completo
-- Adicionar `console.log` da resposta/erro completo após cada RPC
-
-### 3. Arquivos alterados
-| Arquivo | Alteração |
-|---|---|
-| Migration SQL (nova) | Remove overloads antigos, mantém versão única com `p_should_print` |
-| `src/components/palm/OrderReview.tsx` | Logs detalhados + erro real no toast |
-
-### Detalhes técnicos
-
-**Migration final** recria `create_order` e `update_order_items` como função única cada, eliminando ambiguidade de overloads. Os defaults (`p_should_print DEFAULT true`, `p_expected_version DEFAULT NULL`, etc.) permitem chamadas com ou sem esses parâmetros.
-
-**Erro real no toast** — o `catch` passa a exibir:
-```
-title: "Erro ao enviar pedido"
-description: `${err.message}${err.details ? ' — ' + err.details : ''}${err.hint ? ' (Dica: ' + err.hint + ')' : ''}`
-```
-
-**Modal** já está implementado corretamente no código atual — o problema era apenas o backend falhando.
-
+Se o app `.exe` embute uma cópia estática do frontend em vez de apontar para a versão publicada, a mesma correção de frontend precisará entrar no build dele também; se ele usa a versão publicada, a correção do service worker resolve o sincronismo.</final-text>
