@@ -32,6 +32,7 @@ interface Props {
   onUpdateNote: (productId: string, note: string) => void;
   onRemove: (productId: string) => void;
   onSuccess: (senha: string) => void;
+  onCloseAccount?: () => void;
 }
 
 const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; desc: string }[] = [
@@ -42,7 +43,7 @@ const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; des
 
 const OrderReview = ({
   tableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
-  onUpdateQuantity, onUpdateNote, onRemove, onSuccess,
+  onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount,
 }: Props) => {
   const [sending, setSending] = useState(false);
   const [printType, setPrintType] = useState<PrintType>("extra");
@@ -259,6 +260,18 @@ const OrderReview = ({
               })}
             </div>
           </div>
+        )}
+
+        {existingOrderId && onCloseAccount && (
+          <button
+            onClick={() => {
+              playFeedback("click");
+              onCloseAccount();
+            }}
+            className="w-full rounded-lg bg-primary p-4 text-lg font-bold text-primary-foreground transition-all duration-150 active:scale-[0.97] min-h-[56px] mb-2"
+          >
+            💰 FECHAR CONTA
+          </button>
         )}
 
         <button

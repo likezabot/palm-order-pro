@@ -4,11 +4,12 @@ import MenuView from "@/components/palm/MenuView";
 import OrderReview from "@/components/palm/OrderReview";
 import OrderSuccess from "@/components/palm/OrderSuccess";
 import TableGrid from "@/components/palm/TableGrid";
-import { CartItem } from "@/lib/types";
+import CloseOrder from "@/components/cashier/CloseOrder";
+import { CartItem, Order } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { supabase } from "@/integrations/supabase/client";
 
-type Step = "grid" | "menu" | "review" | "success";
+type Step = "grid" | "menu" | "review" | "success" | "close";
 
 const Palm = () => {
   const [searchParams] = useSearchParams();
@@ -131,6 +132,35 @@ const Palm = () => {
     setStep("grid");
   };
 
+  if (step === "close" && existingOrderId) {
+    const closeOrder: Order = {
+      id: existingOrderId,
+      table_name: tableName,
+      waiter_name: waiterName,
+      total,
+      status: "done",
+      created_at: "",
+      updated_at: "",
+      version: orderVersion || 1,
+      print_status: "pending",
+      is_printed: false,
+      delta_items: null,
+      payment_method: null,
+      amount_paid: null,
+      printed_at: null,
+      print_claimed_at: null,
+      print_last_error: null,
+      print_type: null,
+    };
+    return (
+      <CloseOrder
+        order={closeOrder}
+        onBack={() => setStep("review")}
+        onClosed={resetOrder}
+      />
+    );
+  }
+
   if (step === "success") {
     return (
       <OrderSuccess
@@ -161,6 +191,7 @@ const Palm = () => {
           setSenha(s);
           setStep("success");
         }}
+        onCloseAccount={() => setStep("close")}
       />
     );
   }
