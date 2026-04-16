@@ -567,12 +567,12 @@ export async function printCustomerReceipt(
     layout.blocks.splice(titleIdx + 1, 0, { kind: "info", label: "CNPJ", value: COMPANY_CNPJ });
   }
 
-  // HTML so e gerado para inspecao/log; impressao real ocorre via bridge.
-  buildHtmlFromLayout("CONTA", "Comprovante", { tableName, waiterName, items, total }, cfg);
+  // HTML usa os blocos JA enriquecidos (preserva CNPJ/Cliente/Pagamento/Troco).
+  buildHtmlFromBlocks("Comprovante", layout.blocks, cfg);
 
   if (cfg.printMode === "bridge") {
-    // Reaproveita a base CONTA para garantir mesma estrutura no papel.
-    const payload = buildEscPosBill(tableName, waiterName, items, total, cfg);
+    // ESC/POS tambem usa os blocos enriquecidos -> papel sai com os mesmos extras.
+    const payload = renderLayout(layout.blocks, cfg);
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
