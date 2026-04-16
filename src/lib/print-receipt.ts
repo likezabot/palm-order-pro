@@ -7,6 +7,87 @@
 
 import { loadPrintConfig, savePrintConfig, getFontSizes, type PrintConfig, type PaperWidth } from "./print-config";
 import { buildEscPosReceipt, buildEscPosDelta, buildEscPosBill, sendToBridge } from "./thermal-printer";
+import { createReceiptLayoutModel, type LayoutBlock, type DocType, type ReceiptItem } from "./receipt-layout";
+
+// ============================================================
+// HTML RENDERER a partir do layout model (fonte unica)
+// ============================================================
+
+function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): string {
+  const f = getFontSizes(cfg);
+  const parts: string[] = [];
+
+  for (const blk of blocks) {
+    switch (blk.kind) {
+      case "title":
+        parts.push(`<div class="header-text">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "banner":
+        parts.push(
+          `<div class="center bold" style="font-size:${f.total}px;margin:6px 0;">${escapeHtml(blk.text)}</div>`
+        );
+        break;
+      case "sep":
+        parts.push(blk.bold ? `<hr class="sep-bold">` : `<hr class="sep">`);
+        break;
+      case "info":
+        parts.push(
+          `<div class="info-row"><span class="info-label">${escapeHtml(blk.label)}:</span> <span class="info-value">${escapeHtml(blk.value)}</span></div>`
+        );
+        break;
+      case "item": {
+        const right =
+          blk.subtotal > 0
+            ? `<span class="item-right">R$${blk.subtotal.toFixed(2)}</span>`
+            : "";
+        const note = blk.note
+          ? `<div class="item-note">↳ ${escapeHtml(blk.note)}</div>`
+          : "";
+        parts.push(
+          `<div class="item-row"><span class="item-left"><span class="item-qty">${blk.quantity}x</span> ${escapeHtml(blk.name)}</span>${right}</div>${note}`
+        );
+        break;
+      }
+      case "total":
+        parts.push(
+          `<div class="total-block"><div class="total-row"><span>${escapeHtml(blk.label)}</span><span>${escapeHtml(blk.value)}</span></div></div>`
+        );
+        break;
+      case "qtyLine":
+        parts.push(`<div class="qty-line">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "senha":
+        parts.push(`<div class="senha-num">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "footer":
+        parts.push(`<div class="footer">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "cutMark":
+        parts.push(`<div class="cut">✂ --------------------------------</div>`);
+        break;
+    }
+  }
+  return parts.join("\n");
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Helper: monta HTML completo a partir do docType + dados, usando layout model. */
+function buildHtmlFromLayout(
+  docType: DocType,
+  title: string,
+  data: { tableName?: string; waiterName?: string; items: ReceiptItem[]; total?: number; senha?: string },
+  cfg: PrintConfig
+): string {
+  const layout = createReceiptLayoutModel({ docType, ...data }, cfg);
+  const body = `<div class="receipt" id="receipt-root">${renderBlocksToHtml(layout.blocks, cfg)}</div>`;
+  return wrapHtml(title, cfg, body);
+}
 
 export type { PaperWidth };
 
