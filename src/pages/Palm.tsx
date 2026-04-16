@@ -141,6 +141,8 @@ const Palm = () => {
       status: "done",
       created_at: "",
       updated_at: "",
+      payment_method: null,
+      amount_paid: null,
     };
     return (
       <CloseOrder
