@@ -321,27 +321,48 @@ export type Database = {
     Functions: {
       claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
       complete_order_print: { Args: { p_order_id: string }; Returns: undefined }
-      create_order: {
-        Args: {
-          p_items: Json
-          p_table_name: string
-          p_total: number
-          p_waiter_name: string
-        }
-        Returns: Json
-      }
+      create_order:
+        | {
+            Args: {
+              p_items: Json
+              p_table_name: string
+              p_total: number
+              p_waiter_name: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_items: Json
+              p_should_print?: boolean
+              p_table_name: string
+              p_total: number
+              p_waiter_name: string
+            }
+            Returns: Json
+          }
       fail_order_print: {
         Args: { p_error?: string; p_order_id: string }
         Returns: undefined
       }
-      pay_order: {
-        Args: {
-          p_amount_paid: number
-          p_order_id: string
-          p_payment_method: string
-        }
-        Returns: undefined
-      }
+      pay_order:
+        | {
+            Args: {
+              p_amount_paid: number
+              p_order_id: string
+              p_payment_method: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_amount_paid: number
+              p_order_id: string
+              p_payment_method: string
+              p_should_print?: boolean
+            }
+            Returns: undefined
+          }
       update_order_items:
         | {
             Args: {
@@ -360,6 +381,18 @@ export type Database = {
               p_items: Json
               p_order_id: string
               p_print_type?: string
+              p_total: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_delta_items?: Json
+              p_expected_version?: number
+              p_items: Json
+              p_order_id: string
+              p_print_type?: string
+              p_should_print?: boolean
               p_total: number
             }
             Returns: Json
