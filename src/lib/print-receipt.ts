@@ -6,7 +6,7 @@
  */
 
 import { loadPrintConfig, savePrintConfig, getFontSizes, type PrintConfig, type PaperWidth } from "./print-config";
-import { buildEscPosReceipt, buildEscPosDelta, buildEscPosBill, sendToBridge } from "./thermal-printer";
+import { buildEscPosReceipt, buildEscPosDelta, buildEscPosBill, sendToBridge, renderLayout } from "./thermal-printer";
 import { createReceiptLayoutModel, type LayoutBlock, type DocType, type ReceiptItem } from "./receipt-layout";
 
 // ============================================================
@@ -85,7 +85,12 @@ function buildHtmlFromLayout(
   cfg: PrintConfig
 ): string {
   const layout = createReceiptLayoutModel({ docType, ...data }, cfg);
-  const body = `<div class="receipt" id="receipt-root">${renderBlocksToHtml(layout.blocks, cfg)}</div>`;
+  return buildHtmlFromBlocks(title, layout.blocks, cfg);
+}
+
+/** Helper: monta HTML completo a partir de blocos JA prontos (preserva extras injetados). */
+function buildHtmlFromBlocks(title: string, blocks: LayoutBlock[], cfg: PrintConfig): string {
+  const body = `<div class="receipt" id="receipt-root">${renderBlocksToHtml(blocks, cfg)}</div>`;
   return wrapHtml(title, cfg, body);
 }
 
@@ -562,12 +567,12 @@ export async function printCustomerReceipt(
     layout.blocks.splice(titleIdx + 1, 0, { kind: "info", label: "CNPJ", value: COMPANY_CNPJ });
   }
 
-  // HTML so e gerado para inspecao/log; impressao real ocorre via bridge.
-  buildHtmlFromLayout("CONTA", "Comprovante", { tableName, waiterName, items, total }, cfg);
+  // HTML usa os blocos JA enriquecidos (preserva CNPJ/Cliente/Pagamento/Troco).
+  buildHtmlFromBlocks("Comprovante", layout.blocks, cfg);
 
   if (cfg.printMode === "bridge") {
-    // Reaproveita a base CONTA para garantir mesma estrutura no papel.
-    const payload = buildEscPosBill(tableName, waiterName, items, total, cfg);
+    // ESC/POS tambem usa os blocos enriquecidos -> papel sai com os mesmos extras.
+    const payload = renderLayout(layout.blocks, cfg);
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 

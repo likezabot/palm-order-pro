@@ -178,7 +178,7 @@ function isLarge(px: number | undefined, baselinePx: number): boolean {
   return px >= baselinePx + 4;
 }
 
-function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Array {
+export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Array {
   const b = new EscPosBuilder();
   const cols = paperColumns(cfg.paperWidth);
   const f = getFontSizes(cfg);
