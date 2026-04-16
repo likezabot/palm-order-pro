@@ -1,10 +1,20 @@
 import { useState } from "react";
-import { ArrowLeft, Minus, Plus, Trash2, FileText, Receipt, FilePlus } from "lucide-react";
+import { ArrowLeft, Minus, Plus, Trash2, FileText, Receipt, FilePlus, Printer, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type PrintType = "extra" | "full" | "bill";
 
@@ -36,18 +46,21 @@ const OrderReview = ({
 }: Props) => {
   const [sending, setSending] = useState(false);
   const [printType, setPrintType] = useState<PrintType>("extra");
+  const [showConfirm, setShowConfirm] = useState(false);
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
 
-  const handleFinalize = async () => {
+  const handleFinalize = async (shouldPrint: boolean) => {
     if (sending || cart.length === 0) return;
     setSending(true);
+    setShowConfirm(false);
 
     try {
       if (existingOrderId) {
         const delta = calculateDelta(originalCart, cart);
         console.log("[OrderReview] Delta calculado:", delta);
         console.log("[OrderReview] Print type selecionado:", printType);
+        console.log("[OrderReview] Should print:", shouldPrint);
 
         const items = cart.map((item) => ({
           product_id: item.product.id.length === 36 ? item.product.id : null,
@@ -57,6 +70,7 @@ const OrderReview = ({
           note: item.note || null,
           subtotal: item.product.price * item.quantity,
         }));
+        
         const { data: rpcResult, error: rpcError } = await supabase.rpc("update_order_items", {
           p_order_id: existingOrderId,
           p_total: total,
@@ -64,7 +78,9 @@ const OrderReview = ({
           p_delta_items: delta.length > 0 ? delta : null,
           p_print_type: printType,
           p_expected_version: orderVersion ?? undefined,
+          p_should_print: shouldPrint,
         } as any);
+
         if (rpcError) {
           const msg = rpcError.message || "";
           if (msg.includes("version_conflict")) {
@@ -115,6 +131,7 @@ const OrderReview = ({
           p_waiter_name: waiterName,
           p_total: total,
           p_items: rpcItems,
+          p_should_print: shouldPrint,
         } as any);
         if (createError) throw createError;
 
@@ -249,13 +266,44 @@ const OrderReview = ({
         )}
 
         <button
-          onClick={handleFinalize}
+          onClick={() => {
+            playFeedback("click");
+            setShowConfirm(true);
+          }}
           disabled={sending || cart.length === 0}
           className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 min-h-[56px]"
         >
           {sending ? "ENVIANDO..." : existingOrderId ? "✅ ATUALIZAR PEDIDO" : "✅ FINALIZAR PEDIDO"}
         </button>
       </div>
+
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Escolha se deseja enviar o pedido com ou sem impressão na central.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <button
+              onClick={() => handleFinalize(true)}
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+            >
+              <Printer size={20} /> Enviar e imprimir
+            </button>
+            <button
+              onClick={() => handleFinalize(false)}
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-secondary p-4 text-lg font-bold text-secondary-foreground active:scale-[0.98] transition-all"
+            >
+              <Send size={20} /> Enviar sem imprimir
+            </button>
+            <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
