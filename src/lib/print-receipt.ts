@@ -295,24 +295,15 @@ export function buildSenhaHtml(
   configOverride?: PrintConfig
 ): string {
   const cfg = configOverride || loadPrintConfig();
-  const time = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const v = cfg.visibleSections;
-
-  const itemsHtml = items
-    .map((i) => `<div class="item-row"><span class="item-left"><span class="item-qty">${i.quantity}x</span> ${i.product_name}</span></div>`)
-    .join("");
-
-  return wrapHtml("Senha", cfg, `
-<div class="receipt">
-  ${v.title ? `<div class="header-text">${cfg.headerText}</div><hr class="sep-bold">` : ""}
-  ${v.date ? `<div class="center" style="font-size:${getFontSizes(cfg).base - 1}px;color:#555;">BALCÃO • ${time}</div>` : ""}
-  <div class="senha-num">${senha}</div>
-  <hr class="sep">
-  ${itemsHtml}
-  <hr class="sep">
-  ${v.footer ? `<div class="footer">${cfg.footerText}</div>` : ""}
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
+  return buildHtmlFromLayout(
+    "SENHA",
+    "Senha",
+    {
+      items: items.map((i) => ({ ...i, product_price: 0, note: null })),
+      senha,
+    },
+    cfg
+  );
 }
 
 export function buildReceiptHtml(
@@ -323,47 +314,7 @@ export function buildReceiptHtml(
   configOverride?: PrintConfig
 ): string {
   const cfg = configOverride || loadPrintConfig();
-  getFontSizes(cfg);
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
-  const v = cfg.visibleSections;
-
-  const itemsHtml = items
-    .map((item) => {
-      const sub = (item.product_price * item.quantity).toFixed(2);
-      const noteHtml = v.notes && item.note
-        ? `<div class="item-note">↳ ${item.note}</div>`
-        : "";
-      return `
-      <div class="item-row">
-        <span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span>
-        <span class="item-right">R$${sub}</span>
-      </div>${noteHtml}`;
-    })
-    .join("");
-
-  return wrapHtml("Cupom", cfg, `
-<div class="receipt" id="receipt-root">
-  ${v.title ? `<div class="header-text">${cfg.headerText}</div><hr class="sep-bold">` : ""}
-  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
-  ${v.waiter ? `<div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>` : ""}
-  ${v.date ? `<div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>` : ""}
-  <hr class="sep">
-  ${itemsHtml}
-  <hr class="sep-bold">
-  <div class="total-block">
-    <div class="total-row">
-      <span>TOTAL</span>
-      <span>R$ ${total.toFixed(2)}</span>
-    </div>
-  </div>
-  <hr class="sep">
-  <div class="qty-line">Qtd itens: ${totalQty}</div>
-  ${v.footer ? `<div class="footer">${cfg.footerText}</div>` : ""}
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
+  return buildHtmlFromLayout("PEDIDO", "Cupom", { tableName, waiterName, items, total }, cfg);
 }
 
 // ============================================================
