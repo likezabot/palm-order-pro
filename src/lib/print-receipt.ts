@@ -513,39 +513,9 @@ export async function printBill(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Reuse receipt HTML but with CONTA header
-  const f = getFontSizes(cfg.printSize);
-  const now = new Date();
-  const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
-  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
+  buildHtmlFromLayout("CONTA", "Conta", { tableName, waiterName, items, total }, cfg);
 
-  const itemsHtml = items.map((item) => {
-    const sub = (item.product_price * item.quantity).toFixed(2);
-    const noteHtml = item.note ? `<div class="item-note">↳ ${item.note}</div>` : "";
-    return `<div class="item-row"><span class="item-left"><span class="item-qty">${item.quantity}x</span> ${item.product_name}</span><span class="item-right">R$${sub}</span></div>${noteHtml}`;
-  }).join("");
-
-  const html = wrapHtml("Conta", cfg, `
-<div class="receipt">
-  <div class="header-text">${cfg.headerText}</div>
-  <hr class="sep-bold">
-  <div class="center bold" style="font-size:${f.total}px;margin:6px 0;">*** CONTA ***</div>
-  <hr class="sep-bold">
-  <div class="info-row"><span class="info-label">Mesa:</span> <span class="info-value">${tableName}</span></div>
-  <div class="info-row"><span class="info-label">Garçom:</span> <span class="info-value">${waiterName}</span></div>
-  <div class="info-row"><span class="info-label">Data:</span> <span class="info-value">${date} ${time}</span></div>
-  <hr class="sep">
-  ${itemsHtml}
-  <hr class="sep-bold">
-  <div class="total-block"><div class="total-row"><span>TOTAL</span><span>R$ ${total.toFixed(2)}</span></div></div>
-  <hr class="sep">
-  <div class="qty-line">Qtd itens: ${totalQty}</div>
-  <div class="footer">${cfg.footerText}</div>
-  <div class="cut">✂ --------------------------------</div>
-</div>`);
-
-  // No navegador/celular, não imprimir conta para evitar PDF
   console.log("[print] Conta ignorada no modo browser.");
   return false;
 }
