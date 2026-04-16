@@ -1,70 +1,39 @@
 
 
-## Diagnóstico
+## Plano: Atualizar indicador de versão para refletir o histórico real
 
-O SW atual (`plano-b-v3`) já tem `skipWaiting`, `clients.claim`, network-first para navegação, e o `main.tsx` já faz reload no `controllerchange`. Mas o problema persiste porque:
+### Histórico de versões baseado nas mudanças reais do projeto
 
-1. **O `CACHE_NAME` é estático no `sw.js`** — como `sw.js` é servido do `/public` sem hash, o navegador pode usar a cópia em cache do próprio `sw.js` (byte-equal = sem update detectado).
-2. **Não há verificação de versão no app** — se o SW não atualizar, o app não sabe que está desatualizado.
-3. **Falta feedback visual** — o usuário não vê nada quando uma atualização está disponível.
+| Versão | Data | Descrição |
+|---|---|---|
+| **1.0.0** | 14/04 | Sistema completo inicial: Palm, Cozinha, PDV, Admin, banco de dados, Realtime, tema escuro |
+| **1.1.0** | 14/04 | Teclado numérico corrigido, fluxo de impressão com PrintStation, toggle ativo/inativo no Admin |
+| **1.2.0** | 14/04 | Garçom persistente (localStorage), PDV Desktop unificado |
+| **1.3.0** | 14/04 | Feedback tátil/sonoro (vibração + bips), tela de seleção de atendimento |
+| **1.4.0** | 14/04 | Grid visual de mesas (substitui fluxo de 3 telas), otimização UX |
+| **1.5.0** | 14/04 | Balcão multi-pedido, redução para 10 mesas, config de mesas no Admin |
+| **1.6.0** | 14/04 | PWA instalável (ícones, manifest, banner de instalação), edição de pedidos do balcão, senhas sequenciais (#001, #002...) |
+| **1.7.0** | 14/04 | Impressão térmica reescrita do zero (ESC/POS, 58mm/80mm, popup isolado) |
+| **1.8.0** | 15/04 | Ponte local USB (bridge Node.js), impressão automática via Realtime |
+| **1.9.0** | 15/04 | Sistema de delta/acréscimo (imprime só itens novos), 3 botões manuais (Acréscimo/Pedido/Conta) |
+| **1.10.0** | 15/04 | PDV e Caixa unificados, comprovante com CNPJ, modal de dados do cliente |
+| **1.10.1** | 15/04 | Correção: botões do Palm viram toggle (não imprimem no celular), print_type salvo no banco |
+| **1.10.2** | 15/04 | Correção: impressão web bloqueada (só bridge imprime), mensagens contextuais |
+| **1.10.3** | 15/04 | Correção PWA: ícones regenerados, service worker corrigido |
+| **1.11.0** | 16/04 | Modal "Enviar e imprimir / sem imprimir" unificado Palm + CloseOrder, p_should_print no RPC |
+| **1.11.1** | 16/04 | Correção: overloads de RPC removidos, erro real no toast, logs detalhados |
+| **1.12.0** | 16/04 | Fechar conta no Palm + PDV com confirmação de impressão |
+| **1.13.0** | 16/04 | Sistema de atualização automática de versão (cache-busting, SW v4, UpdateBanner) |
 
-## Plano
+**Versão atual: v1.13.0**
 
-### 1. Criar `APP_VERSION` via Vite build
+### Alteração
 
-No `vite.config.ts`, injetar uma variável global com timestamp do build:
+Atualizar `src/pages/Index.tsx` para exibir `v1.13.0` em vez de `v1.0`, mantendo a data do build entre parênteses:
 
-```typescript
-define: {
-  __APP_VERSION__: JSON.stringify(new Date().toISOString()),
-}
+```
+v1.13.0 (2026-04-16)
 ```
 
-Isso garante que cada build gera uma versão única, sem precisar alterar manualmente.
-
-### 2. Criar `src/lib/version-check.ts`
-
-Módulo que:
-- Compara `__APP_VERSION__` com `localStorage.getItem("app_version")`
-- Se diferente: limpa todos os caches (`caches.keys()` → `caches.delete()`), salva nova versão, retorna `true`
-- Se igual: retorna `false`
-
-### 3. Atualizar `src/main.tsx`
-
-- Importar e executar `checkVersion()` **antes do render**
-- Se versão mudou: limpar caches, desregistrar SW antigo, fazer `location.reload()` uma vez (com flag para evitar loop)
-- Se versão igual: continuar normalmente, registrar SW
-
-### 4. Criar componente `src/components/UpdateBanner.tsx`
-
-Banner discreto que aparece quando o SW detecta atualização disponível:
-- "Nova versão disponível. Atualizando..."
-- Auto-reload após 2 segundos, ou botão "Atualizar agora" como fallback
-
-### 5. Atualizar `public/sw.js`
-
-- Injetar timestamp como comentário no topo (via Vite plugin simples ou script) para que o arquivo nunca seja byte-equal entre deploys
-- Alternativa mais simples: no `vite.config.ts`, copiar `sw.js` como parte do build com versão injetada
-
-### 6. Integrar `UpdateBanner` no `App.tsx`
-
-Renderizar o banner globalmente, acima das rotas.
-
-### Arquivos alterados
-
-| Arquivo | Alteração |
-|---|---|
-| `vite.config.ts` | Adicionar `define: { __APP_VERSION__ }` |
-| `src/lib/version-check.ts` | **Novo** — lógica de comparação e limpeza |
-| `src/main.tsx` | Verificar versão antes do render, limpar cache se mudou |
-| `src/components/UpdateBanner.tsx` | **Novo** — banner "Nova versão disponível" |
-| `src/App.tsx` | Adicionar `<UpdateBanner />` |
-| `public/sw.js` | Adicionar versão dinâmica no comentário do topo via build |
-| `src/vite-env.d.ts` | Declarar tipo `__APP_VERSION__` |
-
-### Segurança
-
-- Não apaga `localStorage` inteiro — apenas a chave `app_version`
-- Não apaga cookies ou dados de autenticação
-- Limpa apenas Cache API (caches do SW)
+Arquivo alterado: `src/pages/Index.tsx` — uma linha.
 
