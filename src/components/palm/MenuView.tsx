@@ -4,6 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -14,8 +20,63 @@ interface Props {
   onBack: () => void;
 }
 
+// Subgrupos por categoria, mapeados por nome do produto.
+// Match é por substring case-insensitive — robusto a pequenas variações.
+type Subgroup = { label: string; matchers: string[] };
+
+const SUBGROUPS: Record<string, Subgroup[]> = {
+  bebidas: [
+    { label: "KS 290ml", matchers: ["ks coca-cola zero", "ks coca-cola normal"] },
+    {
+      label: "Mini 220ml",
+      matchers: [
+        "coca-cola 220ml",
+        "coca-cola zero 220ml",
+        "fanta-uva 220ml",
+        "guaraná 220ml",
+        "fanta-laranja 220ml",
+        "sprite 220ml",
+      ],
+    },
+    { label: "Refri 350ml", matchers: ["coca-cola 350ml", "coca-cola zero 350ml"] },
+    {
+      label: "Refri 600ml",
+      matchers: ["coca-cola 600ml", "coca-cola zero 600ml", "tubaina 600ml"],
+    },
+    { label: "Refri 1L", matchers: ["coca-cola 1l", "guaraná 1l"] },
+    { label: "Refri 2L", matchers: ["coca-cola 2l", "coca-cola zero 2l"] },
+    { label: "Água", matchers: ["água com gás", "água sem gás"] },
+    {
+      label: "Sucos Del Valle 290ml",
+      matchers: [
+        "suco del valle maracujá",
+        "suco del valle pêssego",
+        "suco del valle uva",
+      ],
+    },
+  ],
+  cervejas: [
+    {
+      label: "Cervejas",
+      matchers: [
+        "skol 600ml",
+        "antarctica boa",
+        "original 600ml",
+        "skol 269ml",
+        "outra cerveja",
+      ],
+    },
+  ],
+};
+
+const matchesSubgroup = (product: Product, sub: Subgroup) => {
+  const n = product.name.toLowerCase();
+  return sub.matchers.some((m) => n.includes(m));
+};
+
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
+  const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const { playFeedback } = useFeedback();
 
   const { data: products = [] } = useQuery({
@@ -32,18 +93,28 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
   });
 
   const filtered = products.filter((p) => p.category === activeCategory);
+  const subgroups = SUBGROUPS[activeCategory];
 
   const getQty = (id: string) => cart.find((i) => i.product.id === id)?.quantity || 0;
+
+  const subgroupQty = (sub: Subgroup) =>
+    filtered
+      .filter((p) => matchesSubgroup(p, sub))
+      .reduce((sum, p) => sum + getQty(p.id), 0);
+
+  const subgroupProducts = openSubgroup
+    ? filtered.filter((p) => matchesSubgroup(p, openSubgroup))
+    : [];
 
   return (
     <div className="flex min-h-screen flex-col pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
-        <button 
+        <button
           onClick={() => {
             playFeedback("click");
             onBack();
-          }} 
+          }}
           className="flex items-center gap-2 text-muted-foreground text-base mb-2"
         >
           <ArrowLeft size={20} /> Voltar
@@ -70,34 +141,110 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
         </div>
       </div>
 
-      {/* Products grid */}
-      <div className="grid grid-cols-2 gap-3 p-3">
-        {filtered.map((product) => {
-          const qty = getQty(product.id);
-          return (
-            <button
-              key={product.id}
-              onClick={() => {
-                onAdd(product);
-              }}
-              className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
-            >
-              <span className="font-semibold text-base text-foreground leading-tight">
-                {product.name}
-              </span>
-              <span className="mt-1 text-sm text-primary font-bold">
-                R$ {product.price.toFixed(2)}
-              </span>
-              <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
-              {qty > 0 && (
-                <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {qty}
+      {/* Subgroup squares OR product grid */}
+      {subgroups ? (
+        <div className="grid grid-cols-2 gap-3 p-3">
+          {subgroups.map((sub) => {
+            const qty = subgroupQty(sub);
+            return (
+              <button
+                key={sub.label}
+                onClick={() => {
+                  playFeedback("click");
+                  setOpenSubgroup(sub);
+                }}
+                className="relative flex aspect-square flex-col items-center justify-center rounded-lg bg-card border border-border p-4 text-center transition-all duration-150 active:scale-[0.96]"
+              >
+                <span className="text-base font-bold text-foreground leading-tight">
+                  {sub.label}
                 </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+                <span className="mt-2 text-xs text-muted-foreground">Toque para ver</span>
+                {qty > 0 && (
+                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {qty}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 p-3">
+          {filtered.map((product) => {
+            const qty = getQty(product.id);
+            return (
+              <button
+                key={product.id}
+                onClick={() => {
+                  onAdd(product);
+                }}
+                className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+              >
+                <span className="font-semibold text-base text-foreground leading-tight">
+                  {product.name}
+                </span>
+                <span className="mt-1 text-sm text-primary font-bold">
+                  R$ {product.price.toFixed(2)}
+                </span>
+                <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
+                {qty > 0 && (
+                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {qty}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Subgroup dialog */}
+      <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{openSubgroup?.label}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2">
+            {subgroupProducts.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum item disponível.</p>
+            )}
+            {subgroupProducts.map((product) => {
+              const qty = getQty(product.id);
+              return (
+                <button
+                  key={product.id}
+                  onClick={() => onAdd(product)}
+                  className="relative flex items-center justify-between rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.97] min-h-[64px]"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-base text-foreground leading-tight">
+                      {product.name}
+                    </span>
+                    <span className="mt-1 text-sm text-primary font-bold">
+                      R$ {product.price.toFixed(2)}
+                    </span>
+                  </div>
+                  <span className="text-sm font-semibold text-primary">+ ADD</span>
+                  {qty > 0 && (
+                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                      {qty}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => {
+              playFeedback("click");
+              setOpenSubgroup(null);
+            }}
+            className="mt-2 w-full rounded-lg bg-primary p-3 text-base font-bold text-primary-foreground active:scale-[0.97] transition-transform min-h-[48px]"
+          >
+            Concluir
+          </button>
+        </DialogContent>
+      </Dialog>
 
       {/* Floating cart button */}
       {itemCount > 0 && (
