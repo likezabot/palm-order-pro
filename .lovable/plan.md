@@ -1,37 +1,54 @@
 
-O usuário pede para "publicar" a nova versão da aba Impressão. Preciso ser claro: **eu não tenho como executar Publish em produção** — só o usuário pode clicar no botão Publish/Update no Lovable. As alterações de código já foram feitas (PrintConfigPanel reescrito, print-config.ts expandido, etc.), mas só vão para produção quando o usuário clicar Update.
 
-Vou verificar se o código atual no projeto realmente contém o que foi prometido (sem JSON, com presets, com sliders) — porque se houver resquício antigo, precisa corrigir antes do Publish.
+## Plano: Subgrupos de Bebidas/Cervejas como pop-ups (modais)
 
-## Plano
+### O que muda no banco (produtos)
 
-### 1. Auditoria do código atual
-Verificar `src/components/admin/PrintConfigPanel.tsx`:
-- confirmar que NÃO existe mais campo "Template JSON do cupom"
-- confirmar que NÃO existe mais "Cabeçalho base" / "Rodapé base" (como editor de template)
-- confirmar que existe seletor de presets (Mesa simples / Clássico / Conta destacada)
-- confirmar sliders de fonte (título, cabeçalho, itens, observações, total)
-- confirmar switches de visibilidade (título, garçom, data, observações, rodapé)
+**Inserir** (categoria `bebidas`):
+- KS Coca-Cola Zero 290ml — R$ 6,00
+- KS Coca-Cola Normal 290ml — R$ 6,00
 
-Se algum resquício antigo aparecer, corrigir.
+**Inserir** (categoria `cervejas`):
+- Outra cerveja — R$ 4,00
 
-### 2. Explicar ao usuário o passo de Publish
-A produção em `palm-order-pro.lovable.app` só atualiza quando o **usuário** clica em **Publish → Update** no canto superior direito do editor (ou no botão `...` no mobile). O bundle `index-TDDoQuIN.js` é antigo justamente porque o último Publish foi feito antes da reescrita.
+**Manter como estão** os demais itens (Coca 220ml normal mantida; Tubaína R$5,00 mantida; Coca 1L vidro e Guaraná 1L mantidos a R$9,00).
 
-Não posso gerar/forçar um novo hash — isso acontece automaticamente no build do Publish.
+### O que muda no app (apenas UI do MenuView do Palm)
 
-### 3. Após o usuário publicar
-Quando o usuário confirmar que clicou Update, eu posso usar `fetch_website` em `https://palm-order-pro.lovable.app/` para confirmar:
-- novo hash do bundle
-- ausência dos textos antigos
-- presença dos novos controles
+Em `src/components/palm/MenuView.tsx`, quando a categoria ativa for `bebidas` ou `cervejas`, em vez de mostrar a grade de produtos, mostro **botões grandes de subgrupo** (quadrados). Ao tocar, abre um **Dialog (pop-up)** com os produtos daquele subgrupo para adicionar ao pedido.
 
-### Arquivos a revisar (read-only nesta etapa)
-- `src/components/admin/PrintConfigPanel.tsx` — garantir limpeza completa
-- `src/pages/Admin.tsx` — garantir que está usando o painel novo
+Subgrupos definidos no front (mapeados por nome do produto, sem alterar schema):
 
-### Se encontrar resquícios
-Sair do modo plano e remover qualquer referência a JSON/template manual antes do Publish.
+**Bebidas**
+- KS 290ml → KS Coca-Cola Zero, KS Coca-Cola Normal
+- Mini 220ml → Coca 220ml, Coca Zero 220ml, Fanta Uva, Fanta Guaraná (Guaraná 220ml), Fanta Laranja, Sprite 220ml
+- Refri 350ml → Coca 350ml, Coca Zero 350ml
+- Refri 600ml → Coca 600ml, Coca Zero 600ml, Tubaína 600ml
+- Refri 1L → Coca-Cola 1L vidro, Guaraná 1L
+- Refri 2L → Coca-Cola 2L, Coca Zero 2L
+- Água → Com gás, Sem gás
+- Sucos Del Valle 290ml → Maracujá, Pêssego, Uva *(grupo extra para não perder esses itens existentes)*
 
-### Mensagem final ao usuário
-Instruções claras de como clicar Publish → Update (desktop e mobile), e me avisar para eu validar o bundle publicado.
+**Cervejas**
+- Cervejas → Skol 600ml, Antarctica Boa 600ml, Original 600ml, Skol 269ml, Outra (R$4,00)
+
+Para `refeicoes` e `espetos`, **mantém o comportamento atual** (grade direta).
+
+### Arquivos alterados
+
+1. **Migration de dados (insert)** — adicionar 3 produtos novos em `products`.
+2. **`src/components/palm/MenuView.tsx`** — adicionar:
+   - Definição dos subgrupos (constante por categoria com label + lista de nomes/ids).
+   - Render condicional: se categoria tem subgrupos, mostrar grade de quadrados de subgrupo; senão, grade de produtos atual.
+   - Componente `Dialog` (já disponível em `@/components/ui/dialog`) que abre com a lista de produtos do subgrupo, permitindo adicionar (botão `+ ADD`) sem fechar, com badge de quantidade. Botão "Concluir" fecha o pop-up.
+
+### Regras preservadas
+
+- Nada muda no backend de pedidos, RPC, impressão, bridge, Cashier, Kitchen, Admin.
+- Categorias atuais (`bebidas`, `cervejas`) **não mudam** — só a apresentação visual no Palm.
+- Produtos existentes continuam ativos.
+
+### Versão
+
+Após a implementação, atualizo a versão visível (build stamp) — o sistema de auto-refresh já cuida disso via `vite.config.ts`.
+
