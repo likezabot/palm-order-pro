@@ -11,10 +11,18 @@ const RELOAD_FLAG = "app_version_reloading";
 export async function checkAndUpdateVersion(): Promise<boolean> {
   const current = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
   const stored = localStorage.getItem(VERSION_KEY);
+  const lastReloadTs = Number(localStorage.getItem("app_last_reload_ts") || "0");
+  const now = Date.now();
 
-  // Prevent reload loop
+  // Prevent reload loop (session flag)
   if (sessionStorage.getItem(RELOAD_FLAG)) {
     sessionStorage.removeItem(RELOAD_FLAG);
+    localStorage.setItem(VERSION_KEY, current);
+    return false;
+  }
+
+  // Hard guard: never reload twice within 30s, regardless of version mismatch
+  if (now - lastReloadTs < 30_000) {
     localStorage.setItem(VERSION_KEY, current);
     return false;
   }
@@ -35,6 +43,7 @@ export async function checkAndUpdateVersion(): Promise<boolean> {
     }
 
     localStorage.setItem(VERSION_KEY, current);
+    localStorage.setItem("app_last_reload_ts", String(now));
     sessionStorage.setItem(RELOAD_FLAG, "1");
     window.location.reload();
     return true;
