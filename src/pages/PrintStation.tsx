@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import ConnectionStatusBanner from "@/components/print-station/ConnectionStatusBanner";
+import { loadPrintConfig } from "@/lib/print-config";
 
 const PrintStation = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -16,6 +18,13 @@ const PrintStation = () => {
   const [status, setStatus] = useState<"online" | "offline">("online");
   const [printedIds, setPrintedIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  // URL base da bridge .exe (sem /print no final), só se modo bridge estiver ativo
+  const bridgeBaseUrl = (() => {
+    const cfg = loadPrintConfig();
+    if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return undefined;
+    return cfg.bridgeUrl.replace(/\/print\/?$/, "");
+  })();
 
   // Refs estáveis para uso dentro do listener Realtime
   const autoPrintRef = useRef(autoPrint);
@@ -151,7 +160,9 @@ const PrintStation = () => {
   }, [fetchOrders]); // Apenas fetchOrders — estável
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+    <div className="min-h-screen bg-slate-50">
+      <ConnectionStatusBanner realtimeStatus={status} bridgeUrl={bridgeBaseUrl} />
+      <div className="p-4 md:p-8">
       <div className="mx-auto max-w-4xl">
         <Card className="border-2 border-slate-200 shadow-xl">
           <CardHeader className="bg-white border-b border-slate-100 py-6">
@@ -295,6 +306,7 @@ const PrintStation = () => {
             </p>
           </div>
         </Card>
+      </div>
       </div>
     </div>
   );
