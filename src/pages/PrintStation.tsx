@@ -307,6 +307,7 @@ const PrintStation = () => {
           </div>
         </Card>
       </div>
+      </div>
     </div>
   );
 };
