@@ -29,11 +29,14 @@ checkAndUpdateVersion().then((reloading) => {
           .register("/sw.js")
           .then((reg) => {
             console.log("SW registered:", reg);
-            // Periodic update check
-            setInterval(() => reg.update(), 30_000);
-            // Check on tab focus / visibility return — catches deploys fast
+            // Check on tab focus / visibility return — throttled to once per minute
+            let lastCheck = 0;
             const checkOnFocus = () => {
-              if (document.visibilityState === "visible") reg.update();
+              const now = Date.now();
+              if (document.visibilityState === "visible" && now - lastCheck > 60_000) {
+                lastCheck = now;
+                reg.update();
+              }
             };
             document.addEventListener("visibilitychange", checkOnFocus);
             window.addEventListener("focus", checkOnFocus);

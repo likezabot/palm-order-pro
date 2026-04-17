@@ -79,7 +79,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const { playFeedback } = useFeedback();
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isLoading, error, refetch } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -141,8 +141,32 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
         </div>
       </div>
 
+      {/* Loading / error state */}
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center p-10 text-muted-foreground">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mb-3" />
+          <p className="text-sm">Carregando cardápio...</p>
+        </div>
+      )}
+      {error && !isLoading && (
+        <div className="flex flex-col items-center justify-center p-6 text-center">
+          <p className="text-sm text-destructive mb-3">Erro ao carregar cardápio.</p>
+          <button
+            onClick={() => refetch()}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+      {!isLoading && !error && products.length === 0 && (
+        <p className="p-6 text-center text-sm text-muted-foreground">
+          Nenhum produto cadastrado.
+        </p>
+      )}
+
       {/* Subgroup squares OR product grid */}
-      {subgroups ? (
+      {!isLoading && !error && products.length > 0 && (subgroups ? (
         <div className="grid grid-cols-2 gap-3 p-3">
           {subgroups.map((sub) => {
             const qty = subgroupQty(sub);
@@ -196,7 +220,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Subgroup dialog */}
       <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>
