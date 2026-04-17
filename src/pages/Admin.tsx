@@ -267,6 +267,9 @@ const Admin = () => {
             <TabsTrigger value="print" className="font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2">
               <Printer className="w-4 h-4" /> Impressão
             </TabsTrigger>
+            <TabsTrigger value="system" className="font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2">
+              <Wrench className="w-4 h-4" /> Sistema
+            </TabsTrigger>
           </TabsList>
         </div>
 
