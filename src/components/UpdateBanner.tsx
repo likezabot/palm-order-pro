@@ -15,10 +15,13 @@ export default function UpdateBanner() {
     // Listen for new SW taking control
     let refreshing = false;
     const onControllerChange = () => {
-      if (!refreshing) {
-        refreshing = true;
-        onUpdate();
-      }
+      if (refreshing) return;
+      // Anti-loop: don't auto-reload if we just reloaded recently
+      const lastReload = Number(localStorage.getItem("app_last_reload_ts") || "0");
+      if (Date.now() - lastReload < 30_000) return;
+      refreshing = true;
+      localStorage.setItem("app_last_reload_ts", String(Date.now()));
+      onUpdate();
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
