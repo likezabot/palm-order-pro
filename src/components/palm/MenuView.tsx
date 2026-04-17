@@ -79,17 +79,26 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const { playFeedback } = useFeedback();
 
-  const { data: products = [], isLoading, error, refetch } = useQuery({
+  const { data: products = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Timeout duro de 10s — se a rede do tablet pendurar, falha rápido
+      // e mostra botão "Tentar novamente" em vez de spinner eterno.
+      const fetchPromise = supabase
         .from("products")
         .select("*")
         .eq("active", true)
         .order("name");
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout: rede lenta ou sem conexão")), 10_000)
+      );
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
       if (error) throw error;
       return data as Product[];
     },
+    retry: 1,
   });
 
   const filtered = products.filter((p) => p.category === activeCategory);
