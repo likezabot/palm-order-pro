@@ -19,6 +19,13 @@ const PrintStation = () => {
   const [printedIds, setPrintedIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
+  // URL base da bridge .exe (sem /print no final), só se modo bridge estiver ativo
+  const bridgeBaseUrl = (() => {
+    const cfg = loadPrintConfig();
+    if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return undefined;
+    return cfg.bridgeUrl.replace(/\/print\/?$/, "");
+  })();
+
   // Refs estáveis para uso dentro do listener Realtime
   const autoPrintRef = useRef(autoPrint);
   const printingRef = useRef<Set<string>>(new Set());
