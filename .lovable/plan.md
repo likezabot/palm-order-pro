@@ -1,54 +1,39 @@
 
+The user reports the Palm menu page hangs infinitely after publishing. Looking at MenuView.tsx, the products query uses `useQuery` but I don't see a loading state — if products are loading, `filtered` is empty and shows nothing. But "rodando infinitamente" suggests it never resolves.
 
-## Plano: Subgrupos de Bebidas/Cervejas como pop-ups (modais)
+Possible causes:
+1. The `useQuery` has no error/loading UI — silent fail.
+2. Auto-refresh loop: version-check.ts may be reloading repeatedly if `__APP_VERSION__` keeps changing or RELOAD_FLAG logic is broken on this route.
+3. Service worker serving stale bundle that errors out.
 
-### O que muda no banco (produtos)
+Most likely: the version-check reload loop. After the recent SW changes, the BUILD_STAMP changes every build, but the client `__APP_VERSION__` (defined in vite.config) may not match what's stored, causing reload → SW updates → reload cycle.
 
-**Inserir** (categoria `bebidas`):
-- KS Coca-Cola Zero 290ml — R$ 6,00
-- KS Coca-Cola Normal 290ml — R$ 6,00
+Need to check vite.config.ts and main.tsx to confirm.
 
-**Inserir** (categoria `cervejas`):
-- Outra cerveja — R$ 4,00
+## Plan: Diagnosticar e corrigir loop infinito no Palm após publish
 
-**Manter como estão** os demais itens (Coca 220ml normal mantida; Tubaína R$5,00 mantida; Coca 1L vidro e Guaraná 1L mantidos a R$9,00).
+### Investigação
+1. Ler `vite.config.ts` para ver como `__APP_VERSION__` é definido.
+2. Ler `src/main.tsx` para ver registro do SW + chamada de `checkAndUpdateVersion`.
+3. Confirmar se há loop entre version-check.ts ↔ SW update ↔ reload.
 
-### O que muda no app (apenas UI do MenuView do Palm)
+### Hipótese principal
+O `checkAndUpdateVersion` + auto-update do SW (a cada 30s + on focus) podem entrar em conflito:
+- SW detecta nova versão → dispara `UpdateBanner` → reload em 2s.
+- Após reload, `__APP_VERSION__` ainda é o mesmo bundle servido (cacheado), version-check vê diferença → limpa cache → reload de novo.
+- E também: MenuView faz `useQuery` mas não mostra loading/erro → tela em branco enquanto isso.
 
-Em `src/components/palm/MenuView.tsx`, quando a categoria ativa for `bebidas` ou `cervejas`, em vez de mostrar a grade de produtos, mostro **botões grandes de subgrupo** (quadrados). Ao tocar, abre um **Dialog (pop-up)** com os produtos daquele subgrupo para adicionar ao pedido.
+### Correções
+1. **MenuView.tsx**: adicionar estados de loading e erro visíveis (em vez de tela vazia que parece "infinito").
+2. **version-check.ts** + **main.tsx**: garantir que o SW update não dispare reload se o bundle já está atualizado. Adicionar guarda extra no RELOAD_FLAG (timestamp) para impedir reloads em <10s.
+3. **Não mexer** em: pedidos, RPC, bridge, impressão, outras telas.
 
-Subgrupos definidos no front (mapeados por nome do produto, sem alterar schema):
+### Arquivos a alterar
+- `src/components/palm/MenuView.tsx` — loading/erro visíveis.
+- `src/lib/version-check.ts` — guarda anti-loop reforçada.
+- `src/main.tsx` — desativar polling agressivo (30s) e manter só on focus, para reduzir chance de loop em produção.
 
-**Bebidas**
-- KS 290ml → KS Coca-Cola Zero, KS Coca-Cola Normal
-- Mini 220ml → Coca 220ml, Coca Zero 220ml, Fanta Uva, Fanta Guaraná (Guaraná 220ml), Fanta Laranja, Sprite 220ml
-- Refri 350ml → Coca 350ml, Coca Zero 350ml
-- Refri 600ml → Coca 600ml, Coca Zero 600ml, Tubaína 600ml
-- Refri 1L → Coca-Cola 1L vidro, Guaraná 1L
-- Refri 2L → Coca-Cola 2L, Coca Zero 2L
-- Água → Com gás, Sem gás
-- Sucos Del Valle 290ml → Maracujá, Pêssego, Uva *(grupo extra para não perder esses itens existentes)*
-
-**Cervejas**
-- Cervejas → Skol 600ml, Antarctica Boa 600ml, Original 600ml, Skol 269ml, Outra (R$4,00)
-
-Para `refeicoes` e `espetos`, **mantém o comportamento atual** (grade direta).
-
-### Arquivos alterados
-
-1. **Migration de dados (insert)** — adicionar 3 produtos novos em `products`.
-2. **`src/components/palm/MenuView.tsx`** — adicionar:
-   - Definição dos subgrupos (constante por categoria com label + lista de nomes/ids).
-   - Render condicional: se categoria tem subgrupos, mostrar grade de quadrados de subgrupo; senão, grade de produtos atual.
-   - Componente `Dialog` (já disponível em `@/components/ui/dialog`) que abre com a lista de produtos do subgrupo, permitindo adicionar (botão `+ ADD`) sem fechar, com badge de quantidade. Botão "Concluir" fecha o pop-up.
-
-### Regras preservadas
-
-- Nada muda no backend de pedidos, RPC, impressão, bridge, Cashier, Kitchen, Admin.
-- Categorias atuais (`bebidas`, `cervejas`) **não mudam** — só a apresentação visual no Palm.
-- Produtos existentes continuam ativos.
-
-### Versão
-
-Após a implementação, atualizo a versão visível (build stamp) — o sistema de auto-refresh já cuida disso via `vite.config.ts`.
-
+### Critério de aceite
+- Palm sempre mostra "Carregando cardápio..." ou erro claro, nunca tela em branco.
+- Sem loop de reload após publish.
+- Auto-update continua funcionando (banner aparece em troca de foco).
