@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Product, CATEGORY_LABELS, Order } from "@/lib/types";
 import ProductForm from "@/components/admin/ProductForm";
@@ -14,6 +14,8 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import { manualPrintOrder } from "@/lib/print-service";
+import { forceUpdate } from "@/lib/force-update";
+import { getAppVersion } from "@/lib/version-check";
 
 const Admin = () => {
   const navigate = useNavigate();
