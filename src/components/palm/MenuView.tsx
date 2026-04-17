@@ -79,7 +79,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const { playFeedback } = useFeedback();
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isLoading, error, refetch } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       const { data, error } = await supabase
