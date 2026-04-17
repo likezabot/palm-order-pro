@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import ConnectionStatusBanner from "@/components/print-station/ConnectionStatusBanner";
+import { loadPrintConfig } from "@/lib/print-config";
 
 const PrintStation = () => {
   const [orders, setOrders] = useState<Order[]>([]);
