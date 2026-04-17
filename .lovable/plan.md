@@ -1,39 +1,31 @@
 
-The user reports the Palm menu page hangs infinitely after publishing. Looking at MenuView.tsx, the products query uses `useQuery` but I don't see a loading state — if products are loading, `filtered` is empty and shows nothing. But "rodando infinitamente" suggests it never resolves.
+The user says "continues the same" — Palm still hangs after publish. Let me think harder.
 
-Possible causes:
-1. The `useQuery` has no error/loading UI — silent fail.
-2. Auto-refresh loop: version-check.ts may be reloading repeatedly if `__APP_VERSION__` keeps changing or RELOAD_FLAG logic is broken on this route.
-3. Service worker serving stale bundle that errors out.
+Real root cause analysis:
+- `__APP_VERSION__ = new Date().toISOString()` evaluated at config load time. On every Vite build, this is a new string. So in **production**, every published bundle has a different `__APP_VERSION__` baked in. Good.
+- But: index.html references the bundle. If user opens the published URL, browser may have cached `index.html` from a previous version (via SW navigation handler — actually it's network-first, so should be fresh). Bundle hash in script src changes per build → fresh JS loaded.
+- After fresh JS loads, `__APP_VERSION__` is the new build's stamp. `stored` in localStorage is the previous build's stamp. They differ → version-check clears caches, unregisters SW, sets RELOAD_FLAG, reloads.
+- After reload, RELOAD_FLAG is in sessionStorage → version-check returns false. App should render.
 
-Most likely: the version-check reload loop. After the recent SW changes, the BUILD_STAMP changes every build, but the client `__APP_VERSION__` (defined in vite.config) may not match what's stored, causing reload → SW updates → reload cycle.
+So version-check itself is one-shot. The REAL loop must be in the SW + UpdateBanner flow:
+- On reload, no SW (we just unregistered). But main.tsx re-registers it. New SW installs → activate → claims clients → fires `controllerchange` → UpdateBanner reloads page → loop.
 
-Need to check vite.config.ts and main.tsx to confirm.
+THAT's the loop! `controllerchange` fires when a new SW takes control, including the very first registration after we just unregistered it. The 30s anti-loop guard I added should prevent this... unless the localStorage `app_last_reload_ts` wasn't set before the FIRST controllerchange. Let me check: in version-check, on the reload path, I set `app_last_reload_ts`. So after the version-check reload, ts is recent → controllerchange shouldn't reload.
 
-## Plan: Diagnosticar e corrigir loop infinito no Palm após publish
+But... what if user lands fresh (no stored version)? version-check sets stored=current and returns false. SW registers for the first time → controllerchange fires (no prior controller? Actually controllerchange only fires when controller CHANGES, not on first install when there was no controller). Hmm, actually with `clients.claim()` on a fresh page that had no controller, `navigator.serviceWorker.controller` was null, then becomes the new SW → that IS a controllerchange event → UpdateBanner reloads → loop because lastReload is 0!
 
-### Investigação
-1. Ler `vite.config.ts` para ver como `__APP_VERSION__` é definido.
-2. Ler `src/main.tsx` para ver registro do SW + chamada de `checkAndUpdateVersion`.
-3. Confirmar se há loop entre version-check.ts ↔ SW update ↔ reload.
+That's the bug. Fix: only treat controllerchange as "update" if there was a previous controller.
 
-### Hipótese principal
-O `checkAndUpdateVersion` + auto-update do SW (a cada 30s + on focus) podem entrar em conflito:
-- SW detecta nova versão → dispara `UpdateBanner` → reload em 2s.
-- Após reload, `__APP_VERSION__` ainda é o mesmo bundle servido (cacheado), version-check vê diferença → limpa cache → reload de novo.
-- E também: MenuView faz `useQuery` mas não mostra loading/erro → tela em branco enquanto isso.
+Also possible: MenuView showing infinite loading because `useQuery` runs but something prevents it. But user says "rodando infinitamente" which I'll interpret as loading spinner now (since I added one). Could be Supabase request hanging.
 
-### Correções
-1. **MenuView.tsx**: adicionar estados de loading e erro visíveis (em vez de tela vazia que parece "infinito").
-2. **version-check.ts** + **main.tsx**: garantir que o SW update não dispare reload se o bundle já está atualizado. Adicionar guarda extra no RELOAD_FLAG (timestamp) para impedir reloads em <10s.
-3. **Não mexer** em: pedidos, RPC, bridge, impressão, outras telas.
+Let me also check: maybe SW is intercepting the supabase fetch and breaking it. The fetch handler does network-first with cache fallback. For supabase API calls, if network works, fine. If they fall through... should be fine.
 
-### Arquivos a alterar
-- `src/components/palm/MenuView.tsx` — loading/erro visíveis.
-- `src/lib/version-check.ts` — guarda anti-loop reforçada.
-- `src/main.tsx` — desativar polling agressivo (30s) e manter só on focus, para reduzir chance de loop em produção.
+But wait — the SW fetch handler intercepts ALL requests including cross-origin Supabase. `fetch(event.request)` — if supabase request has special headers/credentials, SW respondWith might break it. Let me bypass SW for non-same-origin requests.
 
-### Critério de aceite
-- Palm sempre mostra "Carregando cardápio..." ou erro claro, nunca tela em branco.
-- Sem loop de reload após publish.
-- Auto-update continua funcionando (banner aparece em troca de foco).
+## Plan
+
+1. **UpdateBanner**: skip controllerchange when there was no previous controller (initial registration is not an update).
+2. **sw.js**: skip non-GET and cross-origin requests entirely (let browser handle directly).
+3. **MenuView**: also let `staleTime` not matter here — but add a hard timeout/error if products query takes >10s show retry button.
+
+These three changes should definitively kill the loop and surface any real error.
