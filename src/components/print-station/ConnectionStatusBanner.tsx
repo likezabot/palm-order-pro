@@ -122,7 +122,7 @@ export default function ConnectionStatusBanner({ realtimeStatus, bridgeUrl }: Pr
   const { title, sub, Icon } = labels[status];
 
   return (
-    <div className="sticky top-0 z-50 bg-red-600 text-white py-3 px-4 flex items-center gap-3 shadow-lg animate-pulse">
+    <div className="sticky top-0 z-50 bg-destructive text-destructive-foreground py-3 px-4 flex items-center gap-3 shadow-lg animate-pulse">
       <Icon className="w-6 h-6 shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="font-black text-sm uppercase tracking-wider leading-tight">{title}</p>
