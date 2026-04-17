@@ -29,7 +29,14 @@ checkAndUpdateVersion().then((reloading) => {
           .register("/sw.js")
           .then((reg) => {
             console.log("SW registered:", reg);
-            setInterval(() => reg.update(), 60_000);
+            // Periodic update check
+            setInterval(() => reg.update(), 30_000);
+            // Check on tab focus / visibility return — catches deploys fast
+            const checkOnFocus = () => {
+              if (document.visibilityState === "visible") reg.update();
+            };
+            document.addEventListener("visibilitychange", checkOnFocus);
+            window.addEventListener("focus", checkOnFocus);
           })
           .catch((err) => console.log("SW registration failed:", err));
       });
