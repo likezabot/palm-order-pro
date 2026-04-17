@@ -12,10 +12,15 @@ export default function UpdateBanner() {
       setTimeout(() => window.location.reload(), 2000);
     };
 
-    // Listen for new SW taking control
+    // Capture whether there was already a controller at load time.
+    // If there wasn't, the FIRST controllerchange is just the initial SW
+    // taking control — NOT an app update. Ignoring this prevents reload loops.
+    const hadControllerAtLoad = !!navigator.serviceWorker.controller;
+
     let refreshing = false;
     const onControllerChange = () => {
       if (refreshing) return;
+      if (!hadControllerAtLoad) return; // initial install, not an update
       // Anti-loop: don't auto-reload if we just reloaded recently
       const lastReload = Number(localStorage.getItem("app_last_reload_ts") || "0");
       if (Date.now() - lastReload < 30_000) return;
