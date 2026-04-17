@@ -30,12 +30,20 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+
+  // Skip non-GET (POST/PUT/etc) entirely — let browser handle.
+  if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+
+  // Skip cross-origin requests (Supabase, CDNs, etc.) — never intercept.
+  if (url.origin !== self.location.origin) return;
 
   // Navigation: always network-first
-  if (event.request.mode === "navigate") {
+  if (req.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match("/index.html"))
+      fetch(req).catch(() => caches.match("/index.html"))
     );
     return;
   }
@@ -43,13 +51,13 @@ self.addEventListener("fetch", (event) => {
   // Static assets: cache-first
   if (ASSETS.some((a) => url.pathname === a)) {
     event.respondWith(
-      caches.match(event.request).then((r) => r || fetch(event.request))
+      caches.match(req).then((r) => r || fetch(req))
     );
     return;
   }
 
-  // Everything else: network-first
+  // Same-origin everything else: network-first
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(req).catch(() => caches.match(req))
   );
 });
