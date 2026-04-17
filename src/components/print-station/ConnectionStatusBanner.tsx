@@ -93,10 +93,10 @@ export default function ConnectionStatusBanner({ realtimeStatus, bridgeUrl }: Pr
 
   if (status === "all_ok") {
     return (
-      <div className="sticky top-0 z-50 bg-emerald-500 text-white py-2 px-4 flex items-center justify-center gap-2 text-sm font-bold shadow-md">
+      <div className="sticky top-0 z-50 bg-success text-success-foreground py-2 px-4 flex items-center justify-center gap-2 text-sm font-bold shadow-md">
         <CheckCircle2 className="w-5 h-5" />
         TUDO ONLINE
-        <span className="ml-2 inline-block h-2 w-2 rounded-full bg-white animate-pulse" />
+        <span className="ml-2 inline-block h-2 w-2 rounded-full bg-success-foreground animate-pulse" />
       </div>
     );
   }
