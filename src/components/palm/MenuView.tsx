@@ -220,7 +220,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Subgroup dialog */}
       <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>
