@@ -159,12 +159,16 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
       )}
       {error && !isLoading && (
         <div className="flex flex-col items-center justify-center p-6 text-center">
-          <p className="text-sm text-destructive mb-3">Erro ao carregar cardápio.</p>
+          <p className="text-sm text-destructive mb-1 font-bold">Não foi possível carregar o cardápio</p>
+          <p className="text-xs text-muted-foreground mb-4">
+            {error instanceof Error ? error.message : "Erro desconhecido"}
+          </p>
           <button
             onClick={() => refetch()}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+            disabled={isFetching}
+            className="rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground active:scale-95 transition-transform disabled:opacity-60"
           >
-            Tentar novamente
+            {isFetching ? "Tentando..." : "Tentar novamente"}
           </button>
         </div>
       )}
