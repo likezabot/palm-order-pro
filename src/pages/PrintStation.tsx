@@ -160,7 +160,9 @@ const PrintStation = () => {
   }, [fetchOrders]); // Apenas fetchOrders — estável
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+    <div className="min-h-screen bg-slate-50">
+      <ConnectionStatusBanner realtimeStatus={status} bridgeUrl={bridgeBaseUrl} />
+      <div className="p-4 md:p-8">
       <div className="mx-auto max-w-4xl">
         <Card className="border-2 border-slate-200 shadow-xl">
           <CardHeader className="bg-white border-b border-slate-100 py-6">
