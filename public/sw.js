@@ -1,5 +1,6 @@
-// BUILD_STAMP: __WILL_CHANGE_EACH_DEPLOY__
-const CACHE_NAME = "plano-b-v4";
+// Build stamp changes on every deploy to force SW update detection
+const BUILD_STAMP = "__BUILD_STAMP__";
+const CACHE_NAME = `plano-b-${BUILD_STAMP}`;
 
 const ASSETS = [
   "/manifest.json",
