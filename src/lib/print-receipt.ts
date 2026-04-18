@@ -174,7 +174,7 @@ function thermalCSS(cfg: PrintConfig): string {
 
     .info-row {
       display: block !important;
-      text-align: center !important;
+      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
       padding: 2px 0 !important;
       font-size: ${f.base}px !important;
     }
@@ -189,7 +189,7 @@ function thermalCSS(cfg: PrintConfig): string {
 
     .item-row {
       display: block !important;
-      text-align: center !important;
+      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
       padding: 3px 0 !important;
       font-size: ${f.base}px !important;
     }
@@ -204,17 +204,18 @@ function thermalCSS(cfg: PrintConfig): string {
     }
     .item-right {
       display: inline !important;
-      text-align: center !important;
+      text-align: ${cfg.contentAlign === "left" ? "right" : "center"} !important;
       font-weight: bold !important;
       white-space: nowrap !important;
       margin-left: 6px !important;
     }
     .item-note {
-      text-align: center !important;
+      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
       font-size: ${f.note}px !important;
       color: #333 !important;
       font-style: italic !important;
       margin-bottom: 2px !important;
+      ${cfg.contentAlign === "left" ? "padding-left: 16px !important;" : ""}
     }
 
     .total-block {
@@ -224,7 +225,7 @@ function thermalCSS(cfg: PrintConfig): string {
       font-size: ${f.total}px !important;
       font-weight: 900 !important;
       display: block !important;
-      text-align: center !important;
+      text-align: ${cfg.contentAlign === "left" ? "right" : "center"} !important;
       letter-spacing: 0.5px !important;
     }
     .total-row span { display: inline !important; margin: 0 4px !important; }

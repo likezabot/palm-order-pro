@@ -177,6 +177,25 @@ export default function PrintConfigPanel() {
           </div>
         </section>
 
+        {/* Alinhamento do conteúdo */}
+        <section className="space-y-2">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alinhamento do conteúdo</Label>
+          <div className="flex gap-2">
+            {([
+              { v: "left", label: "Esquerda" },
+              { v: "center", label: "Centralizado" },
+            ] as const).map((opt) => (
+              <Button
+                key={opt.v}
+                variant={cfg.contentAlign === opt.v ? "default" : "outline"}
+                className="flex-1 font-bold"
+                onClick={() => update("contentAlign", opt.v)}
+              >{opt.label}</Button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">Aplica a mesa, itens e total. Título e rodapé sempre centralizados.</p>
+        </section>
+
         {/* Fontes por seção */}
         <section className="space-y-3 p-4 rounded-lg bg-secondary/40 border">
           <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tamanho das fontes</Label>
