@@ -71,6 +71,47 @@ const Admin = () => {
     refetchInterval: 5000,
   });
 
+  // Ordem persistida dos produtos por categoria (key: settings.product_order_<cat>)
+  const { data: orderMap = {} } = useQuery({
+    queryKey: ["product-order"],
+    queryFn: () => fetchAllOrders([...CATEGORIES]),
+  });
+
+  // Produtos agrupados e ordenados por categoria, respeitando ordem persistida.
+  const productsByCategory = useMemo(() => {
+    const map: Record<string, Product[]> = {};
+    CATEGORIES.forEach((cat) => {
+      const items = products.filter((p) => p.category === cat);
+      map[cat] = sortByPersistedOrder(items, orderMap[cat] ?? null);
+    });
+    return map;
+  }, [products, orderMap]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
+
+  const handleDragEnd = async (cat: string, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const current = productsByCategory[cat];
+    const oldIndex = current.findIndex((p) => p.id === active.id);
+    const newIndex = current.findIndex((p) => p.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(current, oldIndex, newIndex);
+    const ids = reordered.map((p) => p.id);
+    // Optimistic update
+    queryClient.setQueryData(["product-order"], { ...orderMap, [cat]: ids });
+    try {
+      await saveOrder(cat, ids);
+      playFeedback("success");
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao salvar ordem" });
+      queryClient.invalidateQueries({ queryKey: ["product-order"] });
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este produto?")) return;
     playFeedback("heavy");
