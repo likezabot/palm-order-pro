@@ -114,7 +114,7 @@ const Kitchen = () => {
         </button>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 md:overflow-hidden overflow-y-auto">
         <KanbanColumn
           title="NOVOS"
           colorClass="text-primary"
