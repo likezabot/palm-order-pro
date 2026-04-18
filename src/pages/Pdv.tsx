@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
+import { formatTableLabel } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const PAYMENT_METHODS = [
