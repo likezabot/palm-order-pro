@@ -20,6 +20,7 @@ interface Props {
   onViewCart: () => void;
   onBack: () => void;
   tableName?: string;
+  originalTableName?: string;
   onRenameTable?: (newName: string) => void | Promise<void>;
 }
 
@@ -71,7 +72,7 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
   return sub.matchers.some((m) => n.includes(m));
 };
 
-const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, onRenameTable }: Props) => {
+const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [porcoOpen, setPorcoOpen] = useState(false);
