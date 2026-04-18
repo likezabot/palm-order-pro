@@ -35,11 +35,18 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, table_name, original_table_name, status, total, waiter_name, created_at")
+        .select("id, table_name, original_table_name, status, total, waiter_name, created_at, order_items(quantity)")
         .in("status", ["new", "preparing", "done"]);
-      
+
       if (error) throw error;
-      return data;
+      // Soma quantidades dos itens em cada pedido
+      return (data ?? []).map((o: any) => ({
+        ...o,
+        item_count: (o.order_items ?? []).reduce(
+          (sum: number, it: { quantity: number }) => sum + (it.quantity ?? 0),
+          0
+        ),
+      }));
     },
     refetchInterval: 5000,
   });
