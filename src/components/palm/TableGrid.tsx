@@ -35,7 +35,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, table_name, status, total, waiter_name, created_at")
+        .select("id, table_name, original_table_name, status, total, waiter_name, created_at")
         .in("status", ["new", "preparing", "done"]);
       
       if (error) throw error;
@@ -243,9 +243,18 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {TABLES.map((table) => {
-              const order = activeOrders?.find((o) => o.table_name === table);
+              // Casar pelo número físico (original_table_name) — assim mesas
+              // renomeadas para "João" continuam ligadas ao botão "1".
+              // Fallback: pedidos antigos sem original_table_name caem em table_name.
+              const order = activeOrders?.find(
+                (o) => (o.original_table_name ?? o.table_name) === table
+              );
               const isOccupied = !!order;
               const isWaitingPayment = order?.status === "done";
+              const customName =
+                order && order.table_name !== (order.original_table_name ?? table)
+                  ? order.table_name
+                  : null;
               
               let statusColor = "bg-emerald-500/20 border-emerald-500 text-emerald-500";
               let pulseClass = "";
@@ -272,7 +281,12 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                     ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
                   `}
                 >
-                  <span className="text-2xl font-black">{table}</span>
+                  <span className="text-2xl font-black leading-none">{table}</span>
+                  {customName && (
+                    <span className="mt-0.5 text-[11px] font-bold truncate w-full text-center px-1 italic">
+                      {customName}
+                    </span>
+                  )}
                   {isOccupied && (
                     <div className="mt-1 flex flex-col items-center">
                       <span className="text-[10px] font-bold opacity-80 uppercase truncate w-full text-center px-1">

@@ -145,6 +145,7 @@ export type Database = {
           delta_items: Json | null
           id: string
           is_printed: boolean | null
+          original_table_name: string | null
           payment_method: string | null
           print_claimed_at: string | null
           print_last_error: string | null
@@ -164,6 +165,7 @@ export type Database = {
           delta_items?: Json | null
           id?: string
           is_printed?: boolean | null
+          original_table_name?: string | null
           payment_method?: string | null
           print_claimed_at?: string | null
           print_last_error?: string | null
@@ -183,6 +185,7 @@ export type Database = {
           delta_items?: Json | null
           id?: string
           is_printed?: boolean | null
+          original_table_name?: string | null
           payment_method?: string | null
           print_claimed_at?: string | null
           print_last_error?: string | null
