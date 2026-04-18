@@ -408,6 +408,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
             })}
         </div>
       ))}
+      </div>
 
       {/* Porco variant dialog */}
       <Dialog open={porcoOpen} onOpenChange={setPorcoOpen}>
