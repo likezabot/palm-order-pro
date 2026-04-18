@@ -71,11 +71,15 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
   return sub.matchers.some((m) => n.includes(m));
 };
 
-const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) => {
+const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, onRenameTable }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [porcoOpen, setPorcoOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const { playFeedback } = useFeedback();
+
+  const canRename = !!tableName && tableName !== "BALCÃO" && !!onRenameTable;
 
   const { data: products = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["products"],
