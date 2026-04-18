@@ -16,9 +16,9 @@ import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import { manualPrintOrder } from "@/lib/print-service";
 import { forceUpdate } from "@/lib/force-update";
 import { getAppVersion } from "@/lib/version-check";
-import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import SortableProductCard from "@/components/admin/SortableProductCard";
+import { PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
+import ProductsManager from "@/components/admin/ProductsManager";
 import { fetchAllOrders, saveOrder, sortByPersistedOrder, resetOrder } from "@/lib/product-order";
 
 const Admin = () => {
@@ -340,85 +340,23 @@ const Admin = () => {
           </TabsList>
         </div>
 
-        <TabsContent value="products" className="flex-1 p-4 space-y-8 pb-10 mt-0">
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 p-3 text-xs text-blue-900 dark:text-blue-200">
-            💡 <strong>Dica:</strong> Arraste os cards pelo ícone <strong>⋮⋮</strong> à esquerda para reordenar. A ordem é salva automaticamente e refletida no app dos garçons.
-          </div>
-          {CATEGORIES.map((cat) => {
-            const items = productsByCategory[cat] ?? [];
-            return (
-              <section key={cat} className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-black uppercase tracking-tight text-slate-900">
-                    {CATEGORY_LABELS[cat]}
-                    <span className="ml-2 text-xs font-bold text-slate-500">({items.length})</span>
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    {(orderMap[cat]?.length ?? 0) > 0 && items.length > 1 && (
-                      <button
-                        onClick={() => handleResetOrder(cat)}
-                        className="flex items-center gap-1.5 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-bold hover:bg-slate-200 transition-colors"
-                        title="Restaurar ordem alfabética"
-                      >
-                        <ArrowDownAZ size={14} /> Restaurar A-Z
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        playFeedback("click");
-                        setEditing(null);
-                        setFormInitialCategory(cat);
-                        setShowForm(true);
-                      }}
-                      className="flex items-center gap-1.5 rounded-lg bg-primary/10 text-primary px-3 py-2 text-sm font-bold hover:bg-primary/20 transition-colors"
-                    >
-                      <Plus size={14} /> Novo produto
-                    </button>
-                  </div>
-                </div>
-                {items.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-muted-foreground bg-white rounded-xl border-2 border-dashed">
-                    Nenhum produto em {CATEGORY_LABELS[cat]}.
-                  </div>
-                ) : (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={(e) => handleDragEnd(cat, e)}
-                  >
-                    {cat === "espetos" && (
-                      <div className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-white border border-border p-4 shadow-sm">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="shrink-0 rounded-md bg-primary/15 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
-                            Popup
-                          </span>
-                          <div className="min-w-0">
-                            <p className="font-bold text-base text-slate-900 leading-tight">Porco</p>
-                            <p className="text-[11px] text-slate-500 truncate">
-                              Porco · Panceta suína · Costela suína
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <SortableContext items={items.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {items.map((product) => (
-                          <SortableProductCard
-                            key={product.id}
-                            product={product}
-                            onToggleActive={handleToggleActive}
-                            onEdit={handleEdit}
-                            onDelete={handleDelete}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                )}
-              </section>
-            );
-          })}
+        <TabsContent value="products" className="flex-1 mt-0 flex flex-col">
+          <ProductsManager
+            productsByCategory={productsByCategory}
+            orderMap={orderMap}
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+            onResetOrder={handleResetOrder}
+            onToggleActive={handleToggleActive}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onNewProduct={(cat) => {
+              playFeedback("click");
+              setEditing(null);
+              setFormInitialCategory(cat);
+              setShowForm(true);
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="orders" className="flex-1 p-4 space-y-3 mt-0">
