@@ -127,6 +127,7 @@ export async function autoPrintOrder(order: {
 export async function autoPrintUpdate(order: {
   id: string;
   table_name: string;
+  original_table_name?: string | null;
   waiter_name: string | null;
   total: number | null;
 }): Promise<{ printed: boolean; reason: string }> {
@@ -137,12 +138,15 @@ export async function autoPrintUpdate(order: {
 
   const { data: orderData } = await supabase
     .from("orders")
-    .select("delta_items, print_type, waiter_name")
+    .select("delta_items, print_type, waiter_name, original_table_name")
     .eq("id", order.id)
     .single();
 
   const printType = (orderData as any)?.print_type as string | null;
   const deltaItems = (orderData as any)?.delta_items as PrintableItem[] | null;
+  const originalName =
+    order.original_table_name ?? (orderData as any)?.original_table_name ?? null;
+  const tableValue = formatPrintTableValue(order.table_name, originalName);
 
   console.log(`[print-service] print_type=${printType}, delta_items=${deltaItems?.length ?? 0}`);
 
@@ -162,29 +166,29 @@ export async function autoPrintUpdate(order: {
     if (printType === "bill") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printBill(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
+      success = await printBill(tableValue, order.waiter_name || "N/A", items, order.total || 0);
       reason = success ? "bill_success" : "print_failed";
     } else if (printType === "full") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
+      success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
       reason = success ? "full_success" : "print_failed";
     } else if (printType === "extra") {
       if (!deltaItems || deltaItems.length === 0) {
         await failPrint(order.id, "no_delta_items");
         return { printed: false, reason: "no_delta" };
       }
-      success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
+      success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
       reason = success ? "delta_success" : "print_failed";
     } else {
       // Fallback legado
       if (deltaItems && deltaItems.length > 0) {
-        success = await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
+        success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
         reason = success ? "delta_success" : "print_failed";
       } else {
         const items = await fetchAllItems();
         if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-        success = await printReceipt(order.table_name, order.waiter_name || "N/A", items, order.total || 0);
+        success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
         reason = success ? "full_fallback" : "print_failed";
       }
     }
