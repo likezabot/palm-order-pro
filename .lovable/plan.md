@@ -1,61 +1,48 @@
 
 
-## Plano: Cardápio Palm cabe inteiro na tela (sem rolagem)
+## Diagnóstico
 
-**Contexto:** O `MenuView` hoje tem `min-h-screen` + grid fixo `grid-cols-2 gap-3 p-3` + cards `min-h-[112px]`. Em telas mais baixas (ou com mais de 4 produtos por categoria) sobra rolagem vertical. O usuário quer que **tudo do cardápio** caiba sem rolagem, adaptando-se automaticamente à altura do dispositivo. **Apenas a tela "Fechar conta" (CloseOrder) deve continuar rolando.**
+Os botões "PREPARAR" / "PRONTO" do Painel Cozinha não respondem. Console mostra:
+> Function components cannot be given refs. Check the render method of `Kitchen` / `KanbanColumn`.
 
-### Estratégia: layout em 3 zonas com altura fixa + grid auto-fit que rola só dentro da zona de produtos
+**Causa raiz:** `KanbanColumn.tsx` define `KanbanColumn` e `KanbanCard` como componentes funcionais simples (sem `forwardRef`). Algo está passando `ref` para eles. Olhando o código atual, **não há `ref` explícito sendo passado** — então o aviso está vindo de outra coisa: provavelmente `pulseNew` está sendo passado mas o React está reclamando de outra prop.
 
-```text
-┌─────────────────────────────┐
-│ HEADER (sticky, altura fixa)│  ← Voltar/Mesa + Busca + Tabs categoria
-├─────────────────────────────┤
-│                             │
-│  GRID DE PRODUTOS           │  ← flex-1, overflow-y-auto INTERNO
-│  (cards auto-redimensionam) │     (rola só se passar do limite extremo)
-│                             │
-├─────────────────────────────┤
-│ FAB carrinho flutuante      │  ← ancorado, fora do fluxo
-└─────────────────────────────┘
-```
+Mas o **problema funcional real** (botões não clicáveis) é diferente: no mobile, o `Kitchen` agora usa `md:h-screen` + grid `overflow-y-auto` no mobile, mas as **3 colunas estão empilhadas em `grid-cols-1`** dentro de um container com `flex-1`. O `flex-1` sem `min-h-0` num pai `flex-col` faz o grid esticar e os cliques caem no lugar errado por causa do FAB ou de `pointer-events`.
 
-### Mudanças em `src/components/palm/MenuView.tsx`
+Olhando a tela enviada (screenshot mostra o pedido visível mas botão "▶ PREPARAR" no rodapé): provavelmente o botão está **atrás do FAB do carrinho** (`fixed bottom-5 right-5`) — mas Kitchen não tem FAB. Então é outra coisa.
 
-1. **Container raiz** — trocar `min-h-screen flex-col pb-24` por `h-[100dvh] flex-col overflow-hidden` (usa `dvh` = dynamic viewport, ignora barra de endereço do mobile).
+**Hipótese mais provável (precisa confirmar lendo o arquivo atual):** depois das últimas mudanças, o container do botão pode estar com `overflow-hidden` cortando a área de toque, ou o card inteiro recebeu um handler que captura o clique antes do botão. Preciso reler `KanbanColumn.tsx` e `Kitchen.tsx` na versão atual para diagnosticar com precisão antes de propor a correção.
 
-2. **Header** — remover `sticky top-0`; vira `shrink-0` simples (altura natural). Compactar levemente (`p-3` → `p-2.5`, `mb-2` → `mb-1.5`) para liberar mais espaço aos cards.
+## Plano
 
-3. **Zona de produtos (grid)** — envolver os 3 blocos de grid (subgroups, produtos, mensagem vazia) num único `<div className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2">`. A rolagem fica isolada aqui — como queremos que tudo caiba, na maioria dos casos não vai aparecer barra; mas se o cardápio for enorme num celular pequeno, ela aparece **dentro** da seção (não vira scroll global).
+### Passo 1 — Investigar o estado atual dos arquivos
+Reler `src/pages/Kitchen.tsx` e `src/components/kitchen/KanbanColumn.tsx` (versões atuais após as últimas edições) para identificar:
+- Se há algum `onClick` no card que faz `stopPropagation` ou conflita
+- Se o botão está dentro de uma área com `pointer-events-none`
+- Se a função `updateStatus` está realmente sendo chamada (adicionar log temporário se necessário)
+- Origem do warning de `ref` (algum wrapper passando ref indevidamente)
 
-4. **Cards adaptativos** — substituir `grid-cols-2 ... min-h-[112px]` por:
-   - Grid responsivo: `grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2`
-   - Remover `min-h-[112px]` dos cards
-   - Reduzir padding interno: `p-4` → `p-3`
-   - Texto continua legível (`text-base` mantido = 16px, atende o min do projeto).
-   
-   Resultado: em telas estreitas mantém 2 colunas; em tablets pode virar 3-4 automaticamente, encolhendo a altura por linha.
+### Passo 2 — Corrigir o handler do botão
+Garantir que:
+- `onClick` do botão chame `e.stopPropagation()` para não vazar pro card
+- `updateStatus` use `await` corretamente e invalide a query
+- Botão não esteja dentro de elemento com `pointer-events-none` ou `disabled`
 
-5. **FAB carrinho** — mantém `fixed bottom-5 right-5` (já está fora do fluxo). Sem mudança.
+### Passo 3 — Eliminar o warning de ref
+Se algum componente estiver recebendo `ref` indevidamente (provável vindo de `KanbanColumn` sendo filho direto de algo que injeta ref), envolver com `React.forwardRef` ou remover o ref.
 
-6. **Diálogos (Porco, Subgrupo, Renomear)** — sem mudança, já têm `max-h-[85vh]` com scroll interno.
-
-### O que NÃO muda
-- `CloseOrder.tsx` — continua com `min-h-screen` e rolagem padrão (única tela que pode rolar, por pedido do usuário).
-- `OrderReview`, `TableGrid`, `OrderSuccess` — fora do escopo.
-- Lógica de dados, busca, favoritos, popup Porco — intactos.
-- Tamanhos de fonte ≥14px e botões com área ≥48-56px de toque preservados.
+### Passo 4 — Garantir feedback visual
+Manter `playFeedback("click")` antes do `await` para dar resposta tátil imediata, mesmo se a rede estiver lenta.
 
 ### Arquivos afetados
 | Arquivo | Mudança |
 |---|---|
-| `src/components/palm/MenuView.tsx` | Container `h-[100dvh] overflow-hidden` + zona scroll interna + grid `auto-fill,minmax(150px,1fr)` + padding compactado |
-
-Sem novos arquivos, sem migrations, sem dependências.
+| `src/components/kitchen/KanbanColumn.tsx` | Adicionar `e.stopPropagation()` no onClick do botão; envolver em `forwardRef` se necessário |
+| `src/pages/Kitchen.tsx` | Garantir que `updateStatus` funcione e tratar erros (toast) |
 
 ### Validação
-1. Abrir Palm → Mesa → Cardápio em celular pequeno (360×640): tudo (header, busca, tabs, grid completo de Espetos) cabe sem barra de rolagem global.
-2. Mudar para Bebidas (subgrupos): 8 quadrados cabem sem rolar.
-3. Em tablet (768×1024): cards expandem para 3-4 colunas automaticamente.
-4. Abrir "Fechar conta" com muitos itens: continua rolando normalmente.
-5. FAB carrinho fica visível e clicável em todos os casos.
+1. Abrir Painel Cozinha no celular
+2. Clicar em "▶ PREPARAR" num pedido NOVO → deve mover para EM PREPARO
+3. Clicar em "✅ PRONTO" → deve mover para FINALIZADOS
+4. Console limpo (sem warnings de ref)
 
