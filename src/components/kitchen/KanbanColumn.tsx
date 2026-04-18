@@ -110,6 +110,7 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
         <button
           type="button"
           onClick={(e) => {
+            console.log("[KanbanCard] button clicked", order.id, actionLabel);
             e.stopPropagation();
             onAction(order.id);
           }}
