@@ -188,10 +188,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   };
 
   return (
-    <div className="flex min-h-screen flex-col pb-24">
+    <div className="flex h-[100dvh] flex-col overflow-hidden">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
-        <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="shrink-0 bg-background border-b border-border p-2.5">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
           <button
             onClick={() => {
               playFeedback("click");
