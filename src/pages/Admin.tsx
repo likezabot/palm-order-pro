@@ -387,25 +387,15 @@ const Admin = () => {
                     onDragEnd={(e) => handleDragEnd(cat, e)}
                   >
                     {cat === "espetos" && (
-                      <div className="mb-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
-                                Card Especial
-                              </span>
-                              <p className="font-black text-base text-slate-900">Porco</p>
-                            </div>
-                            <p className="mt-2 text-xs text-slate-600">
-                              No Palm, este card abre um popup com 3 opções para o garçom escolher:
-                            </p>
-                            <ul className="mt-1.5 ml-1 text-xs font-bold text-slate-700 space-y-0.5">
-                              <li>• Porco</li>
-                              <li>• Panceta suína</li>
-                              <li>• Costela suína</li>
-                            </ul>
-                            <p className="mt-2 text-[11px] text-slate-500 italic">
-                              Cadastre/edite o produto <strong>Porco</strong> abaixo para mudar o preço base. As variantes Panceta e Costela ficam ocultas no Palm (entram via popup).
+                      <div className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-white border border-border p-4 shadow-sm">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="shrink-0 rounded-md bg-primary/15 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
+                            Popup
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-bold text-base text-slate-900 leading-tight">Porco</p>
+                            <p className="text-[11px] text-slate-500 truncate">
+                              Porco · Panceta suína · Costela suína
                             </p>
                           </div>
                         </div>
