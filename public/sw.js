@@ -5,7 +5,9 @@ const CACHE_NAME = `plano-b-${BUILD_STAMP}`;
 const ASSETS = [
   "/manifest.json",
   "/icon-192.png",
-  "/icon-512.png"
+  "/icon-512.png",
+  "/palm",
+  "/"
 ];
 
 self.addEventListener("message", (event) => {
