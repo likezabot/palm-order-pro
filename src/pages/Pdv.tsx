@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
+import { formatTableLabel } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const PAYMENT_METHODS = [
@@ -377,7 +378,10 @@ const Pdv = () => {
                     </div>
                     <div>
                       <div className="font-bold text-lg flex items-center gap-2">
-                        Mesa {order.table_name}
+                        {formatTableLabel(order.table_name, order.original_table_name)}
+                        {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+                          <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
+                        )}
                         {wasPrinted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                       </div>
                       <div className="text-sm text-muted-foreground">{order.waiter_name || "—"}</div>
@@ -402,7 +406,7 @@ const Pdv = () => {
           ) : showPayment ? (
             /* Payment flow */
             <div className="space-y-4">
-              <h2 className="text-xl font-bold">Fechar Conta — Mesa {selectedOrder.table_name}</h2>
+              <h2 className="text-xl font-bold">Fechar Conta — {formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}</h2>
               <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
                 <span>TOTAL</span>
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
@@ -492,7 +496,7 @@ const Pdv = () => {
             /* Order details */
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">Mesa {selectedOrder.table_name}</h2>
+                <h2 className="text-xl font-bold">{formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}</h2>
                 {cfg && <Badge className={cfg.color}>{cfg.label}</Badge>}
               </div>
               <div className="text-sm text-muted-foreground space-y-1">
