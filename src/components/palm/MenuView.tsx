@@ -259,7 +259,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
             </button>
           )}
           {filtered
-            .filter((p) => !(showPorcoCard && p.id === porcoBase!.id))
+            .filter((p) => !(showPorcoCard && porcoReal && p.id === porcoReal.id))
             .map((product) => {
               const qty = getQty(product.id);
               return (
