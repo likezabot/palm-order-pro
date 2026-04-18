@@ -573,9 +573,9 @@ const Pdv = () => {
                 ) : (
                   selectedItems.map((item) => (
                     <div key={item.id}>
-                      <div className="flex justify-between text-base">
-                        <span>{item.quantity}x {item.product_name}</span>
-                        <span className="font-semibold">R$ {item.subtotal.toFixed(2)}</span>
+                      <div className="flex justify-between text-lg">
+                        <span className="font-semibold">{item.quantity}x {item.product_name}</span>
+                        <span className="font-bold">R$ {item.subtotal.toFixed(2)}</span>
                       </div>
                       {item.note && (
                         <p className="text-sm text-muted-foreground ml-4">OBS: {item.note}</p>
