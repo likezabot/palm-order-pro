@@ -71,6 +71,11 @@
   .animate-pulse-active {
     animation: mesa-pulse 2s infinite ease-in-out;
   }
+
+  /* Modo Garçom: oculta elementos administrativos no PDV */
+  .staff-mode .admin-only {
+    display: none !important;
+  }
 }
 
 @keyframes mesa-pulse {

@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Clock, Flame } from "lucide-react";
+import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -56,6 +57,18 @@ const Pdv = () => {
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerDoc, setCustomerDoc] = useState("");
+  const [staffMode, setStaffMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("pdv-staff-mode") === "1";
+  });
+
+  const toggleStaffMode = () => {
+    setStaffMode((v) => {
+      const next = !v;
+      localStorage.setItem("pdv-staff-mode", next ? "1" : "0");
+      return next;
+    });
+  };
 
   const { data: orders = [] } = useQuery({
     queryKey: ["pdv-orders"],
@@ -177,6 +190,28 @@ const Pdv = () => {
   const selectedOrder = orders.find((o) => o.id === selectedId) || null;
   const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
 
+  // Agrupa pedidos por status + conta itens (mais antigo primeiro dentro de cada grupo)
+  const itemsByOrderId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const it of allItems) {
+      map.set(it.order_id, (map.get(it.order_id) || 0) + (it.quantity || 0));
+    }
+    return map;
+  }, [allItems]);
+
+  const groupedOrders = useMemo(() => {
+    const groups: Record<"new" | "preparing" | "done", Order[]> = { new: [], preparing: [], done: [] };
+    for (const o of orders) {
+      const k = (o.status as "new" | "preparing" | "done");
+      if (groups[k]) groups[k].push(o);
+    }
+    // mais antigo primeiro = urgência
+    (Object.keys(groups) as Array<keyof typeof groups>).forEach((k) => {
+      groups[k].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    });
+    return groups;
+  }, [orders]);
+
   const updateStatus = async (orderId: string, status: string) => {
     playFeedback("click");
     await supabase.rpc("update_order_status", { p_order_id: orderId, p_status: status } as any);
@@ -240,22 +275,34 @@ const Pdv = () => {
   const cfg = selectedOrder ? statusConfig[selectedOrder.status] || statusConfig.new : null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className={`min-h-screen flex flex-col bg-background ${staffMode ? "staff-mode" : ""}`}>
       {/* Header */}
       <div className="border-b border-border p-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate("/")} className="text-muted-foreground">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-xl font-bold">PDV / CAIXA</h1>
-          <Badge className={realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
+          <h1 className="text-2xl font-black tracking-tight">PDV / CAIXA</h1>
+          <Badge className={`admin-only ${realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}`}>
             {realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}
           </Badge>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleStaffMode}
+            title={staffMode ? "Desativar modo garçom (mostrar admin)" : "Ativar modo garçom (ocultar admin)"}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-bold transition-colors ${
+              staffMode
+                ? "border-warning bg-warning/10 text-warning"
+                : "border-border bg-card text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            {staffMode ? <EyeOff size={18} /> : <Eye size={18} />}
+            {staffMode ? "MODO GARÇOM" : "MODO ADMIN"}
+          </button>
           <Dialog>
             <DialogTrigger asChild>
-              <button className="p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground">
+              <button className="admin-only p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground">
                 <Settings size={24} />
               </button>
             </DialogTrigger>
@@ -351,49 +398,39 @@ const Pdv = () => {
       {/* Main content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_420px] overflow-hidden">
         {/* Left: Order list */}
-        <div className="overflow-y-auto p-4 space-y-2 border-r border-border">
-          <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">
+        <div className="overflow-y-auto p-4 space-y-4 border-r border-border">
+          <h2 className="text-base font-black text-muted-foreground uppercase tracking-wider">
             Fila de Pedidos ({orders.length})
           </h2>
           {orders.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">Aguardando pedidos...</div>
+            <div className="text-center py-16 text-muted-foreground text-lg">Aguardando pedidos...</div>
           ) : (
-            orders.map((order) => {
-              const s = statusConfig[order.status] || statusConfig.new;
-              const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-              const wasPrinted = order.print_status === 'printed';
-              return (
-                <button
-                  key={order.id}
-                  onClick={() => { setSelectedId(order.id); setShowPayment(false); }}
-                  className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all text-left ${
-                    selectedId === order.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-card hover:border-muted-foreground/30"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-center">
-                      <div className="text-xs text-muted-foreground">{time}</div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-lg flex items-center gap-2">
-                        {formatTableLabel(order.table_name, order.original_table_name)}
-                        {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-                          <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
-                        )}
-                        {wasPrinted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{order.waiter_name || "—"}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-primary">R$ {(order.total || 0).toFixed(2)}</span>
-                    <Badge className={s.color}>{s.label}</Badge>
-                  </div>
-                </button>
-              );
-            })
+            <>
+              <OrderSection
+                title="Aguardando"
+                accent="success"
+                orders={groupedOrders.new}
+                itemsByOrderId={itemsByOrderId}
+                selectedId={selectedId}
+                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
+              />
+              <OrderSection
+                title="Em Preparo"
+                accent="warning"
+                orders={groupedOrders.preparing}
+                itemsByOrderId={itemsByOrderId}
+                selectedId={selectedId}
+                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
+              />
+              <OrderSection
+                title="Prontos p/ Pagamento"
+                accent="destructive"
+                orders={groupedOrders.done}
+                itemsByOrderId={itemsByOrderId}
+                selectedId={selectedId}
+                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
+              />
+            </>
           )}
         </div>
 
@@ -536,9 +573,9 @@ const Pdv = () => {
                 ) : (
                   selectedItems.map((item) => (
                     <div key={item.id}>
-                      <div className="flex justify-between text-base">
-                        <span>{item.quantity}x {item.product_name}</span>
-                        <span className="font-semibold">R$ {item.subtotal.toFixed(2)}</span>
+                      <div className="flex justify-between text-lg">
+                        <span className="font-semibold">{item.quantity}x {item.product_name}</span>
+                        <span className="font-bold">R$ {item.subtotal.toFixed(2)}</span>
                       </div>
                       {item.note && (
                         <p className="text-sm text-muted-foreground ml-4">OBS: {item.note}</p>
@@ -548,7 +585,7 @@ const Pdv = () => {
                 )}
               </div>
 
-              <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
+              <div className="border-t border-border pt-3 flex justify-between text-2xl font-black">
                 <span>TOTAL</span>
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
               </div>
@@ -562,7 +599,7 @@ const Pdv = () => {
                         const ok = await manualPrintDelta(selectedOrder);
                         toast({ title: ok ? "Acréscimo impresso!" : "Sem acréscimo para imprimir", variant: ok ? "default" : "destructive" });
                       })}
-                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
                     >
                       <FilePlus size={16} />
                       ACRÉSCIMO
@@ -574,7 +611,7 @@ const Pdv = () => {
                       if (!ok) toast({ title: "Sem itens para imprimir", variant: "destructive" });
                       else toast({ title: "Cupom enviado para impressão!" });
                     })}
-                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
                   >
                     <FileText size={16} />
                     PEDIDO
@@ -584,7 +621,7 @@ const Pdv = () => {
                       const ok = await manualPrintBill(selectedOrder);
                       toast({ title: ok ? "Conta impressa!" : "Sem itens para imprimir", variant: ok ? "default" : "destructive" });
                     })}
-                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
                   >
                     <Receipt size={16} />
                     CONTA
@@ -655,6 +692,121 @@ const Pdv = () => {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+};
+
+type Accent = "success" | "warning" | "destructive";
+
+const accentClasses: Record<Accent, { dot: string; header: string; border: string }> = {
+  success:     { dot: "bg-success",     header: "text-success",     border: "border-l-success" },
+  warning:     { dot: "bg-warning",     header: "text-warning",     border: "border-l-warning" },
+  destructive: { dot: "bg-destructive", header: "text-destructive", border: "border-l-destructive" },
+};
+
+interface OrderSectionProps {
+  title: string;
+  accent: Accent;
+  orders: Order[];
+  itemsByOrderId: Map<string, number>;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}
+
+const OrderSection = ({ title, accent, orders, itemsByOrderId, selectedId, onSelect }: OrderSectionProps) => {
+  const a = accentClasses[accent];
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 px-1">
+        <span className={`inline-block w-2.5 h-2.5 rounded-full ${a.dot}`} />
+        <h3 className={`text-base font-black uppercase tracking-wide ${a.header}`}>
+          {title} <span className="text-muted-foreground font-bold">({orders.length})</span>
+        </h3>
+      </div>
+      {orders.length === 0 ? (
+        <div className="text-sm text-muted-foreground px-3 py-2 italic">Nenhum pedido</div>
+      ) : (
+        orders.map((order) => (
+          <OrderRow
+            key={order.id}
+            order={order}
+            itemCount={itemsByOrderId.get(order.id) || 0}
+            selected={selectedId === order.id}
+            onSelect={() => onSelect(order.id)}
+            accentBorder={a.border}
+          />
+        ))
+      )}
+    </div>
+  );
+};
+
+interface OrderRowProps {
+  order: Order;
+  itemCount: number;
+  selected: boolean;
+  onSelect: () => void;
+  accentBorder: string;
+}
+
+const OrderRow = ({ order, itemCount, selected, onSelect, accentBorder }: OrderRowProps) => {
+  const elapsed = useElapsedTime(order.created_at);
+  const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const wasPrinted = order.print_status === "printed";
+
+  // Idade em minutos para badges de prioridade
+  const ageMin = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60000);
+  const isUrgent = ageMin >= 40;
+  const isLate = !isUrgent && ageMin >= 20;
+  const waitingPay = order.status === "done" && ageMin >= 10;
+
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full flex items-center justify-between p-4 rounded-lg border-l-4 border ${accentBorder} transition-all text-left ${
+        selected
+          ? "border-primary bg-primary/10"
+          : isUrgent
+            ? "border-destructive bg-destructive/5 animate-pulse-active"
+            : "border-border bg-card hover:border-muted-foreground/30"
+      }`}
+      style={isUrgent ? ({ ["--pulse-color" as any]: "hsl(var(--destructive) / 0.35)" } as React.CSSProperties) : undefined}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex flex-col items-center justify-center min-w-[64px] px-2 py-1 rounded bg-muted/40">
+          <Clock size={14} className="text-muted-foreground" />
+          <span className="text-sm font-black text-foreground leading-none mt-1">{elapsed || "agora"}</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5">{time}</span>
+        </div>
+        <div className="min-w-0">
+          <div className="font-black text-2xl flex items-center gap-2 leading-tight">
+            {formatTableLabel(order.table_name, order.original_table_name)}
+            {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+              <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
+            )}
+            {wasPrinted && <CheckCircle2 className="w-4 h-4 text-success" />}
+          </div>
+          <div className="text-sm text-muted-foreground truncate">
+            {itemCount} {itemCount === 1 ? "item" : "itens"} · {order.waiter_name || "—"}
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {isUrgent && (
+              <Badge className="bg-destructive text-destructive-foreground text-xs gap-1">
+                <Flame className="w-3 h-3" /> URGENTE
+              </Badge>
+            )}
+            {isLate && (
+              <Badge className="bg-warning text-warning-foreground text-xs">⚠ ATRASADO</Badge>
+            )}
+            {waitingPay && !isUrgent && !isLate && (
+              <Badge className="bg-warning text-warning-foreground text-xs">AGUARDANDO PAGAMENTO</Badge>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <span className="font-black text-xl text-primary">R$ {(order.total || 0).toFixed(2)}</span>
+      </div>
+    </button>
   );
 };
 
