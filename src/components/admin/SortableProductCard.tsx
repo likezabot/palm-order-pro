@@ -1,8 +1,14 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, Trash2 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Eye, EyeOff, MoreVertical, Pencil, Trash2, GripVertical } from "lucide-react";
 import { Product } from "@/lib/types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface Props {
   product: Product;
@@ -26,45 +32,75 @@ const SortableProductCard = ({ product, onToggleActive, onEdit, onDelete }: Prop
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between rounded-xl bg-white border border-border p-4 shadow-sm transition-all hover:shadow-md ${
-        !product.active ? "opacity-60 bg-slate-50 grayscale-[0.5]" : ""
+      className={`relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 ${
+        !product.active ? "opacity-50 grayscale" : ""
       }`}
     >
+      {/* Drag handle (top-left, discreto) */}
       <button
         {...attributes}
         {...listeners}
-        className="touch-none mr-2 p-2 -ml-2 text-slate-400 hover:text-slate-700 cursor-grab active:cursor-grabbing"
-        aria-label="Arrastar para reordenar"
+        className="absolute top-1.5 left-1.5 touch-none p-1 text-muted-foreground/60 hover:text-foreground cursor-grab active:cursor-grabbing"
+        aria-label="Arrastar"
       >
-        <GripVertical size={18} />
+        <GripVertical size={14} />
       </button>
-      <div className="flex-1 min-w-0 pr-2">
-        <p className="font-bold text-base truncate text-slate-900">{product.name}</p>
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-tight">
+
+      {/* Menu "⋯" (top-right) */}
+      <div className="absolute top-1 right-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary"
+              aria-label="Mais ações"
+            >
+              <MoreVertical size={16} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEdit(product)}>
+              <Pencil size={14} className="mr-2" /> Editar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDelete(product.id)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 size={14} className="mr-2" /> Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Conteúdo (estilo Palm) */}
+      <div className="pt-4 pr-6 pl-4">
+        <span className="block font-semibold text-base text-foreground leading-tight truncate">
+          {product.name}
+        </span>
+        <span className="mt-1 block text-sm text-primary font-bold">
           R$ {product.price.toFixed(2)}
-          {!product.active && <span className="text-destructive ml-1">• INATIVO</span>}
-        </p>
+        </span>
       </div>
-      <div className="flex items-center gap-3">
-        <Switch
-          checked={product.active}
-          onCheckedChange={() => onToggleActive(product.id, !!product.active)}
-        />
-        <div className="flex items-center gap-2 border-l border-border pl-3">
-          <button
-            onClick={() => onEdit(product)}
-            className="p-2.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-          >
-            <Pencil size={16} />
-          </button>
-          <button
-            onClick={() => onDelete(product.id)}
-            className="p-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
+
+      {/* Footer: botão olho ocupa toda a largura — toque rápido p/ alternar visibilidade */}
+      <button
+        onClick={() => onToggleActive(product.id, !!product.active)}
+        className={`mt-3 flex items-center justify-center gap-2 rounded-md py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+          product.active
+            ? "bg-primary/10 text-primary hover:bg-primary/20"
+            : "bg-destructive/10 text-destructive hover:bg-destructive/20"
+        }`}
+      >
+        {product.active ? (
+          <>
+            <Eye size={14} /> Visível
+          </>
+        ) : (
+          <>
+            <EyeOff size={14} /> Oculto
+          </>
+        )}
+      </button>
     </div>
   );
 };
