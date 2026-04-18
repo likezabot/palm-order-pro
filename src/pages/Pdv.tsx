@@ -585,7 +585,7 @@ const Pdv = () => {
                 )}
               </div>
 
-              <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
+              <div className="border-t border-border pt-3 flex justify-between text-2xl font-black">
                 <span>TOTAL</span>
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
               </div>
