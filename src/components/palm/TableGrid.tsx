@@ -323,7 +323,9 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                         {order.waiter_name || "---"}
                       </span>
                       <span className="text-xs font-bold">
-                        {formatCurrency(order.total)}
+                        {(order as any).item_count > 0
+                          ? `${(order as any).item_count} · ${formatCurrency(order.total)}`
+                          : formatCurrency(order.total)}
                       </span>
                       <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
                         <Clock size={10} />
