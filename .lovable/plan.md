@@ -1,31 +1,43 @@
 
-The user says "continues the same" — Palm still hangs after publish. Let me think harder.
+O usuário quer que o Admin > Cardápio fique visualmente igual ao cardápio do garçom (Palm/MenuView) — mesma navegação por abas de categoria, mesmo layout de cards — mas com um botão de "visível/invisível" (toggle ativo) em cada card, ao invés da lista vertical atual com edit/delete grande.
 
-Real root cause analysis:
-- `__APP_VERSION__ = new Date().toISOString()` evaluated at config load time. On every Vite build, this is a new string. So in **production**, every published bundle has a different `__APP_VERSION__` baked in. Good.
-- But: index.html references the bundle. If user opens the published URL, browser may have cached `index.html` from a previous version (via SW navigation handler — actually it's network-first, so should be fresh). Bundle hash in script src changes per build → fresh JS loaded.
-- After fresh JS loads, `__APP_VERSION__` is the new build's stamp. `stored` in localStorage is the previous build's stamp. They differ → version-check clears caches, unregisters SW, sets RELOAD_FLAG, reloads.
-- After reload, RELOAD_FLAG is in sessionStorage → version-check returns false. App should render.
+## O que mudar
 
-So version-check itself is one-shot. The REAL loop must be in the SW + UpdateBanner flow:
-- On reload, no SW (we just unregistered). But main.tsx re-registers it. New SW installs → activate → claims clients → fires `controllerchange` → UpdateBanner reloads page → loop.
+**Tela Admin > Cardápio** (hoje: lista vertical com todas categorias empilhadas, cards grandes com switch + editar + apagar + arrastar):
 
-THAT's the loop! `controllerchange` fires when a new SW takes control, including the very first registration after we just unregistered it. The 30s anti-loop guard I added should prevent this... unless the localStorage `app_last_reload_ts` wasn't set before the FIRST controllerchange. Let me check: in version-check, on the reload path, I set `app_last_reload_ts`. So after the version-check reload, ts is recent → controllerchange shouldn't reload.
+Passa a ter:
+1. **Tabs de categoria no topo** (Refeições, Espetos, Bebidas, Cervejas) — idêntico ao Palm.
+2. **Grid de cards** da categoria ativa, no mesmo estilo visual do Palm (card branco, nome em destaque, preço).
+3. **Em cada card**: um botão discreto de olho 👁 / 👁‍🗨 (visível/oculto) no canto. Tocar alterna `active` direto, sem precisar abrir edição.
+4. **Ações secundárias** (editar, apagar, arrastar pra reordenar) ficam acessíveis via toque longo OU um menu "•••" no canto do card — pra não poluir.
+5. **Card especial "Porco"** continua aparecendo como popup (igual hoje), mas no mesmo grid visual.
+6. **Botão flutuante "+ Novo produto"** no rodapé, contextual à categoria ativa.
 
-But... what if user lands fresh (no stored version)? version-check sets stored=current and returns false. SW registers for the first time → controllerchange fires (no prior controller? Actually controllerchange only fires when controller CHANGES, not on first install when there was no controller). Hmm, actually with `clients.claim()` on a fresh page that had no controller, `navigator.serviceWorker.controller` was null, then becomes the new SW → that IS a controllerchange event → UpdateBanner reloads → loop because lastReload is 0!
+## Como fica
 
-That's the bug. Fix: only treat controllerchange as "update" if there was a previous controller.
+```text
+┌─────────────────────────────────┐
+│ [Refeições][Espetos][Beb][Cerv] │  ← tabs (Palm)
+├─────────────────────────────────┤
+│ ┌──────┐ ┌──────┐ ┌──────┐      │
+│ │Porco │ │Bovino│ │Frango│ ...  │  ← grid de cards
+│ │R$15  │ │R$12  │ │R$10  │      │
+│ │  👁 ⋯│ │  👁 ⋯│ │  🚫⋯ │     │  ← olho = ativo, ⋯ = menu
+│ └──────┘ └──────┘ └──────┘      │
+│                                 │
+│      [+ Novo produto]           │  ← contextual
+└─────────────────────────────────┘
+```
 
-Also possible: MenuView showing infinite loading because `useQuery` runs but something prevents it. But user says "rodando infinitamente" which I'll interpret as loading spinner now (since I added one). Could be Supabase request hanging.
+Cards inativos ficam com opacidade reduzida + ícone de olho riscado, mantendo o feedback visual atual.
 
-Let me also check: maybe SW is intercepting the supabase fetch and breaking it. The fetch handler does network-first with cache fallback. For supabase API calls, if network works, fine. If they fall through... should be fine.
+## Arquivos afetados
 
-But wait — the SW fetch handler intercepts ALL requests including cross-origin Supabase. `fetch(event.request)` — if supabase request has special headers/credentials, SW respondWith might break it. Let me bypass SW for non-same-origin requests.
+- `src/pages/Admin.tsx` — substituir a lista empilhada por tabs + grid; ações de "Restaurar A-Z" e "Card especial Porco" continuam, só mudam de lugar (botão pequeno no header da categoria ativa).
+- `src/components/admin/SortableProductCard.tsx` — redesenhar como card de grid (estilo Palm) com botão olho proeminente e menu "⋯" pras outras ações; manter `useSortable` pra drag.
+- Reuso da lógica de drag, reorder, reset A-Z, Porco popup, ProductForm — sem mudanças no banco nem em outras telas.
 
-## Plan
+## Pontos a confirmar
 
-1. **UpdateBanner**: skip controllerchange when there was no previous controller (initial registration is not an update).
-2. **sw.js**: skip non-GET and cross-origin requests entirely (let browser handle directly).
-3. **MenuView**: also let `staleTime` not matter here — but add a hard timeout/error if products query takes >10s show retry button.
-
-These three changes should definitively kill the loop and surface any real error.
+- Manter drag pra reordenar dentro da categoria ativa? (Sim, presumo — é funcionalidade pedida antes.)
+- Editar/apagar via menu "⋯" (3 pontos) em cada card está ok? Ou prefere edit ao tocar no card e olho separado?
