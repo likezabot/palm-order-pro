@@ -5,9 +5,7 @@ const CACHE_NAME = `plano-b-${BUILD_STAMP}`;
 const ASSETS = [
   "/manifest.json",
   "/icon-192.png",
-  "/icon-512.png",
-  "/palm",
-  "/"
+  "/icon-512.png"
 ];
 
 self.addEventListener("message", (event) => {
@@ -19,15 +17,7 @@ self.addEventListener("message", (event) => {
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(
-        ASSETS.map((url) =>
-          cache.add(url).catch(() => {
-            // Ignora falhas individuais (ex: rota SPA sem prerender) para não bloquear o install
-          })
-        )
-      )
-    )
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
 });
 
