@@ -23,19 +23,20 @@ export function formatTableLabel(
 }
 
 /**
- * Formata o rótulo da mesa para impressão de cupom.
+ * Valor da mesa para impressão (vai depois do prefixo "Mesa: " do layout).
  * - "BALCÃO" → "BALCÃO"
- * - sem renomear → "Mesa 1"
- * - renomeada → "Mesa 1 - João" (mantém referência física p/ cozinha/conta)
+ * - sem renomear → "1"
+ * - renomeada → "1 - João"
+ * Resultado no cupom: "Mesa: 1 - João"
  */
-export function formatPrintTableLabel(
+export function formatPrintTableValue(
   tableName: string,
   originalTableName?: string | null
 ): string {
   if (!tableName) return "";
   if (tableName === "BALCÃO") return "BALCÃO";
   const original = originalTableName ?? tableName;
-  if (tableName === original) return `Mesa ${tableName}`;
-  return `Mesa ${original} - ${tableName}`;
+  if (tableName === original) return tableName;
+  return `${original} - ${tableName}`;
 }
 
