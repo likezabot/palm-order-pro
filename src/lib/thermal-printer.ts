@@ -202,43 +202,37 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         break;
       }
       case "sep": {
-        b.resetStyle().align("left").line((blk.bold ? "=" : "-").repeat(cols));
+        b.resetStyle().align("center").line((blk.bold ? "=" : "-").repeat(cols));
         break;
       }
       case "info": {
-        b.resetStyle().align("left").size(headerLarge, false);
+        b.resetStyle().align("center").size(headerLarge, false);
         b.bold(true).text(`${blk.label.toUpperCase()}: `).bold(false).line(blk.value);
         b.resetStyle();
         break;
       }
       case "item": {
-        b.resetStyle().align("left").size(itemsLarge, false);
+        b.resetStyle().align("center").size(itemsLarge, false);
         const qtyStr = `${blk.quantity}x `;
-        const priceStr = blk.subtotal > 0 ? `R$${blk.subtotal.toFixed(2)}` : "";
+        const priceStr = blk.subtotal > 0 ? ` R$${blk.subtotal.toFixed(2)}` : "";
         const name = blk.name.toUpperCase();
-        // colunas efetivas (double width consome 2x por char — mas para simplicidade
-        // mantemos contagem em chars normais; double width é só para destaque visual).
         const effectiveCols = itemsLarge ? Math.floor(cols / 2) : cols;
-        const nameSpace = effectiveCols - qtyStr.length - priceStr.length - 1;
-        let displayName = name;
-        if (nameSpace > 0 && name.length > nameSpace) {
-          displayName = name.substring(0, nameSpace - 2) + "..";
-        } else if (nameSpace > 0) {
-          displayName = name.padEnd(nameSpace);
-        }
+        const maxName = Math.max(1, effectiveCols - qtyStr.length - priceStr.length);
+        const displayName =
+          name.length > maxName ? name.substring(0, maxName - 2) + ".." : name;
         b.bold(true).text(qtyStr).bold(false).text(displayName);
-        if (priceStr) b.text(" ").line(priceStr);
+        if (priceStr) b.line(priceStr);
         else b.line("");
         b.resetStyle();
 
         if (blk.note) {
-          b.size(notesLarge, false).align("left").line(`  (${blk.note})`);
+          b.size(notesLarge, false).align("center").line(`(${blk.note})`);
           b.resetStyle();
         }
         break;
       }
       case "total": {
-        b.resetStyle().align("right").bold(true).size(totalLarge, totalLarge);
+        b.resetStyle().align("center").bold(true).size(totalLarge, totalLarge);
         b.line(`${blk.label}: ${blk.value}`);
         b.resetStyle();
         break;
