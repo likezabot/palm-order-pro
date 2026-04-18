@@ -189,6 +189,8 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
   const headerLarge = isLarge(cfg.fontSizes?.header, f.base);
   const notesLarge = isLarge(cfg.fontSizes?.notes, f.note);
 
+  const align: "left" | "center" = cfg.contentAlign === "left" ? "left" : "center";
+
   for (const blk of blocks) {
     switch (blk.kind) {
       case "title": {
@@ -202,17 +204,17 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         break;
       }
       case "sep": {
-        b.resetStyle().align("center").line((blk.bold ? "=" : "-").repeat(cols));
+        b.resetStyle().align(align).line((blk.bold ? "=" : "-").repeat(cols));
         break;
       }
       case "info": {
-        b.resetStyle().align("center").size(headerLarge, false);
+        b.resetStyle().align(align).size(headerLarge, false);
         b.bold(true).text(`${blk.label.toUpperCase()}: `).bold(false).line(blk.value);
         b.resetStyle();
         break;
       }
       case "item": {
-        b.resetStyle().align("center").size(itemsLarge, false);
+        b.resetStyle().align(align).size(itemsLarge, false);
         const qtyStr = `${blk.quantity}x `;
         const priceStr = blk.subtotal > 0 ? ` R$${blk.subtotal.toFixed(2)}` : "";
         const name = blk.name.toUpperCase();
@@ -226,13 +228,13 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         b.resetStyle();
 
         if (blk.note) {
-          b.size(notesLarge, false).align("center").line(`(${blk.note})`);
+          b.size(notesLarge, false).align(align).line(`(${blk.note})`);
           b.resetStyle();
         }
         break;
       }
       case "total": {
-        b.resetStyle().align("center").bold(true).size(totalLarge, totalLarge);
+        b.resetStyle().align(align).bold(true).size(totalLarge, totalLarge);
         b.line(`${blk.label}: ${blk.value}`);
         b.resetStyle();
         break;
