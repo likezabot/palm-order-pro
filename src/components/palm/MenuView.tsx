@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
+import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
 import {
   Dialog,
   DialogContent,
