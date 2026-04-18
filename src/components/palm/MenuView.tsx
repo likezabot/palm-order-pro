@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShoppingCart, Pencil } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Pencil, Search, X, Star } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
+import { useFavoriteProductIds } from "@/hooks/use-favorite-products";
 import {
   Dialog,
   DialogContent,
@@ -73,11 +74,12 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
 };
 
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable }: Props) => {
-  const [activeCategory, setActiveCategory] = useState<string>("espetos");
+  const [activeCategory, setActiveCategory] = useState<string>("favoritos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [porcoOpen, setPorcoOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [search, setSearch] = useState("");
   const { playFeedback } = useFeedback();
 
   const canRename = !!tableName && tableName !== "BALCÃO" && !!onRenameTable;
