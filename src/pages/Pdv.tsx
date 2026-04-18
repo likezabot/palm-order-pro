@@ -378,7 +378,10 @@ const Pdv = () => {
                     </div>
                     <div>
                       <div className="font-bold text-lg flex items-center gap-2">
-                        Mesa {order.table_name}
+                        {formatTableLabel(order.table_name, order.original_table_name)}
+                        {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+                          <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
+                        )}
                         {wasPrinted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                       </div>
                       <div className="text-sm text-muted-foreground">{order.waiter_name || "—"}</div>
