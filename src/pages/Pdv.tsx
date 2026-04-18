@@ -57,6 +57,18 @@ const Pdv = () => {
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerDoc, setCustomerDoc] = useState("");
+  const [staffMode, setStaffMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("pdv-staff-mode") === "1";
+  });
+
+  const toggleStaffMode = () => {
+    setStaffMode((v) => {
+      const next = !v;
+      localStorage.setItem("pdv-staff-mode", next ? "1" : "0");
+      return next;
+    });
+  };
 
   const { data: orders = [] } = useQuery({
     queryKey: ["pdv-orders"],
