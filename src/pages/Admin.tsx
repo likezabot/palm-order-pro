@@ -24,6 +24,7 @@ const Admin = () => {
   const { playFeedback } = useFeedback();
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [formInitialCategory, setFormInitialCategory] = useState<string | undefined>(undefined);
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("pdv_autoprint") !== "false");
   const [tableCount, setTableCount] = useState(10);
   const [savingTables, setSavingTables] = useState(false);
