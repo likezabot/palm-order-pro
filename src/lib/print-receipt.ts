@@ -173,8 +173,8 @@ function thermalCSS(cfg: PrintConfig): string {
     }
 
     .info-row {
-      display: flex !important;
-      justify-content: space-between !important;
+      display: block !important;
+      text-align: center !important;
       padding: 2px 0 !important;
       font-size: ${f.base}px !important;
     }
@@ -188,30 +188,29 @@ function thermalCSS(cfg: PrintConfig): string {
     }
 
     .item-row {
-      display: flex !important;
-      justify-content: space-between !important;
-      align-items: flex-start !important;
+      display: block !important;
+      text-align: center !important;
       padding: 3px 0 !important;
       font-size: ${f.base}px !important;
-      gap: 4px !important;
     }
     .item-left {
-      flex: 1 !important;
+      display: inline !important;
       word-break: break-word !important;
     }
     .item-qty {
       font-weight: 900 !important;
-      min-width: 28px !important;
-      display: inline-block !important;
+      display: inline !important;
+      margin-right: 4px !important;
     }
     .item-right {
-      flex-shrink: 0 !important;
-      text-align: right !important;
+      display: inline !important;
+      text-align: center !important;
       font-weight: bold !important;
       white-space: nowrap !important;
+      margin-left: 6px !important;
     }
     .item-note {
-      padding-left: 16px !important;
+      text-align: center !important;
       font-size: ${f.note}px !important;
       color: #333 !important;
       font-style: italic !important;
@@ -224,10 +223,11 @@ function thermalCSS(cfg: PrintConfig): string {
     .total-row {
       font-size: ${f.total}px !important;
       font-weight: 900 !important;
-      display: flex !important;
-      justify-content: space-between !important;
+      display: block !important;
+      text-align: center !important;
       letter-spacing: 0.5px !important;
     }
+    .total-row span { display: inline !important; margin: 0 4px !important; }
 
     .qty-line {
       font-size: ${f.base - 1}px !important;
