@@ -1,9 +1,9 @@
 {
-  "name": "Plano B Espetaria",
+  "name": "Plano B - Atendimento",
   "short_name": "Plano B",
-  "description": "Sistema de atendimento Plano B Espetaria",
-  "id": "/",
-  "start_url": "/",
+  "description": "Sistema de atendimento Plano B Espetaria - abre direto no balcão/mesas",
+  "id": "/palm",
+  "start_url": "/palm",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
