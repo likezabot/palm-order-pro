@@ -229,6 +229,8 @@ const Pdv = () => {
     });
     if (hasNew) {
       playFeedback("success");
+      // Beep duplo para chamar atenção em ambiente barulhento
+      window.setTimeout(() => playFeedback("success"), 300);
       const order = orders.find((o) => currentDoneIds.has(o.id) && !prevDoneIdsRef.current.has(o.id));
       if (order) {
         toast({ title: `🔔 Pronto p/ pagamento — ${formatTableLabel(order.table_name, order.original_table_name)}` });
