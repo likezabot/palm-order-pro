@@ -112,6 +112,20 @@ const Admin = () => {
     }
   };
 
+  const handleResetOrder = async (cat: string) => {
+    if (!confirm(`Restaurar ordem alfabética em ${CATEGORY_LABELS[cat]}?`)) return;
+    playFeedback("click");
+    queryClient.setQueryData(["product-order"], { ...orderMap, [cat]: [] });
+    try {
+      await resetOrder(cat);
+      playFeedback("success");
+      toast({ title: `Ordem alfabética restaurada em ${CATEGORY_LABELS[cat]}` });
+    } catch {
+      toast({ variant: "destructive", title: "Erro ao restaurar ordem" });
+      queryClient.invalidateQueries({ queryKey: ["product-order"] });
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este produto?")) return;
     playFeedback("heavy");
