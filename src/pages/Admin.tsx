@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench } from "lucide-react";
+import { ArrowLeft, Plus, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Product, CATEGORY_LABELS, CATEGORIES, Order } from "@/lib/types";
 import ProductForm from "@/components/admin/ProductForm";
@@ -16,6 +16,10 @@ import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import { manualPrintOrder } from "@/lib/print-service";
 import { forceUpdate } from "@/lib/force-update";
 import { getAppVersion } from "@/lib/version-check";
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import SortableProductCard from "@/components/admin/SortableProductCard";
+import { fetchAllOrders, saveOrder, sortByPersistedOrder } from "@/lib/product-order";
 
 const Admin = () => {
   const navigate = useNavigate();
