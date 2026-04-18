@@ -195,6 +195,22 @@ const Palm = () => {
         cart={cart}
         total={total}
         itemCount={itemCount}
+        tableName={tableName}
+        onRenameTable={async (newName: string) => {
+          const trimmed = newName.trim();
+          if (!trimmed || trimmed === tableName) return;
+          if (existingOrderId) {
+            const { error } = await supabase.rpc("rename_order_table", {
+              p_order_id: existingOrderId,
+              p_new_name: trimmed,
+            });
+            if (error) {
+              console.error("[Palm] rename_order_table error:", error);
+              return;
+            }
+          }
+          setTableName(trimmed);
+        }}
         onViewCart={() => setStep("review")}
         onBack={() => {
           setStep("grid");

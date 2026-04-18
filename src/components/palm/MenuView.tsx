@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Pencil } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
@@ -19,6 +19,8 @@ interface Props {
   itemCount: number;
   onViewCart: () => void;
   onBack: () => void;
+  tableName?: string;
+  onRenameTable?: (newName: string) => void | Promise<void>;
 }
 
 // Subgrupos por categoria, mapeados por nome do produto.
@@ -69,11 +71,15 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
   return sub.matchers.some((m) => n.includes(m));
 };
 
-const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) => {
+const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, onRenameTable }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [porcoOpen, setPorcoOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const { playFeedback } = useFeedback();
+
+  const canRename = !!tableName && tableName !== "BALCÃO" && !!onRenameTable;
 
   const { data: products = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["products"],
@@ -157,15 +163,38 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
     <div className="flex min-h-screen flex-col pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
-        <button
-          onClick={() => {
-            playFeedback("click");
-            onBack();
-          }}
-          className="flex items-center gap-2 text-muted-foreground text-base mb-2"
-        >
-          <ArrowLeft size={20} /> Voltar
-        </button>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <button
+            onClick={() => {
+              playFeedback("click");
+              onBack();
+            }}
+            className="flex items-center gap-2 text-muted-foreground text-base"
+          >
+            <ArrowLeft size={20} /> Voltar
+          </button>
+
+          {tableName && (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="truncate text-sm font-semibold text-foreground">
+                {tableName === "BALCÃO" ? "BALCÃO" : `Mesa: ${tableName}`}
+              </span>
+              {canRename && (
+                <button
+                  onClick={() => {
+                    playFeedback("click");
+                    setRenameValue(tableName!);
+                    setRenameOpen(true);
+                  }}
+                  aria-label="Renomear mesa"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary active:scale-90 transition-all"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Category tabs */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
@@ -319,6 +348,56 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
         </DialogContent>
       </Dialog>
 
+      {/* Rename table dialog */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nome da mesa</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Substitua o número pelo nome do cliente (ex: "João").
+          </p>
+          <input
+            type="text"
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder="Ex: João, Mesa do canto..."
+            maxLength={40}
+            className="w-full rounded-md border border-border bg-background p-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const v = renameValue.trim();
+                if (v) {
+                  onRenameTable?.(v);
+                  setRenameOpen(false);
+                }
+              }
+            }}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setRenameOpen(false)}
+              className="flex-1 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-secondary-foreground active:scale-[0.97] transition-transform min-h-[48px]"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                const v = renameValue.trim();
+                if (!v) return;
+                playFeedback("click");
+                onRenameTable?.(v);
+                setRenameOpen(false);
+              }}
+              disabled={!renameValue.trim() || renameValue.trim() === tableName}
+              className="flex-1 rounded-lg bg-primary p-3 text-sm font-bold text-primary-foreground active:scale-[0.97] transition-transform disabled:opacity-50 min-h-[48px]"
+            >
+              Salvar
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Subgroup dialog */}
       <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>
