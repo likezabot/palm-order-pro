@@ -40,10 +40,10 @@ self.addEventListener("fetch", (event) => {
   // Skip cross-origin requests (Supabase, CDNs, etc.) — never intercept.
   if (url.origin !== self.location.origin) return;
 
-  // Navigation: always network-first
+  // Navigation: always network-first com no-store para nunca servir HTML cacheado
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req).catch(() => caches.match("/index.html"))
+      fetch(req, { cache: "no-store" }).catch(() => caches.match("/index.html"))
     );
     return;
   }
