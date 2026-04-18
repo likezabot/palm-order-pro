@@ -106,11 +106,16 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
   });
   const subgroups = SUBGROUPS[activeCategory];
 
-  // Produto base "Porco" (ativo). Usado para preço e id base.
-  const porcoBase = products.find(
+  // Produto base "Porco". Preferimos um cadastrado; se não houver, usamos a
+  // Panceta suína como base (mesmo id/preço) para o card sintético funcionar.
+  const porcoReal = products.find(
     (p) => p.category === "espetos" && p.name.toLowerCase() === "porco"
   );
-  // Só mostra o card Porco se ele existir nos espetos ativos.
+  const porcoFallback = products.find(
+    (p) => p.category === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())
+  );
+  const porcoBase = porcoReal ?? porcoFallback;
+  // Mostra o card Porco em Espetos sempre que houver alguma variante disponível.
   const showPorcoCard = activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) => cart.find((i) => i.product.id === id)?.quantity || 0;
