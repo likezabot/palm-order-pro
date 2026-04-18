@@ -385,7 +385,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   onClick={() => {
                     onAdd(product);
                   }}
-                  className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+                  className="relative flex flex-col rounded-xl bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10 min-h-[112px]"
                 >
                   <span className="font-semibold text-base text-foreground leading-tight">
                     {product.name}
@@ -393,9 +393,11 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   <span className="mt-1 text-sm text-primary font-bold">
                     R$ {product.price.toFixed(2)}
                   </span>
-                  <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
+                  <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
+                    + ADD
+                  </span>
                   {qty > 0 && (
-                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground border-2 border-background px-1.5">
                       {qty}
                     </span>
                   )}
