@@ -5,6 +5,7 @@ import { ArrowLeft, Printer, CheckCircle2 } from "lucide-react";
 import { Order, OrderItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
+import { formatTableLabel } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
