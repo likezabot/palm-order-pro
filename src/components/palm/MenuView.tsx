@@ -131,7 +131,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
 
   // Quantidade total no carrinho de qualquer variante de Porco (badge do card).
   const porcoQty = cart
-    .filter((i) => i.product.id === porcoBase?.id || i.product.name.startsWith("Porco"))
+    .filter((i) => i.product.id.startsWith("porco-variant::"))
     .reduce((sum, i) => sum + i.quantity, 0);
 
   const addPorcoVariant = (variant: string) => {
