@@ -327,8 +327,11 @@ const Admin = () => {
         </div>
 
         <TabsContent value="products" className="flex-1 p-4 space-y-8 pb-10 mt-0">
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 p-3 text-xs text-blue-900 dark:text-blue-200">
+            💡 <strong>Dica:</strong> Arraste os cards pelo ícone <strong>⋮⋮</strong> à esquerda para reordenar. A ordem é salva automaticamente e refletida no app dos garçons.
+          </div>
           {CATEGORIES.map((cat) => {
-            const items = products.filter((p) => p.category === cat);
+            const items = productsByCategory[cat] ?? [];
             return (
               <section key={cat} className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -353,44 +356,25 @@ const Admin = () => {
                     Nenhum produto em {CATEGORY_LABELS[cat]}.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {items.map((product) => (
-                      <div
-                        key={product.id}
-                        className={`flex items-center justify-between rounded-xl bg-white border border-border p-4 shadow-sm transition-all hover:shadow-md ${
-                          !product.active ? "opacity-60 bg-slate-50 grayscale-[0.5]" : ""
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0 pr-2">
-                          <p className="font-bold text-base truncate text-slate-900">{product.name}</p>
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-tight">
-                            R$ {product.price.toFixed(2)}
-                            {!product.active && <span className="text-destructive ml-1">• INATIVO</span>}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={product.active}
-                            onCheckedChange={() => handleToggleActive(product.id, !!product.active)}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(e) => handleDragEnd(cat, e)}
+                  >
+                    <SortableContext items={items.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {items.map((product) => (
+                          <SortableProductCard
+                            key={product.id}
+                            product={product}
+                            onToggleActive={handleToggleActive}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
                           />
-                          <div className="flex items-center gap-2 border-l border-border pl-3">
-                            <button
-                              onClick={() => handleEdit(product)}
-                              className="p-2.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(product.id)}
-                              className="p-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </SortableContext>
+                  </DndContext>
                 )}
               </section>
             );
