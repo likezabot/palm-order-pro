@@ -188,10 +188,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   };
 
   return (
-    <div className="flex min-h-screen flex-col pb-24">
+    <div className="flex h-[100dvh] flex-col overflow-hidden">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
-        <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="shrink-0 bg-background border-b border-border p-2.5">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
           <button
             onClick={() => {
               playFeedback("click");
@@ -225,7 +225,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         </div>
 
         {/* Search field */}
-        <div className="relative mb-2">
+        <div className="relative mb-1.5">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
@@ -283,6 +283,8 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         )}
       </div>
 
+      {/* Scrollable content area */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
       {/* Loading / error state */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center p-10 text-muted-foreground">
@@ -324,7 +326,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
 
       {/* Subgroup squares OR product grid */}
       {!isLoading && !error && products.length > 0 && (subgroups ? (
-        <div className="grid grid-cols-2 gap-3 p-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
           {subgroups.map((sub) => {
             const qty = subgroupQty(sub);
             return (
@@ -334,7 +336,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   playFeedback("click");
                   setOpenSubgroup(sub);
                 }}
-                className="relative flex aspect-square flex-col items-center justify-center rounded-lg bg-card border border-border p-4 text-center transition-all duration-150 active:scale-[0.96]"
+                className="relative flex aspect-square flex-col items-center justify-center rounded-lg bg-card border border-border p-3 text-center transition-all duration-150 active:scale-[0.96]"
               >
                 <span className="text-base font-bold text-foreground leading-tight">
                   {sub.label}
@@ -350,7 +352,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           })}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 p-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
           {/* Card especial "Porco" — abre popup com 3 variantes */}
           {showPorcoCard && (
             <button
@@ -359,7 +361,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                 playFeedback("click");
                 setPorcoOpen(true);
               }}
-              className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+              className="relative flex flex-col rounded-lg bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.96]"
             >
               <span className="font-semibold text-base text-foreground leading-tight">
                 Porco
@@ -385,7 +387,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   onClick={() => {
                     onAdd(product);
                   }}
-                  className="relative flex flex-col rounded-xl bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10 min-h-[112px]"
+                  className="relative flex flex-col rounded-xl bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10"
                 >
                   <span className="font-semibold text-base text-foreground leading-tight">
                     {product.name}
@@ -406,6 +408,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
             })}
         </div>
       ))}
+      </div>
 
       {/* Porco variant dialog */}
       <Dialog open={porcoOpen} onOpenChange={setPorcoOpen}>
