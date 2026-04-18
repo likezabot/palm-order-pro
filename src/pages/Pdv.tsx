@@ -398,49 +398,39 @@ const Pdv = () => {
       {/* Main content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_420px] overflow-hidden">
         {/* Left: Order list */}
-        <div className="overflow-y-auto p-4 space-y-2 border-r border-border">
-          <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">
+        <div className="overflow-y-auto p-4 space-y-4 border-r border-border">
+          <h2 className="text-base font-black text-muted-foreground uppercase tracking-wider">
             Fila de Pedidos ({orders.length})
           </h2>
           {orders.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">Aguardando pedidos...</div>
+            <div className="text-center py-16 text-muted-foreground text-lg">Aguardando pedidos...</div>
           ) : (
-            orders.map((order) => {
-              const s = statusConfig[order.status] || statusConfig.new;
-              const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-              const wasPrinted = order.print_status === 'printed';
-              return (
-                <button
-                  key={order.id}
-                  onClick={() => { setSelectedId(order.id); setShowPayment(false); }}
-                  className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all text-left ${
-                    selectedId === order.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-card hover:border-muted-foreground/30"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-center">
-                      <div className="text-xs text-muted-foreground">{time}</div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-lg flex items-center gap-2">
-                        {formatTableLabel(order.table_name, order.original_table_name)}
-                        {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-                          <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
-                        )}
-                        {wasPrinted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{order.waiter_name || "—"}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-primary">R$ {(order.total || 0).toFixed(2)}</span>
-                    <Badge className={s.color}>{s.label}</Badge>
-                  </div>
-                </button>
-              );
-            })
+            <>
+              <OrderSection
+                title="Aguardando"
+                accent="success"
+                orders={groupedOrders.new}
+                itemsByOrderId={itemsByOrderId}
+                selectedId={selectedId}
+                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
+              />
+              <OrderSection
+                title="Em Preparo"
+                accent="warning"
+                orders={groupedOrders.preparing}
+                itemsByOrderId={itemsByOrderId}
+                selectedId={selectedId}
+                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
+              />
+              <OrderSection
+                title="Prontos p/ Pagamento"
+                accent="destructive"
+                orders={groupedOrders.done}
+                itemsByOrderId={itemsByOrderId}
+                selectedId={selectedId}
+                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
+              />
+            </>
           )}
         </div>
 
