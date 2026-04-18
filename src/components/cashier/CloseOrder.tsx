@@ -91,7 +91,7 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
         >
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold">Fechar - {order.table_name}</h1>
+        <h1 className="text-xl font-bold">Fechar - {formatTableLabel(order.table_name, order.original_table_name)}</h1>
       </div>
 
       <div className="p-4 space-y-3">
