@@ -212,6 +212,31 @@ const Pdv = () => {
     return groups;
   }, [orders]);
 
+  // Som curto quando pedido entra em "Prontos p/ Pagamento" (status done)
+  const prevDoneIdsRef = useRef<Set<string>>(new Set());
+  const initializedDoneRef = useRef(false);
+  useEffect(() => {
+    const currentDoneIds = new Set(orders.filter((o) => o.status === "done").map((o) => o.id));
+    if (!initializedDoneRef.current) {
+      // Primeira passada: snapshot inicial, não toca som para pedidos já existentes
+      prevDoneIdsRef.current = currentDoneIds;
+      initializedDoneRef.current = true;
+      return;
+    }
+    let hasNew = false;
+    currentDoneIds.forEach((id) => {
+      if (!prevDoneIdsRef.current.has(id)) hasNew = true;
+    });
+    if (hasNew) {
+      playFeedback("success");
+      const order = orders.find((o) => currentDoneIds.has(o.id) && !prevDoneIdsRef.current.has(o.id));
+      if (order) {
+        toast({ title: `🔔 Pronto p/ pagamento — ${formatTableLabel(order.table_name, order.original_table_name)}` });
+      }
+    }
+    prevDoneIdsRef.current = currentDoneIds;
+  }, [orders, playFeedback, toast]);
+
   const updateStatus = async (orderId: string, status: string) => {
     playFeedback("click");
     await supabase.rpc("update_order_status", { p_order_id: orderId, p_status: status } as any);
