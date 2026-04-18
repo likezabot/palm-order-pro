@@ -113,16 +113,41 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     staleTime: 30_000,
   });
 
-  // Filtragem por categoria + ocultar Panceta/Costela em Espetos (entram via popup do Porco).
-  const filteredRaw = products.filter((p) => {
-    if (p.category !== activeCategory) return false;
-    if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
-      return false;
+  // Top vendidos nos últimos 30 dias para a categoria "Favoritos"
+  const { data: favoriteIds = [] } = useFavoriteProductIds(12, 30);
+
+  const isSearching = search.trim().length > 0;
+
+  // Filtragem: busca global tem prioridade; senão, por categoria (Favoritos é virtual).
+  const filteredRaw = useMemo(() => {
+    if (isSearching) {
+      const q = search.trim().toLowerCase();
+      return products.filter(
+        (p) =>
+          !HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase()) &&
+          p.name.toLowerCase().includes(q)
+      );
     }
-    return true;
-  });
-  const filtered = sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
-  const subgroups = SUBGROUPS[activeCategory];
+    if (activeCategory === "favoritos") {
+      const idx = new Map(favoriteIds.map((id, i) => [id, i]));
+      return products
+        .filter((p) => idx.has(p.id))
+        .sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
+    }
+    return products.filter((p) => {
+      if (p.category !== activeCategory) return false;
+      if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [products, activeCategory, favoriteIds, isSearching, search]);
+
+  const filtered = isSearching || activeCategory === "favoritos"
+    ? filteredRaw
+    : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
+
+  const subgroups = !isSearching && activeCategory !== "favoritos" ? SUBGROUPS[activeCategory] : undefined;
 
   // Produto base "Porco". Preferimos um cadastrado; se não houver, usamos a
   // Panceta suína como base (mesmo id/preço) para o card sintético funcionar.
