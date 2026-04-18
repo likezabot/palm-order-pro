@@ -55,19 +55,13 @@ const SUBGROUPS: Record<string, Subgroup[]> = {
       ],
     },
   ],
-  cervejas: [
-    {
-      label: "Cervejas",
-      matchers: [
-        "skol 600ml",
-        "antarctica boa",
-        "original 600ml",
-        "skol 269ml",
-        "outra cerveja",
-      ],
-    },
-  ],
+  // Cervejas: removido subgrupo — agora cards diretos como qualquer outra categoria.
 };
+
+// Variantes do produto base "Porco" — apresentadas em popup ao tocar no card.
+const PORCO_VARIANTS = ["Porco", "Panceta suína", "Costela suína"] as const;
+// Nomes que devem ser ocultados da grade de Espetos (apresentados via popup do Porco).
+const HIDDEN_ESPETO_NAMES = ["panceta suína", "costela suína"];
 
 const matchesSubgroup = (product: Product, sub: Subgroup) => {
   const n = product.name.toLowerCase();
