@@ -348,6 +348,56 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         </DialogContent>
       </Dialog>
 
+      {/* Rename table dialog */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nome da mesa</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Substitua o número pelo nome do cliente (ex: "João").
+          </p>
+          <input
+            type="text"
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder="Ex: João, Mesa do canto..."
+            maxLength={40}
+            className="w-full rounded-md border border-border bg-background p-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const v = renameValue.trim();
+                if (v) {
+                  onRenameTable?.(v);
+                  setRenameOpen(false);
+                }
+              }
+            }}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setRenameOpen(false)}
+              className="flex-1 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-secondary-foreground active:scale-[0.97] transition-transform min-h-[48px]"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => {
+                const v = renameValue.trim();
+                if (!v) return;
+                playFeedback("click");
+                onRenameTable?.(v);
+                setRenameOpen(false);
+              }}
+              disabled={!renameValue.trim() || renameValue.trim() === tableName}
+              className="flex-1 rounded-lg bg-primary p-3 text-sm font-bold text-primary-foreground active:scale-[0.97] transition-transform disabled:opacity-50 min-h-[48px]"
+            >
+              Salvar
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Subgroup dialog */}
       <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>
