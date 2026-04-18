@@ -19,7 +19,15 @@ self.addEventListener("message", (event) => {
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        ASSETS.map((url) =>
+          cache.add(url).catch(() => {
+            // Ignora falhas individuais (ex: rota SPA sem prerender) para não bloquear o install
+          })
+        )
+      )
+    )
   );
 });
 
