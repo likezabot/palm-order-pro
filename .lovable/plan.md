@@ -1,61 +1,62 @@
 
-## Plano: Admin – Cardápio aprimorado, ocultar sensíveis, Estatísticas
+## Análise
 
-Sem auth (como solicitado). Sem campo de custo. Sem tocar em pedidos/impressão.
+O projeto já tem uma estrutura PWA bem montada com **dois manifests separados**:
 
-### 1. Cardápio: busca + filtros + edição em lote
+- `public/manifest.json` → start_url `/` (home, instalação genérica)
+- `public/manifest-palm.json` → start_url `/palm` (atendimento)
+- `public/manifest-kitchen.json` → start_url `/kitchen` (cozinha)
 
-**Toolbar nova** acima das pills de categoria em `ProductsManager.tsx`:
-- Busca por nome (filtra em tempo real; quando há texto, ignora pills e mostra resultados de TODAS as categorias agrupados)
-- Filtro de status: `Todos / Visíveis / Ocultos`
-- Filtro de preço: min/max em R$
-- Botão `Limpar filtros` quando algum estiver ativo
+Em `src/pages/InstallPalm.tsx` já existe a troca dinâmica do `<link rel="manifest">` para `manifest-palm.json` antes do prompt de instalação. Ou seja: **quem instala pela rota `/install-palm` já recebe um app que abre em `/palm`**.
 
-**Modo seleção múltipla:**
-- Botão `Selecionar` ativa checkboxes nos cards (drag desabilitado nesse modo)
-- Barra fixa no rodapé: "X selecionados" + **Mostrar** + **Ocultar** + **Ajustar preço** (+5%, +10%, -5%, valor fixo) + **Cancelar**
-- Update em lote via `update().in("id", selectedIds)`
+O pedido do usuário é tornar `/palm` o destino padrão também para quem instalar pelo `manifest.json` principal — porque hoje, se o garçom instalar pela home, o app abre em `/`.
 
-### 2. Toggle "Ocultar Informações Sensíveis"
+## Solução proposta (mínima e segura)
 
-Mesmo padrão do PDV (`.staff-mode .admin-only`):
-- Botão Eye/EyeOff no header → `MODO ADMIN ↔ MODO GARÇOM`
-- Persistido em `localStorage` (`admin-staff-mode`)
-- Marca como `admin-only`: aba **Estatísticas**, aba **Sistema**, botões **Excluir** dos cards
-- Toggle em si NÃO leva `admin-only`
-- CSS já existe; adicionar transição opacity .2s
+A forma mais simples e correta: **mudar o `start_url` do `manifest.json` principal de `/` para `/palm`**. Justificativa:
 
-### 3. Nova aba **Estatísticas** (com classe admin-only)
+1. O público real instalando no celular é o garçom (uso primário do sistema).
+2. Os instaladores especializados (`/install-kitchen`, `/install-palm`) continuam funcionando porque trocam o manifest dinamicamente.
+3. A home (`/`) continua acessível por navegação dentro do PWA — `scope: "/"` já garante isso.
 
-Componente `StatsPanel.tsx` usando `recharts` (já instalado):
+### Mudanças
 
-**Filtro de período:** Hoje · 7 dias · 30 dias · Personalizado (DatePicker)
-
-**4 KPIs no topo:** Faturamento total · Pedidos pagos · Ticket médio · Itens vendidos
-
-**4 gráficos:**
-1. Top 10 itens — BarChart horizontal
-2. Vendas por categoria — PieChart (cruza via lookup em products)
-3. Vendas por hora do dia — BarChart (0-23h)
-4. Faturamento por forma de pagamento — PieChart (cash/pix/card)
-
-**3 listas Top 5:** noite (18-23h) · dia (11-17h) · semana (últimos 7 dias)
-
-**Refresh:** `useQuery` com `refetchInterval: 30s` + invalidação por Realtime em `orders`
-
-### 4. Sem migration
-
-Banco já tem tudo: `orders.status='paid'` + `total` + `payment_method` + `created_at` + `order_items.quantity/subtotal`. Categoria via lookup local em `products`.
-
-### Arquivos
-
-| Arquivo | Ação |
+| Arquivo | Mudança |
 |---|---|
-| `src/pages/Admin.tsx` | Toggle staff-mode header + aba Estatísticas + classes `admin-only` |
-| `src/components/admin/ProductsManager.tsx` | Busca, filtros, modo seleção |
-| `src/components/admin/SortableProductCard.tsx` | Prop `selectionMode` + checkbox |
-| `src/components/admin/BulkActionsBar.tsx` | **Novo** |
-| `src/components/admin/StatsPanel.tsx` | **Novo** — KPIs + 4 gráficos + 3 listas top |
-| `src/index.css` | Transição `.admin-only` |
+| `public/manifest.json` | `start_url: "/"` → `"/palm"`, `id: "/"` → `"/palm"`, atualizar `name`/`description` para refletir foco em atendimento |
+| `public/sw.js` | Adicionar `/palm` (e opcionalmente `/`, `/kitchen`) ao array `ASSETS` precachado para abertura offline mais rápida |
+| `index.html` | Atualizar `<title>` e meta description para refletir foco em atendimento (opcional, cosmético) |
 
-Sem migrations. Sem novas dependências (recharts já existe).
+### O que NÃO muda
+
+- `scope: "/"` permanece — todas as rotas internas (`/cashier`, `/admin`, `/kitchen`, `/`) continuam dentro do PWA.
+- `manifest-palm.json` e `manifest-kitchen.json` permanecem — `/install-palm` e `/install-kitchen` continuam funcionando como hoje.
+- Service worker, lógica de cache, registro condicional (iframe/preview), banner de update — tudo intacto.
+- Roteamento React Router intacto.
+
+### Observações sobre o SW
+
+O `sw.js` faz **network-first** para navegação (`req.mode === "navigate"`), então adicionar `/palm` ao array `ASSETS` só ajuda no fallback offline. O HTML servido em `/palm` é o mesmo `index.html` (SPA), então na prática o cache de `/index.html` já cobre tudo. Vou adicionar `/palm` ao precache mesmo assim para garantir abertura instantânea sem rede no primeiro toque após instalar.
+
+### Bump de versão do SW
+
+O `BUILD_STAMP` no `sw.js` é injetado pelo `vite.config.ts` em cada build, então qualquer alteração no arquivo já força reativação automática nos dispositivos com PWA antiga instalada — o `UpdateBanner.tsx` cuida do reload. Sem ação extra necessária.
+
+### Como testar após deploy
+
+1. Desinstalar PWA antiga do celular (se houver) — `start_url` é cache-ado pelo SO no momento da instalação e só atualiza ao reinstalar.
+2. Abrir URL publicada no Chrome Android.
+3. Menu → "Instalar app".
+4. Abrir o ícone na home — deve abrir direto em `/palm`.
+
+> Nota importante para o usuário: dispositivos que já têm o PWA instalado **vão continuar abrindo em `/`** até serem desinstalados/reinstalados. Isso é comportamento do sistema operacional, não do código.
+
+### Sobre a versão .exe (Codex)
+
+Não há nada a sincronizar do lado web — a versão .exe consome o mesmo bundle. Se a .exe usa um wrapper (Electron/Tauri) com URL inicial fixa, essa URL precisa ser ajustada do lado do wrapper, fora do escopo desta tarefa Lovable.
+
+## Arquivos editados
+
+- `public/manifest.json`
+- `public/sw.js`
+- `index.html` (cosmético, opcional)
