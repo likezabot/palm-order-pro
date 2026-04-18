@@ -229,33 +229,80 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 p-3">
-          {filtered.map((product) => {
-            const qty = getQty(product.id);
-            return (
-              <button
-                key={product.id}
-                onClick={() => {
-                  onAdd(product);
-                }}
-                className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
-              >
-                <span className="font-semibold text-base text-foreground leading-tight">
-                  {product.name}
+          {/* Card especial "Porco" — abre popup com 3 variantes */}
+          {showPorcoCard && (
+            <button
+              key="__porco_card__"
+              onClick={() => {
+                playFeedback("click");
+                setPorcoOpen(true);
+              }}
+              className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+            >
+              <span className="font-semibold text-base text-foreground leading-tight">
+                Porco
+              </span>
+              <span className="mt-1 text-sm text-primary font-bold">
+                R$ {porcoBase!.price.toFixed(2)}
+              </span>
+              <span className="mt-2 text-sm font-semibold text-primary">Escolher tipo</span>
+              {porcoQty > 0 && (
+                <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {porcoQty}
                 </span>
-                <span className="mt-1 text-sm text-primary font-bold">
-                  R$ {product.price.toFixed(2)}
-                </span>
-                <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
-                {qty > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {qty}
+              )}
+            </button>
+          )}
+          {filtered
+            .filter((p) => !(showPorcoCard && p.id === porcoBase!.id))
+            .map((product) => {
+              const qty = getQty(product.id);
+              return (
+                <button
+                  key={product.id}
+                  onClick={() => {
+                    onAdd(product);
+                  }}
+                  className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+                >
+                  <span className="font-semibold text-base text-foreground leading-tight">
+                    {product.name}
                   </span>
-                )}
-              </button>
-            );
-          })}
+                  <span className="mt-1 text-sm text-primary font-bold">
+                    R$ {product.price.toFixed(2)}
+                  </span>
+                  <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
+                  {qty > 0 && (
+                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                      {qty}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
         </div>
       ))}
+
+      {/* Porco variant dialog */}
+      <Dialog open={porcoOpen} onOpenChange={setPorcoOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Escolha o tipo de Porco</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2">
+            {PORCO_VARIANTS.map((variant) => (
+              <button
+                key={variant}
+                onClick={() => addPorcoVariant(variant)}
+                className="rounded-lg bg-card border border-border p-4 text-left font-semibold text-foreground active:scale-[0.97] transition-transform min-h-[56px]"
+              >
+                {variant}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Subgroup dialog */}
       <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>
