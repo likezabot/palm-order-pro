@@ -247,6 +247,11 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                       <span className="text-sm font-black text-foreground">
                         {formatCurrency(order.total)}
                       </span>
+                      {(order as any).item_count > 0 && (
+                        <span className="text-[10px] font-semibold text-muted-foreground">
+                          {(order as any).item_count} {(order as any).item_count === 1 ? "item" : "itens"}
+                        </span>
+                      )}
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
                         {badge.label}
                       </span>
