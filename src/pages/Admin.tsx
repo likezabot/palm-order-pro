@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench, ArrowDownAZ } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Product, CATEGORY_LABELS, CATEGORIES, Order } from "@/lib/types";
 import ProductForm from "@/components/admin/ProductForm";
@@ -19,7 +19,7 @@ import { getAppVersion } from "@/lib/version-check";
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import SortableProductCard from "@/components/admin/SortableProductCard";
-import { fetchAllOrders, saveOrder, sortByPersistedOrder } from "@/lib/product-order";
+import { fetchAllOrders, saveOrder, sortByPersistedOrder, resetOrder } from "@/lib/product-order";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -108,6 +108,20 @@ const Admin = () => {
       playFeedback("success");
     } catch (err) {
       toast({ variant: "destructive", title: "Erro ao salvar ordem" });
+      queryClient.invalidateQueries({ queryKey: ["product-order"] });
+    }
+  };
+
+  const handleResetOrder = async (cat: string) => {
+    if (!confirm(`Restaurar ordem alfabética em ${CATEGORY_LABELS[cat]}?`)) return;
+    playFeedback("click");
+    queryClient.setQueryData(["product-order"], { ...orderMap, [cat]: [] });
+    try {
+      await resetOrder(cat);
+      playFeedback("success");
+      toast({ title: `Ordem alfabética restaurada em ${CATEGORY_LABELS[cat]}` });
+    } catch {
+      toast({ variant: "destructive", title: "Erro ao restaurar ordem" });
       queryClient.invalidateQueries({ queryKey: ["product-order"] });
     }
   };
@@ -339,17 +353,28 @@ const Admin = () => {
                     {CATEGORY_LABELS[cat]}
                     <span className="ml-2 text-xs font-bold text-slate-500">({items.length})</span>
                   </h2>
-                  <button
-                    onClick={() => {
-                      playFeedback("click");
-                      setEditing(null);
-                      setFormInitialCategory(cat);
-                      setShowForm(true);
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg bg-primary/10 text-primary px-3 py-2 text-sm font-bold hover:bg-primary/20 transition-colors"
-                  >
-                    <Plus size={14} /> Novo produto
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(orderMap[cat]?.length ?? 0) > 0 && items.length > 1 && (
+                      <button
+                        onClick={() => handleResetOrder(cat)}
+                        className="flex items-center gap-1.5 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-bold hover:bg-slate-200 transition-colors"
+                        title="Restaurar ordem alfabética"
+                      >
+                        <ArrowDownAZ size={14} /> Restaurar A-Z
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        playFeedback("click");
+                        setEditing(null);
+                        setFormInitialCategory(cat);
+                        setShowForm(true);
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg bg-primary/10 text-primary px-3 py-2 text-sm font-bold hover:bg-primary/20 transition-colors"
+                    >
+                      <Plus size={14} /> Novo produto
+                    </button>
+                  </div>
                 </div>
                 {items.length === 0 ? (
                   <div className="py-8 text-center text-sm text-muted-foreground bg-white rounded-xl border-2 border-dashed">

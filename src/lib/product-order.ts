@@ -75,3 +75,8 @@ export const saveOrder = async (category: string, ids: string[]) => {
     if (error) throw error;
   }
 };
+
+/** Reseta a ordem da categoria para alfabético (salva array vazio). */
+export const resetOrder = async (category: string) => {
+  await saveOrder(category, []);
+};
