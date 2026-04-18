@@ -281,11 +281,12 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                     ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
                   `}
                 >
-                  <span className="text-2xl font-black leading-none">{table}</span>
-                  {customName && (
-                    <span className="mt-0.5 text-[11px] font-bold truncate w-full text-center px-1 italic">
+                  {customName ? (
+                    <span className="text-base font-black leading-tight truncate w-full text-center px-1">
                       {customName}
                     </span>
+                  ) : (
+                    <span className="text-2xl font-black leading-none">{table}</span>
                   )}
                   {isOccupied && (
                     <div className="mt-1 flex flex-col items-center">
