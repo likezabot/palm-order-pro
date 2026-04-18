@@ -137,8 +137,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
   const addPorcoVariant = (variant: string) => {
     if (!porcoBase) return;
     const finalName = variant === "Porco" ? "Porco" : `Porco - ${variant}`;
-    // Mantém o id base do Porco para que o backend continue referenciando o produto real.
-    onAdd({ ...porcoBase, name: finalName });
+    // Id sintético por variante para o carrinho agrupar cada uma como linha separada.
+    // Como não é UUID (36 chars), o envio ao backend manda product_id=null e usa product_name.
+    const syntheticId = `porco-variant::${variant}`;
+    onAdd({ ...porcoBase, id: syntheticId, name: finalName });
     setPorcoOpen(false);
   };
 
