@@ -261,7 +261,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   : "bg-card text-muted-foreground border border-border"
               }`}
             >
-              <Star size={14} className="fill-current" /> Favoritos
+              <Star size={16} className="fill-current" aria-label="Favoritos" />
             </button>
             {CATEGORIES.map((cat) => (
               <button
