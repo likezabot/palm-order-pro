@@ -5,6 +5,7 @@ import { ArrowLeft, Printer, CheckCircle2 } from "lucide-react";
 import { Order, OrderItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
+import { formatTableLabel } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,7 +91,7 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
         >
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold">Fechar - {order.table_name}</h1>
+        <h1 className="text-xl font-bold">Fechar - {formatTableLabel(order.table_name, order.original_table_name)}</h1>
       </div>
 
       <div className="p-4 space-y-3">

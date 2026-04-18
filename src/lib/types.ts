@@ -19,6 +19,7 @@ export type OrderPrintStatus = "pending" | "printing" | "printed" | "failed";
 export interface Order {
   id: string;
   table_name: string;
+  original_table_name?: string | null;
   status: string;
   waiter_name: string | null;
   total: number | null;

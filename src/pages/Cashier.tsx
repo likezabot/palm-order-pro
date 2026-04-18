@@ -8,6 +8,7 @@ import CloseOrder from "@/components/cashier/CloseOrder";
 import { manualPrintOrder } from "@/lib/print-service";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
+import { formatTableLabel } from "@/lib/utils";
 
 const Cashier = () => {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ const Cashier = () => {
     playFeedback("click");
     const success = await manualPrintOrder(order);
     if (success) {
-      toast({ title: `Cupom enviado para Mesa ${order.table_name}` });
+      toast({ title: `Cupom enviado para ${formatTableLabel(order.table_name, order.original_table_name)}` });
     } else {
       toast({ title: "Erro ao imprimir", variant: "destructive" });
     }
@@ -77,7 +78,12 @@ const Cashier = () => {
             className="flex items-center justify-between rounded-xl bg-card border-2 border-border p-4 shadow-sm"
           >
             <div className="flex-1">
-              <p className="font-black text-xl text-foreground">Mesa {order.table_name}</p>
+              <p className="font-black text-xl text-foreground">
+                {formatTableLabel(order.table_name, order.original_table_name)}
+                {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+                  <span className="ml-2 text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
+                )}
+              </p>
               <p className="text-primary font-black text-lg">R$ {(order.total || 0).toFixed(2)}</p>
             </div>
             <div className="flex items-center gap-2">

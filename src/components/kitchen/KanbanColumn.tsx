@@ -37,7 +37,13 @@ const KanbanColumn = ({
               className="rounded-lg bg-card border border-border p-4 space-y-2"
             >
               <div className="flex items-center justify-between">
-                <span className="font-bold text-lg">{order.table_name}</span>
+                <span className="font-bold text-lg">
+                  {order.table_name === "BALCÃO"
+                    ? "BALCÃO"
+                    : order.original_table_name && order.table_name !== order.original_table_name
+                    ? `Mesa ${order.original_table_name} · ${order.table_name}`
+                    : `Mesa ${order.table_name}`}
+                </span>
                 <span className="text-sm text-muted-foreground">{time}</span>
               </div>
 
