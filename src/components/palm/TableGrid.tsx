@@ -35,11 +35,18 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, table_name, original_table_name, status, total, waiter_name, created_at")
+        .select("id, table_name, original_table_name, status, total, waiter_name, created_at, order_items(quantity)")
         .in("status", ["new", "preparing", "done"]);
-      
+
       if (error) throw error;
-      return data;
+      // Soma quantidades dos itens em cada pedido
+      return (data ?? []).map((o: any) => ({
+        ...o,
+        item_count: (o.order_items ?? []).reduce(
+          (sum: number, it: { quantity: number }) => sum + (it.quantity ?? 0),
+          0
+        ),
+      }));
     },
     refetchInterval: 5000,
   });
@@ -240,6 +247,11 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                       <span className="text-sm font-black text-foreground">
                         {formatCurrency(order.total)}
                       </span>
+                      {(order as any).item_count > 0 && (
+                        <span className="text-[10px] font-semibold text-muted-foreground">
+                          {(order as any).item_count} {(order as any).item_count === 1 ? "item" : "itens"}
+                        </span>
+                      )}
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
                         {badge.label}
                       </span>
@@ -311,7 +323,9 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                         {order.waiter_name || "---"}
                       </span>
                       <span className="text-xs font-bold">
-                        {formatCurrency(order.total)}
+                        {(order as any).item_count > 0
+                          ? `${(order as any).item_count} · ${formatCurrency(order.total)}`
+                          : formatCurrency(order.total)}
                       </span>
                       <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
                         <Clock size={10} />
