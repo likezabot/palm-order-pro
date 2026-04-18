@@ -69,6 +69,7 @@ export async function isOrderPrinted(orderId: string): Promise<boolean> {
 export async function autoPrintOrder(order: {
   id: string;
   table_name: string;
+  original_table_name?: string | null;
   waiter_name: string | null;
   total: number | null;
 }): Promise<{ printed: boolean; reason: string }> {
@@ -76,6 +77,18 @@ export async function autoPrintOrder(order: {
 
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) return { printed: false, reason: "already_claimed" };
+
+  // Garante original_table_name (busca se não veio)
+  let originalName = order.original_table_name;
+  if (originalName === undefined) {
+    const { data } = await supabase
+      .from("orders")
+      .select("original_table_name")
+      .eq("id", order.id)
+      .single();
+    originalName = (data as any)?.original_table_name ?? null;
+  }
+  const tableValue = formatPrintTableValue(order.table_name, originalName);
 
   let items: PrintableItem[] = [];
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -93,7 +106,7 @@ export async function autoPrintOrder(order: {
   }
 
   const success = await printReceipt(
-    order.table_name,
+    tableValue,
     order.waiter_name || "N/A",
     items,
     order.total || 0
