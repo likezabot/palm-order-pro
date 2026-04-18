@@ -599,7 +599,7 @@ const Pdv = () => {
                         const ok = await manualPrintDelta(selectedOrder);
                         toast({ title: ok ? "Acréscimo impresso!" : "Sem acréscimo para imprimir", variant: ok ? "default" : "destructive" });
                       })}
-                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
                     >
                       <FilePlus size={16} />
                       ACRÉSCIMO
@@ -611,7 +611,7 @@ const Pdv = () => {
                       if (!ok) toast({ title: "Sem itens para imprimir", variant: "destructive" });
                       else toast({ title: "Cupom enviado para impressão!" });
                     })}
-                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
                   >
                     <FileText size={16} />
                     PEDIDO
@@ -621,7 +621,7 @@ const Pdv = () => {
                       const ok = await manualPrintBill(selectedOrder);
                       toast({ title: ok ? "Conta impressa!" : "Sem itens para imprimir", variant: ok ? "default" : "destructive" });
                     })}
-                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-xs min-h-[56px]"
+                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
                   >
                     <Receipt size={16} />
                     CONTA
