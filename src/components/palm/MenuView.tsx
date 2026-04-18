@@ -163,15 +163,38 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     <div className="flex min-h-screen flex-col pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
-        <button
-          onClick={() => {
-            playFeedback("click");
-            onBack();
-          }}
-          className="flex items-center gap-2 text-muted-foreground text-base mb-2"
-        >
-          <ArrowLeft size={20} /> Voltar
-        </button>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <button
+            onClick={() => {
+              playFeedback("click");
+              onBack();
+            }}
+            className="flex items-center gap-2 text-muted-foreground text-base"
+          >
+            <ArrowLeft size={20} /> Voltar
+          </button>
+
+          {tableName && (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="truncate text-sm font-semibold text-foreground">
+                {tableName === "BALCÃO" ? "BALCÃO" : `Mesa: ${tableName}`}
+              </span>
+              {canRename && (
+                <button
+                  onClick={() => {
+                    playFeedback("click");
+                    setRenameValue(tableName!);
+                    setRenameOpen(true);
+                  }}
+                  aria-label="Renomear mesa"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary active:scale-90 transition-all"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Category tabs */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
