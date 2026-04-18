@@ -78,7 +78,12 @@ const Cashier = () => {
             className="flex items-center justify-between rounded-xl bg-card border-2 border-border p-4 shadow-sm"
           >
             <div className="flex-1">
-              <p className="font-black text-xl text-foreground">Mesa {order.table_name}</p>
+              <p className="font-black text-xl text-foreground">
+                {formatTableLabel(order.table_name, order.original_table_name)}
+                {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+                  <span className="ml-2 text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
+                )}
+              </p>
               <p className="text-primary font-black text-lg">R$ {(order.total || 0).toFixed(2)}</p>
             </div>
             <div className="flex items-center gap-2">
