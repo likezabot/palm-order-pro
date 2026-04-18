@@ -311,6 +311,17 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         </p>
       )}
 
+      {/* Mensagens vazias para busca / favoritos */}
+      {!isLoading && !error && products.length > 0 && filtered.length === 0 && !subgroups && (
+        <p className="p-8 text-center text-sm text-muted-foreground">
+          {isSearching
+            ? `Nenhum item encontrado para "${search}".`
+            : activeCategory === "favoritos"
+              ? "Ainda não há favoritos. Eles aparecem após os primeiros pedidos."
+              : "Nenhum item nesta categoria."}
+        </p>
+      )}
+
       {/* Subgroup squares OR product grid */}
       {!isLoading && !error && products.length > 0 && (subgroups ? (
         <div className="grid grid-cols-2 gap-3 p-3">
