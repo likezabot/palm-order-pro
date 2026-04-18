@@ -406,7 +406,7 @@ const Pdv = () => {
           ) : showPayment ? (
             /* Payment flow */
             <div className="space-y-4">
-              <h2 className="text-xl font-bold">Fechar Conta — Mesa {selectedOrder.table_name}</h2>
+              <h2 className="text-xl font-bold">Fechar Conta — {formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}</h2>
               <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
                 <span>TOTAL</span>
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
