@@ -55,19 +55,13 @@ const SUBGROUPS: Record<string, Subgroup[]> = {
       ],
     },
   ],
-  cervejas: [
-    {
-      label: "Cervejas",
-      matchers: [
-        "skol 600ml",
-        "antarctica boa",
-        "original 600ml",
-        "skol 269ml",
-        "outra cerveja",
-      ],
-    },
-  ],
+  // Cervejas: removido subgrupo — agora cards diretos como qualquer outra categoria.
 };
+
+// Variantes do produto base "Porco" — apresentadas em popup ao tocar no card.
+const PORCO_VARIANTS = ["Porco", "Panceta suína", "Costela suína"] as const;
+// Nomes que devem ser ocultados da grade de Espetos (apresentados via popup do Porco).
+const HIDDEN_ESPETO_NAMES = ["panceta suína", "costela suína"];
 
 const matchesSubgroup = (product: Product, sub: Subgroup) => {
   const n = product.name.toLowerCase();
@@ -77,6 +71,7 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
+  const [porcoOpen, setPorcoOpen] = useState(false);
   const { playFeedback } = useFeedback();
 
   const { data: products = [], isLoading, error, refetch, isFetching } = useQuery({
@@ -101,8 +96,22 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
     retry: 1,
   });
 
-  const filtered = products.filter((p) => p.category === activeCategory);
+  // Filtragem por categoria + ocultar Panceta/Costela em Espetos (entram via popup do Porco).
+  const filtered = products.filter((p) => {
+    if (p.category !== activeCategory) return false;
+    if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
   const subgroups = SUBGROUPS[activeCategory];
+
+  // Produto base "Porco" (ativo). Usado para preço e id base.
+  const porcoBase = products.find(
+    (p) => p.category === "espetos" && p.name.toLowerCase() === "porco"
+  );
+  // Só mostra o card Porco se ele existir nos espetos ativos.
+  const showPorcoCard = activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) => cart.find((i) => i.product.id === id)?.quantity || 0;
 
@@ -114,6 +123,19 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
   const subgroupProducts = openSubgroup
     ? filtered.filter((p) => matchesSubgroup(p, openSubgroup))
     : [];
+
+  // Quantidade total no carrinho de qualquer variante de Porco (badge do card).
+  const porcoQty = cart
+    .filter((i) => i.product.id === porcoBase?.id || i.product.name.startsWith("Porco"))
+    .reduce((sum, i) => sum + i.quantity, 0);
+
+  const addPorcoVariant = (variant: string) => {
+    if (!porcoBase) return;
+    const finalName = variant === "Porco" ? "Porco" : `Porco - ${variant}`;
+    // Mantém o id base do Porco para que o backend continue referenciando o produto real.
+    onAdd({ ...porcoBase, name: finalName });
+    setPorcoOpen(false);
+  };
 
   return (
     <div className="flex min-h-screen flex-col pb-24">
@@ -207,33 +229,80 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 p-3">
-          {filtered.map((product) => {
-            const qty = getQty(product.id);
-            return (
-              <button
-                key={product.id}
-                onClick={() => {
-                  onAdd(product);
-                }}
-                className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
-              >
-                <span className="font-semibold text-base text-foreground leading-tight">
-                  {product.name}
+          {/* Card especial "Porco" — abre popup com 3 variantes */}
+          {showPorcoCard && (
+            <button
+              key="__porco_card__"
+              onClick={() => {
+                playFeedback("click");
+                setPorcoOpen(true);
+              }}
+              className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+            >
+              <span className="font-semibold text-base text-foreground leading-tight">
+                Porco
+              </span>
+              <span className="mt-1 text-sm text-primary font-bold">
+                R$ {porcoBase!.price.toFixed(2)}
+              </span>
+              <span className="mt-2 text-sm font-semibold text-primary">Escolher tipo</span>
+              {porcoQty > 0 && (
+                <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {porcoQty}
                 </span>
-                <span className="mt-1 text-sm text-primary font-bold">
-                  R$ {product.price.toFixed(2)}
-                </span>
-                <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
-                {qty > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {qty}
+              )}
+            </button>
+          )}
+          {filtered
+            .filter((p) => !(showPorcoCard && p.id === porcoBase!.id))
+            .map((product) => {
+              const qty = getQty(product.id);
+              return (
+                <button
+                  key={product.id}
+                  onClick={() => {
+                    onAdd(product);
+                  }}
+                  className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+                >
+                  <span className="font-semibold text-base text-foreground leading-tight">
+                    {product.name}
                   </span>
-                )}
-              </button>
-            );
-          })}
+                  <span className="mt-1 text-sm text-primary font-bold">
+                    R$ {product.price.toFixed(2)}
+                  </span>
+                  <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
+                  {qty > 0 && (
+                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                      {qty}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
         </div>
       ))}
+
+      {/* Porco variant dialog */}
+      <Dialog open={porcoOpen} onOpenChange={setPorcoOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Escolha o tipo de Porco</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2">
+            {PORCO_VARIANTS.map((variant) => (
+              <button
+                key={variant}
+                onClick={() => addPorcoVariant(variant)}
+                className="rounded-lg bg-card border border-border p-4 text-left font-semibold text-foreground active:scale-[0.97] transition-transform min-h-[56px]"
+              >
+                {variant}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Subgroup dialog */}
       <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>

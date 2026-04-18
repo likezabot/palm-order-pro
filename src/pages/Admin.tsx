@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Product, CATEGORY_LABELS, Order } from "@/lib/types";
+import { Product, CATEGORY_LABELS, CATEGORIES, Order } from "@/lib/types";
 import ProductForm from "@/components/admin/ProductForm";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -24,6 +24,7 @@ const Admin = () => {
   const { playFeedback } = useFeedback();
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [formInitialCategory, setFormInitialCategory] = useState<string | undefined>(undefined);
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("pdv_autoprint") !== "false");
   const [tableCount, setTableCount] = useState(10);
   const [savingTables, setSavingTables] = useState(false);
@@ -121,12 +122,17 @@ const Admin = () => {
     return (
       <ProductForm
         product={editing}
+        initialCategory={formInitialCategory}
         onBack={() => { 
           playFeedback("click");
           setShowForm(false); 
-          setEditing(null); 
+          setEditing(null);
+          setFormInitialCategory(undefined);
         }}
-        onSaved={handleSaved}
+        onSaved={() => {
+          handleSaved();
+          setFormInitialCategory(undefined);
+        }}
       />
     );
   }
@@ -246,6 +252,8 @@ const Admin = () => {
           <button
             onClick={() => {
               playFeedback("click");
+              setEditing(null);
+              setFormInitialCategory(undefined);
               setShowForm(true);
             }}
             className="flex items-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground active:scale-95 shadow-lg shadow-primary/20 transition-all"
@@ -273,47 +281,75 @@ const Admin = () => {
           </TabsList>
         </div>
 
-        <TabsContent value="products" className="flex-1 p-4 space-y-3 pb-10 mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className={`flex items-center justify-between rounded-xl bg-white border border-border p-4 shadow-sm transition-all hover:shadow-md ${
-                  !product.active ? "opacity-60 bg-slate-50 grayscale-[0.5]" : ""
-                }`}
-              >
-                <div className="flex-1 min-w-0 pr-2">
-                  <p className="font-bold text-base truncate text-slate-900">{product.name}</p>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-tight">
-                    {CATEGORY_LABELS[product.category]} • R$ {product.price.toFixed(2)}
-                    {!product.active && <span className="text-destructive ml-1">• INATIVO</span>}
-                  </p>
+        <TabsContent value="products" className="flex-1 p-4 space-y-8 pb-10 mt-0">
+          {CATEGORIES.map((cat) => {
+            const items = products.filter((p) => p.category === cat);
+            return (
+              <section key={cat} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black uppercase tracking-tight text-slate-900">
+                    {CATEGORY_LABELS[cat]}
+                    <span className="ml-2 text-xs font-bold text-slate-500">({items.length})</span>
+                  </h2>
+                  <button
+                    onClick={() => {
+                      playFeedback("click");
+                      setEditing(null);
+                      setFormInitialCategory(cat);
+                      setShowForm(true);
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg bg-primary/10 text-primary px-3 py-2 text-sm font-bold hover:bg-primary/20 transition-colors"
+                  >
+                    <Plus size={14} /> Novo produto
+                  </button>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-center gap-1">
-                    <Switch
-                      checked={product.active}
-                      onCheckedChange={() => handleToggleActive(product.id, !!product.active)}
-                    />
+                {items.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground bg-white rounded-xl border-2 border-dashed">
+                    Nenhum produto em {CATEGORY_LABELS[cat]}.
                   </div>
-                  <div className="flex items-center gap-2 border-l border-border pl-3">
-                    <button
-                      onClick={() => handleEdit(product)}
-                      className="p-2.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(product.id)}
-                      className="p-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {items.map((product) => (
+                      <div
+                        key={product.id}
+                        className={`flex items-center justify-between rounded-xl bg-white border border-border p-4 shadow-sm transition-all hover:shadow-md ${
+                          !product.active ? "opacity-60 bg-slate-50 grayscale-[0.5]" : ""
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0 pr-2">
+                          <p className="font-bold text-base truncate text-slate-900">{product.name}</p>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-tight">
+                            R$ {product.price.toFixed(2)}
+                            {!product.active && <span className="text-destructive ml-1">• INATIVO</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={product.active}
+                            onCheckedChange={() => handleToggleActive(product.id, !!product.active)}
+                          />
+                          <div className="flex items-center gap-2 border-l border-border pl-3">
+                            <button
+                              onClick={() => handleEdit(product)}
+                              className="p-2.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(product.id)}
+                              className="p-2.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                )}
+              </section>
+            );
+          })}
         </TabsContent>
 
         <TabsContent value="orders" className="flex-1 p-4 space-y-3 mt-0">

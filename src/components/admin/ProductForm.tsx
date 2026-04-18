@@ -8,12 +8,14 @@ interface Props {
   product: Product | null;
   onBack: () => void;
   onSaved: () => void;
+  /** Categoria pré-selecionada ao criar novo produto (usado pelo botão contextual da seção). */
+  initialCategory?: string;
 }
 
-const ProductForm = ({ product, onBack, onSaved }: Props) => {
+const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   const [name, setName] = useState(product?.name || "");
   const [price, setPrice] = useState(product?.price?.toString() || "");
-  const [category, setCategory] = useState(product?.category || "espetos");
+  const [category, setCategory] = useState(product?.category || initialCategory || "espetos");
   const [active, setActive] = useState(product?.active ?? true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();

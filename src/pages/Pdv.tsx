@@ -587,27 +587,13 @@ const Pdv = () => {
                   </button>
                 </div>
 
-                {cfg?.next && (
-                  <button
-                    onClick={() => updateStatus(selectedOrder.id, cfg.next!)}
-                    className={`w-full rounded-lg p-4 font-bold min-h-[56px] ${
-                      cfg.next === "preparing"
-                        ? "bg-warning text-warning-foreground"
-                        : "bg-success text-success-foreground"
-                    }`}
-                  >
-                    {cfg.nextLabel}
-                  </button>
-                )}
-
-                {selectedOrder.status === "done" && (
-                  <button
-                    onClick={() => { setShowPayment(true); setPayMethod(""); setAmountPaid(""); }}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary p-4 font-bold text-primary-foreground min-h-[56px]"
-                  >
-                    <DollarSign size={20} /> FECHAR MESA
-                  </button>
-                )}
+                {/* CTA principal: sempre FECHAR CONTA — independe do status */}
+                <button
+                  onClick={() => { setShowPayment(true); setPayMethod(""); setAmountPaid(""); }}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-success p-5 font-black text-success-foreground min-h-[64px] text-lg active:scale-[0.98] transition-all shadow-lg"
+                >
+                  <DollarSign size={22} /> FECHAR CONTA
+                </button>
               </div>
             </div>
           )}
