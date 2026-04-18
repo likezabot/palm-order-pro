@@ -344,6 +344,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      rename_order_table: {
+        Args: { p_new_name: string; p_order_id: string }
+        Returns: undefined
+      }
       update_order_items: {
         Args: {
           p_delta_items?: Json
