@@ -36,14 +36,18 @@ const Palm = () => {
     setOrderVersion(null);
 
     if (orderId) {
-      // Load version from order
+      // Load version + table_name from order (pode ter sido renomeado)
       const { data: orderData } = await supabase
         .from("orders")
-        .select("version")
+        .select("version, table_name")
         .eq("id", orderId)
         .single();
       if (orderData) {
         setOrderVersion(orderData.version);
+        // Se o pedido tem nome custom (≠ do número clicado), usar ele.
+        if (orderData.table_name && orderData.table_name !== name) {
+          setTableName(orderData.table_name);
+        }
       }
 
       // Load existing order items into cart
