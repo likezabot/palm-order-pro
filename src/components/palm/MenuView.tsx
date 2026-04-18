@@ -376,6 +376,19 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
               }
             }}
           />
+          {/* Botão para resetar ao número original (só aparece se o nome atual for diferente) */}
+          {originalTableName && tableName !== originalTableName && (
+            <button
+              onClick={() => {
+                playFeedback("click");
+                onRenameTable?.(originalTableName);
+                setRenameOpen(false);
+              }}
+              className="w-full rounded-lg border border-border bg-card p-3 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary active:scale-[0.98] transition-all min-h-[48px]"
+            >
+              ↺ Voltar ao número original (Mesa {originalTableName})
+            </button>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => setRenameOpen(false)}
