@@ -353,17 +353,28 @@ const Admin = () => {
                     {CATEGORY_LABELS[cat]}
                     <span className="ml-2 text-xs font-bold text-slate-500">({items.length})</span>
                   </h2>
-                  <button
-                    onClick={() => {
-                      playFeedback("click");
-                      setEditing(null);
-                      setFormInitialCategory(cat);
-                      setShowForm(true);
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg bg-primary/10 text-primary px-3 py-2 text-sm font-bold hover:bg-primary/20 transition-colors"
-                  >
-                    <Plus size={14} /> Novo produto
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(orderMap[cat]?.length ?? 0) > 0 && items.length > 1 && (
+                      <button
+                        onClick={() => handleResetOrder(cat)}
+                        className="flex items-center gap-1.5 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-bold hover:bg-slate-200 transition-colors"
+                        title="Restaurar ordem alfabética"
+                      >
+                        <ArrowDownAZ size={14} /> Restaurar A-Z
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        playFeedback("click");
+                        setEditing(null);
+                        setFormInitialCategory(cat);
+                        setShowForm(true);
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg bg-primary/10 text-primary px-3 py-2 text-sm font-bold hover:bg-primary/20 transition-colors"
+                    >
+                      <Plus size={14} /> Novo produto
+                    </button>
+                  </div>
                 </div>
                 {items.length === 0 ? (
                   <div className="py-8 text-center text-sm text-muted-foreground bg-white rounded-xl border-2 border-dashed">
