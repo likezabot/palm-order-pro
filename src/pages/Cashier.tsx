@@ -35,7 +35,7 @@ const Cashier = () => {
     playFeedback("click");
     const success = await manualPrintOrder(order);
     if (success) {
-      toast({ title: `Cupom enviado para Mesa ${order.table_name}` });
+      toast({ title: `Cupom enviado para ${formatTableLabel(order.table_name, order.original_table_name)}` });
     } else {
       toast({ title: "Erro ao imprimir", variant: "destructive" });
     }
