@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Pencil } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
@@ -19,6 +19,8 @@ interface Props {
   itemCount: number;
   onViewCart: () => void;
   onBack: () => void;
+  tableName?: string;
+  onRenameTable?: (newName: string) => void | Promise<void>;
 }
 
 // Subgrupos por categoria, mapeados por nome do produto.
