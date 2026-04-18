@@ -74,7 +74,7 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
 };
 
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable }: Props) => {
-  const [activeCategory, setActiveCategory] = useState<string>("favoritos");
+  const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [porcoOpen, setPorcoOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
