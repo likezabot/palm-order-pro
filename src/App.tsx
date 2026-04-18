@@ -11,6 +11,8 @@ import Admin from "./pages/Admin";
 import PrintStation from "./pages/PrintStation";
 import Pdv from "./pages/Pdv";
 import ForceUpdate from "./pages/ForceUpdate";
+import InstallPalm from "./pages/InstallPalm";
+import InstallKitchen from "./pages/InstallKitchen";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +33,8 @@ const App = () => (
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/print-station" element={<PrintStation />} />
           <Route path="/atualizar" element={<ForceUpdate />} />
+          <Route path="/instalar/palm" element={<InstallPalm />} />
+          <Route path="/instalar/cozinha" element={<InstallKitchen />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

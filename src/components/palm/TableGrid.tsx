@@ -99,6 +99,23 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     });
   };
 
+  const elapsed = (dateStr: string) => {
+    const diffSec = Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000));
+    if (diffSec < 60) return "agora";
+    const min = Math.floor(diffSec / 60);
+    if (min < 60) return `${min}min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m === 0 ? `${h}h` : `${h}h${m.toString().padStart(2, "0")}`;
+  };
+
+  // Tick a cada 30s para atualizar tempo decorrido
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const formatCurrency = (value: number | null) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -289,12 +306,16 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                     <span className="text-2xl font-black leading-none">{table}</span>
                   )}
                   {isOccupied && (
-                    <div className="mt-1 flex flex-col items-center">
+                    <div className="mt-1 flex flex-col items-center leading-tight">
                       <span className="text-[10px] font-bold opacity-80 uppercase truncate w-full text-center px-1">
                         {order.waiter_name || "---"}
                       </span>
                       <span className="text-xs font-bold">
                         {formatCurrency(order.total)}
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
+                        <Clock size={10} />
+                        {formatTime(order.created_at)} · {elapsed(order.created_at)}
                       </span>
                     </div>
                   )}

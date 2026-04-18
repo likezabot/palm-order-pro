@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShoppingCart, Pencil } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Pencil, Search, X, Star } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
+import { useFavoriteProductIds } from "@/hooks/use-favorite-products";
 import {
   Dialog,
   DialogContent,
@@ -73,11 +74,12 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
 };
 
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable }: Props) => {
-  const [activeCategory, setActiveCategory] = useState<string>("espetos");
+  const [activeCategory, setActiveCategory] = useState<string>("favoritos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [porcoOpen, setPorcoOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [search, setSearch] = useState("");
   const { playFeedback } = useFeedback();
 
   const canRename = !!tableName && tableName !== "BALCÃO" && !!onRenameTable;
@@ -111,16 +113,41 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     staleTime: 30_000,
   });
 
-  // Filtragem por categoria + ocultar Panceta/Costela em Espetos (entram via popup do Porco).
-  const filteredRaw = products.filter((p) => {
-    if (p.category !== activeCategory) return false;
-    if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
-      return false;
+  // Top vendidos nos últimos 30 dias para a categoria "Favoritos"
+  const { data: favoriteIds = [] } = useFavoriteProductIds(12, 30);
+
+  const isSearching = search.trim().length > 0;
+
+  // Filtragem: busca global tem prioridade; senão, por categoria (Favoritos é virtual).
+  const filteredRaw = useMemo(() => {
+    if (isSearching) {
+      const q = search.trim().toLowerCase();
+      return products.filter(
+        (p) =>
+          !HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase()) &&
+          p.name.toLowerCase().includes(q)
+      );
     }
-    return true;
-  });
-  const filtered = sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
-  const subgroups = SUBGROUPS[activeCategory];
+    if (activeCategory === "favoritos") {
+      const idx = new Map(favoriteIds.map((id, i) => [id, i]));
+      return products
+        .filter((p) => idx.has(p.id))
+        .sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
+    }
+    return products.filter((p) => {
+      if (p.category !== activeCategory) return false;
+      if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [products, activeCategory, favoriteIds, isSearching, search]);
+
+  const filtered = isSearching || activeCategory === "favoritos"
+    ? filteredRaw
+    : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
+
+  const subgroups = !isSearching && activeCategory !== "favoritos" ? SUBGROUPS[activeCategory] : undefined;
 
   // Produto base "Porco". Preferimos um cadastrado; se não houver, usamos a
   // Panceta suína como base (mesmo id/preço) para o card sintético funcionar.
@@ -132,7 +159,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   );
   const porcoBase = porcoReal ?? porcoFallback;
   // Mostra o card Porco em Espetos sempre que houver alguma variante disponível.
-  const showPorcoCard = activeCategory === "espetos" && !!porcoBase;
+  const showPorcoCard = !isSearching && activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) => cart.find((i) => i.product.id === id)?.quantity || 0;
 
@@ -197,25 +224,63 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           )}
         </div>
 
-        {/* Category tabs */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {CATEGORIES.map((cat) => (
+        {/* Search field */}
+        <div className="relative mb-2">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            inputMode="search"
+            placeholder="Buscar item no cardápio..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-full border border-border bg-card pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+          />
+          {search && (
             <button
-              key={cat}
+              onClick={() => setSearch("")}
+              aria-label="Limpar busca"
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Category tabs (Favoritos primeiro, depois as cadastradas) */}
+        {!isSearching && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            <button
+              key="favoritos"
               onClick={() => {
                 playFeedback("click");
-                setActiveCategory(cat);
+                setActiveCategory("favoritos");
               }}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
-                activeCategory === cat
+              className={`flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
+                activeCategory === "favoritos"
                   ? "bg-primary text-primary-foreground"
                   : "bg-card text-muted-foreground border border-border"
               }`}
             >
-              {CATEGORY_LABELS[cat]}
+              <Star size={14} className="fill-current" /> Favoritos
             </button>
-          ))}
-        </div>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => {
+                  playFeedback("click");
+                  setActiveCategory(cat);
+                }}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
+                  activeCategory === cat
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground border border-border"
+                }`}
+              >
+                {CATEGORY_LABELS[cat]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Loading / error state */}
@@ -243,6 +308,17 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       {!isLoading && !error && products.length === 0 && (
         <p className="p-6 text-center text-sm text-muted-foreground">
           Nenhum produto cadastrado.
+        </p>
+      )}
+
+      {/* Mensagens vazias para busca / favoritos */}
+      {!isLoading && !error && products.length > 0 && filtered.length === 0 && !subgroups && (
+        <p className="p-8 text-center text-sm text-muted-foreground">
+          {isSearching
+            ? `Nenhum item encontrado para "${search}".`
+            : activeCategory === "favoritos"
+              ? "Ainda não há favoritos. Eles aparecem após os primeiros pedidos."
+              : "Nenhum item nesta categoria."}
         </p>
       )}
 
@@ -309,7 +385,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   onClick={() => {
                     onAdd(product);
                   }}
-                  className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
+                  className="relative flex flex-col rounded-xl bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10 min-h-[112px]"
                 >
                   <span className="font-semibold text-base text-foreground leading-tight">
                     {product.name}
@@ -317,9 +393,11 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   <span className="mt-1 text-sm text-primary font-bold">
                     R$ {product.price.toFixed(2)}
                   </span>
-                  <span className="mt-2 text-sm font-semibold text-primary">+ ADD</span>
+                  <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
+                    + ADD
+                  </span>
                   {qty > 0 && (
-                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground border-2 border-background px-1.5">
                       {qty}
                     </span>
                   )}
@@ -461,20 +539,26 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         </DialogContent>
       </Dialog>
 
-      {/* Floating cart button */}
+      {/* Floating cart FAB (rodapé direito) */}
       {itemCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/90 backdrop-blur border-t border-border">
-          <button
-            onClick={() => {
-              playFeedback("click");
-              onViewCart();
-            }}
-            className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.97] transition-transform duration-150 min-h-[56px]"
-          >
-            <ShoppingCart size={22} />
-            VER PEDIDO — {itemCount} {itemCount === 1 ? "item" : "itens"} — R$ {total.toFixed(2)}
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            playFeedback("click");
+            onViewCart();
+          }}
+          aria-label={`Ver pedido — ${itemCount} ${itemCount === 1 ? "item" : "itens"} — R$ ${total.toFixed(2)}`}
+          className="fixed bottom-5 right-5 z-20 flex items-center gap-3 rounded-full bg-primary pl-5 pr-6 py-4 font-bold text-primary-foreground shadow-2xl shadow-primary/40 active:scale-[0.95] transition-transform duration-150 min-h-[64px] ring-4 ring-primary/20"
+        >
+          <div className="relative">
+            <ShoppingCart size={26} />
+            <span className="absolute -top-2 -right-3 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-black text-destructive-foreground border-2 border-primary">
+              {itemCount}
+            </span>
+          </div>
+          <span className="text-base font-black tabular-nums">
+            R$ {total.toFixed(2)}
+          </span>
+        </button>
       )}
     </div>
   );
