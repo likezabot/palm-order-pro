@@ -19,7 +19,7 @@ import { getAppVersion } from "@/lib/version-check";
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import SortableProductCard from "@/components/admin/SortableProductCard";
-import { fetchAllOrders, saveOrder, sortByPersistedOrder } from "@/lib/product-order";
+import { fetchAllOrders, saveOrder, sortByPersistedOrder, resetOrder } from "@/lib/product-order";
 
 const Admin = () => {
   const navigate = useNavigate();
