@@ -122,12 +122,17 @@ const Admin = () => {
     return (
       <ProductForm
         product={editing}
+        initialCategory={formInitialCategory}
         onBack={() => { 
           playFeedback("click");
           setShowForm(false); 
-          setEditing(null); 
+          setEditing(null);
+          setFormInitialCategory(undefined);
         }}
-        onSaved={handleSaved}
+        onSaved={() => {
+          handleSaved();
+          setFormInitialCategory(undefined);
+        }}
       />
     );
   }
