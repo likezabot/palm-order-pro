@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type PaperWidth = "58mm" | "80mm";
 export type PrintSize = "normal" | "grande";
 export type LayoutPreset = "mesa_simples" | "classico" | "conta_destacada";
+export type ContentAlign = "left" | "center";
 
 export interface FontSizesOverride {
   title?: number;   // cabeçalho do estabelecimento
@@ -39,6 +40,8 @@ export interface PrintConfig {
   layoutPreset: LayoutPreset;
   fontSizes: FontSizesOverride;
   visibleSections: VisibleSections;
+  /** Alinhamento do conteúdo (mesa/itens/total). Cabeçalho/rodapé são sempre centralizados. */
+  contentAlign: ContentAlign;
 }
 
 const STORAGE_KEY = "print_config";
@@ -62,6 +65,7 @@ export const DEFAULT_CONFIG: PrintConfig = {
   layoutPreset: "classico",
   fontSizes: {},
   visibleSections: { ...DEFAULT_VISIBLE },
+  contentAlign: "center",
 };
 
 /** Aplica preset e devolve overrides recomendados (usuário ainda pode ajustar). */
