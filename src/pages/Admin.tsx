@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench, ArrowDownAZ } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Settings, AlertCircle, Printer, RefreshCw, ShoppingBag, Clock, Wrench, ArrowDownAZ, BarChart3, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Product, CATEGORY_LABELS, CATEGORIES, Order } from "@/lib/types";
 import ProductForm from "@/components/admin/ProductForm";
@@ -19,6 +19,7 @@ import { getAppVersion } from "@/lib/version-check";
 import { PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import ProductsManager from "@/components/admin/ProductsManager";
+import StatsPanel from "@/components/admin/StatsPanel";
 import { fetchAllOrders, saveOrder, sortByPersistedOrder, resetOrder } from "@/lib/product-order";
 
 const Admin = () => {
@@ -33,6 +34,14 @@ const Admin = () => {
   const [tableCount, setTableCount] = useState(10);
   const [savingTables, setSavingTables] = useState(false);
   const [activeTab, setActiveTab] = useState("products");
+  const [staffMode, setStaffMode] = useState(() => localStorage.getItem("admin-staff-mode") === "true");
+
+  useEffect(() => {
+    localStorage.setItem("admin-staff-mode", String(staffMode));
+    if (staffMode && (activeTab === "stats" || activeTab === "system")) {
+      setActiveTab("products");
+    }
+  }, [staffMode, activeTab]);
 
   useEffect(() => {
     supabase.from("settings").select("value").eq("key", "table_count").single().then(({ data }) => {
@@ -197,7 +206,7 @@ const Admin = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50/50">
+    <div className={`min-h-screen flex flex-col bg-slate-50/50 ${staffMode ? "staff-mode" : ""}`}>
       <div className="border-b border-border p-4 flex items-center justify-between bg-white shadow-sm">
         <div className="flex items-center gap-4">
           <button 
@@ -212,11 +221,26 @@ const Admin = () => {
           <h1 className="text-xl font-black uppercase tracking-tight">Painel de Controle</h1>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              playFeedback("click");
+              setStaffMode((v) => !v);
+            }}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-black uppercase tracking-wider transition-colors ${
+              staffMode
+                ? "bg-warning/20 text-warning border border-warning/40"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            }`}
+            title={staffMode ? "Modo Garçom: dados sensíveis ocultos" : "Modo Admin: tudo visível"}
+          >
+            {staffMode ? <EyeOff size={14} /> : <Eye size={14} />}
+            {staffMode ? "Modo Garçom" : "Modo Admin"}
+          </button>
           <Dialog>
             <DialogTrigger asChild>
               <button 
                 onClick={() => playFeedback("click")}
-                className="p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground mr-2"
+                className="p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground mr-2 admin-only"
               >
                 <Settings size={24} />
               </button>
@@ -334,7 +358,10 @@ const Admin = () => {
             <TabsTrigger value="print" className="font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2">
               <Printer className="w-4 h-4" /> Impressão
             </TabsTrigger>
-            <TabsTrigger value="system" className="font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2">
+            <TabsTrigger value="stats" className="admin-only font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2">
+              <BarChart3 className="w-4 h-4" /> Estatísticas
+            </TabsTrigger>
+            <TabsTrigger value="system" className="admin-only font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2">
               <Wrench className="w-4 h-4" /> Sistema
             </TabsTrigger>
           </TabsList>
@@ -409,7 +436,11 @@ const Admin = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t">
+        <TabsContent value="stats" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
+          <StatsPanel />
+        </TabsContent>
+
+        <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
           <div className="max-w-2xl mx-auto py-4 space-y-6">
             <div className="rounded-xl border-2 border-border p-5 space-y-4">
               <div className="flex items-start gap-3">
