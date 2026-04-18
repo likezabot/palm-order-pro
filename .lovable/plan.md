@@ -1,61 +1,61 @@
 
-## Plano: Admin – Cardápio aprimorado, ocultar sensíveis, Estatísticas
 
-Sem auth (como solicitado). Sem campo de custo. Sem tocar em pedidos/impressão.
+## Plano: Cardápio Palm cabe inteiro na tela (sem rolagem)
 
-### 1. Cardápio: busca + filtros + edição em lote
+**Contexto:** O `MenuView` hoje tem `min-h-screen` + grid fixo `grid-cols-2 gap-3 p-3` + cards `min-h-[112px]`. Em telas mais baixas (ou com mais de 4 produtos por categoria) sobra rolagem vertical. O usuário quer que **tudo do cardápio** caiba sem rolagem, adaptando-se automaticamente à altura do dispositivo. **Apenas a tela "Fechar conta" (CloseOrder) deve continuar rolando.**
 
-**Toolbar nova** acima das pills de categoria em `ProductsManager.tsx`:
-- Busca por nome (filtra em tempo real; quando há texto, ignora pills e mostra resultados de TODAS as categorias agrupados)
-- Filtro de status: `Todos / Visíveis / Ocultos`
-- Filtro de preço: min/max em R$
-- Botão `Limpar filtros` quando algum estiver ativo
+### Estratégia: layout em 3 zonas com altura fixa + grid auto-fit que rola só dentro da zona de produtos
 
-**Modo seleção múltipla:**
-- Botão `Selecionar` ativa checkboxes nos cards (drag desabilitado nesse modo)
-- Barra fixa no rodapé: "X selecionados" + **Mostrar** + **Ocultar** + **Ajustar preço** (+5%, +10%, -5%, valor fixo) + **Cancelar**
-- Update em lote via `update().in("id", selectedIds)`
+```text
+┌─────────────────────────────┐
+│ HEADER (sticky, altura fixa)│  ← Voltar/Mesa + Busca + Tabs categoria
+├─────────────────────────────┤
+│                             │
+│  GRID DE PRODUTOS           │  ← flex-1, overflow-y-auto INTERNO
+│  (cards auto-redimensionam) │     (rola só se passar do limite extremo)
+│                             │
+├─────────────────────────────┤
+│ FAB carrinho flutuante      │  ← ancorado, fora do fluxo
+└─────────────────────────────┘
+```
 
-### 2. Toggle "Ocultar Informações Sensíveis"
+### Mudanças em `src/components/palm/MenuView.tsx`
 
-Mesmo padrão do PDV (`.staff-mode .admin-only`):
-- Botão Eye/EyeOff no header → `MODO ADMIN ↔ MODO GARÇOM`
-- Persistido em `localStorage` (`admin-staff-mode`)
-- Marca como `admin-only`: aba **Estatísticas**, aba **Sistema**, botões **Excluir** dos cards
-- Toggle em si NÃO leva `admin-only`
-- CSS já existe; adicionar transição opacity .2s
+1. **Container raiz** — trocar `min-h-screen flex-col pb-24` por `h-[100dvh] flex-col overflow-hidden` (usa `dvh` = dynamic viewport, ignora barra de endereço do mobile).
 
-### 3. Nova aba **Estatísticas** (com classe admin-only)
+2. **Header** — remover `sticky top-0`; vira `shrink-0` simples (altura natural). Compactar levemente (`p-3` → `p-2.5`, `mb-2` → `mb-1.5`) para liberar mais espaço aos cards.
 
-Componente `StatsPanel.tsx` usando `recharts` (já instalado):
+3. **Zona de produtos (grid)** — envolver os 3 blocos de grid (subgroups, produtos, mensagem vazia) num único `<div className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2">`. A rolagem fica isolada aqui — como queremos que tudo caiba, na maioria dos casos não vai aparecer barra; mas se o cardápio for enorme num celular pequeno, ela aparece **dentro** da seção (não vira scroll global).
 
-**Filtro de período:** Hoje · 7 dias · 30 dias · Personalizado (DatePicker)
+4. **Cards adaptativos** — substituir `grid-cols-2 ... min-h-[112px]` por:
+   - Grid responsivo: `grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2`
+   - Remover `min-h-[112px]` dos cards
+   - Reduzir padding interno: `p-4` → `p-3`
+   - Texto continua legível (`text-base` mantido = 16px, atende o min do projeto).
+   
+   Resultado: em telas estreitas mantém 2 colunas; em tablets pode virar 3-4 automaticamente, encolhendo a altura por linha.
 
-**4 KPIs no topo:** Faturamento total · Pedidos pagos · Ticket médio · Itens vendidos
+5. **FAB carrinho** — mantém `fixed bottom-5 right-5` (já está fora do fluxo). Sem mudança.
 
-**4 gráficos:**
-1. Top 10 itens — BarChart horizontal
-2. Vendas por categoria — PieChart (cruza via lookup em products)
-3. Vendas por hora do dia — BarChart (0-23h)
-4. Faturamento por forma de pagamento — PieChart (cash/pix/card)
+6. **Diálogos (Porco, Subgrupo, Renomear)** — sem mudança, já têm `max-h-[85vh]` com scroll interno.
 
-**3 listas Top 5:** noite (18-23h) · dia (11-17h) · semana (últimos 7 dias)
+### O que NÃO muda
+- `CloseOrder.tsx` — continua com `min-h-screen` e rolagem padrão (única tela que pode rolar, por pedido do usuário).
+- `OrderReview`, `TableGrid`, `OrderSuccess` — fora do escopo.
+- Lógica de dados, busca, favoritos, popup Porco — intactos.
+- Tamanhos de fonte ≥14px e botões com área ≥48-56px de toque preservados.
 
-**Refresh:** `useQuery` com `refetchInterval: 30s` + invalidação por Realtime em `orders`
-
-### 4. Sem migration
-
-Banco já tem tudo: `orders.status='paid'` + `total` + `payment_method` + `created_at` + `order_items.quantity/subtotal`. Categoria via lookup local em `products`.
-
-### Arquivos
-
-| Arquivo | Ação |
+### Arquivos afetados
+| Arquivo | Mudança |
 |---|---|
-| `src/pages/Admin.tsx` | Toggle staff-mode header + aba Estatísticas + classes `admin-only` |
-| `src/components/admin/ProductsManager.tsx` | Busca, filtros, modo seleção |
-| `src/components/admin/SortableProductCard.tsx` | Prop `selectionMode` + checkbox |
-| `src/components/admin/BulkActionsBar.tsx` | **Novo** |
-| `src/components/admin/StatsPanel.tsx` | **Novo** — KPIs + 4 gráficos + 3 listas top |
-| `src/index.css` | Transição `.admin-only` |
+| `src/components/palm/MenuView.tsx` | Container `h-[100dvh] overflow-hidden` + zona scroll interna + grid `auto-fill,minmax(150px,1fr)` + padding compactado |
 
-Sem migrations. Sem novas dependências (recharts já existe).
+Sem novos arquivos, sem migrations, sem dependências.
+
+### Validação
+1. Abrir Palm → Mesa → Cardápio em celular pequeno (360×640): tudo (header, busca, tabs, grid completo de Espetos) cabe sem barra de rolagem global.
+2. Mudar para Bebidas (subgrupos): 8 quadrados cabem sem rolar.
+3. Em tablet (768×1024): cards expandem para 3-4 colunas automaticamente.
+4. Abrir "Fechar conta" com muitos itens: continua rolando normalmente.
+5. FAB carrinho fica visível e clicável em todos os casos.
+
