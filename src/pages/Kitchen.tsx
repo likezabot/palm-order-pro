@@ -82,7 +82,12 @@ const Kitchen = () => {
 
   const updateStatus = async (orderId: string, status: string) => {
     playFeedback("click");
-    await supabase.from("orders").update({ status }).eq("id", orderId);
+    const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+    if (error) {
+      console.error("[Kitchen] updateStatus error:", error);
+      alert("Erro ao atualizar pedido: " + error.message);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["kitchen-orders"] });
   };
 
