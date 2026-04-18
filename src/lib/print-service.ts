@@ -215,6 +215,7 @@ export const autoPrintDelta = autoPrintUpdate;
 export async function manualPrintOrder(order: {
   id: string;
   table_name: string;
+  original_table_name?: string | null;
   waiter_name: string | null;
   total: number | null;
 }): Promise<boolean> {
@@ -225,12 +226,14 @@ export async function manualPrintOrder(order: {
 
   if (!items || items.length === 0) return false;
 
-  return await printReceipt(order.table_name, order.waiter_name || "N/A", items as any[], order.total || 0);
+  const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
+  return await printReceipt(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0);
 }
 
 export async function manualPrintDelta(order: {
   id: string;
   table_name: string;
+  original_table_name?: string | null;
   waiter_name: string | null;
 }): Promise<boolean> {
   const { data } = await supabase
@@ -242,12 +245,14 @@ export async function manualPrintDelta(order: {
   const deltaItems = (data as any)?.delta_items as PrintableItem[] | null;
   if (!deltaItems || deltaItems.length === 0) return false;
 
-  return await printDelta(order.table_name, order.waiter_name || "N/A", deltaItems);
+  const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
+  return await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
 }
 
 export async function manualPrintBill(order: {
   id: string;
   table_name: string;
+  original_table_name?: string | null;
   waiter_name: string | null;
   total: number | null;
 }): Promise<boolean> {
@@ -258,5 +263,6 @@ export async function manualPrintBill(order: {
 
   if (!items || items.length === 0) return false;
 
-  return await printBill(order.table_name, order.waiter_name || "N/A", items as any[], order.total || 0);
+  const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
+  return await printBill(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0);
 }
