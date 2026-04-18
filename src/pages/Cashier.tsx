@@ -8,6 +8,7 @@ import CloseOrder from "@/components/cashier/CloseOrder";
 import { manualPrintOrder } from "@/lib/print-service";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
+import { formatTableLabel } from "@/lib/utils";
 
 const Cashier = () => {
   const navigate = useNavigate();
