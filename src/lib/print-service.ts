@@ -7,6 +7,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { printReceipt, printDelta, printBill } from "@/lib/print-receipt";
+import { formatPrintTableValue } from "@/lib/utils";
 
 interface PrintableItem {
   product_name: string;
