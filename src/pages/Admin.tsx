@@ -16,9 +16,9 @@ import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import { manualPrintOrder } from "@/lib/print-service";
 import { forceUpdate } from "@/lib/force-update";
 import { getAppVersion } from "@/lib/version-check";
-import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import SortableProductCard from "@/components/admin/SortableProductCard";
+import { PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
+import ProductsManager from "@/components/admin/ProductsManager";
 import { fetchAllOrders, saveOrder, sortByPersistedOrder, resetOrder } from "@/lib/product-order";
 
 const Admin = () => {
