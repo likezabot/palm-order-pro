@@ -10,6 +10,7 @@ import Kitchen from "./pages/Kitchen";
 import Admin from "./pages/Admin";
 import PrintStation from "./pages/PrintStation";
 import Pdv from "./pages/Pdv";
+import ForceUpdate from "./pages/ForceUpdate";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/admin" element={<Admin />} />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/print-station" element={<PrintStation />} />
+          <Route path="/atualizar" element={<ForceUpdate />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
