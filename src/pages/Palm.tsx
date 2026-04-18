@@ -134,6 +134,7 @@ const Palm = () => {
     setCart([]);
     setOriginalCart([]);
     setTableName("");
+    setOriginalTableName("");
     setExistingOrderId(null);
     setOrderVersion(null);
     setSenha("");
@@ -204,6 +205,7 @@ const Palm = () => {
         total={total}
         itemCount={itemCount}
         tableName={tableName}
+        originalTableName={originalTableName}
         onRenameTable={async (newName: string) => {
           const trimmed = newName.trim();
           if (!trimmed || trimmed === tableName) return;
@@ -223,6 +225,7 @@ const Palm = () => {
         onBack={() => {
           setStep("grid");
           setTableName("");
+          setOriginalTableName("");
           setCart([]);
           setOriginalCart([]);
           setExistingOrderId(null);
