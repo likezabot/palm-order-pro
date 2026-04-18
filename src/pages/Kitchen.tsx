@@ -92,7 +92,7 @@ const Kitchen = () => {
   const done = orders.filter((o) => o.status === "done");
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="md:h-screen flex flex-col md:overflow-hidden">
       <div className="border-b border-border p-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate("/")} className="text-muted-foreground">
@@ -114,7 +114,7 @@ const Kitchen = () => {
         </button>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 md:overflow-hidden overflow-y-auto">
         <KanbanColumn
           title="NOVOS"
           colorClass="text-primary"

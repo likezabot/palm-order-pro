@@ -20,16 +20,16 @@ const KanbanColumn = ({
   actionLabel, actionColor, onAction, pulseNew,
 }: Props) => {
   return (
-    <div className={`border-r border-border last:border-r-0 flex flex-col h-full min-h-0 ${bgClass ?? ""}`}>
-      {/* Cabeçalho fixo */}
-      <div className={`sticky top-0 z-10 p-3 border-b-2 ${borderClass} bg-card/95 backdrop-blur`}>
+    <div className={`border-b md:border-b-0 md:border-r border-border md:last:border-r-0 flex flex-col md:h-full md:min-h-0 ${bgClass ?? ""}`}>
+      {/* Cabeçalho */}
+      <div className={`md:sticky md:top-0 z-10 p-3 border-b-2 ${borderClass} bg-card/95 backdrop-blur`}>
         <h2 className={`text-lg font-black uppercase tracking-wide ${colorClass}`}>
           {title} <span className="text-muted-foreground font-bold">({orders.length})</span>
         </h2>
       </div>
 
-      {/* Lista com rolagem vertical */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      {/* Lista — rola só no desktop; no mobile expande naturalmente */}
+      <div className="md:flex-1 md:overflow-y-auto p-3 space-y-3">
         {orders.map((order) => (
           <KanbanCard
             key={order.id}
