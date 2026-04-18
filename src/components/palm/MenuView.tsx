@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
+import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
 import {
   Dialog,
   DialogContent,
@@ -96,14 +97,22 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack }: Props) 
     retry: 1,
   });
 
+  // Ordem persistida pelo Admin (settings.product_order_<categoria>)
+  const { data: orderMap = {} } = useQuery({
+    queryKey: ["product-order"],
+    queryFn: () => fetchAllOrders([...CATEGORIES]),
+    staleTime: 30_000,
+  });
+
   // Filtragem por categoria + ocultar Panceta/Costela em Espetos (entram via popup do Porco).
-  const filtered = products.filter((p) => {
+  const filteredRaw = products.filter((p) => {
     if (p.category !== activeCategory) return false;
     if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
       return false;
     }
     return true;
   });
+  const filtered = sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
   const subgroups = SUBGROUPS[activeCategory];
 
   // Produto base "Porco". Preferimos um cadastrado; se não houver, usamos a
