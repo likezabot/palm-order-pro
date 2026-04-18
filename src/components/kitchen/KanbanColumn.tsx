@@ -110,11 +110,9 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
         <button
           type="button"
           onClick={(e) => {
-            e.preventDefault();
             e.stopPropagation();
             onAction(order.id);
           }}
-          onPointerDown={(e) => e.stopPropagation()}
           className={`relative z-10 w-full mt-2 rounded-lg p-3 font-black text-base transition-colors duration-150 min-h-[56px] touch-manipulation cursor-pointer ${actionColor}`}
         >
           {actionLabel}
