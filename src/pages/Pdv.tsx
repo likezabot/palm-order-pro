@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Clock, Flame } from "lucide-react";
+import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import {
   AlertDialog,
   AlertDialogCancel,
