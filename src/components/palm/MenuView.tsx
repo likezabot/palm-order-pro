@@ -64,11 +64,7 @@ const SUBGROUPS: Record<string, Subgroup[]> = {
 };
 
 // Variantes do produto base "Porco" — apresentadas em popup ao tocar no card.
-const PORCO_VARIANTS: { name: string; description: string }[] = [
-  { name: "Costela suína", description: "Corte com osso, mais suculento" },
-  { name: "Porco", description: "Tanto faz — qualquer corte disponível" },
-  { name: "Panceta suína", description: "Barriga sem osso, com gordura marmorizada" },
-];
+const PORCO_VARIANTS = ["Porco", "Panceta suína", "Costela suína"] as const;
 // Nomes que devem ser ocultados da grade de Espetos (apresentados via popup do Porco).
 const HIDDEN_ESPETO_NAMES = ["panceta suína", "costela suína"];
 
@@ -366,12 +362,12 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
               className="relative flex flex-col rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.96]"
             >
               <span className="font-semibold text-base text-foreground leading-tight">
-                Porco <span className="text-muted-foreground font-normal">(escolher tipo)</span>
+                Porco
               </span>
               <span className="mt-1 text-sm text-primary font-bold">
                 R$ {porcoBase!.price.toFixed(2)}
               </span>
-              <span className="mt-2 text-sm font-semibold text-primary">Toque para escolher</span>
+              <span className="mt-2 text-sm font-semibold text-primary">Escolher tipo</span>
               {porcoQty > 0 && (
                 <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                   {porcoQty}
@@ -420,12 +416,11 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           <div className="grid grid-cols-1 gap-2">
             {PORCO_VARIANTS.map((variant) => (
               <button
-                key={variant.name}
-                onClick={() => addPorcoVariant(variant.name)}
-                className="rounded-lg bg-card border border-border p-4 text-left active:scale-[0.97] transition-transform min-h-[64px]"
+                key={variant}
+                onClick={() => addPorcoVariant(variant)}
+                className="rounded-lg bg-card border border-border p-4 text-left font-semibold text-foreground active:scale-[0.97] transition-transform min-h-[56px]"
               >
-                <div className="font-semibold text-foreground">{variant.name}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{variant.description}</div>
+                {variant}
               </button>
             ))}
           </div>
