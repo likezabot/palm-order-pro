@@ -15,6 +15,7 @@ const Palm = () => {
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>("grid");
   const [tableName, setTableName] = useState("");
+  const [originalTableName, setOriginalTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [originalCart, setOriginalCart] = useState<CartItem[]>([]);
@@ -29,6 +30,7 @@ const Palm = () => {
 
   const handleSelectTable = useCallback(async (name: string, orderId?: string) => {
     setTableName(name);
+    setOriginalTableName(name);
     setSenha("");
     setCart([]);
     setOriginalCart([]);
@@ -36,15 +38,17 @@ const Palm = () => {
     setOrderVersion(null);
 
     if (orderId) {
-      // Load version + table_name from order (pode ter sido renomeado)
+      // Load version + table_name + original (pode ter sido renomeado)
       const { data: orderData } = await supabase
         .from("orders")
-        .select("version, table_name")
+        .select("version, table_name, original_table_name")
         .eq("id", orderId)
         .single();
       if (orderData) {
         setOrderVersion(orderData.version);
-        // Se o pedido tem nome custom (≠ do número clicado), usar ele.
+        if (orderData.original_table_name) {
+          setOriginalTableName(orderData.original_table_name);
+        }
         if (orderData.table_name && orderData.table_name !== name) {
           setTableName(orderData.table_name);
         }
@@ -130,6 +134,7 @@ const Palm = () => {
     setCart([]);
     setOriginalCart([]);
     setTableName("");
+    setOriginalTableName("");
     setExistingOrderId(null);
     setOrderVersion(null);
     setSenha("");
@@ -200,6 +205,7 @@ const Palm = () => {
         total={total}
         itemCount={itemCount}
         tableName={tableName}
+        originalTableName={originalTableName}
         onRenameTable={async (newName: string) => {
           const trimmed = newName.trim();
           if (!trimmed || trimmed === tableName) return;
@@ -219,6 +225,7 @@ const Palm = () => {
         onBack={() => {
           setStep("grid");
           setTableName("");
+          setOriginalTableName("");
           setCart([]);
           setOriginalCart([]);
           setExistingOrderId(null);
