@@ -190,6 +190,28 @@ const Pdv = () => {
   const selectedOrder = orders.find((o) => o.id === selectedId) || null;
   const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
 
+  // Agrupa pedidos por status + conta itens (mais antigo primeiro dentro de cada grupo)
+  const itemsByOrderId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const it of allItems) {
+      map.set(it.order_id, (map.get(it.order_id) || 0) + (it.quantity || 0));
+    }
+    return map;
+  }, [allItems]);
+
+  const groupedOrders = useMemo(() => {
+    const groups: Record<"new" | "preparing" | "done", Order[]> = { new: [], preparing: [], done: [] };
+    for (const o of orders) {
+      const k = (o.status as "new" | "preparing" | "done");
+      if (groups[k]) groups[k].push(o);
+    }
+    // mais antigo primeiro = urgência
+    (Object.keys(groups) as Array<keyof typeof groups>).forEach((k) => {
+      groups[k].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    });
+    return groups;
+  }, [orders]);
+
   const updateStatus = async (orderId: string, status: string) => {
     playFeedback("click");
     await supabase.rpc("update_order_status", { p_order_id: orderId, p_status: status } as any);
