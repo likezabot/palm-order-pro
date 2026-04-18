@@ -496,7 +496,7 @@ const Pdv = () => {
             /* Order details */
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">Mesa {selectedOrder.table_name}</h2>
+                <h2 className="text-xl font-bold">{formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}</h2>
                 {cfg && <Badge className={cfg.color}>{cfg.label}</Badge>}
               </div>
               <div className="text-sm text-muted-foreground space-y-1">
