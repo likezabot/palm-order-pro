@@ -386,6 +386,31 @@ const Admin = () => {
                     collisionDetection={closestCenter}
                     onDragEnd={(e) => handleDragEnd(cat, e)}
                   >
+                    {cat === "espetos" && (
+                      <div className="mb-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary">
+                                Card Especial
+                              </span>
+                              <p className="font-black text-base text-slate-900">Porco</p>
+                            </div>
+                            <p className="mt-2 text-xs text-slate-600">
+                              No Palm, este card abre um popup com 3 opções para o garçom escolher:
+                            </p>
+                            <ul className="mt-1.5 ml-1 text-xs font-bold text-slate-700 space-y-0.5">
+                              <li>• Porco</li>
+                              <li>• Panceta suína</li>
+                              <li>• Costela suína</li>
+                            </ul>
+                            <p className="mt-2 text-[11px] text-slate-500 italic">
+                              Cadastre/edite o produto <strong>Porco</strong> abaixo para mudar o preço base. As variantes Panceta e Costela ficam ocultas no Palm (entram via popup).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <SortableContext items={items.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {items.map((product) => (
