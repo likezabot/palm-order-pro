@@ -15,6 +15,7 @@ const Palm = () => {
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>("grid");
   const [tableName, setTableName] = useState("");
+  const [originalTableName, setOriginalTableName] = useState("");
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem("waiter_name") || "");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [originalCart, setOriginalCart] = useState<CartItem[]>([]);
@@ -29,6 +30,7 @@ const Palm = () => {
 
   const handleSelectTable = useCallback(async (name: string, orderId?: string) => {
     setTableName(name);
+    setOriginalTableName(name);
     setSenha("");
     setCart([]);
     setOriginalCart([]);
