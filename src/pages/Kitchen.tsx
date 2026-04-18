@@ -1,17 +1,32 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Volume2, VolumeX } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import KanbanColumn from "@/components/kitchen/KanbanColumn";
 import { useFeedback } from "@/hooks/use-feedback";
+
+const SOUND_KEY = "kitchen-sound-enabled";
 
 const Kitchen = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { playFeedback } = useFeedback();
   const prevCountRef = useRef(0);
+  const [pulseNew, setPulseNew] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem(SOUND_KEY) !== "0";
+  });
+
+  const toggleSound = () => {
+    setSoundEnabled((v) => {
+      const next = !v;
+      localStorage.setItem(SOUND_KEY, next ? "1" : "0");
+      return next;
+    });
+  };
 
   const { data: orders = [] } = useQuery({
     queryKey: ["kitchen-orders"],
@@ -52,14 +67,18 @@ const Kitchen = () => {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
-  // Beep on new orders
+  // Beep + pulse on new orders
   const newOrders = orders.filter((o) => o.status === "new");
   useEffect(() => {
     if (newOrders.length > prevCountRef.current) {
-      playFeedback("notification");
+      if (soundEnabled) playFeedback("notification");
+      setPulseNew(true);
+      const t = setTimeout(() => setPulseNew(false), 4000);
+      prevCountRef.current = newOrders.length;
+      return () => clearTimeout(t);
     }
     prevCountRef.current = newOrders.length;
-  }, [newOrders.length, playFeedback]);
+  }, [newOrders.length, playFeedback, soundEnabled]);
 
   const updateStatus = async (orderId: string, status: string) => {
     playFeedback("click");
@@ -73,29 +92,46 @@ const Kitchen = () => {
   const done = orders.filter((o) => o.status === "done");
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="border-b border-border p-4 flex items-center gap-4">
-        <button onClick={() => navigate("/")} className="text-muted-foreground">
-          <ArrowLeft size={24} />
+    <div className="h-screen flex flex-col overflow-hidden">
+      <div className="border-b border-border p-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate("/")} className="text-muted-foreground">
+            <ArrowLeft size={24} />
+          </button>
+          <h1 className="text-2xl font-black tracking-tight">PAINEL COZINHA</h1>
+        </div>
+        <button
+          onClick={toggleSound}
+          title={soundEnabled ? "Desativar som de novos pedidos" : "Ativar som de novos pedidos"}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-bold transition-colors ${
+            soundEnabled
+              ? "border-success bg-success/10 text-success"
+              : "border-border bg-card text-muted-foreground hover:bg-secondary"
+          }`}
+        >
+          {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          {soundEnabled ? "SOM LIGADO" : "SOM DESLIGADO"}
         </button>
-        <h1 className="text-xl font-bold">PAINEL COZINHA</h1>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-0 md:gap-0">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 overflow-hidden">
         <KanbanColumn
           title="NOVOS"
           colorClass="text-primary"
           borderClass="border-primary"
+          bgClass="bg-primary/5"
           orders={newOrders}
           getItems={getItems}
           actionLabel="▶ PREPARAR"
           actionColor="bg-warning text-warning-foreground"
           onAction={(id) => updateStatus(id, "preparing")}
+          pulseNew={pulseNew}
         />
         <KanbanColumn
           title="EM PREPARO"
           colorClass="text-warning"
           borderClass="border-warning"
+          bgClass="bg-warning/5"
           orders={preparing}
           getItems={getItems}
           actionLabel="✅ PRONTO"
@@ -106,6 +142,7 @@ const Kitchen = () => {
           title="FINALIZADOS"
           colorClass="text-success"
           borderClass="border-success"
+          bgClass="bg-success/5"
           orders={done}
           getItems={getItems}
         />
