@@ -72,11 +72,13 @@
     animation: mesa-pulse 2s infinite ease-in-out;
   }
 
-  /* Modo Garçom: oculta elementos administrativos no PDV/Admin */
+  /* Modo Garçom: oculta elementos administrativos.
+     :has() no body alcança conteúdo renderizado em portais Radix (dropdowns, dialogs). */
   .admin-only {
     transition: opacity 0.2s ease;
   }
-  .staff-mode .admin-only {
+  .staff-mode .admin-only,
+  body:has(.staff-mode) .admin-only {
     display: none !important;
   }
 }
