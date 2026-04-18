@@ -275,22 +275,34 @@ const Pdv = () => {
   const cfg = selectedOrder ? statusConfig[selectedOrder.status] || statusConfig.new : null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className={`min-h-screen flex flex-col bg-background ${staffMode ? "staff-mode" : ""}`}>
       {/* Header */}
       <div className="border-b border-border p-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate("/")} className="text-muted-foreground">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-xl font-bold">PDV / CAIXA</h1>
-          <Badge className={realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}>
+          <h1 className="text-2xl font-black tracking-tight">PDV / CAIXA</h1>
+          <Badge className={`admin-only ${realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}`}>
             {realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}
           </Badge>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleStaffMode}
+            title={staffMode ? "Desativar modo garçom (mostrar admin)" : "Ativar modo garçom (ocultar admin)"}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-bold transition-colors ${
+              staffMode
+                ? "border-warning bg-warning/10 text-warning"
+                : "border-border bg-card text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            {staffMode ? <EyeOff size={18} /> : <Eye size={18} />}
+            {staffMode ? "MODO GARÇOM" : "MODO ADMIN"}
+          </button>
           <Dialog>
             <DialogTrigger asChild>
-              <button className="p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground">
+              <button className="admin-only p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground">
                 <Settings size={24} />
               </button>
             </DialogTrigger>
