@@ -127,6 +127,7 @@ const OrderReview = ({
           p_total: total,
           p_items: rpcItems,
           p_should_print: shouldPrint,
+          p_original_table_name: originalTableName || tableName,
         };
         console.log("[OrderReview] CREATE payload:", JSON.stringify(payload, null, 2));
 
