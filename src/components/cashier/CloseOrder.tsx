@@ -113,9 +113,9 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent className="max-w-[90vw] rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl">Tem certeza que quer fechar a mesa?</AlertDialogTitle>
             <AlertDialogDescription>
-              Escolha se deseja fechar a conta com ou sem a impressão do comprovante.
+              Escolha se deseja fechar com ou sem impressão do comprovante.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
