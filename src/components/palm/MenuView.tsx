@@ -1,18 +1,22 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShoppingCart, Pencil, Search, X, Star, ArrowRightLeft } from "lucide-react";
+import { ArrowLeft, Pencil, Search, X, Star, ArrowRightLeft } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
 import { useFavoriteProductIds } from "@/hooks/use-favorite-products";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import MoveTableDialog from "./MoveTableDialog";
+import {
+  SUBGROUPS,
+  HIDDEN_ESPETO_NAMES,
+  matchesSubgroup,
+  type Subgroup,
+} from "./menu-subgroups";
+import { RenameTableDialog } from "./RenameTableDialog";
+import { PorcoVariantDialog } from "./PorcoVariantDialog";
+import { SubgroupDialog } from "./SubgroupDialog";
+import { CartFab } from "./CartFab";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -28,54 +32,6 @@ interface Props {
   existingOrderId?: string | null;
   onTableMoved?: (newTable: string) => void;
 }
-
-// Subgrupos por categoria, mapeados por nome do produto.
-// Match é por substring case-insensitive — robusto a pequenas variações.
-type Subgroup = { label: string; matchers: string[] };
-
-const SUBGROUPS: Record<string, Subgroup[]> = {
-  bebidas: [
-    { label: "KS 290ml", matchers: ["ks coca-cola zero", "ks coca-cola normal"] },
-    {
-      label: "Mini 220ml",
-      matchers: [
-        "coca-cola 220ml",
-        "coca-cola zero 220ml",
-        "fanta-uva 220ml",
-        "guaraná 220ml",
-        "fanta-laranja 220ml",
-        "sprite 220ml",
-      ],
-    },
-    { label: "Refri 350ml", matchers: ["coca-cola 350ml", "coca-cola zero 350ml"] },
-    {
-      label: "Refri 600ml",
-      matchers: ["coca-cola 600ml", "coca-cola zero 600ml", "tubaina 600ml"],
-    },
-    { label: "Refri 1L", matchers: ["coca-cola 1l", "guaraná 1l"] },
-    { label: "Refri 2L", matchers: ["coca-cola 2l", "coca-cola zero 2l"] },
-    { label: "Água", matchers: ["água com gás", "água sem gás"] },
-    {
-      label: "Sucos Del Valle 290ml",
-      matchers: [
-        "suco del valle maracujá",
-        "suco del valle pêssego",
-        "suco del valle uva",
-      ],
-    },
-  ],
-  // Cervejas: removido subgrupo — agora cards diretos como qualquer outra categoria.
-};
-
-// Variantes do produto base "Porco" — apresentadas em popup ao tocar no card.
-const PORCO_VARIANTS = ["Porco", "Panceta suína", "Costela suína"] as const;
-// Nomes que devem ser ocultados da grade de Espetos (apresentados via popup do Porco).
-const HIDDEN_ESPETO_NAMES = ["panceta suína", "costela suína"];
-
-const matchesSubgroup = (product: Product, sub: Subgroup) => {
-  const n = product.name.toLowerCase();
-  return sub.matchers.some((m) => n.includes(m));
-};
 
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
@@ -94,7 +50,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     queryKey: ["products"],
     queryFn: async () => {
       // Timeout duro de 10s — se a rede do tablet pendurar, falha rápido
-      // e mostra botão "Tentar novamente" em vez de spinner eterno.
       const fetchPromise = supabase
         .from("products")
         .select("*")
@@ -164,7 +119,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     (p) => p.category === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())
   );
   const porcoBase = porcoReal ?? porcoFallback;
-  // Mostra o card Porco em Espetos sempre que houver alguma variante disponível.
   const showPorcoCard = !isSearching && activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) => cart.find((i) => i.product.id === id)?.quantity || 0;
@@ -265,7 +219,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           )}
         </div>
 
-        {/* Category tabs (Favoritos primeiro, depois as cadastradas) */}
+        {/* Category tabs */}
         {!isSearching && (
           <div className="flex gap-2 overflow-x-auto no-scrollbar">
             <button
@@ -304,153 +258,128 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
 
       {/* Scrollable content area */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-      {/* Loading / error state */}
-      {isLoading && (
-        <div className="flex flex-col items-center justify-center p-10 text-muted-foreground">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mb-3" />
-          <p className="text-sm">Carregando cardápio...</p>
-        </div>
-      )}
-      {error && !isLoading && (
-        <div className="flex flex-col items-center justify-center p-6 text-center">
-          <p className="text-sm text-destructive mb-1 font-bold">Não foi possível carregar o cardápio</p>
-          <p className="text-xs text-muted-foreground mb-4">
-            {error instanceof Error ? error.message : "Erro desconhecido"}
-          </p>
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground active:scale-95 transition-transform disabled:opacity-60"
-          >
-            {isFetching ? "Tentando..." : "Tentar novamente"}
-          </button>
-        </div>
-      )}
-      {!isLoading && !error && products.length === 0 && (
-        <p className="p-6 text-center text-sm text-muted-foreground">
-          Nenhum produto cadastrado.
-        </p>
-      )}
-
-      {/* Mensagens vazias para busca / favoritos */}
-      {!isLoading && !error && products.length > 0 && filtered.length === 0 && !subgroups && (
-        <p className="p-8 text-center text-sm text-muted-foreground">
-          {isSearching
-            ? `Nenhum item encontrado para "${search}".`
-            : activeCategory === "favoritos"
-              ? "Ainda não há favoritos. Eles aparecem após os primeiros pedidos."
-              : "Nenhum item nesta categoria."}
-        </p>
-      )}
-
-      {/* Subgroup squares OR product grid */}
-      {!isLoading && !error && products.length > 0 && (subgroups ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
-          {subgroups.map((sub) => {
-            const qty = subgroupQty(sub);
-            return (
-              <button
-                key={sub.label}
-                onClick={() => {
-                  playFeedback("click");
-                  setOpenSubgroup(sub);
-                }}
-                className="relative flex aspect-square flex-col items-center justify-center rounded-lg bg-card border border-border p-3 text-center transition-all duration-150 active:scale-[0.96]"
-              >
-                <span className="text-base font-bold text-foreground leading-tight">
-                  {sub.label}
-                </span>
-                <span className="mt-2 text-xs text-muted-foreground">Toque para ver</span>
-                {qty > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {qty}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
-          {/* Card especial "Porco" — abre popup com 3 variantes */}
-          {showPorcoCard && (
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center p-10 text-muted-foreground">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mb-3" />
+            <p className="text-sm">Carregando cardápio...</p>
+          </div>
+        )}
+        {error && !isLoading && (
+          <div className="flex flex-col items-center justify-center p-6 text-center">
+            <p className="text-sm text-destructive mb-1 font-bold">Não foi possível carregar o cardápio</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : "Erro desconhecido"}
+            </p>
             <button
-              key="__porco_card__"
-              onClick={() => {
-                playFeedback("click");
-                setPorcoOpen(true);
-              }}
-              className="relative flex flex-col rounded-lg bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.96]"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground active:scale-95 transition-transform disabled:opacity-60"
             >
-              <span className="font-semibold text-base text-foreground leading-tight">
-                Porco
-              </span>
-              <span className="mt-1 text-sm text-primary font-bold">
-                R$ {porcoBase!.price.toFixed(2)}
-              </span>
-              <span className="mt-2 text-sm font-semibold text-primary">Escolher tipo</span>
-              {porcoQty > 0 && (
-                <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {porcoQty}
-                </span>
-              )}
+              {isFetching ? "Tentando..." : "Tentar novamente"}
             </button>
-          )}
-          {filtered
-            .filter((p) => !(showPorcoCard && porcoReal && p.id === porcoReal.id))
-            .map((product) => {
-              const qty = getQty(product.id);
+          </div>
+        )}
+        {!isLoading && !error && products.length === 0 && (
+          <p className="p-6 text-center text-sm text-muted-foreground">
+            Nenhum produto cadastrado.
+          </p>
+        )}
+
+        {!isLoading && !error && products.length > 0 && filtered.length === 0 && !subgroups && (
+          <p className="p-8 text-center text-sm text-muted-foreground">
+            {isSearching
+              ? `Nenhum item encontrado para "${search}".`
+              : activeCategory === "favoritos"
+                ? "Ainda não há favoritos. Eles aparecem após os primeiros pedidos."
+                : "Nenhum item nesta categoria."}
+          </p>
+        )}
+
+        {!isLoading && !error && products.length > 0 && (subgroups ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
+            {subgroups.map((sub) => {
+              const qty = subgroupQty(sub);
               return (
                 <button
-                  key={product.id}
+                  key={sub.label}
                   onClick={() => {
-                    onAdd(product);
+                    playFeedback("click");
+                    setOpenSubgroup(sub);
                   }}
-                  className="relative flex flex-col rounded-xl bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10"
+                  className="relative flex aspect-square flex-col items-center justify-center rounded-lg bg-card border border-border p-3 text-center transition-all duration-150 active:scale-[0.96]"
                 >
-                  <span className="font-semibold text-base text-foreground leading-tight">
-                    {product.name}
+                  <span className="text-base font-bold text-foreground leading-tight">
+                    {sub.label}
                   </span>
-                  <span className="mt-1 text-sm text-primary font-bold">
-                    R$ {product.price.toFixed(2)}
-                  </span>
-                  <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
-                    + ADD
-                  </span>
+                  <span className="mt-2 text-xs text-muted-foreground">Toque para ver</span>
                   {qty > 0 && (
-                    <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground border-2 border-background px-1.5">
+                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                       {qty}
                     </span>
                   )}
                 </button>
               );
             })}
-        </div>
-      ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
+            {/* Card especial "Porco" — abre popup com 3 variantes */}
+            {showPorcoCard && (
+              <button
+                key="__porco_card__"
+                onClick={() => {
+                  playFeedback("click");
+                  setPorcoOpen(true);
+                }}
+                className="relative flex flex-col rounded-lg bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.96]"
+              >
+                <span className="font-semibold text-base text-foreground leading-tight">
+                  Porco
+                </span>
+                <span className="mt-1 text-sm text-primary font-bold">
+                  R$ {porcoBase!.price.toFixed(2)}
+                </span>
+                <span className="mt-2 text-sm font-semibold text-primary">Escolher tipo</span>
+                {porcoQty > 0 && (
+                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {porcoQty}
+                  </span>
+                )}
+              </button>
+            )}
+            {filtered
+              .filter((p) => !(showPorcoCard && porcoReal && p.id === porcoReal.id))
+              .map((product) => {
+                const qty = getQty(product.id);
+                return (
+                  <button
+                    key={product.id}
+                    onClick={() => onAdd(product)}
+                    className="relative flex flex-col rounded-xl bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10"
+                  >
+                    <span className="font-semibold text-base text-foreground leading-tight">
+                      {product.name}
+                    </span>
+                    <span className="mt-1 text-sm text-primary font-bold">
+                      R$ {product.price.toFixed(2)}
+                    </span>
+                    <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
+                      + ADD
+                    </span>
+                    {qty > 0 && (
+                      <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground border-2 border-background px-1.5">
+                        {qty}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+          </div>
+        ))}
       </div>
 
-      {/* Porco variant dialog */}
-      <Dialog open={porcoOpen} onOpenChange={setPorcoOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Escolha o tipo de Porco</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 gap-2">
-            {PORCO_VARIANTS.map((variant) => (
-              <button
-                key={variant}
-                onClick={() => addPorcoVariant(variant)}
-                className="rounded-lg bg-card border border-border p-4 text-left font-semibold text-foreground active:scale-[0.97] transition-transform min-h-[56px]"
-              >
-                {variant}
-              </button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PorcoVariantDialog open={porcoOpen} onOpenChange={setPorcoOpen} onPick={addPorcoVariant} />
 
-      {/* Rename table dialog */}
-      {/* Move table dialog */}
       {canMove && existingOrderId && originalTableName && (
         <MoveTableDialog
           open={moveOpen}
@@ -461,139 +390,25 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         />
       )}
 
-      {/* Rename table dialog */}
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Nome da mesa</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground -mt-2">
-            Substitua o número pelo nome do cliente (ex: "João").
-          </p>
-          <input
-            type="text"
-            autoFocus
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            placeholder="Ex: João, Mesa do canto..."
-            maxLength={40}
-            className="w-full rounded-md border border-border bg-background p-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const v = renameValue.trim();
-                if (v) {
-                  onRenameTable?.(v);
-                  setRenameOpen(false);
-                }
-              }
-            }}
-          />
-          {/* Botão para resetar ao número original (só aparece se o nome atual for diferente) */}
-          {originalTableName && tableName !== originalTableName && (
-            <button
-              onClick={() => {
-                playFeedback("click");
-                onRenameTable?.(originalTableName);
-                setRenameOpen(false);
-              }}
-              className="w-full rounded-lg border border-border bg-card p-3 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary active:scale-[0.98] transition-all min-h-[48px]"
-            >
-              ↺ Voltar ao número original (Mesa {originalTableName})
-            </button>
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setRenameOpen(false)}
-              className="flex-1 rounded-lg border border-border bg-secondary p-3 text-sm font-semibold text-secondary-foreground active:scale-[0.97] transition-transform min-h-[48px]"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => {
-                const v = renameValue.trim();
-                if (!v) return;
-                playFeedback("click");
-                onRenameTable?.(v);
-                setRenameOpen(false);
-              }}
-              disabled={!renameValue.trim() || renameValue.trim() === tableName}
-              className="flex-1 rounded-lg bg-primary p-3 text-sm font-bold text-primary-foreground active:scale-[0.97] transition-transform disabled:opacity-50 min-h-[48px]"
-            >
-              Salvar
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <RenameTableDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        value={renameValue}
+        onValueChange={setRenameValue}
+        tableName={tableName}
+        originalTableName={originalTableName}
+        onRename={(v) => onRenameTable?.(v)}
+      />
 
-      {/* Subgroup dialog */}
-      <Dialog open={!!openSubgroup} onOpenChange={(o) => !o && setOpenSubgroup(null)}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{openSubgroup?.label}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 gap-2">
-            {subgroupProducts.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum item disponível.</p>
-            )}
-            {subgroupProducts.map((product) => {
-              const qty = getQty(product.id);
-              return (
-                <button
-                  key={product.id}
-                  onClick={() => onAdd(product)}
-                  className="relative flex items-center justify-between rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.97] min-h-[64px]"
-                >
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-base text-foreground leading-tight">
-                      {product.name}
-                    </span>
-                    <span className="mt-1 text-sm text-primary font-bold">
-                      R$ {product.price.toFixed(2)}
-                    </span>
-                  </div>
-                  <span className="text-sm font-semibold text-primary">+ ADD</span>
-                  {qty > 0 && (
-                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                      {qty}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            onClick={() => {
-              playFeedback("click");
-              setOpenSubgroup(null);
-            }}
-            className="mt-2 w-full rounded-lg bg-primary p-3 text-base font-bold text-primary-foreground active:scale-[0.97] transition-transform min-h-[48px]"
-          >
-            Concluir
-          </button>
-        </DialogContent>
-      </Dialog>
+      <SubgroupDialog
+        subgroup={openSubgroup}
+        products={subgroupProducts}
+        onClose={() => setOpenSubgroup(null)}
+        onAdd={onAdd}
+        getQty={getQty}
+      />
 
-      {/* Floating cart FAB (rodapé direito) */}
-      {itemCount > 0 && (
-        <button
-          onClick={() => {
-            playFeedback("click");
-            onViewCart();
-          }}
-          aria-label={`Ver pedido — ${itemCount} ${itemCount === 1 ? "item" : "itens"} — R$ ${total.toFixed(2)}`}
-          className="fixed bottom-5 right-5 z-20 flex items-center gap-3 rounded-full bg-primary pl-5 pr-6 py-4 font-bold text-primary-foreground shadow-2xl shadow-primary/40 active:scale-[0.95] transition-transform duration-150 min-h-[64px] ring-4 ring-primary/20"
-        >
-          <div className="relative">
-            <ShoppingCart size={26} />
-            <span className="absolute -top-2 -right-3 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-black text-destructive-foreground border-2 border-primary">
-              {itemCount}
-            </span>
-          </div>
-          <span className="text-base font-black tabular-nums">
-            R$ {total.toFixed(2)}
-          </span>
-        </button>
-      )}
+      <CartFab itemCount={itemCount} total={total} onClick={onViewCart} />
     </div>
   );
 };
