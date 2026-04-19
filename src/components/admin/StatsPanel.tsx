@@ -221,6 +221,33 @@ const StatsPanel = () => {
     ? (totalOrders > 0 ? totalRevenue / totalOrders : 0)
     : (totalItems > 0 ? totalRevenue / totalItems : 0);
 
+  // KPIs do período anterior (respeitam o filtro de garçom)
+  const prevKpis = useMemo(() => {
+    let revenue = 0;
+    let items = 0;
+    let ordersCount = 0;
+    prevOrders.forEach((o) => {
+      const matchingItems = waiterFilter === "all"
+        ? (o.order_items || [])
+        : (o.order_items || []).filter((i) => ((i.waiter_name || o.waiter_name || "").trim()) === waiterFilter);
+      if (matchingItems.length === 0) return;
+      ordersCount += 1;
+      matchingItems.forEach((i) => {
+        revenue += i.subtotal || 0;
+        items += i.quantity || 0;
+      });
+    });
+    const avg = waiterFilter === "all"
+      ? (ordersCount > 0 ? revenue / ordersCount : 0)
+      : (items > 0 ? revenue / items : 0);
+    return { revenue, items, orders: ordersCount, avg };
+  }, [prevOrders, waiterFilter]);
+
+  const calcDeltaPct = (current: number, previous: number): number | null => {
+    if (previous <= 0) return current > 0 ? Infinity : null;
+    return ((current - previous) / previous) * 100;
+  };
+
   // ===== Top 10 itens =====
   const topItems = useMemo(() => {
     const counts: Record<string, number> = {};
