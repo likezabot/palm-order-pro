@@ -41,26 +41,24 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   });
 
   const total = order.total || 0;
-  const paid = parseFloat(amountPaid) || 0;
-  const change = paid - total;
 
   const handleConfirm = async (shouldPrint: boolean) => {
-    if (!method || sending) return;
+    if (sending) return;
     setSending(true);
     setShowConfirm(false);
 
     try {
       const { error } = await supabase.rpc("pay_order", {
         p_order_id: order.id,
-        p_payment_method: method,
-        p_amount_paid: method === "cash" ? paid : total,
+        p_payment_method: "none",
+        p_amount_paid: total,
         p_should_print: shouldPrint,
       });
 
       if (error) throw error;
 
       playFeedback("success");
-      toast({ title: "Pagamento confirmado!" });
+      toast({ title: "Mesa fechada!" });
       onClosed();
     } catch (err) {
       console.error(err);
@@ -73,11 +71,11 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   return (
     <div className="min-h-screen flex flex-col pb-28">
       <div className="border-b border-border p-4 flex items-center gap-4">
-        <button 
+        <button
           onClick={() => {
             playFeedback("click");
             onBack();
-          }} 
+          }}
           className="text-muted-foreground"
         >
           <ArrowLeft size={24} />
@@ -99,55 +97,16 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
         </div>
       </div>
 
-      <div className="p-4 space-y-3">
-        <p className="font-semibold text-base">Forma de pagamento:</p>
-        <div className="grid grid-cols-3 gap-3">
-          {PAYMENT_METHODS.map((pm) => (
-            <button
-              key={pm.key}
-              onClick={() => {
-                playFeedback("click");
-                setMethod(pm.key);
-              }}
-              className={`rounded-lg border p-3 text-base font-semibold transition-all duration-150 active:scale-95 ${
-                method === pm.key
-                  ? "border-primary bg-primary/20 text-primary"
-                  : "border-border bg-card text-foreground"
-              }`}
-            >
-              {pm.label}
-            </button>
-          ))}
-        </div>
-
-        {method === "cash" && (
-          <div className="space-y-2">
-            <input
-              type="number"
-              placeholder="Valor recebido"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              className="w-full rounded-lg border border-border bg-card p-4 text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            {paid >= total && (
-              <p className="text-lg font-bold text-success">
-                Troco: R$ {change.toFixed(2)}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border">
         <button
           onClick={() => {
             playFeedback("click");
             setShowConfirm(true);
           }}
-          disabled={!method || sending || (method === "cash" && paid < total)}
+          disabled={sending}
           className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground active:scale-[0.97] transition-transform disabled:opacity-40 min-h-[56px]"
         >
-          {sending ? "PROCESSANDO..." : "✅ CONFIRMAR PAGAMENTO"}
+          {sending ? "PROCESSANDO..." : "✅ FECHAR MESA"}
         </button>
       </div>
 
