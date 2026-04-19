@@ -97,14 +97,47 @@ const StatsPanel = () => {
     return m;
   }, [products]);
 
+  // Lista de garçons disponíveis no período (para o seletor)
+  const availableWaiters = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o) => {
+      o.order_items?.forEach((i) => {
+        const name = (i.waiter_name || o.waiter_name || "").trim();
+        if (name) set.add(name);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [orders]);
+
+  // Pedidos com itens filtrados pelo garçom selecionado.
+  // Mantemos a estrutura de OrderRow, só descartamos itens de outros garçons.
+  // KPIs baseados em ITENS (não em order.total) para refletir o filtro corretamente.
+  const filteredOrders = useMemo<OrderRow[]>(() => {
+    if (waiterFilter === "all") return orders;
+    return orders
+      .map((o) => {
+        const items = (o.order_items || []).filter((i) => {
+          const w = (i.waiter_name || o.waiter_name || "").trim();
+          return w === waiterFilter;
+        });
+        if (items.length === 0) return null;
+        const itemsTotal = items.reduce((s, i) => s + (i.subtotal || 0), 0);
+        return { ...o, total: itemsTotal, order_items: items };
+      })
+      .filter((o): o is OrderRow => o !== null);
+  }, [orders, waiterFilter]);
+
   // ===== KPIs =====
-  const totalRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
-  const totalOrders = orders.length;
-  const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  const totalItems = orders.reduce(
+  const totalRevenue = filteredOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const totalOrders = filteredOrders.length;
+  const totalItems = filteredOrders.reduce(
     (s, o) => s + (o.order_items?.reduce((x, i) => x + (i.quantity || 0), 0) || 0),
     0,
   );
+  // Quando filtrado por garçom, "ticket médio" passa a ser por item (mais útil).
+  const avgTicket = waiterFilter === "all"
+    ? (totalOrders > 0 ? totalRevenue / totalOrders : 0)
+    : (totalItems > 0 ? totalRevenue / totalItems : 0);
 
   // ===== Top 10 itens =====
   const topItems = useMemo(() => {
