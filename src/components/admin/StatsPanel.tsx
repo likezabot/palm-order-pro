@@ -894,6 +894,7 @@ const StatsPanel = () => {
                       <SortHeader label="Médio/item" k="avg" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
                       <SortHeader label="Médio/mesa" k="avgPerTable" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
                       <SortHeader label="% fat." k="share" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="left" />
+                      <th className="py-2">vs anterior</th>
                       <th className="py-2">Top categoria</th>
                     </tr>
                   </thead>
