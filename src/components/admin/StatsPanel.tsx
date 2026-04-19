@@ -46,6 +46,7 @@ const StatsPanel = () => {
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<Period>("today");
   const [customDate, setCustomDate] = useState<Date | undefined>();
+  const [waiterFilter, setWaiterFilter] = useState<string>("all");
 
   const periodStart = useMemo(() => {
     const now = new Date();
