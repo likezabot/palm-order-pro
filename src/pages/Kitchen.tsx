@@ -98,24 +98,24 @@ const Kitchen = () => {
 
   return (
     <div className="md:h-screen flex flex-col md:overflow-hidden">
-      <div className="border-b border-border p-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/")} className="text-muted-foreground">
+      <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+          <button onClick={() => navigate("/")} className="text-muted-foreground shrink-0">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-2xl font-black tracking-tight">PAINEL COZINHA</h1>
+          <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">PAINEL COZINHA</h1>
         </div>
         <button
           onClick={toggleSound}
           title={soundEnabled ? "Desativar som de novos pedidos" : "Ativar som de novos pedidos"}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-bold transition-colors ${
+          className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs sm:text-sm font-bold transition-colors shrink-0 ${
             soundEnabled
               ? "border-success bg-success/10 text-success"
               : "border-border bg-card text-muted-foreground hover:bg-secondary"
           }`}
         >
           {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-          {soundEnabled ? "SOM LIGADO" : "SOM DESLIGADO"}
+          <span className="hidden sm:inline">{soundEnabled ? "SOM LIGADO" : "SOM DESLIGADO"}</span>
         </button>
       </div>
 

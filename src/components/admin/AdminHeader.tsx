@@ -23,27 +23,30 @@ export const AdminHeader = ({
   const { playFeedback } = useFeedback();
 
   return (
-    <div className="border-b border-border p-4 flex items-center justify-between bg-white shadow-sm">
-      <div className="flex items-center gap-4">
+    <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 bg-white shadow-sm">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
         <button
           onClick={() => {
             playFeedback("click");
             navigate("/");
           }}
-          className="text-muted-foreground hover:bg-secondary p-2 rounded-full transition-colors"
+          className="text-muted-foreground hover:bg-secondary p-2 rounded-full transition-colors shrink-0"
         >
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-black uppercase tracking-tight">Painel de Controle</h1>
+        <h1 className="text-base sm:text-xl font-black uppercase tracking-tight truncate">
+          <span className="hidden sm:inline">Painel de Controle</span>
+          <span className="sm:hidden">Admin</span>
+        </h1>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
         <DuplicatesResolver />
         <button
           onClick={() => {
             playFeedback("click");
             onToggleStaffMode();
           }}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-black uppercase tracking-wider transition-colors ${
+          className={`flex items-center gap-1 rounded-lg px-2 sm:px-3 py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider transition-colors ${
             staffMode
               ? "bg-warning/20 text-warning border border-warning/40"
               : "bg-secondary text-muted-foreground hover:text-foreground"
@@ -55,7 +58,7 @@ export const AdminHeader = ({
           }
         >
           {staffMode ? <EyeOff size={14} /> : <Eye size={14} />}
-          {staffMode ? "Modo Garçom" : "Modo Admin"}
+          <span className="hidden xs:inline">{staffMode ? "Garçom" : "Admin"}</span>
         </button>
         <SettingsDialog autoPrint={autoPrint} onAutoPrintChange={onAutoPrintChange} />
         <button
@@ -63,9 +66,11 @@ export const AdminHeader = ({
             playFeedback("click");
             onNewProduct();
           }}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground active:scale-95 shadow-lg shadow-primary/20 transition-all"
+          className="flex items-center gap-1.5 rounded-xl bg-primary px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-primary-foreground active:scale-95 shadow-lg shadow-primary/20 transition-all"
         >
-          <Plus size={18} /> NOVO PRODUTO
+          <Plus size={18} />
+          <span className="hidden sm:inline">NOVO PRODUTO</span>
+          <span className="sm:hidden">NOVO</span>
         </button>
       </div>
     </div>

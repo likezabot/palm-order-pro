@@ -210,7 +210,7 @@ const ProductsManager = ({
       {/* Toolbar de busca + filtros */}
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3 space-y-3">
         <div className="flex gap-2 items-center flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}

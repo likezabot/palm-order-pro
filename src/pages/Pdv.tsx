@@ -204,28 +204,29 @@ const Pdv = () => {
   return (
     <div className={`min-h-screen flex flex-col bg-background ${staffMode ? "staff-mode" : ""}`}>
       {/* Header */}
-      <div className="border-b border-border p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/")} className="text-muted-foreground">
+      <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+          <button onClick={() => navigate("/")} className="text-muted-foreground shrink-0">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-2xl font-black tracking-tight">PDV / CAIXA</h1>
-          <Badge className={`admin-only ${realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}`}>
-            {realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}
+          <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">PDV / CAIXA</h1>
+          <Badge className={`admin-only shrink-0 ${realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}`}>
+            <span className="hidden sm:inline">{realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}</span>
+            <span className="sm:hidden">●</span>
           </Badge>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={toggleStaffMode}
             title={staffMode ? "Desativar modo garçom (mostrar admin)" : "Ativar modo garçom (ocultar admin)"}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-bold transition-colors ${
+            className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs sm:text-sm font-bold transition-colors ${
               staffMode
                 ? "border-warning bg-warning/10 text-warning"
                 : "border-border bg-card text-muted-foreground hover:bg-secondary"
             }`}
           >
             {staffMode ? <EyeOff size={18} /> : <Eye size={18} />}
-            {staffMode ? "MODO GARÇOM" : "MODO ADMIN"}
+            <span className="hidden xs:inline sm:inline">{staffMode ? "GARÇOM" : "ADMIN"}</span>
           </button>
           <PrintSettingsDialog />
         </div>
