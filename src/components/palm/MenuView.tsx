@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShoppingCart, Pencil, Search, X, Star } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Pencil, Search, X, Star, ArrowRightLeft } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import MoveTableDialog from "./MoveTableDialog";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -23,6 +24,9 @@ interface Props {
   tableName?: string;
   originalTableName?: string;
   onRenameTable?: (newName: string) => void | Promise<void>;
+  /** Quando presente, habilita o botão "mover mesa" (só faz sentido com pedido já enviado) */
+  existingOrderId?: string | null;
+  onTableMoved?: (newTable: string) => void;
 }
 
 // Subgrupos por categoria, mapeados por nome do produto.
