@@ -1,43 +1,51 @@
 
+## Objetivo
+Rastrear vendas por garçom **no nível do item** (não mais só no pedido), permitindo saber quanto cada garçom vendeu mesmo quando vários atendem a mesma mesa.
 
-## Diagnóstico
+## Problema atual
+- `orders.waiter_name` guarda apenas o garçom que **abriu** a mesa.
+- Se outro garçom adiciona itens depois, a venda inteira fica creditada ao primeiro.
+- A aba de Estatísticas (StatsPanel) provavelmente agrega por `orders.waiter_name`, distorcendo o ranking.
 
-**Bug relatado:** Garçom Wilson abriu mesa, renomeou para "Felipe". Ao voltar na mesma mesa, o nome "Felipe" não apareceu — apareceu o nome original. Ele fez novo pedido e ficou com **duas mesas duplicadas** no grid (uma com nome original, outra com "Felipe").
+## Solução
+Adicionar `waiter_name` em cada `order_items`, capturado no momento em que o item é inserido/editado.
 
-**Causa raiz provável** (lendo `Palm.tsx` + `rename_order_table`):
+### Mudanças
 
-1. `rename_order_table` atualiza `orders.table_name` mas **não toca em `original_table_name`**.
-2. No `TableGrid` (preciso confirmar), as mesas em uso provavelmente são listadas a partir de `orders` ativos agrupados por `table_name` (o nome atual). Mas as mesas "vazias" do grid usam o nome físico fixo ("Mesa 5", "Mesa 6"...).
-3. **Quando Wilson renomeia "Mesa 5" → "Felipe":** o pedido fica com `table_name="Felipe"` e `original_table_name="Mesa 5"`. No grid, aparece um card "Felipe" (pedido ativo) **e** o card fixo "Mesa 5" continua aparecendo como vazia (porque o grid renderiza as mesas físicas independentemente).
-4. Wilson clica em "Mesa 5" achando que é a do Felipe → cai no fluxo de **mesa nova** (sem `orderId`), cria um **segundo pedido** com `table_name="Mesa 5"`. Resultado: duas mesas no grid, ambas com itens, sem ligação entre si.
+**1. Banco (migration)**
+- Adicionar coluna `waiter_name text` em `order_items` (nullable, para itens antigos).
+- Atualizar funções RPC para receber e gravar o garçom por item:
+  - `create_order(...)` — ler `item->>'waiter_name'` ao inserir.
+  - `update_order_items(...)` — idem (cada item carrega seu próprio garçom).
+- Backfill: itens existentes sem `waiter_name` herdam de `orders.waiter_name`.
 
-**Por que é intermitente:** só acontece quando o garçom renomeia a mesa E depois clica no card físico antigo em vez do card renomeado. Se ele clicar no card "Felipe" funciona normal.
+**2. Frontend — captura por item**
+- `src/lib/types.ts`: adicionar `waiter_name?: string` em `CartItem` e `OrderItem`.
+- `src/hooks/use-palm-cart.ts`: 
+  - `addToCart` passa a receber/anexar o `waiterName` atual ao item.
+  - `loadOrder` preserva o `waiter_name` original de cada item carregado (não sobrescreve).
+- `src/pages/Palm.tsx`: passar `waiterName` para `addToCart`.
+- `src/components/palm/OrderReview.tsx`: ao chamar `create_order`/`update_order_items`, incluir `waiter_name` em cada item do payload JSON.
 
-## Plano
+**3. UI — visibilidade**
+- `OrderReview` e `OrderRow` (PDV): mostrar tag pequena com o nome do garçom ao lado de cada item (cinza, opcional, só quando há mais de um garçom no pedido).
+- Header da mesa no Palm/PDV: deixar de mostrar "Garçom: Fulano" como dono fixo — mostrar "Aberta por: Fulano" para deixar claro que é só quem iniciou.
 
-### Passo 1 — Investigar `TableGrid.tsx` para confirmar a hipótese
-Ler `src/components/palm/TableGrid.tsx` para ver exatamente como os cards são montados (mesas físicas fixas vs pedidos ativos) e confirmar que mesas renomeadas geram cards duplicados.
+**4. Estatísticas (StatsPanel)**
+- Trocar a agregação: somar `order_items.subtotal` agrupado por `order_items.waiter_name` (com fallback para `orders.waiter_name` quando nulo, cobrindo histórico).
+- Período: manter os filtros existentes (hoje, semana, mês).
+- Mostrar: ranking com nome, qtd de itens vendidos, total em R$, ticket médio por item.
 
-### Passo 2 — Fix no grid: ocultar mesa física que tem pedido ativo renomeado
-Quando uma mesa física (ex: "Mesa 5") tem um pedido ativo cujo `original_table_name` é "Mesa 5" mas `table_name` é diferente ("Felipe"), o card físico **não deve aparecer como vazio** — ele já está em uso, só renomeado. O card renomeado ("Felipe") substitui visualmente o card físico, com badge "(Mesa 5)" pequeno embaixo para manter a referência.
+## Arquivos afetados
+- migration nova (coluna + atualização das 2 funções RPC + backfill)
+- `src/lib/types.ts`
+- `src/hooks/use-palm-cart.ts`
+- `src/pages/Palm.tsx`
+- `src/components/palm/OrderReview.tsx`
+- `src/components/admin/StatsPanel.tsx`
+- `src/components/pdv/OrderRow.tsx` (badge do garçom por item)
 
-### Passo 3 — Fix de proteção no servidor: bloquear criação de pedido em mesa já ocupada por renomeação
-No `create_order` (RPC), adicionar verificação: se já existe um pedido ativo (`status IN ('new','preparing','done')`) cujo `original_table_name = p_table_name`, **rejeitar** com erro `table_already_in_use_renamed` e devolver o nome atual + orderId, para o frontend redirecionar o garçom ao pedido existente em vez de criar duplicata.
-
-### Passo 4 — Tratamento no frontend
-Em `OrderReview` (onde o pedido é criado), capturar esse erro específico e mostrar diálogo: "Esta mesa já está em uso como '{nome_atual}'. Deseja abrir esse pedido?" → ao confirmar, navega para o pedido existente.
-
-### Arquivos afetados
-
-| Arquivo | Mudança |
-|---|---|
-| `src/components/palm/TableGrid.tsx` | Mesclar mesa física + pedido renomeado num único card |
-| `supabase/migrations/...` (novo) | `create_order` valida `original_table_name` duplicado |
-| `src/components/palm/OrderReview.tsx` | Tratar novo erro e redirecionar |
-
-### Validação
-1. Abrir Palm, escolher "Mesa 5", renomear para "Felipe", adicionar item, enviar.
-2. Voltar ao grid: deve aparecer **apenas um card** "Felipe" (com "Mesa 5" pequeno embaixo) — não dois.
-3. Tentar clicar em outra rota que tente criar pedido em "Mesa 5" → deve receber alerta e ser redirecionado ao pedido do Felipe.
-4. Pedidos antigos que já estão duplicados continuam visíveis (não quebra dados existentes).
-
+## Notas
+- Itens antigos continuam funcionando (fallback para `orders.waiter_name`).
+- Sem breaking changes na API: `waiter_name` é opcional no payload.
+- Testes: adicionar 2 testes — agregação por garçom com fallback, e merge de itens preservando o garçom original.
