@@ -209,6 +209,13 @@ const Palm = () => {
         itemCount={itemCount}
         tableName={tableName}
         originalTableName={originalTableName}
+        existingOrderId={existingOrderId}
+        onTableMoved={(newTable) => {
+          // Após mover, o pedido agora está em outra mesa física.
+          // Atualiza nomes locais para refletir; itens permanecem.
+          setTableName(newTable);
+          setOriginalTableName(newTable);
+        }}
         onRenameTable={async (newName: string) => {
           const trimmed = newName.trim();
           if (!trimmed || trimmed === tableName) return;
