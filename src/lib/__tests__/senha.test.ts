@@ -39,11 +39,17 @@ describe("senha do BALCÃO", () => {
   });
 
   it("formata #100 corretamente (sem padding extra)", () => {
-    const orders = Array.from({ length: 100 }, (_, i) => ({
-      id: `order-${i}`,
-      table_name: "BALCÃO",
-      created_at: TODAY(8, i),
-    }));
+    // Espalha 100 pedidos ao longo do dia para evitar timestamps duplicados.
+    const orders = Array.from({ length: 100 }, (_, i) => {
+      const totalMin = i * 5; // 0, 5, 10, ... minutos a partir de 00:00
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return {
+        id: `order-${i}`,
+        table_name: "BALCÃO",
+        created_at: TODAY(h, m),
+      };
+    });
     expect(getSenha("order-99", orders, NOW)).toBe("#100");
   });
 
