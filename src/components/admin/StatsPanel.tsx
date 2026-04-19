@@ -401,10 +401,7 @@ const StatsPanel = () => {
     return { revenue, items, orders: prevOrders.length };
   }, [prevOrders]);
 
-  const calcDelta = (current: number, previous: number): number | null => {
-    if (previous <= 0) return current > 0 ? Infinity : null;
-    return ((current - previous) / previous) * 100;
-  };
+  // (calcDeltaPct definido acima é reutilizado abaixo)
 
   interface WaiterRow {
     name: string;
