@@ -1,8 +1,7 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, Settings, AlertCircle, RefreshCw, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Clock, Flame } from "lucide-react";
-import { useElapsedTime } from "@/hooks/use-elapsed-time";
+import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -14,21 +13,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
-import { manualPrintOrder, manualPrintDelta, manualPrintBill, autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
-import { printTest, getPaperWidth, setPaperWidth, printCustomerReceipt } from "@/lib/print-receipt";
+import { manualPrintOrder, manualPrintDelta, manualPrintBill } from "@/lib/print-service";
+import { printCustomerReceipt } from "@/lib/print-receipt";
 import { loadPrintConfig } from "@/lib/print-config";
 import { useToast } from "@/hooks/use-toast";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 import { formatTableLabel } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
-
-// Forma de pagamento removida — fechamento direto sem método (estabelecimento não usa).
-
+import { OrderSection } from "@/components/pdv/OrderSection";
+import { PrintSettingsDialog } from "@/components/pdv/PrintSettingsDialog";
+import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
   new: { label: "NOVO", color: "bg-primary text-primary-foreground", next: "preparing", nextLabel: "▶ PREPARAR" },
@@ -45,7 +40,6 @@ const Pdv = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [sending, setSending] = useState(false);
-  const [realtimeStatus, setRealtimeStatus] = useState<"online" | "offline">("offline");
   const [wantCustomerData, setWantCustomerData] = useState(false);
   const [showPayConfirm, setShowPayConfirm] = useState(false);
   const [pendingPrint, setPendingPrint] = useState<(() => Promise<void>) | null>(null);
@@ -56,6 +50,8 @@ const Pdv = () => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("pdv-staff-mode") === "1";
   });
+
+  const { realtimeStatus } = usePdvRealtime();
 
   const toggleStaffMode = () => {
     setStaffMode((v) => {
@@ -100,88 +96,6 @@ const Pdv = () => {
     }
   }, [toast]);
 
-  // Guard de idempotência
-  const printedEventsRef = useRef<Set<string>>(new Set());
-  const printingNowRef = useRef<Set<string>>(new Set());
-  const toastRef = useRef(toast);
-  const playFeedbackRef = useRef(playFeedback);
-
-  useEffect(() => { toastRef.current = toast; }, [toast]);
-  useEffect(() => { playFeedbackRef.current = playFeedback; }, [playFeedback]);
-
-  // Ref-based auto-print — never changes identity, so Realtime subscription stays stable
-  const tryAutoPrintRef = useRef(async (order: Order, eventKey: string, isUpdate: boolean) => {
-    if (printedEventsRef.current.has(eventKey)) return;
-    if (printingNowRef.current.has(order.id)) return;
-
-    printedEventsRef.current.add(eventKey);
-    printingNowRef.current.add(order.id);
-
-    console.log(`[PDV AutoPrint] Aguardando itens do pedido ${order.id} (Mesa ${order.table_name})...`);
-    await new Promise((r) => setTimeout(r, 2000));
-
-    try {
-      const result = isUpdate
-        ? await autoPrintDelta(order)
-        : await autoPrintOrder(order);
-
-      if (result.printed) {
-        const msg = result.reason === "delta_success"
-          ? `Acréscimo impresso — Mesa ${order.table_name}`
-          : `Impresso automaticamente — Mesa ${order.table_name}`;
-        console.log(`[PDV AutoPrint] ${msg}`);
-        toastRef.current({ title: msg });
-      } else {
-        console.warn(`[PDV AutoPrint] Não imprimiu: ${result.reason}`);
-      }
-    } catch (error) {
-      console.error("[PDV AutoPrint] Falha na autoimpressão:", error);
-    } finally {
-      printingNowRef.current.delete(order.id);
-    }
-  });
-
-  // Realtime — subscription estável (sem dependências instáveis)
-  useEffect(() => {
-    console.log("[PDV] Inscrevendo canal Realtime...");
-
-    const channel = supabase
-      .channel("pdv-realtime-v3")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
-        queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
-        queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
-        const newOrder = payload.new as Order;
-        console.log(`[PDV Realtime] INSERT recebido: ${newOrder.id} — Mesa ${newOrder.table_name}`);
-        playFeedbackRef.current("notification");
-        toastRef.current({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
-        const eventKey = `${newOrder.id}:insert`;
-        tryAutoPrintRef.current(newOrder, eventKey, false);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
-        queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
-        const updated = payload.new as Order;
-        const old = payload.old as Partial<Order>;
-        // Com REPLICA IDENTITY FULL, old tem todos os campos
-        const totalChanged = updated.total !== old.total;
-        const printReset = updated.print_status === 'pending' && (old as Partial<Order>).print_status !== 'pending';
-        
-        if (totalChanged || printReset) {
-          console.log(`[PDV Realtime] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name} (totalChanged=${totalChanged}, printReset=${printReset})`);
-          const eventKey = `${updated.id}:upd:${updated.updated_at}`;
-          tryAutoPrintRef.current(updated, eventKey, true); // isUpdate=true → imprime delta
-        }
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
-      })
-      .subscribe((status) => {
-        console.log(`[PDV Realtime] Status: ${status}`);
-        setRealtimeStatus(status === "SUBSCRIBED" ? "online" : "offline");
-      });
-
-    return () => { supabase.removeChannel(channel); };
-  }, [queryClient]); // Apenas queryClient — estável
-
   const selectedOrder = orders.find((o) => o.id === selectedId) || null;
   const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
 
@@ -200,7 +114,6 @@ const Pdv = () => {
       const k = (o.status as "new" | "preparing" | "done");
       if (groups[k]) groups[k].push(o);
     }
-    // mais antigo primeiro = urgência
     (Object.keys(groups) as Array<keyof typeof groups>).forEach((k) => {
       groups[k].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     });
@@ -213,7 +126,6 @@ const Pdv = () => {
   useEffect(() => {
     const currentDoneIds = new Set(orders.filter((o) => o.status === "done").map((o) => o.id));
     if (!initializedDoneRef.current) {
-      // Primeira passada: snapshot inicial, não toca som para pedidos já existentes
       prevDoneIdsRef.current = currentDoneIds;
       initializedDoneRef.current = true;
       return;
@@ -224,7 +136,6 @@ const Pdv = () => {
     });
     if (hasNew) {
       playFeedback("success");
-      // Beep duplo para chamar atenção em ambiente barulhento
       window.setTimeout(() => playFeedback("success"), 300);
       const order = orders.find((o) => currentDoneIds.has(o.id) && !prevDoneIdsRef.current.has(o.id));
       if (order) {
@@ -233,12 +144,6 @@ const Pdv = () => {
     }
     prevDoneIdsRef.current = currentDoneIds;
   }, [orders, playFeedback, toast]);
-
-  const updateStatus = async (orderId: string, status: string) => {
-    playFeedback("click");
-    await supabase.rpc("update_order_status", { p_order_id: orderId, p_status: status } as any);
-    queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
-  };
 
   const handlePayment = async (shouldPrint: boolean) => {
     if (!selectedOrder || sending) return;
@@ -322,98 +227,7 @@ const Pdv = () => {
             {staffMode ? <EyeOff size={18} /> : <Eye size={18} />}
             {staffMode ? "MODO GARÇOM" : "MODO ADMIN"}
           </button>
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="admin-only p-2 rounded-full hover:bg-secondary transition-colors text-muted-foreground">
-                <Settings size={24} />
-              </button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  Configurações de Impressão
-                </DialogTitle>
-                <DialogDescription>
-                  Configure a largura do papel e faça testes de impressão.
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-6 pt-4">
-                {/* Info: auto-print centralizado */}
-                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/50">
-                  <p className="text-sm text-emerald-800 dark:text-emerald-200">
-                    <strong>✅ Impressão automática ATIVA</strong> — pedidos novos e atualizações são impressos automaticamente nesta tela.
-                    O botão abaixo serve apenas para reimpressão manual.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-                    Largura do Papel
-                  </h3>
-                  <div className="flex gap-2">
-                    {(["58mm", "80mm"] as const).map((w) => (
-                      <Button
-                        key={w}
-                        variant={getPaperWidth() === w ? "default" : "outline"}
-                        className="flex-1 font-bold"
-                        onClick={() => {
-                          setPaperWidth(w);
-                          toast({ title: `Papel alterado para ${w}` });
-                        }}
-                      >
-                        {w}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-                    <AlertCircle className="w-4 h-4" />
-                    Como configurar impressora
-                  </h3>
-                  <div className="space-y-2 text-sm bg-amber-50 dark:bg-amber-950/20 p-4 rounded-lg border border-amber-100 dark:border-amber-900/50">
-                    <p>1. No Windows, defina sua <strong>Impressora Térmica</strong> como <strong>Padrão</strong>.</p>
-                    <p>2. Nas configurações de impressão do navegador, desmarque <strong>"Cabeçalhos e rodapés"</strong>.</p>
-                    <p>3. Impressão silenciosa (sem diálogo) requer <strong>modo kiosk</strong> ou <strong>app desktop</strong>.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <Button 
-                    variant="outline" 
-                    className="w-full gap-2 font-bold"
-                    onClick={async () => {
-                      const ok = await printTest();
-                      if (ok) {
-                        toast({ title: "Teste enviado!", description: "Verifique o cupom na impressora." });
-                      } else {
-                        toast({ 
-                          title: "Impressão bloqueada", 
-                          description: "O modo navegador não permite imprimir. Mude para o modo app desktop/ponte.",
-                          variant: "destructive"
-                        });
-                      }
-                    }}
-                  >
-                    <Printer className="w-4 h-4" />
-                    🖨️ IMPRIMIR TESTE
-                  </Button>
-                  
-                  <Button 
-                    variant="secondary" 
-                    className="w-full gap-2 font-bold"
-                    onClick={() => navigate("/print-station")}
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    ABRIR ESTAÇÃO DE IMPRESSÃO
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <PrintSettingsDialog />
         </div>
       </div>
 
@@ -470,8 +284,6 @@ const Pdv = () => {
                 <span>TOTAL</span>
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
               </div>
-
-              {/* Forma de pagamento removida — fluxo simplificado */}
 
               {/* Customer data section */}
               <div className="rounded-lg border border-border bg-card p-4 space-y-3">
@@ -621,7 +433,6 @@ const Pdv = () => {
                   </button>
                 </div>
 
-                {/* CTA principal: sempre FECHAR CONTA — independe do status */}
                 <button
                   onClick={() => { setShowPayment(true); }}
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-success p-5 font-black text-success-foreground min-h-[64px] text-lg active:scale-[0.98] transition-all shadow-lg"
@@ -685,121 +496,6 @@ const Pdv = () => {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-};
-
-type Accent = "success" | "warning" | "destructive";
-
-const accentClasses: Record<Accent, { dot: string; header: string; border: string }> = {
-  success:     { dot: "bg-success",     header: "text-success",     border: "border-l-success" },
-  warning:     { dot: "bg-warning",     header: "text-warning",     border: "border-l-warning" },
-  destructive: { dot: "bg-destructive", header: "text-destructive", border: "border-l-destructive" },
-};
-
-interface OrderSectionProps {
-  title: string;
-  accent: Accent;
-  orders: Order[];
-  itemsByOrderId: Map<string, number>;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}
-
-const OrderSection = ({ title, accent, orders, itemsByOrderId, selectedId, onSelect }: OrderSectionProps) => {
-  const a = accentClasses[accent];
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 px-1">
-        <span className={`inline-block w-2.5 h-2.5 rounded-full ${a.dot}`} />
-        <h3 className={`text-base font-black uppercase tracking-wide ${a.header}`}>
-          {title} <span className="text-muted-foreground font-bold">({orders.length})</span>
-        </h3>
-      </div>
-      {orders.length === 0 ? (
-        <div className="text-sm text-muted-foreground px-3 py-2 italic">Nenhum pedido</div>
-      ) : (
-        orders.map((order) => (
-          <OrderRow
-            key={order.id}
-            order={order}
-            itemCount={itemsByOrderId.get(order.id) || 0}
-            selected={selectedId === order.id}
-            onSelect={() => onSelect(order.id)}
-            accentBorder={a.border}
-          />
-        ))
-      )}
-    </div>
-  );
-};
-
-interface OrderRowProps {
-  order: Order;
-  itemCount: number;
-  selected: boolean;
-  onSelect: () => void;
-  accentBorder: string;
-}
-
-const OrderRow = ({ order, itemCount, selected, onSelect, accentBorder }: OrderRowProps) => {
-  const elapsed = useElapsedTime(order.created_at);
-  const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const wasPrinted = order.print_status === "printed";
-
-  // Idade em minutos para badges de prioridade
-  const ageMin = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60000);
-  const isUrgent = ageMin >= 40;
-  const isLate = !isUrgent && ageMin >= 20;
-  const waitingPay = order.status === "done" && ageMin >= 10;
-
-  return (
-    <button
-      onClick={onSelect}
-      className={`w-full flex items-center justify-between p-4 rounded-lg border-l-4 border ${accentBorder} transition-all text-left ${
-        selected
-          ? "border-primary bg-primary/10"
-          : isUrgent
-            ? "border-destructive bg-destructive/5 animate-pulse-active"
-            : "border-border bg-card hover:border-muted-foreground/30"
-      }`}
-      style={isUrgent ? ({ ["--pulse-color" as any]: "hsl(var(--destructive) / 0.35)" } as React.CSSProperties) : undefined}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="flex flex-col items-center justify-center min-w-[64px] px-2 py-1 rounded bg-muted/40">
-          <Clock size={14} className="text-muted-foreground" />
-          <span className="text-sm font-black text-foreground leading-none mt-1">{elapsed || "agora"}</span>
-          <span className="text-[10px] text-muted-foreground mt-0.5">{time}</span>
-        </div>
-        <div className="min-w-0">
-          <div className="font-black text-2xl flex items-center gap-2 leading-tight">
-            {formatTableLabel(order.table_name, order.original_table_name)}
-            {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-              <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
-            )}
-            {wasPrinted && <CheckCircle2 className="w-4 h-4 text-success" />}
-          </div>
-          <div className="text-sm text-muted-foreground truncate">
-            {itemCount} {itemCount === 1 ? "item" : "itens"} · {order.waiter_name || "—"}
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {isUrgent && (
-              <Badge className="bg-destructive text-destructive-foreground text-xs gap-1">
-                <Flame className="w-3 h-3" /> URGENTE
-              </Badge>
-            )}
-            {isLate && (
-              <Badge className="bg-warning text-warning-foreground text-xs">⚠ ATRASADO</Badge>
-            )}
-            {waitingPay && !isUrgent && !isLate && (
-              <Badge className="bg-warning text-warning-foreground text-xs">AGUARDANDO PAGAMENTO</Badge>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <span className="font-black text-xl text-primary">R$ {(order.total || 0).toFixed(2)}</span>
-      </div>
-    </button>
   );
 };
 

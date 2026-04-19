@@ -1,98 +1,15 @@
 /**
- * Sistema de Impressão Térmica — Plano B Espetaria
- * 
- * Usa iframe oculto com documento HTML isolado.
- * Layout profissional otimizado para impressoras 58mm/80mm.
+ * Sistema de Impressão Térmica — Plano B Espetaria.
+ *
+ * Orquestrador: monta os blocos via receipt-layout, gera HTML via receipt-html
+ * e despacha para o navegador (print-iframe) ou para a ponte ESC/POS (thermal-printer).
  */
 
-import { loadPrintConfig, savePrintConfig, getFontSizes, type PrintConfig, type PaperWidth } from "./print-config";
+import { loadPrintConfig, savePrintConfig, type PaperWidth } from "./print-config";
 import { buildEscPosReceipt, buildEscPosDelta, buildEscPosBill, sendToBridge, renderLayout } from "./thermal-printer";
-import { createReceiptLayoutModel, type LayoutBlock, type DocType, type ReceiptItem } from "./receipt-layout";
-
-// ============================================================
-// HTML RENDERER a partir do layout model (fonte unica)
-// ============================================================
-
-function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): string {
-  const f = getFontSizes(cfg);
-  const parts: string[] = [];
-
-  for (const blk of blocks) {
-    switch (blk.kind) {
-      case "title":
-        parts.push(`<div class="header-text">${escapeHtml(blk.text)}</div>`);
-        break;
-      case "banner":
-        parts.push(
-          `<div class="center bold" style="font-size:${f.total}px;margin:6px 0;">${escapeHtml(blk.text)}</div>`
-        );
-        break;
-      case "sep":
-        parts.push(blk.bold ? `<hr class="sep-bold">` : `<hr class="sep">`);
-        break;
-      case "info":
-        parts.push(
-          `<div class="info-row"><span class="info-label">${escapeHtml(blk.label)}:</span> <span class="info-value">${escapeHtml(blk.value)}</span></div>`
-        );
-        break;
-      case "item": {
-        const right =
-          blk.subtotal > 0
-            ? `<span class="item-right">R$${blk.subtotal.toFixed(2)}</span>`
-            : "";
-        const note = blk.note
-          ? `<div class="item-note">↳ ${escapeHtml(blk.note)}</div>`
-          : "";
-        parts.push(
-          `<div class="item-row"><span class="item-left"><span class="item-qty">${blk.quantity}x</span> ${escapeHtml(blk.name)}</span>${right}</div>${note}`
-        );
-        break;
-      }
-      case "total":
-        parts.push(
-          `<div class="total-block"><div class="total-row"><span>${escapeHtml(blk.label)}</span><span>${escapeHtml(blk.value)}</span></div></div>`
-        );
-        break;
-      case "qtyLine":
-        parts.push(`<div class="qty-line">${escapeHtml(blk.text)}</div>`);
-        break;
-      case "senha":
-        parts.push(`<div class="senha-num">${escapeHtml(blk.text)}</div>`);
-        break;
-      case "footer":
-        parts.push(`<div class="footer">${escapeHtml(blk.text)}</div>`);
-        break;
-      case "cutMark":
-        parts.push(`<div class="cut">✂ --------------------------------</div>`);
-        break;
-    }
-  }
-  return parts.join("\n");
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-/** Helper: monta HTML completo a partir do docType + dados, usando layout model. */
-function buildHtmlFromLayout(
-  docType: DocType,
-  title: string,
-  data: { tableName?: string; waiterName?: string; items: ReceiptItem[]; total?: number; senha?: string },
-  cfg: PrintConfig
-): string {
-  const layout = createReceiptLayoutModel({ docType, ...data }, cfg);
-  return buildHtmlFromBlocks(title, layout.blocks, cfg);
-}
-
-/** Helper: monta HTML completo a partir de blocos JA prontos (preserva extras injetados). */
-function buildHtmlFromBlocks(title: string, blocks: LayoutBlock[], cfg: PrintConfig): string {
-  const body = `<div class="receipt" id="receipt-root">${renderBlocksToHtml(blocks, cfg)}</div>`;
-  return wrapHtml(title, cfg, body);
-}
+import { createReceiptLayoutModel, type LayoutBlock } from "./receipt-layout";
+import { buildHtmlFromLayout, buildHtmlFromBlocks } from "./receipt-html";
+import { doPrint } from "./print-iframe";
 
 export type { PaperWidth };
 
@@ -106,199 +23,10 @@ export function setPaperWidth(width: PaperWidth) {
   savePrintConfig(cfg);
 }
 
-// ============================================================
-// CSS GENERATION
-// ============================================================
-
-function contentWidth(paper: PaperWidth): string {
-  return paper === "58mm" ? "48mm" : "72mm";
-}
-
-function thermalCSS(cfg: PrintConfig): string {
-  const paper = cfg.paperWidth;
-  const cw = contentWidth(paper);
-  const f = getFontSizes(cfg);
-  const pad = paper === "58mm" ? "2mm" : "4mm";
-
-  return `
-    @page {
-      size: ${paper} auto !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: ${paper} !important;
-      max-width: ${paper} !important;
-      min-width: ${paper} !important;
-      height: auto !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #fff !important;
-      color: #000 !important;
-      font-family: 'Courier New', Courier, monospace !important;
-      font-size: ${f.base}px !important;
-      line-height: ${f.lineHeight} !important;
-      overflow: visible !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .receipt {
-      width: ${cw} !important;
-      max-width: ${cw} !important;
-      padding: 3mm ${pad} 4mm ${pad} !important;
-      margin: 0 auto !important;
-    }
-    .center { text-align: center !important; }
-    .bold { font-weight: bold !important; }
-
-    .header-text {
-      font-size: ${f.title}px !important;
-      font-weight: 900 !important;
-      text-align: center !important;
-      letter-spacing: 1px !important;
-      padding: 6px 0 4px 0 !important;
-      text-transform: uppercase !important;
-    }
-
-    .sep {
-      border: none !important;
-      border-top: 1px dashed #000 !important;
-      margin: 5px 0 !important;
-    }
-    .sep-bold {
-      border: none !important;
-      border-top: 2px solid #000 !important;
-      margin: 5px 0 !important;
-    }
-
-    .info-row {
-      display: block !important;
-      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
-      padding: 2px 0 !important;
-      font-size: ${f.base}px !important;
-    }
-    .info-label {
-      font-weight: bold !important;
-      text-transform: uppercase !important;
-      font-size: ${f.base - 1}px !important;
-    }
-    .info-value {
-      font-weight: 900 !important;
-    }
-
-    .item-row {
-      display: block !important;
-      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
-      padding: 3px 0 !important;
-      font-size: ${f.base}px !important;
-    }
-    .item-left {
-      display: inline !important;
-      word-break: break-word !important;
-    }
-    .item-qty {
-      font-weight: 900 !important;
-      display: inline !important;
-      margin-right: 4px !important;
-    }
-    .item-right {
-      display: inline !important;
-      text-align: ${cfg.contentAlign === "left" ? "right" : "center"} !important;
-      font-weight: bold !important;
-      white-space: nowrap !important;
-      margin-left: 6px !important;
-    }
-    .item-note {
-      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
-      font-size: ${f.note}px !important;
-      color: #333 !important;
-      font-style: italic !important;
-      margin-bottom: 2px !important;
-      ${cfg.contentAlign === "left" ? "padding-left: 16px !important;" : ""}
-    }
-
-    .total-block {
-      padding: 6px 0 !important;
-    }
-    .total-row {
-      font-size: ${f.total}px !important;
-      font-weight: 900 !important;
-      display: block !important;
-      text-align: ${cfg.contentAlign === "left" ? "right" : "center"} !important;
-      letter-spacing: 0.5px !important;
-    }
-    .total-row span { display: inline !important; margin: 0 4px !important; }
-
-    .qty-line {
-      font-size: ${f.base - 1}px !important;
-      text-align: center !important;
-      color: #555 !important;
-      padding: 2px 0 !important;
-    }
-
-    .senha-num {
-      font-size: ${f.senha}px !important;
-      font-weight: 900 !important;
-      text-align: center !important;
-      line-height: 1.1 !important;
-      margin: 8px 0 !important;
-      letter-spacing: 3px !important;
-    }
-
-    .footer {
-      font-size: ${f.footer}px !important;
-      text-align: center !important;
-      margin-top: 8px !important;
-      color: #555 !important;
-    }
-    .cut {
-      text-align: center !important;
-      font-size: 8px !important;
-      color: #aaa !important;
-      margin-top: 5mm !important;
-      letter-spacing: 2px !important;
-    }
-
-    @media print {
-      html, body {
-        width: ${paper} !important;
-        max-width: ${paper} !important;
-        min-width: ${paper} !important;
-        height: auto !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-      }
-    }
-  `;
-}
-
-// ============================================================
-// HTML GENERATION
-// ============================================================
-
-function wrapHtml(title: string, cfg: PrintConfig, body: string): string {
-  const paper = cfg.paperWidth;
-  const pxWidth = paper === "58mm" ? 219 : 302;
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=${pxWidth}">
-  <title>${title}</title>
-  <style>${thermalCSS(cfg)}</style>
-</head>
-<body>
-${body}
-</body>
-</html>`;
-}
-
 export function buildSenhaHtml(
   senha: string,
   items: { product_name: string; quantity: number }[],
-  configOverride?: PrintConfig
+  configOverride?: import("./print-config").PrintConfig,
 ): string {
   const cfg = configOverride || loadPrintConfig();
   return buildHtmlFromLayout(
@@ -308,7 +36,7 @@ export function buildSenhaHtml(
       items: items.map((i) => ({ ...i, product_price: 0, note: null })),
       senha,
     },
-    cfg
+    cfg,
   );
 }
 
@@ -317,109 +45,10 @@ export function buildReceiptHtml(
   waiterName: string,
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number,
-  configOverride?: PrintConfig
+  configOverride?: import("./print-config").PrintConfig,
 ): string {
   const cfg = configOverride || loadPrintConfig();
   return buildHtmlFromLayout("PEDIDO", "Cupom", { tableName, waiterName, items, total }, cfg);
-}
-
-// ============================================================
-// PRINTING VIA HIDDEN IFRAME
-// ============================================================
-
-let printLock = false;
-
-function doPrint(html: string, expectedItemCount: number): void {
-  console.log(`[print] Iniciando processo de impressão. Itens esperados: ${expectedItemCount}`);
-  
-  if (printLock) {
-    console.warn("[print] Impressão bloqueada: outra tarefa em andamento");
-    return;
-  }
-  
-  printLock = true;
-
-  const old = document.getElementById("__thermal_print_frame");
-  if (old) old.remove();
-
-  const cfg = loadPrintConfig();
-  const pxWidth = cfg.paperWidth === "58mm" ? 219 : 302;
-
-  const iframe = document.createElement("iframe");
-  iframe.id = "__thermal_print_frame";
-  iframe.style.cssText = `
-    position: fixed;
-    right: -9999px;
-    bottom: -9999px;
-    width: ${pxWidth}px;
-    height: 800px;
-    border: 0;
-    visibility: hidden;
-    pointer-events: none;
-  `;
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!doc) {
-    console.error("[print] Erro crítico: Iframe inacessível");
-    iframe.remove();
-    printLock = false;
-    return;
-  }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  const cleanup = () => {
-    console.log("[print] Limpando recursos de impressão");
-    printLock = false;
-    setTimeout(() => {
-      try { iframe.remove(); } catch {}
-    }, 2000);
-  };
-
-  // Espera a renderização completa
-  setTimeout(() => {
-    try {
-      const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (!frameDoc) throw new Error("Documento perdeu referência");
-
-      // Validação final do DOM antes de disparar o comando do sistema
-      const itemRows = frameDoc.querySelectorAll(".item-row");
-      const hasTotal = frameDoc.body.innerText.includes("TOTAL");
-      
-      console.log(`[print] Validação DOM: ${itemRows.length} itens encontrados, Total presente: ${hasTotal}`);
-
-      if (itemRows.length < expectedItemCount) {
-        console.error(`[print] ERRO: HTML incompleto! Esperava ${expectedItemCount}, encontrou ${itemRows.length}. Cancelando.`);
-        cleanup();
-        return;
-      }
-
-      if (!hasTotal) {
-        console.error("[print] ERRO: Bloco de total ausente no HTML final. Cancelando.");
-        cleanup();
-        return;
-      }
-
-      console.log("[print] Disparando window.print()");
-      iframe.contentWindow?.focus();
-      if (iframe.contentWindow) {
-        iframe.contentWindow.onafterprint = cleanup;
-      }
-      iframe.contentWindow?.print();
-      
-      // Fallback cleanup para drivers de impressora que não disparam onafterprint corretamente
-      setTimeout(() => {
-        if (printLock) cleanup();
-      }, 20000);
-      
-    } catch (e) {
-      console.error("[print] Exceção durante disparo:", e);
-      cleanup();
-    }
-  }, 800); // Aumentado de 400ms para 800ms para garantir layout em apps desktop
 }
 
 // ============================================================
@@ -428,7 +57,7 @@ function doPrint(html: string, expectedItemCount: number): void {
 
 export async function printSenha(
   senha: string,
-  items: { product_name: string; quantity: number }[]
+  items: { product_name: string; quantity: number }[],
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
   if (cfg.printMode === "bridge") {
@@ -436,13 +65,13 @@ export async function printSenha(
     const payload = buildEscPosReceipt(
       `SENHA ${senha}`,
       "BALCÃO",
-      items.map(i => ({ ...i, product_price: 0, note: null })),
+      items.map((i) => ({ ...i, product_price: 0, note: null })),
       0,
-      cfg
+      cfg,
     );
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
-  
+
   // No navegador/celular, não imprimir senha para evitar PDF
   console.log("[print] Senha ignorada no modo browser.");
   return false;
@@ -452,7 +81,7 @@ export async function printReceipt(
   tableName: string,
   waiterName: string,
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
-  total: number
+  total: number,
 ) {
   const cfg = loadPrintConfig();
   console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
@@ -460,11 +89,8 @@ export async function printReceipt(
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg);
     const success = await sendToBridge(payload, cfg.bridgeUrl);
-    
     if (!success) {
       console.warn("[print] Falha na ponte térmica.");
-      // Opcional: só faz fallback se o usuário não exigir erro real
-      // Mas o usuário pediu "sem falsa confirmação", então vamos retornar o erro.
       return false;
     }
     return true;
@@ -478,7 +104,7 @@ export async function printReceipt(
 export async function printDelta(
   tableName: string,
   waiterName: string,
-  deltaItems: { product_name: string; quantity: number; product_price: number; note?: string | null }[]
+  deltaItems: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
   console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
@@ -498,7 +124,7 @@ export async function printDelta(
       items: deltaItems,
       total: deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0),
     },
-    cfg
+    cfg,
   );
 
   console.log("[print] Acréscimo ignorado no modo browser.");
@@ -509,7 +135,7 @@ export async function printBill(
   tableName: string,
   waiterName: string,
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
-  total: number
+  total: number,
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
   console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
@@ -533,7 +159,7 @@ export async function printCustomerReceipt(
   total: number,
   paymentMethod: string,
   amountPaid: number,
-  customerData?: { name?: string; document?: string } | null
+  customerData?: { name?: string; document?: string } | null,
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
   const COMPANY_CNPJ = "38.000.368/0001-22";
@@ -543,7 +169,7 @@ export async function printCustomerReceipt(
   // Base estrutural via fonte unica de layout (CONTA: titulo, info, itens, total).
   const layout = createReceiptLayoutModel(
     { docType: "CONTA", tableName, waiterName, items, total },
-    cfg
+    cfg,
   );
 
   // Insere blocos extras (cliente / pagamento / troco) imediatamente antes do rodape/cutMark.
@@ -589,8 +215,11 @@ export async function printTest() {
   ];
   const ok = await printReceipt("TESTE", "Admin", items, 78.5);
   if (!ok && loadPrintConfig().printMode !== "bridge") {
-    // Se falhou por estar no modo browser, avisar no log mas não lançar erro
     console.warn("[print] Teste de impressão bloqueado no navegador.");
   }
   return ok;
 }
+
+// Re-export das funções extraídas para manter compatibilidade com qualquer
+// import legado que dependa delas vindas do print-receipt.
+export { doPrint } from "./print-iframe";
