@@ -45,7 +45,7 @@ export const usePalmCart = () => {
 
     const { data: items } = await supabase
       .from("order_items")
-      .select("product_id, product_name, product_price, quantity, note")
+      .select("product_id, product_name, product_price, quantity, note, waiter_name")
       .eq("order_id", orderId);
 
     if (items && items.length > 0) {
@@ -60,6 +60,7 @@ export const usePalmCart = () => {
         },
         quantity: item.quantity,
         note: item.note || "",
+        waiter_name: (item as any).waiter_name || undefined,
       }));
       setCart(loadedCart);
       setOriginalCart(loadedCart.map((i) => ({ ...i, product: { ...i.product } })));
@@ -67,16 +68,19 @@ export const usePalmCart = () => {
     }
   }, []);
 
-  const addToCart = (product: CartItem["product"]) => {
+  const addToCart = (product: CartItem["product"], waiterName?: string) => {
     playFeedback("click");
     setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
+      // Agrupa apenas se MESMO produto E MESMO garçom — assim a venda fica creditada corretamente.
+      const existing = prev.find(
+        (i) => i.product.id === product.id && (i.waiter_name || "") === (waiterName || ""),
+      );
       if (existing) {
         return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i,
+          i === existing ? { ...i, quantity: i.quantity + 1 } : i,
         );
       }
-      return [...prev, { product, quantity: 1, note: "" }];
+      return [...prev, { product, quantity: 1, note: "", waiter_name: waiterName }];
     });
   };
 

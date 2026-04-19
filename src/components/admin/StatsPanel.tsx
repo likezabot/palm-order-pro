@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfDay, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, TrendingUp, ShoppingBag, DollarSign, Package } from "lucide-react";
+import { CalendarIcon, TrendingUp, ShoppingBag, DollarSign, Package, Users } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -30,7 +30,8 @@ interface OrderRow {
   total: number | null;
   payment_method: string | null;
   created_at: string;
-  order_items: { product_name: string; quantity: number; subtotal: number }[];
+  waiter_name: string | null;
+  order_items: { product_name: string; quantity: number; subtotal: number; waiter_name: string | null }[];
 }
 
 const COLORS = [
@@ -59,7 +60,7 @@ const StatsPanel = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, total, payment_method, created_at, order_items(product_name, quantity, subtotal)")
+        .select("id, total, payment_method, created_at, waiter_name, order_items(product_name, quantity, subtotal, waiter_name)")
         .eq("status", "paid")
         .gte("created_at", periodStart.toISOString())
         .order("created_at", { ascending: false });
@@ -180,6 +181,27 @@ const StatsPanel = () => {
   const topWeek = useMemo(() => {
     const cutoff = subDays(new Date(), 7);
     return topByWindow((d) => d >= cutoff);
+  }, [orders]);
+
+  // ===== Vendas por garçom (nível do item, fallback para waiter do pedido) =====
+  const byWaiter = useMemo(() => {
+    const agg: Record<string, { revenue: number; items: number }> = {};
+    orders.forEach((o) => {
+      o.order_items?.forEach((i) => {
+        const name = (i.waiter_name || o.waiter_name || "Sem garçom").trim() || "Sem garçom";
+        if (!agg[name]) agg[name] = { revenue: 0, items: 0 };
+        agg[name].revenue += i.subtotal || 0;
+        agg[name].items += i.quantity || 0;
+      });
+    });
+    return Object.entries(agg)
+      .map(([name, v]) => ({
+        name,
+        revenue: Number(v.revenue.toFixed(2)),
+        items: v.items,
+        avg: v.items > 0 ? Number((v.revenue / v.items).toFixed(2)) : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
   }, [orders]);
 
   const fmtBRL = (n: number) =>
@@ -343,6 +365,41 @@ const StatsPanel = () => {
         <TopList title="🌙 Top 5 da noite (18h–23h)" items={topNight} />
         <TopList title="☀️ Top 5 do dia (11h–17h)" items={topDay} />
         <TopList title="📅 Top 5 da semana" items={topWeek} />
+      </div>
+
+      {/* Ranking de garçons */}
+      <div className="rounded-xl bg-card border border-border p-4">
+        <h3 className="font-bold text-sm mb-3 text-foreground flex items-center gap-2">
+          <Users size={16} className="text-primary" /> Vendas por garçom (no período)
+        </h3>
+        {byWaiter.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Sem dados</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground text-xs uppercase tracking-wider">
+                  <th className="py-2">#</th>
+                  <th className="py-2">Garçom</th>
+                  <th className="py-2 text-right">Itens</th>
+                  <th className="py-2 text-right">Total</th>
+                  <th className="py-2 text-right">Médio/item</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byWaiter.map((w, i) => (
+                  <tr key={w.name} className="border-t border-border">
+                    <td className="py-2 font-bold text-muted-foreground">{i + 1}</td>
+                    <td className="py-2 font-semibold text-foreground">{w.name}</td>
+                    <td className="py-2 text-right tabular-nums">{w.items}</td>
+                    <td className="py-2 text-right font-bold text-primary tabular-nums">{fmtBRL(w.revenue)}</td>
+                    <td className="py-2 text-right text-muted-foreground tabular-nums">{fmtBRL(w.avg)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

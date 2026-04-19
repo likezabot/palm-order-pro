@@ -11,6 +11,7 @@ export interface CartItem {
   product: Product;
   quantity: number;
   note: string;
+  waiter_name?: string;
 }
 
 export type OrderPrintType = "extra" | "full" | "bill";
@@ -45,6 +46,7 @@ export interface OrderItem {
   quantity: number;
   note: string | null;
   subtotal: number;
+  waiter_name?: string | null;
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
