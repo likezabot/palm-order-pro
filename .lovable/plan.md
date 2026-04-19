@@ -2,47 +2,42 @@
 
 ## Diagnóstico
 
-Os botões "PREPARAR" / "PRONTO" do Painel Cozinha não respondem. Console mostra:
-> Function components cannot be given refs. Check the render method of `Kitchen` / `KanbanColumn`.
+**Bug relatado:** Garçom Wilson abriu mesa, renomeou para "Felipe". Ao voltar na mesma mesa, o nome "Felipe" não apareceu — apareceu o nome original. Ele fez novo pedido e ficou com **duas mesas duplicadas** no grid (uma com nome original, outra com "Felipe").
 
-**Causa raiz:** `KanbanColumn.tsx` define `KanbanColumn` e `KanbanCard` como componentes funcionais simples (sem `forwardRef`). Algo está passando `ref` para eles. Olhando o código atual, **não há `ref` explícito sendo passado** — então o aviso está vindo de outra coisa: provavelmente `pulseNew` está sendo passado mas o React está reclamando de outra prop.
+**Causa raiz provável** (lendo `Palm.tsx` + `rename_order_table`):
 
-Mas o **problema funcional real** (botões não clicáveis) é diferente: no mobile, o `Kitchen` agora usa `md:h-screen` + grid `overflow-y-auto` no mobile, mas as **3 colunas estão empilhadas em `grid-cols-1`** dentro de um container com `flex-1`. O `flex-1` sem `min-h-0` num pai `flex-col` faz o grid esticar e os cliques caem no lugar errado por causa do FAB ou de `pointer-events`.
+1. `rename_order_table` atualiza `orders.table_name` mas **não toca em `original_table_name`**.
+2. No `TableGrid` (preciso confirmar), as mesas em uso provavelmente são listadas a partir de `orders` ativos agrupados por `table_name` (o nome atual). Mas as mesas "vazias" do grid usam o nome físico fixo ("Mesa 5", "Mesa 6"...).
+3. **Quando Wilson renomeia "Mesa 5" → "Felipe":** o pedido fica com `table_name="Felipe"` e `original_table_name="Mesa 5"`. No grid, aparece um card "Felipe" (pedido ativo) **e** o card fixo "Mesa 5" continua aparecendo como vazia (porque o grid renderiza as mesas físicas independentemente).
+4. Wilson clica em "Mesa 5" achando que é a do Felipe → cai no fluxo de **mesa nova** (sem `orderId`), cria um **segundo pedido** com `table_name="Mesa 5"`. Resultado: duas mesas no grid, ambas com itens, sem ligação entre si.
 
-Olhando a tela enviada (screenshot mostra o pedido visível mas botão "▶ PREPARAR" no rodapé): provavelmente o botão está **atrás do FAB do carrinho** (`fixed bottom-5 right-5`) — mas Kitchen não tem FAB. Então é outra coisa.
-
-**Hipótese mais provável (precisa confirmar lendo o arquivo atual):** depois das últimas mudanças, o container do botão pode estar com `overflow-hidden` cortando a área de toque, ou o card inteiro recebeu um handler que captura o clique antes do botão. Preciso reler `KanbanColumn.tsx` e `Kitchen.tsx` na versão atual para diagnosticar com precisão antes de propor a correção.
+**Por que é intermitente:** só acontece quando o garçom renomeia a mesa E depois clica no card físico antigo em vez do card renomeado. Se ele clicar no card "Felipe" funciona normal.
 
 ## Plano
 
-### Passo 1 — Investigar o estado atual dos arquivos
-Reler `src/pages/Kitchen.tsx` e `src/components/kitchen/KanbanColumn.tsx` (versões atuais após as últimas edições) para identificar:
-- Se há algum `onClick` no card que faz `stopPropagation` ou conflita
-- Se o botão está dentro de uma área com `pointer-events-none`
-- Se a função `updateStatus` está realmente sendo chamada (adicionar log temporário se necessário)
-- Origem do warning de `ref` (algum wrapper passando ref indevidamente)
+### Passo 1 — Investigar `TableGrid.tsx` para confirmar a hipótese
+Ler `src/components/palm/TableGrid.tsx` para ver exatamente como os cards são montados (mesas físicas fixas vs pedidos ativos) e confirmar que mesas renomeadas geram cards duplicados.
 
-### Passo 2 — Corrigir o handler do botão
-Garantir que:
-- `onClick` do botão chame `e.stopPropagation()` para não vazar pro card
-- `updateStatus` use `await` corretamente e invalide a query
-- Botão não esteja dentro de elemento com `pointer-events-none` ou `disabled`
+### Passo 2 — Fix no grid: ocultar mesa física que tem pedido ativo renomeado
+Quando uma mesa física (ex: "Mesa 5") tem um pedido ativo cujo `original_table_name` é "Mesa 5" mas `table_name` é diferente ("Felipe"), o card físico **não deve aparecer como vazio** — ele já está em uso, só renomeado. O card renomeado ("Felipe") substitui visualmente o card físico, com badge "(Mesa 5)" pequeno embaixo para manter a referência.
 
-### Passo 3 — Eliminar o warning de ref
-Se algum componente estiver recebendo `ref` indevidamente (provável vindo de `KanbanColumn` sendo filho direto de algo que injeta ref), envolver com `React.forwardRef` ou remover o ref.
+### Passo 3 — Fix de proteção no servidor: bloquear criação de pedido em mesa já ocupada por renomeação
+No `create_order` (RPC), adicionar verificação: se já existe um pedido ativo (`status IN ('new','preparing','done')`) cujo `original_table_name = p_table_name`, **rejeitar** com erro `table_already_in_use_renamed` e devolver o nome atual + orderId, para o frontend redirecionar o garçom ao pedido existente em vez de criar duplicata.
 
-### Passo 4 — Garantir feedback visual
-Manter `playFeedback("click")` antes do `await` para dar resposta tátil imediata, mesmo se a rede estiver lenta.
+### Passo 4 — Tratamento no frontend
+Em `OrderReview` (onde o pedido é criado), capturar esse erro específico e mostrar diálogo: "Esta mesa já está em uso como '{nome_atual}'. Deseja abrir esse pedido?" → ao confirmar, navega para o pedido existente.
 
 ### Arquivos afetados
+
 | Arquivo | Mudança |
 |---|---|
-| `src/components/kitchen/KanbanColumn.tsx` | Adicionar `e.stopPropagation()` no onClick do botão; envolver em `forwardRef` se necessário |
-| `src/pages/Kitchen.tsx` | Garantir que `updateStatus` funcione e tratar erros (toast) |
+| `src/components/palm/TableGrid.tsx` | Mesclar mesa física + pedido renomeado num único card |
+| `supabase/migrations/...` (novo) | `create_order` valida `original_table_name` duplicado |
+| `src/components/palm/OrderReview.tsx` | Tratar novo erro e redirecionar |
 
 ### Validação
-1. Abrir Painel Cozinha no celular
-2. Clicar em "▶ PREPARAR" num pedido NOVO → deve mover para EM PREPARO
-3. Clicar em "✅ PRONTO" → deve mover para FINALIZADOS
-4. Console limpo (sem warnings de ref)
+1. Abrir Palm, escolher "Mesa 5", renomear para "Felipe", adicionar item, enviar.
+2. Voltar ao grid: deve aparecer **apenas um card** "Felipe" (com "Mesa 5" pequeno embaixo) — não dois.
+3. Tentar clicar em outra rota que tente criar pedido em "Mesa 5" → deve receber alerta e ser redirecionado ao pedido do Felipe.
+4. Pedidos antigos que já estão duplicados continuam visíveis (não quebra dados existentes).
 
