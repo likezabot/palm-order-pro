@@ -14,6 +14,9 @@ import {
   Download,
   ArrowUpDown,
   Trophy,
+  ArrowUp,
+  ArrowDown,
+  Minus,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -96,6 +99,22 @@ const StatsPanel = () => {
     return customDate ? startOfDay(customDate) : startOfDay(now);
   }, [period, customDate]);
 
+  // Período anterior equivalente: mesmo tamanho, terminando logo antes de periodStart
+  const { prevStart, prevEnd, prevLabel } = useMemo(() => {
+    let days = 1;
+    if (period === "7d") days = 7;
+    else if (period === "30d") days = 30;
+    else if (period === "custom") days = 1;
+    const end = periodStart; // exclusivo
+    const start = subDays(periodStart, days);
+    const label =
+      period === "today" ? "vs ontem"
+      : period === "7d" ? "vs 7d anteriores"
+      : period === "30d" ? "vs 30d anteriores"
+      : "vs dia anterior";
+    return { prevStart: start, prevEnd: end, prevLabel: label };
+  }, [period, periodStart]);
+
   const { data: orders = [] } = useQuery({
     queryKey: ["stats-orders", periodStart.toISOString()],
     queryFn: async () => {
@@ -109,6 +128,21 @@ const StatsPanel = () => {
       return (data || []) as OrderRow[];
     },
     refetchInterval: 30_000,
+  });
+
+  const { data: prevOrders = [] } = useQuery({
+    queryKey: ["stats-orders-prev", prevStart.toISOString(), prevEnd.toISOString()],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, table_name, total, created_at, waiter_name, order_items(product_name, product_id, quantity, subtotal, waiter_name)")
+        .eq("status", "paid")
+        .gte("created_at", prevStart.toISOString())
+        .lt("created_at", prevEnd.toISOString());
+      if (error) throw error;
+      return (data || []) as OrderRow[];
+    },
+    refetchInterval: 60_000,
   });
 
   const { data: products = [] } = useQuery({
@@ -186,6 +220,33 @@ const StatsPanel = () => {
   const avgTicket = waiterFilter === "all"
     ? (totalOrders > 0 ? totalRevenue / totalOrders : 0)
     : (totalItems > 0 ? totalRevenue / totalItems : 0);
+
+  // KPIs do período anterior (respeitam o filtro de garçom)
+  const prevKpis = useMemo(() => {
+    let revenue = 0;
+    let items = 0;
+    let ordersCount = 0;
+    prevOrders.forEach((o) => {
+      const matchingItems = waiterFilter === "all"
+        ? (o.order_items || [])
+        : (o.order_items || []).filter((i) => ((i.waiter_name || o.waiter_name || "").trim()) === waiterFilter);
+      if (matchingItems.length === 0) return;
+      ordersCount += 1;
+      matchingItems.forEach((i) => {
+        revenue += i.subtotal || 0;
+        items += i.quantity || 0;
+      });
+    });
+    const avg = waiterFilter === "all"
+      ? (ordersCount > 0 ? revenue / ordersCount : 0)
+      : (items > 0 ? revenue / items : 0);
+    return { revenue, items, orders: ordersCount, avg };
+  }, [prevOrders, waiterFilter]);
+
+  const calcDeltaPct = (current: number, previous: number): number | null => {
+    if (previous <= 0) return current > 0 ? Infinity : null;
+    return ((current - previous) / previous) * 100;
+  };
 
   // ===== Top 10 itens =====
   const topItems = useMemo(() => {
@@ -318,6 +379,30 @@ const StatsPanel = () => {
     [waiterAggMap],
   );
 
+  // ===== Período anterior: agregações para comparação =====
+  const prevWaiterRevenue = useMemo(() => {
+    const map = new Map<string, number>();
+    prevOrders.forEach((o) => {
+      o.order_items?.forEach((i) => {
+        const name = (i.waiter_name || o.waiter_name || "Sem garçom").trim() || "Sem garçom";
+        map.set(name, (map.get(name) || 0) + (i.subtotal || 0));
+      });
+    });
+    return map;
+  }, [prevOrders]);
+
+  const prevTotals = useMemo(() => {
+    let revenue = 0;
+    let items = 0;
+    prevOrders.forEach((o) => {
+      revenue += o.total || 0;
+      o.order_items?.forEach((i) => { items += i.quantity || 0; });
+    });
+    return { revenue, items, orders: prevOrders.length };
+  }, [prevOrders]);
+
+  // (calcDeltaPct definido acima é reutilizado abaixo)
+
   interface WaiterRow {
     name: string;
     revenue: number;
@@ -328,6 +413,8 @@ const StatsPanel = () => {
     share: number; // %
     topCategory: string;
     top3: { name: string; qty: number; revenue: number }[];
+    prevRevenue: number;
+    revenueDelta: number | null;
   }
 
   const waiterRows = useMemo<WaiterRow[]>(() => {
@@ -339,6 +426,7 @@ const StatsPanel = () => {
         .map(([name, qty]) => ({ name, qty, revenue: w.productRevenue[name] || 0 }))
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 3);
+      const prevRevenue = prevWaiterRevenue.get(w.name) || 0;
       return {
         name: w.name,
         revenue: Number(w.revenue.toFixed(2)),
@@ -349,9 +437,11 @@ const StatsPanel = () => {
         share: grandTotal > 0 ? Number(((w.revenue / grandTotal) * 100).toFixed(1)) : 0,
         topCategory,
         top3,
+        prevRevenue,
+        revenueDelta: calcDeltaPct(w.revenue, prevRevenue),
       };
     });
-  }, [waiterAggMap, grandTotal]);
+  }, [waiterAggMap, grandTotal, prevWaiterRevenue]);
 
   const sortedWaiterRows = useMemo(() => {
     const rows = [...waiterRows];
@@ -515,18 +605,34 @@ const StatsPanel = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard icon={<DollarSign className="w-4 h-4" />} label="Faturamento" value={fmtBRL(totalRevenue)} />
+        <KpiCard
+          icon={<DollarSign className="w-4 h-4" />}
+          label="Faturamento"
+          value={fmtBRL(totalRevenue)}
+          delta={calcDeltaPct(totalRevenue, prevKpis.revenue)}
+          deltaLabel={prevLabel}
+        />
         <KpiCard
           icon={<ShoppingBag className="w-4 h-4" />}
           label={waiterFilter === "all" ? "Pedidos pagos" : "Pedidos atendidos"}
           value={String(totalOrders)}
+          delta={calcDeltaPct(totalOrders, prevKpis.orders)}
+          deltaLabel={prevLabel}
         />
         <KpiCard
           icon={<TrendingUp className="w-4 h-4" />}
           label={waiterFilter === "all" ? "Ticket médio" : "Médio por item"}
           value={fmtBRL(avgTicket)}
+          delta={calcDeltaPct(avgTicket, prevKpis.avg)}
+          deltaLabel={prevLabel}
         />
-        <KpiCard icon={<Package className="w-4 h-4" />} label="Itens vendidos" value={String(totalItems)} />
+        <KpiCard
+          icon={<Package className="w-4 h-4" />}
+          label="Itens vendidos"
+          value={String(totalItems)}
+          delta={calcDeltaPct(totalItems, prevKpis.items)}
+          deltaLabel={prevLabel}
+        />
       </div>
 
       {/* Gráficos */}
@@ -682,6 +788,9 @@ const StatsPanel = () => {
               <div className="text-xs font-bold text-muted-foreground">
                 {champion.share.toString().replace(".", ",")}% do faturamento
               </div>
+              <div className="mt-1 flex justify-end">
+                <DeltaBadge delta={champion.revenueDelta} label={prevLabel} />
+              </div>
             </div>
           </div>
         )}
@@ -785,6 +894,7 @@ const StatsPanel = () => {
                       <SortHeader label="Médio/item" k="avg" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
                       <SortHeader label="Médio/mesa" k="avgPerTable" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
                       <SortHeader label="% fat." k="share" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="left" />
+                      <th className="py-2">vs anterior</th>
                       <th className="py-2">Top categoria</th>
                     </tr>
                   </thead>
@@ -814,6 +924,7 @@ const StatsPanel = () => {
                             </span>
                           </div>
                         </td>
+                        <td className="py-2"><DeltaBadge delta={w.revenueDelta} /></td>
                         <td className="py-2 text-xs text-muted-foreground">{w.topCategory}</td>
                       </tr>
                     ))}
@@ -834,7 +945,10 @@ const StatsPanel = () => {
                         />
                         <span className="font-bold text-foreground truncate">{w.name}</span>
                       </div>
-                      <span className="font-black text-primary tabular-nums">{fmtBRL(w.revenue)}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="font-black text-primary tabular-nums">{fmtBRL(w.revenue)}</span>
+                        <DeltaBadge delta={w.revenueDelta} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <div>Itens: <span className="font-bold text-foreground tabular-nums">{w.items}</span></div>
@@ -860,14 +974,55 @@ const StatsPanel = () => {
   );
 };
 
-const KpiCard = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) => (
+const KpiCard = ({
+  icon, label, value, delta, deltaLabel,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  delta?: number | null;
+  deltaLabel?: string;
+}) => (
   <div className="rounded-xl bg-card border border-border p-4">
     <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
       {icon} {label}
     </div>
     <div className="mt-2 text-2xl font-black text-foreground">{value}</div>
+    {delta !== undefined && (
+      <div className="mt-1.5">
+        <DeltaBadge delta={delta} label={deltaLabel} />
+      </div>
+    )}
   </div>
 );
+
+const DeltaBadge = ({ delta, label }: { delta: number | null; label?: string }) => {
+  if (delta === null) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
+        <Minus size={11} /> sem dados {label && <span className="font-normal opacity-70">{label}</span>}
+      </span>
+    );
+  }
+  const isInf = !isFinite(delta);
+  const isUp = delta > 0;
+  const isDown = delta < 0;
+  const colorClass = isUp || isInf
+    ? "text-success bg-success/10"
+    : isDown
+      ? "text-destructive bg-destructive/10"
+      : "text-muted-foreground bg-muted/40";
+  const Icon = isUp || isInf ? ArrowUp : isDown ? ArrowDown : Minus;
+  const text = isInf
+    ? "novo"
+    : `${isUp ? "+" : ""}${delta.toFixed(1).replace(".", ",")}%`;
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums", colorClass)}>
+      <Icon size={10} /> {text}
+      {label && <span className="font-normal opacity-70 ml-0.5">{label}</span>}
+    </span>
+  );
+};
 
 const ChartCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="rounded-xl bg-card border border-border p-4">
