@@ -27,11 +27,8 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { formatTableLabel } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const PAYMENT_METHODS = [
-  { key: "cash", label: "DINHEIRO", icon: Banknote, color: "bg-emerald-500" },
-  { key: "pix", label: "PIX", icon: QrCode, color: "bg-cyan-500" },
-  { key: "card", label: "CARTÃO", icon: CreditCard, color: "bg-blue-500" },
-] as const;
+// Forma de pagamento removida — fechamento direto sem método (estabelecimento não usa).
+
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
   new: { label: "NOVO", color: "bg-primary text-primary-foreground", next: "preparing", nextLabel: "▶ PREPARAR" },
@@ -47,8 +44,6 @@ const Pdv = () => {
   const { playFeedback } = useFeedback();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
-  const [payMethod, setPayMethod] = useState("");
-  const [amountPaid, setAmountPaid] = useState("");
   const [sending, setSending] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState<"online" | "offline">("offline");
   const [wantCustomerData, setWantCustomerData] = useState(false);
@@ -246,13 +241,17 @@ const Pdv = () => {
   };
 
   const handlePayment = async (shouldPrint: boolean) => {
-    if (!selectedOrder || !payMethod || sending) return;
+    if (!selectedOrder || sending) return;
     setSending(true);
     setShowPayConfirm(false);
     const total = selectedOrder.total || 0;
-    const paid = payMethod === "cash" ? (parseFloat(amountPaid) || 0) : total;
-    await supabase.rpc("pay_order", { p_order_id: selectedOrder.id, p_payment_method: payMethod, p_amount_paid: paid, p_should_print: shouldPrint } as any);
-    
+    await supabase.rpc("pay_order", {
+      p_order_id: selectedOrder.id,
+      p_payment_method: "none",
+      p_amount_paid: total,
+      p_should_print: shouldPrint,
+    } as any);
+
     if (shouldPrint) {
       const printConfig = loadPrintConfig();
       const items = allItems.filter((i) => i.order_id === selectedOrder.id);
@@ -263,8 +262,8 @@ const Pdv = () => {
           selectedOrder.waiter_name || "N/A",
           items,
           total,
-          payMethod,
-          paid,
+          "none",
+          total,
           custData
         );
       }
@@ -274,8 +273,6 @@ const Pdv = () => {
     toast({ title: shouldPrint ? "Mesa fechada! Comprovante impresso." : "Mesa fechada com sucesso!" });
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
     setShowPayment(false);
-    setPayMethod("");
-    setAmountPaid("");
     setWantCustomerData(false);
     setCustomerName("");
     setCustomerDoc("");
@@ -297,8 +294,6 @@ const Pdv = () => {
   };
 
   const total = selectedOrder?.total || 0;
-  const paid = parseFloat(amountPaid) || 0;
-  const change = paid - total;
   const cfg = selectedOrder ? statusConfig[selectedOrder.status] || statusConfig.new : null;
 
   return (
@@ -476,37 +471,8 @@ const Pdv = () => {
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
               </div>
 
-              <p className="font-semibold">Forma de pagamento:</p>
-              <div className="grid grid-cols-3 gap-3">
-                {PAYMENT_METHODS.map((pm) => (
-                  <button
-                    key={pm.key}
-                    onClick={() => setPayMethod(pm.key)}
-                    className={`rounded-lg border p-3 text-base font-semibold transition-all active:scale-95 ${
-                      payMethod === pm.key
-                        ? "border-primary bg-primary/20 text-primary"
-                        : "border-border bg-card text-foreground"
-                    }`}
-                  >
-                    {pm.label}
-                  </button>
-                ))}
-              </div>
+              {/* Forma de pagamento removida — fluxo simplificado */}
 
-              {payMethod === "cash" && (
-                <div className="space-y-2">
-                  <input
-                    type="number"
-                    placeholder="Valor recebido"
-                    value={amountPaid}
-                    onChange={(e) => setAmountPaid(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-card p-4 text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  {paid >= total && (
-                    <p className="text-lg font-bold text-success">Troco: R$ {change.toFixed(2)}</p>
-                  )}
-                </div>
-              )}
               {/* Customer data section */}
               <div className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center gap-3">
@@ -549,7 +515,7 @@ const Pdv = () => {
                 </button>
                 <button
                   onClick={() => setShowPayConfirm(true)}
-                  disabled={!payMethod || sending || (payMethod === "cash" && paid < total)}
+                  disabled={sending}
                   className="flex-1 rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
                 >
                   {sending ? "PROCESSANDO..." : "✅ FECHAR MESA"}
@@ -657,7 +623,7 @@ const Pdv = () => {
 
                 {/* CTA principal: sempre FECHAR CONTA — independe do status */}
                 <button
-                  onClick={() => { setShowPayment(true); setPayMethod(""); setAmountPaid(""); }}
+                  onClick={() => { setShowPayment(true); }}
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-success p-5 font-black text-success-foreground min-h-[64px] text-lg active:scale-[0.98] transition-all shadow-lg"
                 >
                   <DollarSign size={22} /> FECHAR CONTA
@@ -671,7 +637,7 @@ const Pdv = () => {
       <AlertDialog open={showPayConfirm} onOpenChange={setShowPayConfirm}>
         <AlertDialogContent className="max-w-[90vw] rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl">Tem certeza que quer fechar a mesa?</AlertDialogTitle>
             <AlertDialogDescription>
               Escolha se deseja fechar a conta com ou sem impressão do comprovante.
             </AlertDialogDescription>
