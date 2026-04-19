@@ -969,14 +969,55 @@ const StatsPanel = () => {
   );
 };
 
-const KpiCard = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) => (
+const KpiCard = ({
+  icon, label, value, delta, deltaLabel,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  delta?: number | null;
+  deltaLabel?: string;
+}) => (
   <div className="rounded-xl bg-card border border-border p-4">
     <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
       {icon} {label}
     </div>
     <div className="mt-2 text-2xl font-black text-foreground">{value}</div>
+    {delta !== undefined && (
+      <div className="mt-1.5">
+        <DeltaBadge delta={delta} label={deltaLabel} />
+      </div>
+    )}
   </div>
 );
+
+const DeltaBadge = ({ delta, label }: { delta: number | null; label?: string }) => {
+  if (delta === null) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
+        <Minus size={11} /> sem dados {label && <span className="font-normal opacity-70">{label}</span>}
+      </span>
+    );
+  }
+  const isInf = !isFinite(delta);
+  const isUp = delta > 0;
+  const isDown = delta < 0;
+  const colorClass = isUp || isInf
+    ? "text-success bg-success/10"
+    : isDown
+      ? "text-destructive bg-destructive/10"
+      : "text-muted-foreground bg-muted/40";
+  const Icon = isUp || isInf ? ArrowUp : isDown ? ArrowDown : Minus;
+  const text = isInf
+    ? "novo"
+    : `${isUp ? "+" : ""}${delta.toFixed(1).replace(".", ",")}%`;
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums", colorClass)}>
+      <Icon size={10} /> {text}
+      {label && <span className="font-normal opacity-70 ml-0.5">{label}</span>}
+    </span>
+  );
+};
 
 const ChartCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="rounded-xl bg-card border border-border p-4">
