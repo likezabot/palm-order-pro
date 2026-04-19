@@ -193,6 +193,9 @@ const Palm = () => {
           setStep("success");
         }}
         onCloseAccount={() => setStep("close")}
+        onRedirectToExisting={(name, orderId) => {
+          handleSelectTable(name, orderId);
+        }}
       />
     );
   }

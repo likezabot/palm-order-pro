@@ -326,6 +326,37 @@ const OrderReview = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={!!conflict} onOpenChange={(open) => !open && setConflict(null)}>
+        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Mesa já está em uso</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta mesa já tem um pedido aberto como <strong>"{conflict?.tableName}"</strong>.
+              Deseja abrir esse pedido em vez de criar outro?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <button
+              onClick={() => {
+                if (conflict && onRedirectToExisting) {
+                  onRedirectToExisting(conflict.tableName, conflict.orderId);
+                }
+                setConflict(null);
+              }}
+              className="w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+            >
+              Abrir pedido existente
+            </button>
+            <AlertDialogCancel
+              onClick={() => setConflict(null)}
+              className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground"
+            >
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
