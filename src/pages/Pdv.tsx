@@ -376,19 +376,33 @@ const Pdv = () => {
               <div className="border-t border-border pt-3 space-y-2">
                 {selectedItems.length === 0 ? (
                   <p className="text-muted-foreground text-sm">Carregando itens...</p>
-                ) : (
-                  selectedItems.map((item) => (
-                    <div key={item.id}>
-                      <div className="flex justify-between text-lg">
-                        <span className="font-semibold">{item.quantity}x {item.product_name}</span>
-                        <span className="font-bold">R$ {item.subtotal.toFixed(2)}</span>
+                ) : (() => {
+                  const uniqueWaiters = new Set(
+                    selectedItems.map((i) => i.waiter_name || selectedOrder.waiter_name).filter(Boolean)
+                  );
+                  const showWaiterTag = uniqueWaiters.size > 1;
+                  return selectedItems.map((item) => {
+                    const waiter = item.waiter_name || selectedOrder.waiter_name;
+                    return (
+                      <div key={item.id}>
+                        <div className="flex justify-between text-lg gap-2">
+                          <span className="font-semibold min-w-0 break-words">
+                            {item.quantity}x {item.product_name}
+                            {showWaiterTag && waiter && (
+                              <span className="ml-2 inline-block text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded align-middle">
+                                por {waiter}
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-bold shrink-0">R$ {item.subtotal.toFixed(2)}</span>
+                        </div>
+                        {item.note && (
+                          <p className="text-sm text-muted-foreground ml-4">OBS: {item.note}</p>
+                        )}
                       </div>
-                      {item.note && (
-                        <p className="text-sm text-muted-foreground ml-4">OBS: {item.note}</p>
-                      )}
-                    </div>
-                  ))
-                )}
+                    );
+                  });
+                })()}
               </div>
 
               <div className="border-t border-border pt-3 flex justify-between text-2xl font-black">
