@@ -623,7 +623,7 @@ const Pdv = () => {
 
                 {/* CTA principal: sempre FECHAR CONTA — independe do status */}
                 <button
-                  onClick={() => { setShowPayment(true); setPayMethod(""); setAmountPaid(""); }}
+                  onClick={() => { setShowPayment(true); }}
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-success p-5 font-black text-success-foreground min-h-[64px] text-lg active:scale-[0.98] transition-all shadow-lg"
                 >
                   <DollarSign size={22} /> FECHAR CONTA
