@@ -350,6 +350,7 @@ export type Database = {
         Args: { p_error?: string; p_order_id: string }
         Returns: undefined
       }
+      merge_table_duplicates: { Args: { p_table_name: string }; Returns: Json }
       move_order_to_table: {
         Args: { p_order_id: string; p_target_table: string }
         Returns: undefined
