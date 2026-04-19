@@ -275,9 +275,12 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
               // Casar pelo número físico (original_table_name) — assim mesas
               // renomeadas para "João" continuam ligadas ao botão "1".
               // Fallback: pedidos antigos sem original_table_name caem em table_name.
-              const order = activeOrders?.find(
+              const ordersForTable = (activeOrders ?? []).filter(
                 (o) => (o.original_table_name ?? o.table_name) === table
               );
+              const order = ordersForTable[0];
+              const duplicateCount = ordersForTable.length;
+              const hasDuplicates = duplicateCount > 1;
               const isOccupied = !!order;
               const isWaitingPayment = order?.status === "done";
               const customName =
@@ -289,7 +292,11 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
               let pulseClass = "";
               let pulseColor = "";
 
-              if (isWaitingPayment) {
+              if (hasDuplicates) {
+                statusColor = "bg-yellow-500/20 border-yellow-500 text-yellow-500";
+                pulseClass = "animate-pulse-active ring-2 ring-yellow-500/60";
+                pulseColor = "rgba(234, 179, 8, 0.5)";
+              } else if (isWaitingPayment) {
                 statusColor = "bg-amber-500/20 border-amber-500 text-amber-500";
                 pulseClass = "animate-pulse-active ring-2 ring-amber-500/50";
                 pulseColor = "rgba(245, 158, 11, 0.4)";
@@ -304,12 +311,19 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                   key={table}
                   onClick={() => handleTableClick(table, order?.id)}
                   style={{ "--pulse-color": pulseColor } as any}
+                  title={hasDuplicates ? `${duplicateCount} pedidos ativos nesta mesa — verifique no Admin` : undefined}
                   className={`
                     relative aspect-square flex flex-col items-center justify-center rounded-2xl border-[3px] transition-all active:scale-95
                     ${statusColor} ${pulseClass}
                     ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
                   `}
                 >
+                  {hasDuplicates && (
+                    <div className="absolute -top-2 -right-2 flex items-center gap-0.5 rounded-full bg-yellow-500 px-1.5 py-0.5 text-[10px] font-black text-black shadow-lg ring-2 ring-background">
+                      <AlertTriangle size={11} strokeWidth={3} />
+                      <span>{duplicateCount}</span>
+                    </div>
+                  )}
                   {customName ? (
                     <span className="text-base font-black leading-tight truncate w-full text-center px-1">
                       {customName}
