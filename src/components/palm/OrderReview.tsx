@@ -169,8 +169,8 @@ const OrderReview = ({
   };
 
   return (
-    <div className="flex min-h-screen flex-col pb-32">
-      <div className="sticky top-0 z-10 bg-background border-b border-border p-3">
+    <div className="flex h-[100dvh] flex-col overflow-hidden">
+      <div className="shrink-0 bg-background border-b border-border p-3">
         <button 
           onClick={() => {
             playFeedback("click");
@@ -185,7 +185,7 @@ const OrderReview = ({
         </h2>
       </div>
 
-      <div className="flex flex-col gap-3 p-3">
+      <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3">
         {(() => {
           const uniqueWaiters = new Set(cart.map((i) => i.waiter_name || waiterName).filter(Boolean));
           const showWaiterTag = uniqueWaiters.size > 1;
@@ -249,7 +249,7 @@ const OrderReview = ({
       </div>
 
       {/* Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border p-4">
+      <div className="shrink-0 bg-background border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="flex items-center justify-between mb-3">
           <span className="text-lg font-bold">Total:</span>
           <span className="text-xl font-bold text-primary">R$ {total.toFixed(2)}</span>
