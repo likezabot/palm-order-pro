@@ -924,6 +924,7 @@ const StatsPanel = () => {
                             </span>
                           </div>
                         </td>
+                        <td className="py-2"><DeltaBadge delta={w.revenueDelta} /></td>
                         <td className="py-2 text-xs text-muted-foreground">{w.topCategory}</td>
                       </tr>
                     ))}
