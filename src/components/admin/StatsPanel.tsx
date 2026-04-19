@@ -290,15 +290,52 @@ const StatsPanel = () => {
           </PopoverContent>
         </Popover>
         <span className="text-xs text-muted-foreground ml-auto">
-          Atualiza a cada 30s · {orders.length} pedidos pagos no período
+          Atualiza a cada 30s · {filteredOrders.length} pedidos no recorte
         </span>
+      </div>
+
+      {/* Filtro por garçom */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+          <Users size={14} /> Garçom:
+        </span>
+        <Button
+          size="sm"
+          variant={waiterFilter === "all" ? "default" : "secondary"}
+          onClick={() => setWaiterFilter("all")}
+          className="font-bold h-8"
+        >
+          Todos
+        </Button>
+        {availableWaiters.map((w) => (
+          <Button
+            key={w}
+            size="sm"
+            variant={waiterFilter === w ? "default" : "secondary"}
+            onClick={() => setWaiterFilter(w)}
+            className="font-bold h-8"
+          >
+            {w}
+          </Button>
+        ))}
+        {availableWaiters.length === 0 && (
+          <span className="text-xs text-muted-foreground italic">Nenhum garçom no período</span>
+        )}
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard icon={<DollarSign className="w-4 h-4" />} label="Faturamento" value={fmtBRL(totalRevenue)} />
-        <KpiCard icon={<ShoppingBag className="w-4 h-4" />} label="Pedidos pagos" value={String(totalOrders)} />
-        <KpiCard icon={<TrendingUp className="w-4 h-4" />} label="Ticket médio" value={fmtBRL(avgTicket)} />
+        <KpiCard
+          icon={<ShoppingBag className="w-4 h-4" />}
+          label={waiterFilter === "all" ? "Pedidos pagos" : "Pedidos atendidos"}
+          value={String(totalOrders)}
+        />
+        <KpiCard
+          icon={<TrendingUp className="w-4 h-4" />}
+          label={waiterFilter === "all" ? "Ticket médio" : "Médio por item"}
+          value={fmtBRL(avgTicket)}
+        />
         <KpiCard icon={<Package className="w-4 h-4" />} label="Itens vendidos" value={String(totalItems)} />
       </div>
 
