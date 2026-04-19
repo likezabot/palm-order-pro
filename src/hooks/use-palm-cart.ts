@@ -1,0 +1,139 @@
+import { useCallback, useState } from "react";
+import { CartItem } from "@/lib/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useFeedback } from "@/hooks/use-feedback";
+
+/**
+ * Hook que gerencia o carrinho do garçom (Palm) — adicionar/remover/atualizar itens,
+ * carregar um pedido existente do banco, e calcular totais.
+ */
+export const usePalmCart = () => {
+  const { playFeedback } = useFeedback();
+  const [tableName, setTableName] = useState("");
+  const [originalTableName, setOriginalTableName] = useState("");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [originalCart, setOriginalCart] = useState<CartItem[]>([]);
+  const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
+  const [orderVersion, setOrderVersion] = useState<number | null>(null);
+  const [senha, setSenha] = useState("");
+
+  const loadOrder = useCallback(async (name: string, orderId?: string) => {
+    setTableName(name);
+    setOriginalTableName(name);
+    setSenha("");
+    setCart([]);
+    setOriginalCart([]);
+    setExistingOrderId(orderId ?? null);
+    setOrderVersion(null);
+
+    if (!orderId) return;
+
+    const { data: orderData } = await supabase
+      .from("orders")
+      .select("version, table_name, original_table_name")
+      .eq("id", orderId)
+      .single();
+    if (orderData) {
+      setOrderVersion(orderData.version);
+      if (orderData.original_table_name) {
+        setOriginalTableName(orderData.original_table_name);
+      }
+      if (orderData.table_name && orderData.table_name !== name) {
+        setTableName(orderData.table_name);
+      }
+    }
+
+    const { data: items } = await supabase
+      .from("order_items")
+      .select("product_id, product_name, product_price, quantity, note")
+      .eq("order_id", orderId);
+
+    if (items && items.length > 0) {
+      const loadedCart: CartItem[] = items.map((item) => ({
+        product: {
+          id: item.product_id || item.product_name,
+          name: item.product_name,
+          price: item.product_price,
+          category: "",
+          active: true,
+          created_at: "",
+        },
+        quantity: item.quantity,
+        note: item.note || "",
+      }));
+      setCart(loadedCart);
+      setOriginalCart(loadedCart.map((i) => ({ ...i, product: { ...i.product } })));
+      setExistingOrderId(orderId);
+    }
+  }, []);
+
+  const addToCart = (product: CartItem["product"]) => {
+    playFeedback("click");
+    setCart((prev) => {
+      const existing = prev.find((i) => i.product.id === product.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i,
+        );
+      }
+      return [...prev, { product, quantity: 1, note: "" }];
+    });
+  };
+
+  const updateQuantity = (productId: string, delta: number) => {
+    playFeedback("click");
+    setCart((prev) =>
+      prev
+        .map((i) =>
+          i.product.id === productId ? { ...i, quantity: i.quantity + delta } : i,
+        )
+        .filter((i) => i.quantity > 0),
+    );
+  };
+
+  const updateNote = (productId: string, note: string) => {
+    setCart((prev) => prev.map((i) => (i.product.id === productId ? { ...i, note } : i)));
+  };
+
+  const removeItem = (productId: string) => {
+    playFeedback("heavy");
+    setCart((prev) => prev.filter((i) => i.product.id !== productId));
+  };
+
+  const reset = () => {
+    playFeedback("notification");
+    setCart([]);
+    setOriginalCart([]);
+    setTableName("");
+    setOriginalTableName("");
+    setExistingOrderId(null);
+    setOrderVersion(null);
+    setSenha("");
+  };
+
+  const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+  const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+
+  return {
+    // state
+    tableName,
+    originalTableName,
+    cart,
+    originalCart,
+    existingOrderId,
+    orderVersion,
+    senha,
+    total,
+    itemCount,
+    // setters/actions
+    setTableName,
+    setOriginalTableName,
+    setSenha,
+    loadOrder,
+    addToCart,
+    updateQuantity,
+    updateNote,
+    removeItem,
+    reset,
+  };
+};
