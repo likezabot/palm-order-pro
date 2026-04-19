@@ -352,6 +352,33 @@ const StatsPanel = () => {
     [waiterAggMap],
   );
 
+  // ===== Período anterior: agregações para comparação =====
+  const prevWaiterRevenue = useMemo(() => {
+    const map = new Map<string, number>();
+    prevOrders.forEach((o) => {
+      o.order_items?.forEach((i) => {
+        const name = (i.waiter_name || o.waiter_name || "Sem garçom").trim() || "Sem garçom";
+        map.set(name, (map.get(name) || 0) + (i.subtotal || 0));
+      });
+    });
+    return map;
+  }, [prevOrders]);
+
+  const prevTotals = useMemo(() => {
+    let revenue = 0;
+    let items = 0;
+    prevOrders.forEach((o) => {
+      revenue += o.total || 0;
+      o.order_items?.forEach((i) => { items += i.quantity || 0; });
+    });
+    return { revenue, items, orders: prevOrders.length };
+  }, [prevOrders]);
+
+  const calcDelta = (current: number, previous: number): number | null => {
+    if (previous <= 0) return current > 0 ? Infinity : null;
+    return ((current - previous) / previous) * 100;
+  };
+
   interface WaiterRow {
     name: string;
     revenue: number;
@@ -362,6 +389,8 @@ const StatsPanel = () => {
     share: number; // %
     topCategory: string;
     top3: { name: string; qty: number; revenue: number }[];
+    prevRevenue: number;
+    revenueDelta: number | null;
   }
 
   const waiterRows = useMemo<WaiterRow[]>(() => {
@@ -373,6 +402,7 @@ const StatsPanel = () => {
         .map(([name, qty]) => ({ name, qty, revenue: w.productRevenue[name] || 0 }))
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 3);
+      const prevRevenue = prevWaiterRevenue.get(w.name) || 0;
       return {
         name: w.name,
         revenue: Number(w.revenue.toFixed(2)),
@@ -383,9 +413,11 @@ const StatsPanel = () => {
         share: grandTotal > 0 ? Number(((w.revenue / grandTotal) * 100).toFixed(1)) : 0,
         topCategory,
         top3,
+        prevRevenue,
+        revenueDelta: calcDelta(w.revenue, prevRevenue),
       };
     });
-  }, [waiterAggMap, grandTotal]);
+  }, [waiterAggMap, grandTotal, prevWaiterRevenue]);
 
   const sortedWaiterRows = useMemo(() => {
     const rows = [...waiterRows];
