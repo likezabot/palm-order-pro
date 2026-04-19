@@ -338,6 +338,10 @@ export type Database = {
         Args: { p_error?: string; p_order_id: string }
         Returns: undefined
       }
+      move_order_to_table: {
+        Args: { p_order_id: string; p_target_table: string }
+        Returns: undefined
+      }
       pay_order: {
         Args: {
           p_amount_paid: number

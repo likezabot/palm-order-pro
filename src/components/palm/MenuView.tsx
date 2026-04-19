@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShoppingCart, Pencil, Search, X, Star } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Pencil, Search, X, Star, ArrowRightLeft } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import MoveTableDialog from "./MoveTableDialog";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -23,6 +24,9 @@ interface Props {
   tableName?: string;
   originalTableName?: string;
   onRenameTable?: (newName: string) => void | Promise<void>;
+  /** Quando presente, habilita o botão "mover mesa" (só faz sentido com pedido já enviado) */
+  existingOrderId?: string | null;
+  onTableMoved?: (newTable: string) => void;
 }
 
 // Subgrupos por categoria, mapeados por nome do produto.
@@ -73,16 +77,18 @@ const matchesSubgroup = (product: Product, sub: Subgroup) => {
   return sub.matchers.some((m) => n.includes(m));
 };
 
-const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable }: Props) => {
+const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [porcoOpen, setPorcoOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [moveOpen, setMoveOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { playFeedback } = useFeedback();
 
   const canRename = !!tableName && tableName !== "BALCÃO" && !!onRenameTable;
+  const canMove = !!existingOrderId && !!originalTableName && originalTableName !== "BALCÃO" && !!onTableMoved;
 
   const { data: products = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["products"],
@@ -218,6 +224,19 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary active:scale-90 transition-all"
                 >
                   <Pencil size={14} />
+                </button>
+              )}
+              {canMove && (
+                <button
+                  onClick={() => {
+                    playFeedback("click");
+                    setMoveOpen(true);
+                  }}
+                  aria-label="Mover para outra mesa"
+                  title="Mover para outra mesa"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary active:scale-90 transition-all"
+                >
+                  <ArrowRightLeft size={14} />
                 </button>
               )}
             </div>
@@ -429,6 +448,18 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Rename table dialog */}
+      {/* Move table dialog */}
+      {canMove && existingOrderId && originalTableName && (
+        <MoveTableDialog
+          open={moveOpen}
+          onOpenChange={setMoveOpen}
+          orderId={existingOrderId}
+          currentTable={originalTableName}
+          onMoved={(newTable) => onTableMoved?.(newTable)}
+        />
+      )}
 
       {/* Rename table dialog */}
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
