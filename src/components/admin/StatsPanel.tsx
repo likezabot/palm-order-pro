@@ -945,7 +945,10 @@ const StatsPanel = () => {
                         />
                         <span className="font-bold text-foreground truncate">{w.name}</span>
                       </div>
-                      <span className="font-black text-primary tabular-nums">{fmtBRL(w.revenue)}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="font-black text-primary tabular-nums">{fmtBRL(w.revenue)}</span>
+                        <DeltaBadge delta={w.revenueDelta} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <div>Itens: <span className="font-bold text-foreground tabular-nums">{w.items}</span></div>
