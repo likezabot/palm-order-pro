@@ -21,6 +21,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import ProductsManager from "@/components/admin/ProductsManager";
 import StatsPanel from "@/components/admin/StatsPanel";
 import { fetchAllOrders, saveOrder, sortByPersistedOrder, resetOrder } from "@/lib/product-order";
+import DuplicatesResolver from "@/components/admin/DuplicatesResolver";
 
 const Admin = () => {
   const navigate = useNavigate();
