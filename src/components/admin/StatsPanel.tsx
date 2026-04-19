@@ -99,6 +99,22 @@ const StatsPanel = () => {
     return customDate ? startOfDay(customDate) : startOfDay(now);
   }, [period, customDate]);
 
+  // Período anterior equivalente: mesmo tamanho, terminando logo antes de periodStart
+  const { prevStart, prevEnd, prevLabel } = useMemo(() => {
+    let days = 1;
+    if (period === "7d") days = 7;
+    else if (period === "30d") days = 30;
+    else if (period === "custom") days = 1;
+    const end = periodStart; // exclusivo
+    const start = subDays(periodStart, days);
+    const label =
+      period === "today" ? "vs ontem"
+      : period === "7d" ? "vs 7d anteriores"
+      : period === "30d" ? "vs 30d anteriores"
+      : "vs dia anterior";
+    return { prevStart: start, prevEnd: end, prevLabel: label };
+  }, [period, periodStart]);
+
   const { data: orders = [] } = useQuery({
     queryKey: ["stats-orders", periodStart.toISOString()],
     queryFn: async () => {
@@ -112,6 +128,21 @@ const StatsPanel = () => {
       return (data || []) as OrderRow[];
     },
     refetchInterval: 30_000,
+  });
+
+  const { data: prevOrders = [] } = useQuery({
+    queryKey: ["stats-orders-prev", prevStart.toISOString(), prevEnd.toISOString()],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, table_name, total, created_at, waiter_name, order_items(product_name, product_id, quantity, subtotal, waiter_name)")
+        .eq("status", "paid")
+        .gte("created_at", prevStart.toISOString())
+        .lt("created_at", prevEnd.toISOString());
+      if (error) throw error;
+      return (data || []) as OrderRow[];
+    },
+    refetchInterval: 60_000,
   });
 
   const { data: products = [] } = useQuery({
