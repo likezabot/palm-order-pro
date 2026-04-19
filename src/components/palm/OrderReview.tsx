@@ -33,6 +33,7 @@ interface Props {
   onRemove: (productId: string) => void;
   onSuccess: (senha: string) => void;
   onCloseAccount?: () => void;
+  onRedirectToExisting?: (tableName: string, orderId: string) => void;
 }
 
 const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; desc: string }[] = [
@@ -43,11 +44,12 @@ const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; des
 
 const OrderReview = ({
   tableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
-  onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount,
+  onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
 }: Props) => {
   const [sending, setSending] = useState(false);
   const [printType, setPrintType] = useState<PrintType>("extra");
   const [showConfirm, setShowConfirm] = useState(false);
+  const [conflict, setConflict] = useState<{ orderId: string; tableName: string } | null>(null);
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
 
@@ -129,7 +131,18 @@ const OrderReview = ({
 
         const { data: createData, error: createError } = await supabase.rpc("create_order", payload as any);
         console.log("[OrderReview] CREATE result:", createData, "error:", createError);
-        if (createError) throw createError;
+        if (createError) {
+          const msg = createError.message || "";
+          // Formato: "table_already_in_use:<orderId>:<currentName>"
+          const match = msg.match(/table_already_in_use:([0-9a-f-]+):(.+)$/i);
+          if (match) {
+            playFeedback("error");
+            setConflict({ orderId: match[1], tableName: match[2].trim() });
+            setSending(false);
+            return;
+          }
+          throw createError;
+        }
 
         playFeedback("success");
         onSuccess(newSenha);
@@ -308,6 +321,37 @@ const OrderReview = ({
               <Send size={20} /> Enviar sem imprimir
             </button>
             <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!conflict} onOpenChange={(open) => !open && setConflict(null)}>
+        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Mesa já está em uso</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta mesa já tem um pedido aberto como <strong>"{conflict?.tableName}"</strong>.
+              Deseja abrir esse pedido em vez de criar outro?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <button
+              onClick={() => {
+                if (conflict && onRedirectToExisting) {
+                  onRedirectToExisting(conflict.tableName, conflict.orderId);
+                }
+                setConflict(null);
+              }}
+              className="w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+            >
+              Abrir pedido existente
+            </button>
+            <AlertDialogCancel
+              onClick={() => setConflict(null)}
+              className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground"
+            >
               Cancelar
             </AlertDialogCancel>
           </AlertDialogFooter>
