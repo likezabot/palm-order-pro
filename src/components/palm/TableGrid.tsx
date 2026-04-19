@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFeedback } from "@/hooks/use-feedback";
-import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock } from "lucide-react";
+import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 
