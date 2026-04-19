@@ -390,7 +390,7 @@ const StatsPanel = () => {
           )}
         </ChartCard>
 
-        <ChartCard title="Vendas por hora do dia">
+        <ChartCard title={waiterFilter === "all" ? "Pedidos por hora do dia" : "Itens vendidos por hora"}>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={byHour}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
