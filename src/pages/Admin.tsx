@@ -222,6 +222,7 @@ const Admin = () => {
           <h1 className="text-xl font-black uppercase tracking-tight">Painel de Controle</h1>
         </div>
         <div className="flex items-center gap-2">
+          <DuplicatesResolver />
           <button
             onClick={() => {
               playFeedback("click");
