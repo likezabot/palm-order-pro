@@ -1,51 +1,43 @@
 
-## Objetivo
-Rastrear vendas por garçom **no nível do item** (não mais só no pedido), permitindo saber quanto cada garçom vendeu mesmo quando vários atendem a mesma mesa.
+## Expandir aba de Estatísticas — foco em garçons
 
-## Problema atual
-- `orders.waiter_name` guarda apenas o garçom que **abriu** a mesa.
-- Se outro garçom adiciona itens depois, a venda inteira fica creditada ao primeiro.
-- A aba de Estatísticas (StatsPanel) provavelmente agrega por `orders.waiter_name`, distorcendo o ranking.
+### O que adicionar
 
-## Solução
-Adicionar `waiter_name` em cada `order_items`, capturado no momento em que o item é inserido/editado.
+**1. Card de destaque "Garçom do dia/período"**
+- Mostra o top 1 com avatar/inicial, total vendido, nº de itens e % do faturamento total.
 
-### Mudanças
+**2. Ranking expandido (tabela "Vendas por garçom")**
+Colunas atuais: nome, itens, total, médio/item.
+Adicionar:
+- **Pedidos atendidos** (nº de mesas distintas em que o garçom adicionou itens)
+- **Ticket médio por mesa** (total ÷ mesas distintas)
+- **% do faturamento** (barra de progresso visual)
+- **Top categoria** (categoria mais vendida por aquele garçom — ex: "Cervejas")
+- Ordenação clicável por coluna
 
-**1. Banco (migration)**
-- Adicionar coluna `waiter_name text` em `order_items` (nullable, para itens antigos).
-- Atualizar funções RPC para receber e gravar o garçom por item:
-  - `create_order(...)` — ler `item->>'waiter_name'` ao inserir.
-  - `update_order_items(...)` — idem (cada item carrega seu próprio garçom).
-- Backfill: itens existentes sem `waiter_name` herdam de `orders.waiter_name`.
+**3. Gráfico "Vendas por garçom ao longo do dia"**
+- Barras empilhadas por hora, cada cor = um garçom
+- Mostra picos de produtividade de cada um
+- Reaproveita o filtro de período já existente
 
-**2. Frontend — captura por item**
-- `src/lib/types.ts`: adicionar `waiter_name?: string` em `CartItem` e `OrderItem`.
-- `src/hooks/use-palm-cart.ts`: 
-  - `addToCart` passa a receber/anexar o `waiterName` atual ao item.
-  - `loadOrder` preserva o `waiter_name` original de cada item carregado (não sobrescreve).
-- `src/pages/Palm.tsx`: passar `waiterName` para `addToCart`.
-- `src/components/palm/OrderReview.tsx`: ao chamar `create_order`/`update_order_items`, incluir `waiter_name` em cada item do payload JSON.
+**4. Top 3 itens por garçom (mini-cards)**
+- Quando um garçom é selecionado no filtro, mostra os 3 produtos que ele mais vende
+- Quando "Todos", mostra um card por garçom com seu top item
 
-**3. UI — visibilidade**
-- `OrderReview` e `OrderRow` (PDV): mostrar tag pequena com o nome do garçom ao lado de cada item (cinza, opcional, só quando há mais de um garçom no pedido).
-- Header da mesa no Palm/PDV: deixar de mostrar "Garçom: Fulano" como dono fixo — mostrar "Aberta por: Fulano" para deixar claro que é só quem iniciou.
+**5. Comparação rápida (chips de KPI no topo do bloco de garçons)**
+- Total de garçons ativos no período
+- Média de vendas por garçom
+- Diferença % entre o 1º e o 2º colocado
 
-**4. Estatísticas (StatsPanel)**
-- Trocar a agregação: somar `order_items.subtotal` agrupado por `order_items.waiter_name` (com fallback para `orders.waiter_name` quando nulo, cobrindo histórico).
-- Período: manter os filtros existentes (hoje, semana, mês).
-- Mostrar: ranking com nome, qtd de itens vendidos, total em R$, ticket médio por item.
+**6. Exportar CSV**
+- Botão "Exportar ranking" → baixa CSV com todas as colunas do ranking + período selecionado.
 
-## Arquivos afetados
-- migration nova (coluna + atualização das 2 funções RPC + backfill)
-- `src/lib/types.ts`
-- `src/hooks/use-palm-cart.ts`
-- `src/pages/Palm.tsx`
-- `src/components/palm/OrderReview.tsx`
-- `src/components/admin/StatsPanel.tsx`
-- `src/components/pdv/OrderRow.tsx` (badge do garçom por item)
+### Arquivos
+- `src/components/admin/StatsPanel.tsx` — toda a lógica de agregação e UI nova
+- (sem mudanças de banco — tudo é derivado de `order_items.waiter_name`)
 
-## Notas
-- Itens antigos continuam funcionando (fallback para `orders.waiter_name`).
-- Sem breaking changes na API: `waiter_name` é opcional no payload.
-- Testes: adicionar 2 testes — agregação por garçom com fallback, e merge de itens preservando o garçom original.
+### Notas
+- Reutiliza `filteredOrders` e `availableWaiters` já existentes.
+- Para "top categoria por garçom", precisamos cruzar `order_items.product_id` → `products.category` (já carregado no painel).
+- Mobile: ranking vira cards empilhados abaixo de 640px; gráfico empilhado mantém scroll horizontal se necessário.
+- Sem novas dependências — usa Recharts (já no projeto) e componentes shadcn existentes.
