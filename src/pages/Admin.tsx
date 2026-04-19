@@ -176,35 +176,35 @@ const Admin = () => {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <div className="bg-white border-b border-border px-4">
-          <TabsList className="bg-transparent h-14 gap-6">
+        <div className="bg-white border-b border-border px-2 sm:px-4 overflow-x-auto">
+          <TabsList className="bg-transparent h-14 gap-3 sm:gap-6 w-max">
             <TabsTrigger
               value="products"
-              className="font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 whitespace-nowrap"
             >
               Cardápio
             </TabsTrigger>
             <TabsTrigger
               value="orders"
-              className="font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
-              <ShoppingBag className="w-4 h-4" /> Editor de Pedidos
+              <ShoppingBag className="w-4 h-4" /> <span className="hidden sm:inline">Editor de </span>Pedidos
             </TabsTrigger>
             <TabsTrigger
               value="print"
-              className="font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
               <Printer className="w-4 h-4" /> Impressão
             </TabsTrigger>
             <TabsTrigger
               value="stats"
-              className="admin-only font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
-              <BarChart3 className="w-4 h-4" /> Estatísticas
+              <BarChart3 className="w-4 h-4" /> <span className="hidden sm:inline">Estatísticas</span><span className="sm:hidden">Stats</span>
             </TabsTrigger>
             <TabsTrigger
               value="system"
-              className="admin-only font-bold text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-2"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
               <Wrench className="w-4 h-4" /> Sistema
             </TabsTrigger>
