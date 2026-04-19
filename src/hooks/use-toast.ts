@@ -151,6 +151,7 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
+      duration: props.duration ?? TOAST_AUTO_DISMISS,
       onOpenChange: (open) => {
         if (!open) dismiss();
       },
