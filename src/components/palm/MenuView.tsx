@@ -450,6 +450,18 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       </Dialog>
 
       {/* Rename table dialog */}
+      {/* Move table dialog */}
+      {canMove && existingOrderId && originalTableName && (
+        <MoveTableDialog
+          open={moveOpen}
+          onOpenChange={setMoveOpen}
+          orderId={existingOrderId}
+          currentTable={originalTableName}
+          onMoved={(newTable) => onTableMoved?.(newTable)}
+        />
+      )}
+
+      {/* Rename table dialog */}
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
