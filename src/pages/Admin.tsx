@@ -21,6 +21,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import ProductsManager from "@/components/admin/ProductsManager";
 import StatsPanel from "@/components/admin/StatsPanel";
 import { fetchAllOrders, saveOrder, sortByPersistedOrder, resetOrder } from "@/lib/product-order";
+import DuplicatesResolver from "@/components/admin/DuplicatesResolver";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -221,6 +222,7 @@ const Admin = () => {
           <h1 className="text-xl font-black uppercase tracking-tight">Painel de Controle</h1>
         </div>
         <div className="flex items-center gap-2">
+          <DuplicatesResolver />
           <button
             onClick={() => {
               playFeedback("click");
