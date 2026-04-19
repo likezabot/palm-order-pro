@@ -226,6 +226,19 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   <Pencil size={14} />
                 </button>
               )}
+              {canMove && (
+                <button
+                  onClick={() => {
+                    playFeedback("click");
+                    setMoveOpen(true);
+                  }}
+                  aria-label="Mover para outra mesa"
+                  title="Mover para outra mesa"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary active:scale-90 transition-all"
+                >
+                  <ArrowRightLeft size={14} />
+                </button>
+              )}
             </div>
           )}
         </div>
