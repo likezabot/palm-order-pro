@@ -100,6 +100,7 @@ export type Database = {
           product_price: number
           quantity: number
           subtotal: number
+          waiter_name: string | null
         }
         Insert: {
           id?: string
@@ -110,6 +111,7 @@ export type Database = {
           product_price: number
           quantity?: number
           subtotal: number
+          waiter_name?: string | null
         }
         Update: {
           id?: string
@@ -120,6 +122,7 @@ export type Database = {
           product_price?: number
           quantity?: number
           subtotal?: number
+          waiter_name?: string | null
         }
         Relationships: [
           {
@@ -324,28 +327,17 @@ export type Database = {
     Functions: {
       claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
       complete_order_print: { Args: { p_order_id: string }; Returns: undefined }
-      create_order:
-        | {
-            Args: {
-              p_items: Json
-              p_should_print?: boolean
-              p_table_name: string
-              p_total: number
-              p_waiter_name: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_items: Json
-              p_original_table_name?: string
-              p_should_print?: boolean
-              p_table_name: string
-              p_total: number
-              p_waiter_name: string
-            }
-            Returns: Json
-          }
+      create_order: {
+        Args: {
+          p_items: Json
+          p_original_table_name?: string
+          p_should_print?: boolean
+          p_table_name: string
+          p_total: number
+          p_waiter_name: string
+        }
+        Returns: Json
+      }
       fail_order_print: {
         Args: { p_error?: string; p_order_id: string }
         Returns: undefined
