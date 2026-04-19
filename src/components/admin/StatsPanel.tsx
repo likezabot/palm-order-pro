@@ -14,6 +14,9 @@ import {
   Download,
   ArrowUpDown,
   Trophy,
+  ArrowUp,
+  ArrowDown,
+  Minus,
 } from "lucide-react";
 import {
   ResponsiveContainer,
