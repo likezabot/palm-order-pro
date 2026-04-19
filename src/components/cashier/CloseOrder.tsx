@@ -8,7 +8,6 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { formatTableLabel } from "@/lib/utils";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -23,15 +22,7 @@ interface Props {
   onClosed: () => void;
 }
 
-const PAYMENT_METHODS = [
-  { key: "cash", label: "💵 DINHEIRO" },
-  { key: "pix", label: "📱 PIX" },
-  { key: "card", label: "💳 CARTÃO" },
-] as const;
-
 const CloseOrder = ({ order, onBack, onClosed }: Props) => {
-  const [method, setMethod] = useState<string>("");
-  const [amountPaid, setAmountPaid] = useState("");
   const [sending, setSending] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const { toast } = useToast();
