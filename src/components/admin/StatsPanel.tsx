@@ -788,6 +788,9 @@ const StatsPanel = () => {
               <div className="text-xs font-bold text-muted-foreground">
                 {champion.share.toString().replace(".", ",")}% do faturamento
               </div>
+              <div className="mt-1 flex justify-end">
+                <DeltaBadge delta={champion.revenueDelta} label={prevLabel} />
+              </div>
             </div>
           </div>
         )}
