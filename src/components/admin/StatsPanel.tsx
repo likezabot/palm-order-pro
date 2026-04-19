@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfDay, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, TrendingUp, ShoppingBag, DollarSign, Package } from "lucide-react";
+import { CalendarIcon, TrendingUp, ShoppingBag, DollarSign, Package, Users } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -30,7 +30,8 @@ interface OrderRow {
   total: number | null;
   payment_method: string | null;
   created_at: string;
-  order_items: { product_name: string; quantity: number; subtotal: number }[];
+  waiter_name: string | null;
+  order_items: { product_name: string; quantity: number; subtotal: number; waiter_name: string | null }[];
 }
 
 const COLORS = [
