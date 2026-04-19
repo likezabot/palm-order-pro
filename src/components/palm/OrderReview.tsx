@@ -33,6 +33,7 @@ interface Props {
   onRemove: (productId: string) => void;
   onSuccess: (senha: string) => void;
   onCloseAccount?: () => void;
+  onRedirectToExisting?: (tableName: string, orderId: string) => void;
 }
 
 const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; desc: string }[] = [
@@ -43,11 +44,12 @@ const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; des
 
 const OrderReview = ({
   tableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
-  onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount,
+  onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
 }: Props) => {
   const [sending, setSending] = useState(false);
   const [printType, setPrintType] = useState<PrintType>("extra");
   const [showConfirm, setShowConfirm] = useState(false);
+  const [conflict, setConflict] = useState<{ orderId: string; tableName: string } | null>(null);
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
 
@@ -129,7 +131,18 @@ const OrderReview = ({
 
         const { data: createData, error: createError } = await supabase.rpc("create_order", payload as any);
         console.log("[OrderReview] CREATE result:", createData, "error:", createError);
-        if (createError) throw createError;
+        if (createError) {
+          const msg = createError.message || "";
+          // Formato: "table_already_in_use:<orderId>:<currentName>"
+          const match = msg.match(/table_already_in_use:([0-9a-f-]+):(.+)$/i);
+          if (match) {
+            playFeedback("error");
+            setConflict({ orderId: match[1], tableName: match[2].trim() });
+            setSending(false);
+            return;
+          }
+          throw createError;
+        }
 
         playFeedback("success");
         onSuccess(newSenha);
