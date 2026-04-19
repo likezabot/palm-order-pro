@@ -3,7 +3,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfDay, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, TrendingUp, ShoppingBag, DollarSign, Package, Users } from "lucide-react";
+import {
+  CalendarIcon,
+  TrendingUp,
+  ShoppingBag,
+  DollarSign,
+  Package,
+  Users,
+  Crown,
+  Download,
+  ArrowUpDown,
+  Trophy,
+} from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -20,18 +31,28 @@ import {
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import { CATEGORIES, CATEGORY_LABELS, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Period = "today" | "7d" | "30d" | "custom";
 
+interface OrderItemRow {
+  product_name: string;
+  product_id: string | null;
+  quantity: number;
+  subtotal: number;
+  waiter_name: string | null;
+}
+
 interface OrderRow {
   id: string;
+  table_name: string;
   total: number | null;
   payment_method: string | null;
   created_at: string;
   waiter_name: string | null;
-  order_items: { product_name: string; quantity: number; subtotal: number; waiter_name: string | null }[];
+  order_items: OrderItemRow[];
 }
 
 const COLORS = [
@@ -42,11 +63,30 @@ const COLORS = [
   "hsl(var(--muted-foreground))",
 ];
 
+// Paleta para garçons (até ~10). Usa tokens HSL semânticos com leves variações de luminosidade.
+const WAITER_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--success))",
+  "hsl(var(--warning))",
+  "hsl(var(--destructive))",
+  "hsl(217 91% 60%)",
+  "hsl(280 65% 60%)",
+  "hsl(160 60% 45%)",
+  "hsl(35 90% 55%)",
+  "hsl(330 75% 60%)",
+  "hsl(190 70% 50%)",
+];
+
+type SortKey = "name" | "items" | "tables" | "revenue" | "avg" | "avgPerTable" | "share";
+type SortDir = "asc" | "desc";
+
 const StatsPanel = () => {
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<Period>("today");
   const [customDate, setCustomDate] = useState<Date | undefined>();
   const [waiterFilter, setWaiterFilter] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("revenue");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const periodStart = useMemo(() => {
     const now = new Date();
@@ -61,7 +101,7 @@ const StatsPanel = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, total, payment_method, created_at, waiter_name, order_items(product_name, quantity, subtotal, waiter_name)")
+        .select("id, table_name, total, payment_method, created_at, waiter_name, order_items(product_name, product_id, quantity, subtotal, waiter_name)")
         .eq("status", "paid")
         .gte("created_at", periodStart.toISOString())
         .order("created_at", { ascending: false });
@@ -74,9 +114,9 @@ const StatsPanel = () => {
   const { data: products = [] } = useQuery({
     queryKey: ["stats-products"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("name, category");
+      const { data, error } = await supabase.from("products").select("id, name, category");
       if (error) throw error;
-      return data as Pick<Product, "name" | "category">[];
+      return data as (Pick<Product, "name" | "category"> & { id: string })[];
     },
   });
 
@@ -91,13 +131,24 @@ const StatsPanel = () => {
     return () => { supabase.removeChannel(ch); };
   }, [queryClient]);
 
-  const productCategoryMap = useMemo(() => {
+  const productCategoryByName = useMemo(() => {
     const m = new Map<string, string>();
     products.forEach((p) => m.set(p.name, p.category));
     return m;
   }, [products]);
 
-  // Lista de garçons disponíveis no período (para o seletor)
+  const productCategoryById = useMemo(() => {
+    const m = new Map<string, string>();
+    products.forEach((p) => m.set(p.id, p.category));
+    return m;
+  }, [products]);
+
+  const getItemCategory = (i: OrderItemRow) =>
+    (i.product_id && productCategoryById.get(i.product_id)) ||
+    productCategoryByName.get(i.product_name) ||
+    "_outros";
+
+  // Lista de garçons disponíveis no período
   const availableWaiters = useMemo(() => {
     const set = new Set<string>();
     orders.forEach((o) => {
@@ -109,9 +160,7 @@ const StatsPanel = () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [orders]);
 
-  // Pedidos com itens filtrados pelo garçom selecionado.
-  // Mantemos a estrutura de OrderRow, só descartamos itens de outros garçons.
-  // KPIs baseados em ITENS (não em order.total) para refletir o filtro corretamente.
+  // Pedidos com itens filtrados pelo garçom selecionado
   const filteredOrders = useMemo<OrderRow[]>(() => {
     if (waiterFilter === "all") return orders;
     return orders
@@ -134,7 +183,6 @@ const StatsPanel = () => {
     (s, o) => s + (o.order_items?.reduce((x, i) => x + (i.quantity || 0), 0) || 0),
     0,
   );
-  // Quando filtrado por garçom, "ticket médio" passa a ser por item (mais útil).
   const avgTicket = waiterFilter === "all"
     ? (totalOrders > 0 ? totalRevenue / totalOrders : 0)
     : (totalItems > 0 ? totalRevenue / totalItems : 0);
@@ -159,18 +207,17 @@ const StatsPanel = () => {
     CATEGORIES.forEach((c) => (totals[c] = 0));
     filteredOrders.forEach((o) =>
       o.order_items?.forEach((i) => {
-        const cat = productCategoryMap.get(i.product_name);
-        if (cat && cat in totals) totals[cat] += i.subtotal || 0;
+        const cat = getItemCategory(i);
+        if (cat in totals) totals[cat] += i.subtotal || 0;
         else totals["_outros"] = (totals["_outros"] || 0) + (i.subtotal || 0);
       }),
     );
     return Object.entries(totals)
       .filter(([, v]) => v > 0)
       .map(([k, v]) => ({ name: CATEGORY_LABELS[k] || "Outros", value: Number(v.toFixed(2)) }));
-  }, [filteredOrders, productCategoryMap]);
+  }, [filteredOrders, productCategoryById, productCategoryByName]);
 
   // ===== Vendas por hora =====
-  // Quando filtrado por garçom, conta itens do garçom por hora (não pedidos inteiros).
   const byHour = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, h) => ({ hour: `${String(h).padStart(2, "0")}h`, pedidos: 0 }));
     filteredOrders.forEach((o) => {
@@ -200,7 +247,7 @@ const StatsPanel = () => {
     }));
   }, [filteredOrders]);
 
-  // ===== Top 5 noite/dia/semana =====
+  // ===== Top windows =====
   const topByWindow = (filter: (d: Date) => boolean) => {
     const counts: Record<string, number> = {};
     filteredOrders
@@ -222,29 +269,172 @@ const StatsPanel = () => {
     return topByWindow((d) => d >= cutoff);
   }, [filteredOrders]);
 
-  // ===== Vendas por garçom (nível do item, fallback para waiter do pedido) =====
-  const byWaiter = useMemo(() => {
-    const agg: Record<string, { revenue: number; items: number }> = {};
+  // ===== Agregação rica por garçom (sempre considera TODOS os pedidos do período, ignora waiterFilter) =====
+  interface WaiterAgg {
+    name: string;
+    revenue: number;
+    items: number;
+    tables: Set<string>;
+    categoryTotals: Record<string, number>;
+    productCounts: Record<string, number>;
+    productRevenue: Record<string, number>;
+    hourly: number[]; // 24 buckets, revenue
+  }
+
+  const waiterAggMap = useMemo(() => {
+    const map = new Map<string, WaiterAgg>();
     orders.forEach((o) => {
+      const hour = new Date(o.created_at).getHours();
       o.order_items?.forEach((i) => {
         const name = (i.waiter_name || o.waiter_name || "Sem garçom").trim() || "Sem garçom";
-        if (!agg[name]) agg[name] = { revenue: 0, items: 0 };
-        agg[name].revenue += i.subtotal || 0;
-        agg[name].items += i.quantity || 0;
+        if (!map.has(name)) {
+          map.set(name, {
+            name,
+            revenue: 0,
+            items: 0,
+            tables: new Set(),
+            categoryTotals: {},
+            productCounts: {},
+            productRevenue: {},
+            hourly: Array(24).fill(0),
+          });
+        }
+        const w = map.get(name)!;
+        w.revenue += i.subtotal || 0;
+        w.items += i.quantity || 0;
+        w.tables.add(o.table_name);
+        const cat = getItemCategory(i);
+        w.categoryTotals[cat] = (w.categoryTotals[cat] || 0) + (i.subtotal || 0);
+        w.productCounts[i.product_name] = (w.productCounts[i.product_name] || 0) + (i.quantity || 0);
+        w.productRevenue[i.product_name] = (w.productRevenue[i.product_name] || 0) + (i.subtotal || 0);
+        w.hourly[hour] += i.subtotal || 0;
       });
     });
-    return Object.entries(agg)
-      .map(([name, v]) => ({
-        name,
-        revenue: Number(v.revenue.toFixed(2)),
-        items: v.items,
-        avg: v.items > 0 ? Number((v.revenue / v.items).toFixed(2)) : 0,
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [orders]);
+    return map;
+  }, [orders, productCategoryById, productCategoryByName]);
+
+  const grandTotal = useMemo(
+    () => Array.from(waiterAggMap.values()).reduce((s, w) => s + w.revenue, 0),
+    [waiterAggMap],
+  );
+
+  interface WaiterRow {
+    name: string;
+    revenue: number;
+    items: number;
+    tables: number;
+    avg: number; // por item
+    avgPerTable: number;
+    share: number; // %
+    topCategory: string;
+    top3: { name: string; qty: number; revenue: number }[];
+  }
+
+  const waiterRows = useMemo<WaiterRow[]>(() => {
+    return Array.from(waiterAggMap.values()).map((w) => {
+      const tables = w.tables.size;
+      const topCatEntry = Object.entries(w.categoryTotals).sort((a, b) => b[1] - a[1])[0];
+      const topCategory = topCatEntry ? (CATEGORY_LABELS[topCatEntry[0]] || "Outros") : "—";
+      const top3 = Object.entries(w.productCounts)
+        .map(([name, qty]) => ({ name, qty, revenue: w.productRevenue[name] || 0 }))
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 3);
+      return {
+        name: w.name,
+        revenue: Number(w.revenue.toFixed(2)),
+        items: w.items,
+        tables,
+        avg: w.items > 0 ? Number((w.revenue / w.items).toFixed(2)) : 0,
+        avgPerTable: tables > 0 ? Number((w.revenue / tables).toFixed(2)) : 0,
+        share: grandTotal > 0 ? Number(((w.revenue / grandTotal) * 100).toFixed(1)) : 0,
+        topCategory,
+        top3,
+      };
+    });
+  }, [waiterAggMap, grandTotal]);
+
+  const sortedWaiterRows = useMemo(() => {
+    const rows = [...waiterRows];
+    rows.sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      const va = a[sortKey];
+      const vb = b[sortKey];
+      if (typeof va === "string" && typeof vb === "string") return va.localeCompare(vb, "pt-BR") * dir;
+      return ((va as number) - (vb as number)) * dir;
+    });
+    return rows;
+  }, [waiterRows, sortKey, sortDir]);
+
+  const topByRevenue = useMemo(() => [...waiterRows].sort((a, b) => b.revenue - a.revenue), [waiterRows]);
+  const champion = topByRevenue[0];
+  const runnerUp = topByRevenue[1];
+  const championLead = champion && runnerUp && runnerUp.revenue > 0
+    ? Number((((champion.revenue - runnerUp.revenue) / runnerUp.revenue) * 100).toFixed(1))
+    : null;
+  const avgPerWaiter = waiterRows.length > 0 ? grandTotal / waiterRows.length : 0;
+
+  // ===== Stacked hourly revenue por garçom =====
+  const stackedHourly = useMemo(() => {
+    const aggs = Array.from(waiterAggMap.values());
+    return Array.from({ length: 24 }, (_, h) => {
+      const row: Record<string, string | number> = { hour: `${String(h).padStart(2, "0")}h` };
+      aggs.forEach((w) => {
+        row[w.name] = Number(w.hourly[h].toFixed(2));
+      });
+      return row;
+    });
+  }, [waiterAggMap]);
+
+  const waiterColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    topByRevenue.forEach((w, i) => map.set(w.name, WAITER_COLORS[i % WAITER_COLORS.length]));
+    return map;
+  }, [topByRevenue]);
 
   const fmtBRL = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir(key === "name" ? "asc" : "desc");
+    }
+  };
+
+  const periodLabel = period === "today" ? "Hoje"
+    : period === "7d" ? "Últimos 7 dias"
+    : period === "30d" ? "Últimos 30 dias"
+    : customDate ? format(customDate, "dd/MM/yyyy", { locale: ptBR }) : "Personalizado";
+
+  const exportCSV = () => {
+    const header = ["#", "Garçom", "Itens", "Mesas", "Total (R$)", "Médio/item (R$)", "Médio/mesa (R$)", "% faturamento", "Top categoria"];
+    const rows = sortedWaiterRows.map((w, i) => [
+      i + 1,
+      w.name,
+      w.items,
+      w.tables,
+      w.revenue.toFixed(2).replace(".", ","),
+      w.avg.toFixed(2).replace(".", ","),
+      w.avgPerTable.toFixed(2).replace(".", ","),
+      `${w.share.toFixed(1).replace(".", ",")}%`,
+      w.topCategory,
+    ]);
+    const csv = [
+      `Período: ${periodLabel}`,
+      "",
+      header.join(";"),
+      ...rows.map((r) => r.join(";")),
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vendas-garcons-${format(new Date(), "yyyy-MM-dd-HHmm")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -443,39 +633,228 @@ const StatsPanel = () => {
         <TopList title="📅 Top 5 da semana" items={topWeek} />
       </div>
 
-      {/* Ranking de garçons */}
-      <div className="rounded-xl bg-card border border-border p-4">
-        <h3 className="font-bold text-sm mb-3 text-foreground flex items-center gap-2">
-          <Users size={16} className="text-primary" /> Vendas por garçom (no período)
-        </h3>
-        {byWaiter.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Sem dados</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-muted-foreground text-xs uppercase tracking-wider">
-                  <th className="py-2">#</th>
-                  <th className="py-2">Garçom</th>
-                  <th className="py-2 text-right">Itens</th>
-                  <th className="py-2 text-right">Total</th>
-                  <th className="py-2 text-right">Médio/item</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byWaiter.map((w, i) => (
-                  <tr key={w.name} className="border-t border-border">
-                    <td className="py-2 font-bold text-muted-foreground">{i + 1}</td>
-                    <td className="py-2 font-semibold text-foreground">{w.name}</td>
-                    <td className="py-2 text-right tabular-nums">{w.items}</td>
-                    <td className="py-2 text-right font-bold text-primary tabular-nums">{fmtBRL(w.revenue)}</td>
-                    <td className="py-2 text-right text-muted-foreground tabular-nums">{fmtBRL(w.avg)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* ============ BLOCO DE GARÇONS ============ */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-lg font-black text-foreground flex items-center gap-2">
+            <Users size={20} className="text-primary" /> Desempenho dos Garçons
+          </h2>
+          <Button size="sm" variant="secondary" onClick={exportCSV} className="gap-1.5 font-bold" disabled={waiterRows.length === 0}>
+            <Download size={14} /> Exportar CSV
+          </Button>
+        </div>
+
+        {/* Chips de KPI rápidos */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <KpiCard
+            icon={<Users className="w-4 h-4" />}
+            label="Garçons ativos"
+            value={String(waiterRows.length)}
+          />
+          <KpiCard
+            icon={<DollarSign className="w-4 h-4" />}
+            label="Média por garçom"
+            value={fmtBRL(avgPerWaiter)}
+          />
+          <KpiCard
+            icon={<Trophy className="w-4 h-4" />}
+            label="Vantagem do líder"
+            value={championLead !== null ? `+${championLead.toString().replace(".", ",")}%` : "—"}
+          />
+        </div>
+
+        {/* Card destaque: Garçom do período */}
+        {champion && (
+          <div className="rounded-xl border border-primary/40 bg-gradient-to-br from-primary/10 via-card to-card p-5 flex items-center gap-4 flex-wrap">
+            <div className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-black shrink-0 relative">
+              {champion.name.charAt(0).toUpperCase()}
+              <Crown className="absolute -top-2 -right-2 w-6 h-6 text-warning fill-warning" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold uppercase tracking-wider text-primary">Destaque do período</div>
+              <div className="text-2xl font-black text-foreground truncate">{champion.name}</div>
+              <div className="text-sm text-muted-foreground">
+                {champion.items} itens · {champion.tables} {champion.tables === 1 ? "mesa" : "mesas"} · top em {champion.topCategory}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-black text-primary tabular-nums">{fmtBRL(champion.revenue)}</div>
+              <div className="text-xs font-bold text-muted-foreground">
+                {champion.share.toString().replace(".", ",")}% do faturamento
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Gráfico empilhado: vendas por hora por garçom */}
+        {waiterRows.length > 0 && (
+          <ChartCard title="Vendas por garçom ao longo do dia (R$)">
+            <div className="overflow-x-auto">
+              <div style={{ minWidth: 600 }}>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={stackedHourly}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="hour" stroke="hsl(var(--muted-foreground))" fontSize={10} interval={1} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={(v) => `R$${v}`} />
+                    <Tooltip
+                      formatter={(v: number) => fmtBRL(v)}
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {topByRevenue.map((w) => (
+                      <Bar
+                        key={w.name}
+                        dataKey={w.name}
+                        stackId="waiters"
+                        fill={waiterColorMap.get(w.name)}
+                        radius={[2, 2, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </ChartCard>
+        )}
+
+        {/* Top 3 itens por garçom */}
+        {waiterRows.length > 0 && (
+          <div>
+            <h3 className="font-bold text-sm mb-3 text-foreground">
+              {waiterFilter === "all" ? "Top 3 itens por garçom" : `Top 3 itens de ${waiterFilter}`}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(waiterFilter === "all" ? topByRevenue : waiterRows.filter((w) => w.name === waiterFilter)).map((w) => (
+                <div key={w.name} className="rounded-xl bg-card border border-border p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black text-primary-foreground shrink-0"
+                      style={{ background: waiterColorMap.get(w.name) || "hsl(var(--primary))" }}
+                    >
+                      {w.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="font-bold text-sm text-foreground truncate">{w.name}</div>
+                  </div>
+                  {w.top3.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Sem itens</p>
+                  ) : (
+                    <ol className="space-y-1.5">
+                      {w.top3.map((it, i) => (
+                        <li key={it.name} className="flex items-center justify-between text-xs gap-2">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span className="w-4 h-4 rounded-full bg-primary/10 text-primary text-[9px] font-black flex items-center justify-center shrink-0">
+                              {i + 1}
+                            </span>
+                            <span className="truncate">{it.name}</span>
+                          </span>
+                          <span className="font-bold text-foreground tabular-nums shrink-0">{it.qty}x</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ranking expandido */}
+        <div className="rounded-xl bg-card border border-border p-4">
+          <h3 className="font-bold text-sm mb-3 text-foreground flex items-center gap-2">
+            <Trophy size={16} className="text-primary" /> Ranking de vendas por garçom
+          </h3>
+          {sortedWaiterRows.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Sem dados</p>
+          ) : (
+            <>
+              {/* Tabela (desktop) */}
+              <div className="overflow-x-auto hidden sm:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-muted-foreground text-xs uppercase tracking-wider">
+                      <th className="py-2 w-8">#</th>
+                      <SortHeader label="Garçom" k="name" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} />
+                      <SortHeader label="Itens" k="items" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
+                      <SortHeader label="Mesas" k="tables" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
+                      <SortHeader label="Total" k="revenue" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
+                      <SortHeader label="Médio/item" k="avg" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
+                      <SortHeader label="Médio/mesa" k="avgPerTable" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="right" />
+                      <SortHeader label="% fat." k="share" sortKey={sortKey} sortDir={sortDir} onClick={handleSort} align="left" />
+                      <th className="py-2">Top categoria</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedWaiterRows.map((w, i) => (
+                      <tr key={w.name} className="border-t border-border">
+                        <td className="py-2 font-bold text-muted-foreground">{i + 1}</td>
+                        <td className="py-2 font-semibold text-foreground">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ background: waiterColorMap.get(w.name) || "hsl(var(--muted))" }}
+                            />
+                            {w.name}
+                          </div>
+                        </td>
+                        <td className="py-2 text-right tabular-nums">{w.items}</td>
+                        <td className="py-2 text-right tabular-nums">{w.tables}</td>
+                        <td className="py-2 text-right font-bold text-primary tabular-nums">{fmtBRL(w.revenue)}</td>
+                        <td className="py-2 text-right text-muted-foreground tabular-nums">{fmtBRL(w.avg)}</td>
+                        <td className="py-2 text-right text-muted-foreground tabular-nums">{fmtBRL(w.avgPerTable)}</td>
+                        <td className="py-2 min-w-[120px]">
+                          <div className="flex items-center gap-2">
+                            <Progress value={w.share} className="h-1.5 flex-1" />
+                            <span className="text-xs font-bold tabular-nums w-10 text-right">
+                              {w.share.toString().replace(".", ",")}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2 text-xs text-muted-foreground">{w.topCategory}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Cards (mobile) */}
+              <div className="space-y-2 sm:hidden">
+                {sortedWaiterRows.map((w, i) => (
+                  <div key={w.name} className="rounded-lg border border-border p-3 bg-background/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold text-muted-foreground">#{i + 1}</span>
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ background: waiterColorMap.get(w.name) || "hsl(var(--muted))" }}
+                        />
+                        <span className="font-bold text-foreground truncate">{w.name}</span>
+                      </div>
+                      <span className="font-black text-primary tabular-nums">{fmtBRL(w.revenue)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <div>Itens: <span className="font-bold text-foreground tabular-nums">{w.items}</span></div>
+                      <div>Mesas: <span className="font-bold text-foreground tabular-nums">{w.tables}</span></div>
+                      <div>Médio/item: <span className="font-bold text-foreground tabular-nums">{fmtBRL(w.avg)}</span></div>
+                      <div>Médio/mesa: <span className="font-bold text-foreground tabular-nums">{fmtBRL(w.avgPerTable)}</span></div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Progress value={w.share} className="h-1.5 flex-1" />
+                      <span className="text-[10px] font-bold tabular-nums w-10 text-right">
+                        {w.share.toString().replace(".", ",")}%
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-1">Top: {w.topCategory}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -525,5 +904,33 @@ const TopList = ({ title, items }: { title: string; items: { name: string; qty: 
     )}
   </div>
 );
+
+const SortHeader = ({
+  label, k, sortKey, sortDir, onClick, align = "left",
+}: {
+  label: string;
+  k: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onClick: (k: SortKey) => void;
+  align?: "left" | "right";
+}) => {
+  const active = sortKey === k;
+  return (
+    <th className={cn("py-2 select-none", align === "right" && "text-right")}>
+      <button
+        onClick={() => onClick(k)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+          active && "text-foreground",
+        )}
+      >
+        {label}
+        <ArrowUpDown size={11} className={cn("opacity-50", active && "opacity-100")} />
+        {active && <span className="text-[9px]">{sortDir === "asc" ? "↑" : "↓"}</span>}
+      </button>
+    </th>
+  );
+};
 
 export default StatsPanel;
