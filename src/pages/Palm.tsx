@@ -177,6 +177,7 @@ const Palm = () => {
     return (
       <OrderReview
         tableName={tableName}
+        originalTableName={originalTableName}
         waiterName={waiterName}
         cart={cart}
         originalCart={originalCart}
