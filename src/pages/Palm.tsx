@@ -121,7 +121,7 @@ const Palm = () => {
   if (step === "menu") {
     return (
       <MenuView
-        onAdd={addToCart}
+        onAdd={(product) => addToCart(product, waiterName)}
         cart={cart}
         total={total}
         itemCount={itemCount}

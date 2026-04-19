@@ -69,6 +69,7 @@ const OrderReview = ({
           quantity: item.quantity,
           note: item.note || null,
           subtotal: item.product.price * item.quantity,
+          waiter_name: item.waiter_name || waiterName || null,
         }));
 
         const payload = {
@@ -119,6 +120,7 @@ const OrderReview = ({
           quantity: item.quantity,
           note: item.note || null,
           subtotal: item.product.price * item.quantity,
+          waiter_name: item.waiter_name || waiterName || null,
         }));
 
         const payload = {
