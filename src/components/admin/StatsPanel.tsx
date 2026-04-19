@@ -60,7 +60,7 @@ const StatsPanel = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, total, payment_method, created_at, order_items(product_name, quantity, subtotal)")
+        .select("id, total, payment_method, created_at, waiter_name, order_items(product_name, quantity, subtotal, waiter_name)")
         .eq("status", "paid")
         .gte("created_at", periodStart.toISOString())
         .order("created_at", { ascending: false });
