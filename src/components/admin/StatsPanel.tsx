@@ -605,18 +605,34 @@ const StatsPanel = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard icon={<DollarSign className="w-4 h-4" />} label="Faturamento" value={fmtBRL(totalRevenue)} />
+        <KpiCard
+          icon={<DollarSign className="w-4 h-4" />}
+          label="Faturamento"
+          value={fmtBRL(totalRevenue)}
+          delta={calcDeltaPct(totalRevenue, prevKpis.revenue)}
+          deltaLabel={prevLabel}
+        />
         <KpiCard
           icon={<ShoppingBag className="w-4 h-4" />}
           label={waiterFilter === "all" ? "Pedidos pagos" : "Pedidos atendidos"}
           value={String(totalOrders)}
+          delta={calcDeltaPct(totalOrders, prevKpis.orders)}
+          deltaLabel={prevLabel}
         />
         <KpiCard
           icon={<TrendingUp className="w-4 h-4" />}
           label={waiterFilter === "all" ? "Ticket médio" : "Médio por item"}
           value={fmtBRL(avgTicket)}
+          delta={calcDeltaPct(avgTicket, prevKpis.avg)}
+          deltaLabel={prevLabel}
         />
-        <KpiCard icon={<Package className="w-4 h-4" />} label="Itens vendidos" value={String(totalItems)} />
+        <KpiCard
+          icon={<Package className="w-4 h-4" />}
+          label="Itens vendidos"
+          value={String(totalItems)}
+          delta={calcDeltaPct(totalItems, prevKpis.items)}
+          deltaLabel={prevLabel}
+        />
       </div>
 
       {/* Gráficos */}
