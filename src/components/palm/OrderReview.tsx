@@ -20,6 +20,7 @@ type PrintType = "extra" | "full" | "bill";
 
 interface Props {
   tableName: string;
+  originalTableName?: string;
   waiterName: string;
   cart: CartItem[];
   originalCart?: CartItem[];
@@ -43,7 +44,7 @@ const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; des
 ];
 
 const OrderReview = ({
-  tableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
+  tableName, originalTableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
 }: Props) => {
   const [sending, setSending] = useState(false);
@@ -126,6 +127,7 @@ const OrderReview = ({
           p_total: total,
           p_items: rpcItems,
           p_should_print: shouldPrint,
+          p_original_table_name: originalTableName || tableName,
         };
         console.log("[OrderReview] CREATE payload:", JSON.stringify(payload, null, 2));
 
