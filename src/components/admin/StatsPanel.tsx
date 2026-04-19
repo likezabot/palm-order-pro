@@ -46,6 +46,7 @@ const StatsPanel = () => {
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<Period>("today");
   const [customDate, setCustomDate] = useState<Date | undefined>();
+  const [waiterFilter, setWaiterFilter] = useState<string>("all");
 
   const periodStart = useMemo(() => {
     const now = new Date();
@@ -96,19 +97,52 @@ const StatsPanel = () => {
     return m;
   }, [products]);
 
+  // Lista de garçons disponíveis no período (para o seletor)
+  const availableWaiters = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o) => {
+      o.order_items?.forEach((i) => {
+        const name = (i.waiter_name || o.waiter_name || "").trim();
+        if (name) set.add(name);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [orders]);
+
+  // Pedidos com itens filtrados pelo garçom selecionado.
+  // Mantemos a estrutura de OrderRow, só descartamos itens de outros garçons.
+  // KPIs baseados em ITENS (não em order.total) para refletir o filtro corretamente.
+  const filteredOrders = useMemo<OrderRow[]>(() => {
+    if (waiterFilter === "all") return orders;
+    return orders
+      .map((o) => {
+        const items = (o.order_items || []).filter((i) => {
+          const w = (i.waiter_name || o.waiter_name || "").trim();
+          return w === waiterFilter;
+        });
+        if (items.length === 0) return null;
+        const itemsTotal = items.reduce((s, i) => s + (i.subtotal || 0), 0);
+        return { ...o, total: itemsTotal, order_items: items };
+      })
+      .filter((o): o is OrderRow => o !== null);
+  }, [orders, waiterFilter]);
+
   // ===== KPIs =====
-  const totalRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
-  const totalOrders = orders.length;
-  const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  const totalItems = orders.reduce(
+  const totalRevenue = filteredOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const totalOrders = filteredOrders.length;
+  const totalItems = filteredOrders.reduce(
     (s, o) => s + (o.order_items?.reduce((x, i) => x + (i.quantity || 0), 0) || 0),
     0,
   );
+  // Quando filtrado por garçom, "ticket médio" passa a ser por item (mais útil).
+  const avgTicket = waiterFilter === "all"
+    ? (totalOrders > 0 ? totalRevenue / totalOrders : 0)
+    : (totalItems > 0 ? totalRevenue / totalItems : 0);
 
   // ===== Top 10 itens =====
   const topItems = useMemo(() => {
     const counts: Record<string, number> = {};
-    orders.forEach((o) =>
+    filteredOrders.forEach((o) =>
       o.order_items?.forEach((i) => {
         counts[i.product_name] = (counts[i.product_name] || 0) + (i.quantity || 0);
       }),
@@ -117,13 +151,13 @@ const StatsPanel = () => {
       .map(([name, qty]) => ({ name, qty }))
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 10);
-  }, [orders]);
+  }, [filteredOrders]);
 
   // ===== Vendas por categoria =====
   const byCategory = useMemo(() => {
     const totals: Record<string, number> = {};
     CATEGORIES.forEach((c) => (totals[c] = 0));
-    orders.forEach((o) =>
+    filteredOrders.forEach((o) =>
       o.order_items?.forEach((i) => {
         const cat = productCategoryMap.get(i.product_name);
         if (cat && cat in totals) totals[cat] += i.subtotal || 0;
@@ -133,22 +167,27 @@ const StatsPanel = () => {
     return Object.entries(totals)
       .filter(([, v]) => v > 0)
       .map(([k, v]) => ({ name: CATEGORY_LABELS[k] || "Outros", value: Number(v.toFixed(2)) }));
-  }, [orders, productCategoryMap]);
+  }, [filteredOrders, productCategoryMap]);
 
   // ===== Vendas por hora =====
+  // Quando filtrado por garçom, conta itens do garçom por hora (não pedidos inteiros).
   const byHour = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, h) => ({ hour: `${String(h).padStart(2, "0")}h`, pedidos: 0 }));
-    orders.forEach((o) => {
+    filteredOrders.forEach((o) => {
       const h = new Date(o.created_at).getHours();
-      hours[h].pedidos += 1;
+      if (waiterFilter === "all") {
+        hours[h].pedidos += 1;
+      } else {
+        hours[h].pedidos += (o.order_items?.reduce((s, i) => s + (i.quantity || 0), 0) || 0);
+      }
     });
     return hours;
-  }, [orders]);
+  }, [filteredOrders, waiterFilter]);
 
   // ===== Forma de pagamento =====
   const byPayment = useMemo(() => {
     const totals: Record<string, number> = {};
-    orders.forEach((o) => {
+    filteredOrders.forEach((o) => {
       const k = o.payment_method || "Não informado";
       totals[k] = (totals[k] || 0) + (o.total || 0);
     });
@@ -159,12 +198,12 @@ const StatsPanel = () => {
       name: labelMap[k] || k,
       value: Number(v.toFixed(2)),
     }));
-  }, [orders]);
+  }, [filteredOrders]);
 
   // ===== Top 5 noite/dia/semana =====
   const topByWindow = (filter: (d: Date) => boolean) => {
     const counts: Record<string, number> = {};
-    orders
+    filteredOrders
       .filter((o) => filter(new Date(o.created_at)))
       .forEach((o) =>
         o.order_items?.forEach((i) => {
@@ -176,12 +215,12 @@ const StatsPanel = () => {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
   };
-  const topNight = useMemo(() => topByWindow((d) => d.getHours() >= 18 && d.getHours() <= 23), [orders]);
-  const topDay = useMemo(() => topByWindow((d) => d.getHours() >= 11 && d.getHours() <= 17), [orders]);
+  const topNight = useMemo(() => topByWindow((d) => d.getHours() >= 18 && d.getHours() <= 23), [filteredOrders]);
+  const topDay = useMemo(() => topByWindow((d) => d.getHours() >= 11 && d.getHours() <= 17), [filteredOrders]);
   const topWeek = useMemo(() => {
     const cutoff = subDays(new Date(), 7);
     return topByWindow((d) => d >= cutoff);
-  }, [orders]);
+  }, [filteredOrders]);
 
   // ===== Vendas por garçom (nível do item, fallback para waiter do pedido) =====
   const byWaiter = useMemo(() => {
@@ -251,15 +290,52 @@ const StatsPanel = () => {
           </PopoverContent>
         </Popover>
         <span className="text-xs text-muted-foreground ml-auto">
-          Atualiza a cada 30s · {orders.length} pedidos pagos no período
+          Atualiza a cada 30s · {filteredOrders.length} pedidos no recorte
         </span>
+      </div>
+
+      {/* Filtro por garçom */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+          <Users size={14} /> Garçom:
+        </span>
+        <Button
+          size="sm"
+          variant={waiterFilter === "all" ? "default" : "secondary"}
+          onClick={() => setWaiterFilter("all")}
+          className="font-bold h-8"
+        >
+          Todos
+        </Button>
+        {availableWaiters.map((w) => (
+          <Button
+            key={w}
+            size="sm"
+            variant={waiterFilter === w ? "default" : "secondary"}
+            onClick={() => setWaiterFilter(w)}
+            className="font-bold h-8"
+          >
+            {w}
+          </Button>
+        ))}
+        {availableWaiters.length === 0 && (
+          <span className="text-xs text-muted-foreground italic">Nenhum garçom no período</span>
+        )}
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard icon={<DollarSign className="w-4 h-4" />} label="Faturamento" value={fmtBRL(totalRevenue)} />
-        <KpiCard icon={<ShoppingBag className="w-4 h-4" />} label="Pedidos pagos" value={String(totalOrders)} />
-        <KpiCard icon={<TrendingUp className="w-4 h-4" />} label="Ticket médio" value={fmtBRL(avgTicket)} />
+        <KpiCard
+          icon={<ShoppingBag className="w-4 h-4" />}
+          label={waiterFilter === "all" ? "Pedidos pagos" : "Pedidos atendidos"}
+          value={String(totalOrders)}
+        />
+        <KpiCard
+          icon={<TrendingUp className="w-4 h-4" />}
+          label={waiterFilter === "all" ? "Ticket médio" : "Médio por item"}
+          value={fmtBRL(avgTicket)}
+        />
         <KpiCard icon={<Package className="w-4 h-4" />} label="Itens vendidos" value={String(totalItems)} />
       </div>
 
@@ -314,7 +390,7 @@ const StatsPanel = () => {
           )}
         </ChartCard>
 
-        <ChartCard title="Vendas por hora do dia">
+        <ChartCard title={waiterFilter === "all" ? "Pedidos por hora do dia" : "Itens vendidos por hora"}>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={byHour}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
