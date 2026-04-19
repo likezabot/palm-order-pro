@@ -438,7 +438,7 @@ const StatsPanel = () => {
         topCategory,
         top3,
         prevRevenue,
-        revenueDelta: calcDelta(w.revenue, prevRevenue),
+        revenueDelta: calcDeltaPct(w.revenue, prevRevenue),
       };
     });
   }, [waiterAggMap, grandTotal, prevWaiterRevenue]);
