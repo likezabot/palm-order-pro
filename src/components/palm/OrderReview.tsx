@@ -156,7 +156,7 @@ const OrderReview = ({
           createData && typeof createData === "object" && !Array.isArray(createData)
             ? (createData as any).id
             : undefined;
-        onSuccess(newSenha, newOrderId);
+        onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
         return;
       }
 
@@ -188,8 +188,21 @@ const OrderReview = ({
           <ArrowLeft size={20} /> Voltar ao cardápio
         </button>
         <h2 className="mt-2 text-xl font-bold">
-          {tableName === "BALCÃO" ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
+          {isBalcao ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
         </h2>
+        {isBalcao && !existingOrderId && onCustomerNameChange && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2">
+            <User size={18} className="text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              value={customerName || ""}
+              onChange={(e) => onCustomerNameChange(e.target.value)}
+              placeholder="Nome do cliente (opcional)"
+              maxLength={40}
+              className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3">
