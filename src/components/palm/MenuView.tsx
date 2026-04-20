@@ -121,7 +121,8 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   const porcoBase = porcoReal ?? porcoFallback;
   const showPorcoCard = !isSearching && activeCategory === "espetos" && !!porcoBase;
 
-  const getQty = (id: string) => cart.find((i) => i.product.id === id)?.quantity || 0;
+  const getQty = (id: string) =>
+    cart.filter((i) => i.product.id === id).reduce((sum, i) => sum + i.quantity, 0);
 
   const subgroupQty = (sub: Subgroup) =>
     filtered
