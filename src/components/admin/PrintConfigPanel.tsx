@@ -113,7 +113,13 @@ export default function PrintConfigPanel() {
     let errorMsg = "";
     try {
       if (previewMode === "senha") {
-        success = await printSenha("042", SAMPLE_ITEMS);
+        success = await printSenha("146", SAMPLE_ITEMS, {
+          waiterName: "Carlos",
+          orderId: "abcd1234ef56789012114162",
+          customerName: "CONSUMIDOR FINAL",
+          total: SAMPLE_TOTAL,
+          force: true,
+        });
       } else {
         success = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL);
       }
@@ -135,7 +141,13 @@ export default function PrintConfigPanel() {
   };
 
   const previewHtml = useMemo(() => {
-    if (previewMode === "senha") return buildSenhaHtml("042", SAMPLE_ITEMS, cfg);
+    if (previewMode === "senha")
+      return buildSenhaHtml("146", SAMPLE_ITEMS, cfg, {
+        waiterName: "Carlos",
+        orderId: "abcd1234ef56789012114162",
+        customerName: "CONSUMIDOR FINAL",
+        total: SAMPLE_TOTAL,
+      });
     return buildReceiptHtml("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, cfg);
   }, [cfg, previewMode]);
 
@@ -231,6 +243,13 @@ export default function PrintConfigPanel() {
               />
             </div>
           ))}
+          <div className="flex items-center justify-between pt-2 border-t border-border/40">
+            <span className="text-sm font-medium">Imprimir senha automaticamente no BALCÃO</span>
+            <Switch
+              checked={cfg.printSenhaEnabled}
+              onCheckedChange={(v) => update("printSenhaEnabled", v)}
+            />
+          </div>
         </section>
 
         {/* Textos */}
