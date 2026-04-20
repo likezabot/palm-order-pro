@@ -133,6 +133,7 @@ export const usePalmCart = () => {
     setTableName,
     setOriginalTableName,
     setSenha,
+    setExistingOrderId,
     loadOrder,
     addToCart,
     updateQuantity,
