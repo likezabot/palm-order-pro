@@ -166,7 +166,9 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
 // ============================================================
 
 function paperColumns(paper: "58mm" | "80mm"): number {
-  return paper === "58mm" ? 32 : 48;
+  // Largura útil em Font A (12x24): 80mm ≈ 42 cols, 58mm ≈ 32 cols.
+  // Antes usávamos 48 em 80mm, o que estourava a linha em quase todas as impressoras.
+  return paper === "58mm" ? 32 : 42;
 }
 
 /** Trunca/preenche string para o tamanho exato. */
@@ -179,12 +181,26 @@ function fitRight(s: string, n: number): string {
   return " ".repeat(n - s.length) + s;
 }
 
-/** Formata uma linha tabular: Qtd(3) Item(rest) Unit(7) Total(7) com 1 espaço entre cols. */
-function formatTableRow(cols: number, qty: string, name: string, unit: string, total: string): string {
-  const QTY = 3;
-  const UNIT = 7;
-  const TOTAL = 7;
-  const GAPS = 3;
+/**
+ * Tabela de itens — larguras dependentes do papel.
+ *  80mm (42 cols): Qtd(3) Item(21) Unit(7) Total(8) + 3 espaços = 42
+ *  58mm (32 cols): Qtd(2) Item(14) Unit(6) Total(7) + 3 espaços = 32
+ * Valores R$ até 999.99 cabem em 6 chars; reservamos 1 a mais no Total para até 9999.99.
+ */
+function tableWidths(paper: "58mm" | "80mm") {
+  if (paper === "58mm") return { QTY: 2, UNIT: 6, TOTAL: 7, GAPS: 3 };
+  return { QTY: 3, UNIT: 7, TOTAL: 8, GAPS: 3 };
+}
+
+function formatTableRow(
+  paper: "58mm" | "80mm",
+  qty: string,
+  name: string,
+  unit: string,
+  total: string,
+): string {
+  const cols = paperColumns(paper);
+  const { QTY, UNIT, TOTAL, GAPS } = tableWidths(paper);
   const NAME = Math.max(4, cols - QTY - UNIT - TOTAL - GAPS);
   return (
     fitLeft(qty, QTY) + " " +
