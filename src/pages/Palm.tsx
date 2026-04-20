@@ -60,6 +60,7 @@ const Palm = () => {
 
   const resetOrder = () => {
     reset();
+    setSuccessOrderId(undefined);
     setStep("grid");
   };
 
