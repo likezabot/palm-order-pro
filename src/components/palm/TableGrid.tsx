@@ -89,8 +89,14 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     };
   }, [queryClient]);
 
-  const balcaoOrders = (activeOrders?.filter((o) => o.table_name === "BALCÃO") || [])
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const todayStart = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+  const balcaoOrders = (activeOrders?.filter(
+    (o) => o.table_name === "BALCÃO" && new Date(o.created_at).getTime() >= todayStart,
+  ) || []).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const getSenha = (order: typeof balcaoOrders[0]) => {
     const today = new Date();
