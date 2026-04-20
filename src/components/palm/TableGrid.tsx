@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFeedback } from "@/hooks/use-feedback";
-import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, AlertTriangle } from "lucide-react";
+import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, AlertTriangle, Printer } from "lucide-react";
+import { reprintSenhaForOrder } from "@/lib/reprint-senha";
+import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -16,8 +18,27 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   const navigate = useNavigate();
   const { playFeedback } = useFeedback();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [editingWaiter, setEditingWaiter] = useState(!waiterName);
   const [tempWaiterName, setTempWaiterName] = useState(waiterName);
+  const [reprintingId, setReprintingId] = useState<string | null>(null);
+
+  const handleReprint = async (orderId: string) => {
+    if (reprintingId) return;
+    playFeedback("click");
+    setReprintingId(orderId);
+    const r = await reprintSenhaForOrder(orderId);
+    setReprintingId(null);
+    if (r.ok) {
+      toast({ title: "Senha reimpressa" });
+    } else {
+      toast({
+        title: "Não foi possível reimprimir",
+        description: r.reason,
+        variant: "destructive",
+      });
+    }
+  };
 
   const { data: tableCount = 10 } = useQuery({
     queryKey: ["table-count"],
