@@ -84,56 +84,7 @@ export function createReceiptLayoutModel(
     blocks.push({ kind: "sep", bold: true });
   }
 
-  // 3. Senha (cupom de balcão) — layout estilo recibo de caixa
-  if (input.docType === "SENHA") {
-    // Número da senha sem "#" (ex: "146")
-    const senhaNum = (input.senha || "").replace(/^#/, "");
-    blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}` });
-    if (v.title && cfg.headerText) {
-      blocks.push({ kind: "title", text: cfg.headerText });
-    }
-    blocks.push({ kind: "sep", bold: true });
-
-    if (v.date) {
-      blocks.push({ kind: "info", label: "Data", value: `${date} ${time}` });
-    }
-    if (input.orderId) {
-      // Últimos 6 caracteres do uuid (sem hífen) p/ caber em uma linha
-      const venda = input.orderId.replace(/-/g, "").slice(-6).toUpperCase();
-      blocks.push({ kind: "info", label: "Venda", value: venda });
-    }
-    blocks.push({ kind: "info", label: "Vendedor", value: "BALCAO" });
-    if (input.waiterName) {
-      blocks.push({ kind: "info", label: "Caixa", value: input.waiterName });
-    }
-    blocks.push({
-      kind: "info",
-      label: "Cliente",
-      value: input.customerName || "CONSUMIDOR FINAL",
-    });
-
-    blocks.push({ kind: "sep", bold: true });
-    blocks.push({ kind: "itemTableHeader" });
-    blocks.push({ kind: "sep", bold: true });
-    input.items.forEach((it) =>
-      blocks.push({
-        kind: "itemTableRow",
-        quantity: it.quantity,
-        name: it.product_name,
-        unit: it.product_price,
-        subtotal: it.product_price * it.quantity,
-      })
-    );
-    blocks.push({ kind: "sep" });
-    blocks.push({
-      kind: "itemTableTotal",
-      value: `R$ ${(input.total ?? 0).toFixed(2)}`,
-    });
-    blocks.push({ kind: "sep", bold: true });
-    if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
-    blocks.push({ kind: "cutMark" });
-    return { blocks, docType: input.docType };
-  }
+  // (SENHA já foi tratada no topo via buildSenhaLayout)
 
   // 4. Info (mesa / garçom / data)
   if (input.tableName) {
