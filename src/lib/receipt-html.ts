@@ -60,6 +60,24 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
       case "senha":
         parts.push(`<div class="senha-num">${escapeHtml(blk.text)}</div>`);
         break;
+      case "senhaTitle":
+        parts.push(`<div class="senha-title">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "itemTableHeader":
+        parts.push(
+          `<div class="item-table-row item-table-head"><span>Qtd</span><span>Item</span><span class="ta-right">Unit</span><span class="ta-right">Total</span></div>`
+        );
+        break;
+      case "itemTableRow":
+        parts.push(
+          `<div class="item-table-row"><span>${blk.quantity}</span><span class="it-name">${escapeHtml(blk.name)}</span><span class="ta-right">${blk.unit.toFixed(2)}</span><span class="ta-right">${blk.subtotal.toFixed(2)}</span></div>`
+        );
+        break;
+      case "itemTableTotal":
+        parts.push(
+          `<div class="item-table-total"><span>TOTAL</span><span>${escapeHtml(blk.value)}</span></div>`
+        );
+        break;
       case "footer":
         parts.push(`<div class="footer">${escapeHtml(blk.text)}</div>`);
         break;
