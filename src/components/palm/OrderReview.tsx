@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Printer, Send } from "lucide-react";
+import { ArrowLeft, Printer, Send, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
@@ -32,15 +32,19 @@ interface Props {
   onUpdateQuantity: (productId: string, delta: number) => void;
   onUpdateNote: (productId: string, note: string) => void;
   onRemove: (productId: string) => void;
-  onSuccess: (senha: string, orderId?: string) => void;
+  onSuccess: (senha: string, orderId?: string, customerName?: string) => void;
   onCloseAccount?: () => void;
   onRedirectToExisting?: (tableName: string, orderId: string) => void;
+  customerName?: string;
+  onCustomerNameChange?: (name: string) => void;
 }
 
 const OrderReview = ({
   tableName, originalTableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
+  customerName, onCustomerNameChange,
 }: Props) => {
+  const isBalcao = tableName === "BALCÃO";
   const [sending, setSending] = useState(false);
   const [printType, setPrintType] = useState<PrintType>("extra");
   const [showConfirm, setShowConfirm] = useState(false);
@@ -152,7 +156,7 @@ const OrderReview = ({
           createData && typeof createData === "object" && !Array.isArray(createData)
             ? (createData as any).id
             : undefined;
-        onSuccess(newSenha, newOrderId);
+        onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
         return;
       }
 
@@ -184,8 +188,21 @@ const OrderReview = ({
           <ArrowLeft size={20} /> Voltar ao cardápio
         </button>
         <h2 className="mt-2 text-xl font-bold">
-          {tableName === "BALCÃO" ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
+          {isBalcao ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
         </h2>
+        {isBalcao && !existingOrderId && onCustomerNameChange && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2">
+            <User size={18} className="text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              value={customerName || ""}
+              onChange={(e) => onCustomerNameChange(e.target.value)}
+              placeholder="Nome do cliente (opcional)"
+              maxLength={40}
+              className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3">
