@@ -228,10 +228,10 @@ const OrderReview = ({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3">
+      <div className="flex-1 overflow-y-auto flex flex-col gap-2 p-2">
         {cart.map((item) => (
           <CartItemRow
-            key={`${item.product.id}-${item.waiter_name || ""}`}
+            key={`${item.product.id}-${(item.waiter_name || "").trim().toUpperCase()}`}
             item={item}
             showWaiterTag={showWaiterTag}
             fallbackWaiter={waiterName}
