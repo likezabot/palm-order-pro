@@ -299,7 +299,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
       }
       case "itemTableHeader": {
         b.resetStyle().align("left").bold(true);
-        b.line(formatTableRow(cols, "Qtd", "Item", "Unit", "Total"));
+        b.line(formatTableRow(cfg.paperWidth, "Qtd", "Item", "Unit", "Total"));
         b.resetStyle();
         break;
       }
@@ -307,7 +307,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         b.resetStyle().align("left");
         b.line(
           formatTableRow(
-            cols,
+            cfg.paperWidth,
             String(blk.quantity),
             blk.name.toUpperCase(),
             blk.unit.toFixed(2),
