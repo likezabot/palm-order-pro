@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Printer, Send, User } from "lucide-react";
+import { ArrowLeft, Printer, Send, User, RotateCw } from "lucide-react";
+import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
