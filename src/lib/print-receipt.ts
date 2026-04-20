@@ -78,19 +78,39 @@ export function buildReceiptHtml(
 
 export async function printSenha(
   senha: string,
-  items: { product_name: string; quantity: number }[],
+  items: { product_name: string; quantity: number; product_price?: number }[],
+  opts: SenhaOpts = {},
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
+
+  // Respeita toggle (a menos que seja chamada manual com force=true)
+  if (!opts.force && !cfg.printSenhaEnabled) {
+    console.log("[print] Senha automática desativada nas configurações.");
+    return false;
+  }
+
   if (cfg.printMode === "bridge") {
     console.log("[print] Usando ponte térmica para senha");
-    const payload = buildEscPosReceipt(
-      `SENHA ${senha}`,
-      "BALCÃO",
-      items.map((i) => ({ ...i, product_price: 0, note: null })),
-      0,
+    const total =
+      opts.total ?? items.reduce((s, i) => s + (i.product_price ?? 0) * i.quantity, 0);
+    const layout = createReceiptLayoutModel(
+      {
+        docType: "SENHA",
+        items: items.map((i) => ({
+          product_name: i.product_name,
+          quantity: i.quantity,
+          product_price: i.product_price ?? 0,
+          note: null,
+        })),
+        senha,
+        orderId: opts.orderId,
+        waiterName: opts.waiterName,
+        customerName: opts.customerName,
+        total,
+      },
       cfg,
     );
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    return await sendToBridge(renderLayout(layout.blocks, cfg), cfg.bridgeUrl);
   }
 
   // No navegador/celular, não imprimir senha para evitar PDF
