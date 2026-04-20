@@ -8,31 +8,70 @@ interface Props {
   senha?: string;
   cart?: CartItem[];
   allowLocalPrint?: boolean;
+  waiterName?: string;
+  orderId?: string;
+  customerName?: string;
 }
 
-const OrderSuccess = ({ onReset, senha, cart, allowLocalPrint = false }: Props) => {
+const OrderSuccess = ({
+  onReset,
+  senha,
+  cart,
+  allowLocalPrint = false,
+  waiterName,
+  orderId,
+  customerName,
+}: Props) => {
   const printedRef = useRef(false);
 
-  const handlePrint = useCallback(() => {
-    if (!allowLocalPrint || !senha) return;
+  const buildPrintArgs = useCallback(() => {
     const items = (cart || []).map((i) => ({
       product_name: i.product.name,
       quantity: i.quantity,
+      product_price: i.product.price,
     }));
-    printSenha(senha, items);
-  }, [allowLocalPrint, senha, cart]);
+    const total = (cart || []).reduce(
+      (s, i) => s + i.product.price * i.quantity,
+      0,
+    );
+    return { items, total };
+  }, [cart]);
+
+  const handleAutoPrint = useCallback(() => {
+    if (!allowLocalPrint || !senha) return;
+    const { items, total } = buildPrintArgs();
+    // Auto: respeita toggle (force=false)
+    printSenha(senha, items, {
+      waiterName,
+      orderId,
+      customerName,
+      total,
+      force: false,
+    });
+  }, [allowLocalPrint, senha, buildPrintArgs, waiterName, orderId, customerName]);
+
+  const handleManualPrint = useCallback(() => {
+    if (!senha) return;
+    const { items, total } = buildPrintArgs();
+    // Manual: ignora toggle (force=true)
+    printSenha(senha, items, {
+      waiterName,
+      orderId,
+      customerName,
+      total,
+      force: true,
+    });
+  }, [senha, buildPrintArgs, waiterName, orderId, customerName]);
 
   useEffect(() => {
-    // Auto-print senha for counter orders only once
     if (allowLocalPrint && senha && !printedRef.current) {
       printedRef.current = true;
-      // Small delay to ensure the component is fully mounted and browser is ready
       const timer = setTimeout(() => {
-        handlePrint();
+        handleAutoPrint();
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [allowLocalPrint, handlePrint, senha]);
+  }, [allowLocalPrint, handleAutoPrint, senha]);
 
   useEffect(() => {
     const delay = allowLocalPrint && senha ? 5000 : 3000;
@@ -52,7 +91,7 @@ const OrderSuccess = ({ onReset, senha, cart, allowLocalPrint = false }: Props) 
             <p className="text-xl font-bold text-white/80 uppercase">Sua Senha:</p>
             <p className="text-8xl font-black text-white mt-1">{senha}</p>
             <button
-              onClick={handlePrint}
+              onClick={handleManualPrint}
               className="mt-8 flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl"
             >
               <Printer size={24} /> IMPRIMIR NOVAMENTE
