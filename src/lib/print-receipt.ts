@@ -23,18 +23,39 @@ export function setPaperWidth(width: PaperWidth) {
   savePrintConfig(cfg);
 }
 
+export interface SenhaOpts {
+  waiterName?: string;
+  orderId?: string;
+  customerName?: string;
+  total?: number;
+  /** Bypassa o toggle printSenhaEnabled (usado pelo botão "Imprimir novamente"). */
+  force?: boolean;
+}
+
 export function buildSenhaHtml(
   senha: string,
-  items: { product_name: string; quantity: number }[],
+  items: { product_name: string; quantity: number; product_price?: number }[],
   configOverride?: import("./print-config").PrintConfig,
+  opts: SenhaOpts = {},
 ): string {
   const cfg = configOverride || loadPrintConfig();
+  const total =
+    opts.total ?? items.reduce((s, i) => s + (i.product_price ?? 0) * i.quantity, 0);
   return buildHtmlFromLayout(
     "SENHA",
     "Senha",
     {
-      items: items.map((i) => ({ ...i, product_price: 0, note: null })),
+      items: items.map((i) => ({
+        product_name: i.product_name,
+        quantity: i.quantity,
+        product_price: i.product_price ?? 0,
+        note: null,
+      })),
       senha,
+      orderId: opts.orderId,
+      waiterName: opts.waiterName,
+      customerName: opts.customerName,
+      total,
     },
     cfg,
   );
