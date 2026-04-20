@@ -31,6 +31,7 @@ const Palm = () => {
     setTableName,
     setOriginalTableName,
     setSenha,
+    setExistingOrderId,
     loadOrder,
     addToCart,
     updateQuantity,
@@ -86,6 +87,8 @@ const Palm = () => {
         senha={senha}
         cart={cart}
         allowLocalPrint={tableName === "BALCÃO" && !existingOrderId}
+        waiterName={waiterName}
+        orderId={existingOrderId ?? undefined}
       />
     );
   }
@@ -106,8 +109,9 @@ const Palm = () => {
         onUpdateQuantity={updateQuantity}
         onUpdateNote={updateNote}
         onRemove={removeItem}
-        onSuccess={(s: string) => {
+        onSuccess={(s: string, newOrderId?: string) => {
           setSenha(s);
+          if (newOrderId) setExistingOrderId(newOrderId);
           setStep("success");
         }}
         onCloseAccount={() => setStep("close")}
