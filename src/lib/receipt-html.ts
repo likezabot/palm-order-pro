@@ -60,6 +60,24 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
       case "senha":
         parts.push(`<div class="senha-num">${escapeHtml(blk.text)}</div>`);
         break;
+      case "senhaTitle":
+        parts.push(`<div class="senha-title">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "itemTableHeader":
+        parts.push(
+          `<div class="item-table-row item-table-head"><span>Qtd</span><span>Item</span><span class="ta-right">Unit</span><span class="ta-right">Total</span></div>`
+        );
+        break;
+      case "itemTableRow":
+        parts.push(
+          `<div class="item-table-row"><span>${blk.quantity}</span><span class="it-name">${escapeHtml(blk.name)}</span><span class="ta-right">${blk.unit.toFixed(2)}</span><span class="ta-right">${blk.subtotal.toFixed(2)}</span></div>`
+        );
+        break;
+      case "itemTableTotal":
+        parts.push(
+          `<div class="item-table-total"><span>TOTAL</span><span>${escapeHtml(blk.value)}</span></div>`
+        );
+        break;
       case "footer":
         parts.push(`<div class="footer">${escapeHtml(blk.text)}</div>`);
         break;
@@ -141,6 +159,28 @@ export function thermalCSS(cfg: PrintConfig): string {
       font-size: ${f.senha}px !important; font-weight: 900 !important; text-align: center !important;
       line-height: 1.1 !important; margin: 8px 0 !important; letter-spacing: 3px !important;
     }
+    .senha-title {
+      font-size: ${Math.round(f.senha * 0.55)}px !important; font-weight: 900 !important;
+      text-align: center !important; line-height: 1.1 !important; margin: 4px 0 6px 0 !important;
+      letter-spacing: 2px !important; text-transform: uppercase !important;
+    }
+    .item-table-row {
+      display: grid !important;
+      grid-template-columns: 2.2em 1fr 3.6em 3.6em !important;
+      gap: 2px !important;
+      font-size: ${f.base}px !important;
+      font-family: 'Courier New', Courier, monospace !important;
+      padding: 1px 0 !important;
+      align-items: baseline !important;
+    }
+    .item-table-row .ta-right { text-align: right !important; }
+    .item-table-row .it-name { word-break: break-word !important; text-transform: uppercase !important; }
+    .item-table-head { font-weight: 900 !important; text-transform: uppercase !important; }
+    .item-table-total {
+      display: flex !important; justify-content: space-between !important;
+      font-size: ${f.total}px !important; font-weight: 900 !important;
+      padding: 4px 0 !important; letter-spacing: 0.5px !important;
+    }
     .footer { font-size: ${f.footer}px !important; text-align: center !important; margin-top: 8px !important; color: #555 !important; }
     .cut { text-align: center !important; font-size: 8px !important; color: #aaa !important; margin-top: 5mm !important; letter-spacing: 2px !important; }
     @media print {
@@ -173,7 +213,15 @@ ${body}
 export function buildHtmlFromLayout(
   docType: DocType,
   title: string,
-  data: { tableName?: string; waiterName?: string; items: ReceiptItem[]; total?: number; senha?: string },
+  data: {
+    tableName?: string;
+    waiterName?: string;
+    items: ReceiptItem[];
+    total?: number;
+    senha?: string;
+    orderId?: string;
+    customerName?: string;
+  },
   cfg: PrintConfig,
 ): string {
   const layout = createReceiptLayoutModel({ docType, ...data }, cfg);

@@ -42,6 +42,8 @@ export interface PrintConfig {
   visibleSections: VisibleSections;
   /** Alinhamento do conteúdo (mesa/itens/total). Cabeçalho/rodapé são sempre centralizados. */
   contentAlign: ContentAlign;
+  /** Imprime senha automaticamente quando finaliza pedido no BALCÃO. */
+  printSenhaEnabled: boolean;
 }
 
 const STORAGE_KEY = "print_config";
@@ -66,6 +68,7 @@ export const DEFAULT_CONFIG: PrintConfig = {
   fontSizes: {},
   visibleSections: { ...DEFAULT_VISIBLE },
   contentAlign: "center",
+  printSenhaEnabled: true,
 };
 
 /** Aplica preset e devolve overrides recomendados (usuário ainda pode ajustar). */

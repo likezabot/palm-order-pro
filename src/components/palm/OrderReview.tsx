@@ -32,7 +32,7 @@ interface Props {
   onUpdateQuantity: (productId: string, delta: number) => void;
   onUpdateNote: (productId: string, note: string) => void;
   onRemove: (productId: string) => void;
-  onSuccess: (senha: string) => void;
+  onSuccess: (senha: string, orderId?: string) => void;
   onCloseAccount?: () => void;
   onRedirectToExisting?: (tableName: string, orderId: string) => void;
 }
@@ -147,7 +147,12 @@ const OrderReview = ({
         }
 
         playFeedback("success");
-        onSuccess(newSenha);
+        // RPC retorna { id, ... } — propaga o id para a tela de sucesso (cupom da senha).
+        const newOrderId =
+          createData && typeof createData === "object" && !Array.isArray(createData)
+            ? (createData as any).id
+            : undefined;
+        onSuccess(newSenha, newOrderId);
         return;
       }
 

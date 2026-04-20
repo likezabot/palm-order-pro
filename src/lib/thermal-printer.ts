@@ -169,6 +169,31 @@ function paperColumns(paper: "58mm" | "80mm"): number {
   return paper === "58mm" ? 32 : 48;
 }
 
+/** Trunca/preenche string para o tamanho exato. */
+function fitLeft(s: string, n: number): string {
+  if (s.length > n) return s.substring(0, n);
+  return s + " ".repeat(n - s.length);
+}
+function fitRight(s: string, n: number): string {
+  if (s.length > n) return s.substring(s.length - n);
+  return " ".repeat(n - s.length) + s;
+}
+
+/** Formata uma linha tabular: Qtd(3) Item(rest) Unit(7) Total(7) com 1 espaço entre cols. */
+function formatTableRow(cols: number, qty: string, name: string, unit: string, total: string): string {
+  const QTY = 3;
+  const UNIT = 7;
+  const TOTAL = 7;
+  const GAPS = 3;
+  const NAME = Math.max(4, cols - QTY - UNIT - TOTAL - GAPS);
+  return (
+    fitLeft(qty, QTY) + " " +
+    fitLeft(name, NAME) + " " +
+    fitRight(unit, UNIT) + " " +
+    fitRight(total, TOTAL)
+  );
+}
+
 /**
  * Mapeia overrides de fontSizes (px) -> intensidade no ESC/POS (double width/height).
  * O ESC/POS não tem fontes contínuas; usamos thresholds estáveis.
@@ -247,6 +272,41 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
       case "senha": {
         b.resetStyle().align("center").bold(true).size(true, true);
         b.line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "senhaTitle": {
+        b.resetStyle().align("center").bold(true).size(true, true);
+        b.line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "itemTableHeader": {
+        b.resetStyle().align("left").bold(true);
+        b.line(formatTableRow(cols, "Qtd", "Item", "Unit", "Total"));
+        b.resetStyle();
+        break;
+      }
+      case "itemTableRow": {
+        b.resetStyle().align("left");
+        b.line(
+          formatTableRow(
+            cols,
+            String(blk.quantity),
+            blk.name.toUpperCase(),
+            blk.unit.toFixed(2),
+            blk.subtotal.toFixed(2),
+          ),
+        );
+        b.resetStyle();
+        break;
+      }
+      case "itemTableTotal": {
+        b.resetStyle().align("left").bold(true).size(false, true);
+        const label = "TOTAL";
+        const val = blk.value;
+        const padN = Math.max(1, cols - label.length - val.length);
+        b.line(label + " ".repeat(padN) + val);
         b.resetStyle();
         break;
       }
