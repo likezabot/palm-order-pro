@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Printer, Send, User } from "lucide-react";
+import { ArrowLeft, Printer, Send, User, RotateCw } from "lucide-react";
+import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
@@ -187,9 +188,31 @@ const OrderReview = ({
         >
           <ArrowLeft size={20} /> Voltar ao cardápio
         </button>
-        <h2 className="mt-2 text-xl font-bold">
-          {isBalcao ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
-        </h2>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <h2 className="text-xl font-bold">
+            {isBalcao ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
+          </h2>
+          {isBalcao && existingOrderId && (
+            <button
+              onClick={async () => {
+                playFeedback("click");
+                const r = await reprintSenhaForOrder(existingOrderId);
+                if (r.ok) {
+                  toast({ title: "Senha reimpressa" });
+                } else {
+                  toast({
+                    title: "Não foi possível reimprimir",
+                    description: r.reason,
+                    variant: "destructive",
+                  });
+                }
+              }}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm font-bold text-secondary-foreground active:scale-95 transition-transform"
+            >
+              <RotateCw size={16} /> Reimprimir senha
+            </button>
+          )}
+        </div>
         {isBalcao && !existingOrderId && onCustomerNameChange && (
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2">
             <User size={18} className="text-muted-foreground shrink-0" />

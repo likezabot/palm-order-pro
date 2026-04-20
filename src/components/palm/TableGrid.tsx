@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFeedback } from "@/hooks/use-feedback";
-import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, AlertTriangle } from "lucide-react";
+import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, AlertTriangle, Printer } from "lucide-react";
+import { reprintSenhaForOrder } from "@/lib/reprint-senha";
+import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -16,8 +18,27 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   const navigate = useNavigate();
   const { playFeedback } = useFeedback();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [editingWaiter, setEditingWaiter] = useState(!waiterName);
   const [tempWaiterName, setTempWaiterName] = useState(waiterName);
+  const [reprintingId, setReprintingId] = useState<string | null>(null);
+
+  const handleReprint = async (orderId: string) => {
+    if (reprintingId) return;
+    playFeedback("click");
+    setReprintingId(orderId);
+    const r = await reprintSenhaForOrder(orderId);
+    setReprintingId(null);
+    if (r.ok) {
+      toast({ title: "Senha reimpressa" });
+    } else {
+      toast({
+        title: "Não foi possível reimprimir",
+        description: r.reason,
+        variant: "destructive",
+      });
+    }
+  };
 
   const { data: tableCount = 10 } = useQuery({
     queryKey: ["table-count"],
@@ -68,8 +89,14 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     };
   }, [queryClient]);
 
-  const balcaoOrders = (activeOrders?.filter((o) => o.table_name === "BALCÃO") || [])
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const todayStart = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+  const balcaoOrders = (activeOrders?.filter(
+    (o) => o.table_name === "BALCÃO" && new Date(o.created_at).getTime() >= todayStart,
+  ) || []).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const getSenha = (order: typeof balcaoOrders[0]) => {
     const today = new Date();
@@ -234,33 +261,52 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                 {balcaoOrders.map((order) => {
                   const badge = getStatusBadge(order.status);
                   return (
-                    <button
+                    <div
                       key={order.id}
-                      onClick={() => handleTableClick("BALCÃO", order.id)}
-                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 min-w-[100px] transition-all active:scale-95 hover:border-primary/50"
+                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 min-w-[110px] transition-all hover:border-primary/50"
                     >
-                      <span className="text-lg font-black text-primary">{getSenha(order)}</span>
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Clock size={12} />
-                        <span className="text-xs font-bold">{formatTime(order.created_at)}</span>
-                      </div>
-                      <span className="text-sm font-black text-foreground">
-                        {formatCurrency(order.total)}
-                      </span>
-                      {(order as any).item_count > 0 && (
-                        <span className="text-[10px] font-semibold text-muted-foreground">
-                          {(order as any).item_count} {(order as any).item_count === 1 ? "item" : "itens"}
+                      <button
+                        onClick={() => handleTableClick("BALCÃO", order.id)}
+                        className="flex flex-col items-start gap-1 w-full active:scale-95 transition-transform"
+                      >
+                        <span className="text-lg font-black text-primary">{getSenha(order)}</span>
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <Clock size={12} />
+                          <span className="text-xs font-bold">{formatTime(order.created_at)}</span>
+                        </div>
+                        <span className="text-sm font-black text-foreground">
+                          {formatCurrency(order.total)}
                         </span>
-                      )}
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                      {order.waiter_name && (
-                        <span className="text-[10px] text-muted-foreground truncate w-full">
-                          {order.waiter_name}
+                        {(order as any).item_count > 0 && (
+                          <span className="text-[10px] font-semibold text-muted-foreground">
+                            {(order as any).item_count} {(order as any).item_count === 1 ? "item" : "itens"}
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
+                          {badge.label}
                         </span>
-                      )}
-                    </button>
+                        {order.waiter_name && (
+                          <span className="text-[10px] text-muted-foreground truncate w-full">
+                            {order.waiter_name}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReprint(order.id);
+                        }}
+                        disabled={reprintingId === order.id}
+                        className="mt-1 flex items-center justify-center gap-1 w-full rounded-md bg-secondary px-2 py-1.5 text-[11px] font-bold text-secondary-foreground active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        {reprintingId === order.id ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Printer size={12} />
+                        )}
+                        Reimprimir
+                      </button>
+                    </div>
                   );
                 })}
               </div>
