@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowLeft, Minus, Plus, Trash2, FileText, Receipt, FilePlus, Printer, Send } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, Printer, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -15,8 +14,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-type PrintType = "extra" | "full" | "bill";
+import CartItemRow from "./CartItemRow";
+import OrderReviewFooter from "./OrderReviewFooter";
+import { PrintType } from "./PrintTypeSelector";
 
 interface Props {
   tableName: string;
@@ -37,12 +37,6 @@ interface Props {
   onRedirectToExisting?: (tableName: string, orderId: string) => void;
 }
 
-const PRINT_OPTIONS: { key: PrintType; label: string; icon: typeof FilePlus; desc: string }[] = [
-  { key: "extra", label: "Acréscimo", icon: FilePlus, desc: "Só itens novos" },
-  { key: "full", label: "Pedido", icon: FileText, desc: "Comanda completa" },
-  { key: "bill", label: "Conta", icon: Receipt, desc: "Conta final" },
-];
-
 const OrderReview = ({
   tableName, originalTableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
@@ -53,6 +47,11 @@ const OrderReview = ({
   const [conflict, setConflict] = useState<{ orderId: string; tableName: string } | null>(null);
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
+
+  const showWaiterTag = useMemo(() => {
+    const uniqueWaiters = new Set(cart.map((i) => i.waiter_name || waiterName).filter(Boolean));
+    return uniqueWaiters.size > 1;
+  }, [cart, waiterName]);
 
   const handleFinalize = async (shouldPrint: boolean) => {
     if (sending || cart.length === 0) return;
@@ -82,7 +81,7 @@ const OrderReview = ({
           p_should_print: shouldPrint,
         };
         console.log("[OrderReview] UPDATE payload:", JSON.stringify(payload, null, 2));
-        
+
         const { data: rpcResult, error: rpcError } = await supabase.rpc("update_order_items", payload as any);
         console.log("[OrderReview] UPDATE result:", rpcResult, "error:", rpcError);
 
@@ -137,7 +136,6 @@ const OrderReview = ({
         console.log("[OrderReview] CREATE result:", createData, "error:", createError);
         if (createError) {
           const msg = createError.message || "";
-          // Formato: "table_already_in_use:<orderId>:<currentName>"
           const match = msg.match(/table_already_in_use:([0-9a-f-]+):(.+)$/i);
           if (match) {
             playFeedback("error");
@@ -171,11 +169,11 @@ const OrderReview = ({
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
       <div className="shrink-0 bg-background border-b border-border p-3">
-        <button 
+        <button
           onClick={() => {
             playFeedback("click");
             onBack();
-          }} 
+          }}
           className="flex items-center gap-2 text-muted-foreground text-base"
         >
           <ArrowLeft size={20} /> Voltar ao cardápio
@@ -186,131 +184,29 @@ const OrderReview = ({
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col gap-3 p-3">
-        {(() => {
-          const uniqueWaiters = new Set(cart.map((i) => i.waiter_name || waiterName).filter(Boolean));
-          const showWaiterTag = uniqueWaiters.size > 1;
-          return cart.map((item) => (
-            <div key={`${item.product.id}-${item.waiter_name || ""}`} className="rounded-lg bg-card border border-border p-4">
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <p className="font-semibold text-base">{item.product.name}</p>
-                  <p className="text-sm text-primary font-bold">
-                    R$ {(item.product.price * item.quantity).toFixed(2)}
-                  </p>
-                  {showWaiterTag && (item.waiter_name || waiterName) && (
-                    <span className="inline-block mt-1 text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">
-                      por {item.waiter_name || waiterName}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      playFeedback("click");
-                      onUpdateQuantity(item.product.id, -1);
-                    }}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground active:scale-90 transition-transform"
-                  >
-                    <Minus size={18} />
-                  </button>
-                  <span className="text-lg font-bold w-6 text-center">{item.quantity}</span>
-                  <button
-                    onClick={() => {
-                      playFeedback("click");
-                      onUpdateQuantity(item.product.id, 1);
-                    }}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground active:scale-90 transition-transform"
-                  >
-                    <Plus size={18} />
-                  </button>
-                </div>
-              </div>
-
-              <input
-                type="text"
-                placeholder="Observação (ex: sem cebola)"
-                value={item.note}
-                onChange={(e) => onUpdateNote(item.product.id, e.target.value)}
-                className="mt-2 w-full rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-
-              <button
-                onClick={() => {
-                  playFeedback("heavy");
-                  onRemove(item.product.id);
-                }}
-                className="mt-2 flex items-center gap-1 text-sm text-destructive font-semibold"
-              >
-                <Trash2 size={14} /> REMOVER
-              </button>
-            </div>
-          ));
-        })()}
+        {cart.map((item) => (
+          <CartItemRow
+            key={`${item.product.id}-${item.waiter_name || ""}`}
+            item={item}
+            showWaiterTag={showWaiterTag}
+            fallbackWaiter={waiterName}
+            onUpdateQuantity={onUpdateQuantity}
+            onUpdateNote={onUpdateNote}
+            onRemove={onRemove}
+          />
+        ))}
       </div>
 
-      {/* Footer */}
-      <div className="shrink-0 bg-background border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-lg font-bold">Total:</span>
-          <span className="text-xl font-bold text-primary">R$ {total.toFixed(2)}</span>
-        </div>
-
-        {/* Seletor do que a central vai imprimir — só para mesa existente */}
-        {existingOrderId && (
-          <div className="mb-3">
-            <p className="text-xs text-muted-foreground font-semibold mb-2 uppercase tracking-wide">
-              Na central imprimir:
-            </p>
-            <div className="flex gap-2">
-              {PRINT_OPTIONS.map((opt) => {
-                const Icon = opt.icon;
-                const active = printType === opt.key;
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      playFeedback("click");
-                      setPrintType(opt.key);
-                    }}
-                    className={`flex-1 flex flex-col items-center gap-1 rounded-lg border p-3 text-sm font-semibold transition-all active:scale-95 min-h-[56px] ${
-                      active
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    <Icon size={18} />
-                    <span className="text-xs font-bold">{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {existingOrderId && onCloseAccount && (
-          <button
-            onClick={() => {
-              playFeedback("click");
-              onCloseAccount();
-            }}
-            className="w-full rounded-lg bg-primary p-4 text-lg font-bold text-primary-foreground transition-all duration-150 active:scale-[0.97] min-h-[56px] mb-2"
-          >
-            💰 FECHAR CONTA
-          </button>
-        )}
-
-        <button
-          onClick={() => {
-            playFeedback("click");
-            setShowConfirm(true);
-          }}
-          disabled={sending || cart.length === 0}
-          className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 min-h-[56px]"
-        >
-          {sending ? "ENVIANDO..." : existingOrderId ? "✅ ATUALIZAR PEDIDO" : "✅ FINALIZAR PEDIDO"}
-        </button>
-      </div>
+      <OrderReviewFooter
+        total={total}
+        sending={sending}
+        cartEmpty={cart.length === 0}
+        existingOrderId={existingOrderId}
+        printType={printType}
+        onPrintTypeChange={setPrintType}
+        onCloseAccount={onCloseAccount}
+        onFinalize={() => setShowConfirm(true)}
+      />
 
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent className="max-w-[90vw] rounded-2xl">
