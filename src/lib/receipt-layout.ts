@@ -27,6 +27,10 @@ export type LayoutBlock =
   | { kind: "total"; label: string; value: string }
   | { kind: "qtyLine"; text: string }
   | { kind: "senha"; text: string }
+  | { kind: "senhaTitle"; text: string }
+  | { kind: "itemTableHeader" }
+  | { kind: "itemTableRow"; quantity: number; name: string; unit: number; subtotal: number }
+  | { kind: "itemTableTotal"; value: string }
   | { kind: "footer"; text: string }
   | { kind: "cutMark" };
 
@@ -42,6 +46,8 @@ export interface BuildLayoutInput {
   items: ReceiptItem[];
   total?: number;
   senha?: string;
+  orderId?: string;
+  customerName?: string;
 }
 
 /**
@@ -73,23 +79,52 @@ export function createReceiptLayoutModel(
     blocks.push({ kind: "sep", bold: true });
   }
 
-  // 3. Senha (cupom de balcão)
+  // 3. Senha (cupom de balcão) — layout estilo recibo de caixa
   if (input.docType === "SENHA") {
-    if (v.date) {
-      blocks.push({ kind: "info", label: "Balcao", value: time });
+    // Número da senha sem "#" (ex: "146")
+    const senhaNum = (input.senha || "").replace(/^#/, "");
+    blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}` });
+    if (v.title && cfg.headerText) {
+      blocks.push({ kind: "title", text: cfg.headerText });
     }
-    blocks.push({ kind: "senha", text: input.senha || "" });
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", bold: true });
+
+    if (v.date) {
+      blocks.push({ kind: "info", label: "Data", value: `${date} ${time}` });
+    }
+    if (input.orderId) {
+      // Últimos 6 caracteres do uuid (sem hífen) p/ caber em uma linha
+      const venda = input.orderId.replace(/-/g, "").slice(-6).toUpperCase();
+      blocks.push({ kind: "info", label: "Venda", value: venda });
+    }
+    blocks.push({ kind: "info", label: "Vendedor", value: "BALCAO" });
+    if (input.waiterName) {
+      blocks.push({ kind: "info", label: "Caixa", value: input.waiterName });
+    }
+    blocks.push({
+      kind: "info",
+      label: "Cliente",
+      value: input.customerName || "CONSUMIDOR FINAL",
+    });
+
+    blocks.push({ kind: "sep", bold: true });
+    blocks.push({ kind: "itemTableHeader" });
+    blocks.push({ kind: "sep", bold: true });
     input.items.forEach((it) =>
       blocks.push({
-        kind: "item",
-        name: it.product_name,
+        kind: "itemTableRow",
         quantity: it.quantity,
-        subtotal: 0,
-        note: null,
+        name: it.product_name,
+        unit: it.product_price,
+        subtotal: it.product_price * it.quantity,
       })
     );
     blocks.push({ kind: "sep" });
+    blocks.push({
+      kind: "itemTableTotal",
+      value: `R$ ${(input.total ?? 0).toFixed(2)}`,
+    });
+    blocks.push({ kind: "sep", bold: true });
     if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
     blocks.push({ kind: "cutMark" });
     return { blocks, docType: input.docType };
