@@ -169,6 +169,31 @@ function paperColumns(paper: "58mm" | "80mm"): number {
   return paper === "58mm" ? 32 : 48;
 }
 
+/** Trunca/preenche string para o tamanho exato. */
+function fitLeft(s: string, n: number): string {
+  if (s.length > n) return s.substring(0, n);
+  return s + " ".repeat(n - s.length);
+}
+function fitRight(s: string, n: number): string {
+  if (s.length > n) return s.substring(s.length - n);
+  return " ".repeat(n - s.length) + s;
+}
+
+/** Formata uma linha tabular: Qtd(3) Item(rest) Unit(7) Total(7) com 1 espaço entre cols. */
+function formatTableRow(cols: number, qty: string, name: string, unit: string, total: string): string {
+  const QTY = 3;
+  const UNIT = 7;
+  const TOTAL = 7;
+  const GAPS = 3;
+  const NAME = Math.max(4, cols - QTY - UNIT - TOTAL - GAPS);
+  return (
+    fitLeft(qty, QTY) + " " +
+    fitLeft(name, NAME) + " " +
+    fitRight(unit, UNIT) + " " +
+    fitRight(total, TOTAL)
+  );
+}
+
 /**
  * Mapeia overrides de fontSizes (px) -> intensidade no ESC/POS (double width/height).
  * O ESC/POS não tem fontes contínuas; usamos thresholds estáveis.
