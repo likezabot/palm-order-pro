@@ -6,6 +6,7 @@ import { Order, OrderItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { formatTableLabel } from "@/lib/utils";
+import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -84,12 +85,25 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
       </div>
 
       <div className="p-4 space-y-3">
-        {items.map((item) => (
-          <div key={item.id} className="flex justify-between text-base">
-            <span>{item.quantity}x {item.product_name}</span>
-            <span className="font-semibold">R$ {item.subtotal.toFixed(2)}</span>
-          </div>
-        ))}
+        {summarizeItemWaiters(items, order.waiter_name || "").map((item, idx) => {
+          const tag = formatWaiterTag(item.waiters, order.waiter_name);
+          return (
+            <div key={`${item.product_id || item.product_name}-${idx}`} className="flex justify-between text-base gap-2">
+              <span className="min-w-0 break-words">
+                {item.quantity}x {item.product_name}
+                {item.note && (
+                  <span className="text-muted-foreground italic text-sm ml-2">({item.note})</span>
+                )}
+                {tag && (
+                  <span className="ml-2 inline-block text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded align-middle">
+                    {tag}
+                  </span>
+                )}
+              </span>
+              <span className="font-semibold shrink-0">R$ {item.subtotal.toFixed(2)}</span>
+            </div>
+          );
+        })}
 
         <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
           <span>TOTAL</span>

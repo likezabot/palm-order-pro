@@ -1,6 +1,7 @@
 import { Order, OrderItem } from "@/lib/types";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { Clock, Flame } from "lucide-react";
+import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
 
 interface CardProps {
   order: Order;
@@ -23,6 +24,8 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
     : isLate
       ? "bg-warning text-warning-foreground"
       : "bg-muted text-muted-foreground";
+
+  const summarized = summarizeItemWaiters(items, order.waiter_name || "");
 
   return (
     <div
@@ -48,14 +51,22 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
       <div className="text-xs text-muted-foreground">Entrou às {time}</div>
 
       <div className="space-y-1 pt-1">
-        {items.map((item) => (
-          <div key={item.id} className="text-base text-foreground">
-            <span className="font-semibold">• {item.quantity}x {item.product_name}</span>
-            {item.note && (
-              <span className="text-muted-foreground ml-2 italic text-sm">({item.note})</span>
-            )}
-          </div>
-        ))}
+        {summarized.map((item, idx) => {
+          const tag = formatWaiterTag(item.waiters, order.waiter_name);
+          return (
+            <div key={`${item.product_id || item.product_name}-${idx}`} className="text-base text-foreground">
+              <span className="font-semibold">• {item.quantity}x {item.product_name}</span>
+              {item.note && (
+                <span className="text-muted-foreground ml-2 italic text-sm">({item.note})</span>
+              )}
+              {tag && (
+                <span className="ml-2 text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded align-middle">
+                  {tag}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {actionLabel && onAction && (
