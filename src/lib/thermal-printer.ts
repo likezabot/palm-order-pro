@@ -250,6 +250,41 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         b.resetStyle();
         break;
       }
+      case "senhaTitle": {
+        b.resetStyle().align("center").bold(true).size(true, true);
+        b.line(blk.text);
+        b.resetStyle();
+        break;
+      }
+      case "itemTableHeader": {
+        b.resetStyle().align("left").bold(true);
+        b.line(formatTableRow(cols, "Qtd", "Item", "Unit", "Total"));
+        b.resetStyle();
+        break;
+      }
+      case "itemTableRow": {
+        b.resetStyle().align("left");
+        b.line(
+          formatTableRow(
+            cols,
+            String(blk.quantity),
+            blk.name.toUpperCase(),
+            blk.unit.toFixed(2),
+            blk.subtotal.toFixed(2),
+          ),
+        );
+        b.resetStyle();
+        break;
+      }
+      case "itemTableTotal": {
+        b.resetStyle().align("left").bold(true).size(false, true);
+        const label = "TOTAL";
+        const val = blk.value;
+        const padN = Math.max(1, cols - label.length - val.length);
+        b.line(label + " ".repeat(padN) + val);
+        b.resetStyle();
+        break;
+      }
       case "footer": {
         b.resetStyle().align("center").line(blk.text);
         b.resetStyle();
