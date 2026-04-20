@@ -213,7 +213,15 @@ ${body}
 export function buildHtmlFromLayout(
   docType: DocType,
   title: string,
-  data: { tableName?: string; waiterName?: string; items: ReceiptItem[]; total?: number; senha?: string },
+  data: {
+    tableName?: string;
+    waiterName?: string;
+    items: ReceiptItem[];
+    total?: number;
+    senha?: string;
+    orderId?: string;
+    customerName?: string;
+  },
   cfg: PrintConfig,
 ): string {
   const layout = createReceiptLayoutModel({ docType, ...data }, cfg);
