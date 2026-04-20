@@ -138,3 +138,59 @@ export function createReceiptLayoutModel(
 
   return { blocks, docType: input.docType };
 }
+
+/** Layout do cupom SENHA (BALCÃO) — estilo recibo de caixa. */
+function buildSenhaLayout(
+  input: BuildLayoutInput,
+  cfg: PrintConfig,
+  ctx: { date: string; time: string }
+): ReceiptLayout {
+  const v = cfg.visibleSections;
+  const blocks: LayoutBlock[] = [];
+  const senhaNum = (input.senha || "").replace(/^#/, "");
+
+  blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}` });
+  if (v.title && cfg.headerText) {
+    blocks.push({ kind: "title", text: cfg.headerText });
+  }
+  blocks.push({ kind: "sep", bold: true });
+
+  if (v.date) {
+    blocks.push({ kind: "info", label: "Data", value: `${ctx.date} ${ctx.time}` });
+  }
+  if (input.orderId) {
+    const venda = input.orderId.replace(/-/g, "").slice(-6).toUpperCase();
+    blocks.push({ kind: "info", label: "Venda", value: venda });
+  }
+  blocks.push({ kind: "info", label: "Vendedor", value: "BALCAO" });
+  if (input.waiterName) {
+    blocks.push({ kind: "info", label: "Caixa", value: input.waiterName });
+  }
+  blocks.push({
+    kind: "info",
+    label: "Cliente",
+    value: input.customerName || "CONSUMIDOR FINAL",
+  });
+
+  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "itemTableHeader" });
+  blocks.push({ kind: "sep", bold: true });
+  input.items.forEach((it) =>
+    blocks.push({
+      kind: "itemTableRow",
+      quantity: it.quantity,
+      name: it.product_name,
+      unit: it.product_price,
+      subtotal: it.product_price * it.quantity,
+    })
+  );
+  blocks.push({ kind: "sep" });
+  blocks.push({
+    kind: "itemTableTotal",
+    value: `R$ ${(input.total ?? 0).toFixed(2)}`,
+  });
+  blocks.push({ kind: "sep", bold: true });
+  if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
+  blocks.push({ kind: "cutMark" });
+  return { blocks, docType: "SENHA" };
+}
