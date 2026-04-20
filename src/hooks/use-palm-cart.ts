@@ -49,19 +49,34 @@ export const usePalmCart = () => {
       .eq("order_id", orderId);
 
     if (items && items.length > 0) {
-      const loadedCart: CartItem[] = items.map((item) => ({
-        product: {
-          id: item.product_id || item.product_name,
-          name: item.product_name,
-          price: item.product_price,
-          category: "",
-          active: true,
-          created_at: "",
-        },
-        quantity: item.quantity,
-        note: item.note || "",
-        waiter_name: (item as any).waiter_name || undefined,
-      }));
+      // Dedupe linhas iguais (mesmo product_id+note+waiter) somando quantidade,
+      // para evitar "1x Coca por João" + "1x Coca por João" duplicado vindo do banco.
+      const dedupeMap = new Map<string, CartItem>();
+      for (const item of items) {
+        const waiter = (item as any).waiter_name || undefined;
+        const note = item.note || "";
+        const productId = item.product_id || item.product_name;
+        const key = `${productId}|${note}|${waiter || ""}`;
+        const existing = dedupeMap.get(key);
+        if (existing) {
+          existing.quantity += item.quantity;
+        } else {
+          dedupeMap.set(key, {
+            product: {
+              id: productId,
+              name: item.product_name,
+              price: item.product_price,
+              category: "",
+              active: true,
+              created_at: "",
+            },
+            quantity: item.quantity,
+            note,
+            waiter_name: waiter,
+          });
+        }
+      }
+      const loadedCart: CartItem[] = Array.from(dedupeMap.values());
       setCart(loadedCart);
       setOriginalCart(loadedCart.map((i) => ({ ...i, product: { ...i.product } })));
       setExistingOrderId(orderId);

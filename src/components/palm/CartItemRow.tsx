@@ -29,7 +29,7 @@ const CartItemRow = ({
           <p className="text-sm text-primary font-bold">
             R$ {(item.product.price * item.quantity).toFixed(2)}
           </p>
-          {showWaiterTag && (item.waiter_name || fallbackWaiter) && (
+          {showWaiterTag && (item.waiter_name || fallbackWaiter) && (item.waiter_name || fallbackWaiter) !== fallbackWaiter && (
             <span className="inline-block mt-1 text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded">
               por {item.waiter_name || fallbackWaiter}
             </span>

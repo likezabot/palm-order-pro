@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { OrderSection } from "@/components/pdv/OrderSection";
 import { PrintSettingsDialog } from "@/components/pdv/PrintSettingsDialog";
 import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
+import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
   new: { label: "NOVO", color: "bg-primary text-primary-foreground", next: "preparing", nextLabel: "▶ PREPARAR" },
@@ -376,21 +377,17 @@ const Pdv = () => {
               <div className="border-t border-border pt-3 space-y-2">
                 {selectedItems.length === 0 ? (
                   <p className="text-muted-foreground text-sm">Carregando itens...</p>
-                ) : (() => {
-                  const uniqueWaiters = new Set(
-                    selectedItems.map((i) => i.waiter_name || selectedOrder.waiter_name).filter(Boolean)
-                  );
-                  const showWaiterTag = uniqueWaiters.size > 1;
-                  return selectedItems.map((item) => {
-                    const waiter = item.waiter_name || selectedOrder.waiter_name;
+                ) : (
+                  summarizeItemWaiters(selectedItems, selectedOrder.waiter_name || "").map((item, idx) => {
+                    const tag = formatWaiterTag(item.waiters, selectedOrder.waiter_name);
                     return (
-                      <div key={item.id}>
+                      <div key={`${item.product_id || item.product_name}-${idx}`}>
                         <div className="flex justify-between text-lg gap-2">
                           <span className="font-semibold min-w-0 break-words">
                             {item.quantity}x {item.product_name}
-                            {showWaiterTag && waiter && (
+                            {tag && (
                               <span className="ml-2 inline-block text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded align-middle">
-                                por {waiter}
+                                {tag}
                               </span>
                             )}
                           </span>
@@ -401,8 +398,8 @@ const Pdv = () => {
                         )}
                       </div>
                     );
-                  });
-                })()}
+                  })
+                )}
               </div>
 
               <div className="border-t border-border pt-3 flex justify-between text-2xl font-black">
