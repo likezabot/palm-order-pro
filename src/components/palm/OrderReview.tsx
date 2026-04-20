@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Printer, Send } from "lucide-react";
+import { ArrowLeft, Printer, Send, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
@@ -32,15 +32,19 @@ interface Props {
   onUpdateQuantity: (productId: string, delta: number) => void;
   onUpdateNote: (productId: string, note: string) => void;
   onRemove: (productId: string) => void;
-  onSuccess: (senha: string, orderId?: string) => void;
+  onSuccess: (senha: string, orderId?: string, customerName?: string) => void;
   onCloseAccount?: () => void;
   onRedirectToExisting?: (tableName: string, orderId: string) => void;
+  customerName?: string;
+  onCustomerNameChange?: (name: string) => void;
 }
 
 const OrderReview = ({
   tableName, originalTableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
+  customerName, onCustomerNameChange,
 }: Props) => {
+  const isBalcao = tableName === "BALCÃO";
   const [sending, setSending] = useState(false);
   const [printType, setPrintType] = useState<PrintType>("extra");
   const [showConfirm, setShowConfirm] = useState(false);
