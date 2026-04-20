@@ -53,10 +53,12 @@ export const usePalmCart = () => {
       // para evitar "1x Coca por João" + "1x Coca por João" duplicado vindo do banco.
       const dedupeMap = new Map<string, CartItem>();
       for (const item of items) {
-        const waiter = (item as any).waiter_name || undefined;
+        const rawWaiter = (item as any).waiter_name;
+        const waiter = rawWaiter ? String(rawWaiter).trim() : undefined;
+        const waiterKey = (waiter || "").toUpperCase();
         const note = item.note || "";
         const productId = item.product_id || item.product_name;
-        const key = `${productId}|${note}|${waiter || ""}`;
+        const key = `${productId}|${note}|${waiterKey}`;
         const existing = dedupeMap.get(key);
         if (existing) {
           existing.quantity += item.quantity;
