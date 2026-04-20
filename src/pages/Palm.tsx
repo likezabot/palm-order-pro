@@ -17,6 +17,7 @@ const Palm = () => {
   const [waiterName, setWaiterName] = useState(
     () => localStorage.getItem("waiter_name") || "",
   );
+  const [successOrderId, setSuccessOrderId] = useState<string | undefined>(undefined);
   const cartState = usePalmCart();
   const {
     tableName,
@@ -31,7 +32,6 @@ const Palm = () => {
     setTableName,
     setOriginalTableName,
     setSenha,
-    setExistingOrderId,
     loadOrder,
     addToCart,
     updateQuantity,
@@ -88,7 +88,7 @@ const Palm = () => {
         cart={cart}
         allowLocalPrint={tableName === "BALCÃO" && !existingOrderId}
         waiterName={waiterName}
-        orderId={existingOrderId ?? undefined}
+        orderId={successOrderId}
       />
     );
   }
@@ -111,7 +111,7 @@ const Palm = () => {
         onRemove={removeItem}
         onSuccess={(s: string, newOrderId?: string) => {
           setSenha(s);
-          if (newOrderId) setExistingOrderId(newOrderId);
+          setSuccessOrderId(newOrderId);
           setStep("success");
         }}
         onCloseAccount={() => setStep("close")}
