@@ -64,6 +64,11 @@ export function createReceiptLayoutModel(
   const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("pt-BR");
 
+  // SENHA tem layout próprio (recibo de caixa) — trata antes de qualquer outro bloco.
+  if (input.docType === "SENHA") {
+    return buildSenhaLayout(input, cfg, { date, time });
+  }
+
   // 1. Título
   if (v.title && cfg.headerText) {
     blocks.push({ kind: "title", text: cfg.headerText });
