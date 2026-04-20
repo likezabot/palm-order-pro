@@ -1,89 +1,51 @@
 
-## Reformular cupom do BALCÃO + opção "imprimir senha"
 
-Deixar o cupom da senha (BALCÃO) com layout estilo recibo de caixa, como na foto, e adicionar um toggle em Configurações para ligar/desligar a impressão automática da senha.
+## Mostrar garçom em todos os lugares + agrupar itens repetidos
 
-### 1. Novo layout do cupom SENHA (`receipt-layout.ts` + `receipt-html.ts`)
+Dois problemas:
 
-Sequência de blocos (substitui o bloco SENHA atual):
+**A. Tag "por garçom" só aparece em alguns lugares.** Hoje aparece no Palm (OrderReview) e PDV (admin), mas não em: cozinha (KanbanCard) nem fechamento de conta (CloseOrder).
 
-```text
-        SENHA: 146                ← grande, negrito, centralizado
-     PLANO B ESPETARIA            ← headerText
-   Data: 20/04/2026 13:34         ← data + hora
-   Venda: 114162                  ← últimos 6 dígitos do order.id
-   Vendedor: BALCÃO
-   Caixa:    <waiterName>
-   Cliente:  CONSUMIDOR FINAL     ← ou nome do cliente, se houver
-============================================
-Qtd   Item                Unit       Total
-============================================
-2     COCA COLA ZERO 500ML 10,00     20,00
-1     STROGONOFF CARNE     40,00     40,00
-1     STROGONOFF CAMARÃO   45,00     45,00
---------------------------------------------
-                          TOTAL R$  140,00
-============================================
-        Obrigado pela preferência!
+**B. Mesmo item anotado por garçons diferentes vira linhas separadas + risco de "X2" duplicado.** Quando 2 garçons anotam "Coca 350ml" na mesma mesa, salvamos 2 linhas em `order_items` com `waiter_name` diferente. Hoje a UI lista tudo cru — então aparece "1x Coca" "1x Coca" em vez de "2x Coca (João + Maria)" e, pior, se o mesmo garçom adicionar Coca em momentos diferentes (depois de fechar/reabrir a mesa), vira "1x Coca por João" + "1x Coca por João" duplicado.
+
+### Solução
+
+**1. Helper único `groupItemsByProductAndWaiter` em `src/lib/order-items-group.ts` (novo)**
+- Recebe `OrderItem[]` (ou `CartItem[]`) + fallback waiter.
+- Agrupa por chave `product_id|product_name|note|waiter` somando `quantity` e `subtotal`.
+- Retorna lista enxuta sem duplicatas. Uma única fonte de verdade.
+
+**2. Helper auxiliar `summarizeItemWaiters`**
+- Agrupa só por produto+nota (ignorando garçom) e devolve `{ name, quantity, subtotal, note, waiters: string[] }`.
+- Usado quando queremos UMA linha por produto mostrando "por João, Maria" no canto, em vez de duas linhas.
+
+**3. Aplicar nos componentes**
+
+| Local | Mudança |
+|---|---|
+| `CartItemRow` (Palm) | Manter como está (já agrupa por garçom no `addToCart`); apenas garantir que a tag não duplique caso `item.waiter_name === fallbackWaiter`. |
+| `KanbanCard` (cozinha) | Usar `summarizeItemWaiters`. Cada linha vira `• 2x Coca 350ml — João, Maria` (lista de garçons em cinza, fonte menor, só se >1 garçom OU se diferente do `order.waiter_name`). |
+| `CloseOrder` (cashier do garçom) | Mesmo: `summarizeItemWaiters` → uma linha por produto, lista de garçons como tag pequena ao lado. |
+| `Pdv.tsx` (admin) | Trocar o `selectedItems.map` cru por `summarizeItemWaiters`. Mantém `showWaiterTag` (só mostra quando há >1 garçom único). Resolve o bug de "por João" repetir. |
+| `OrderReview` (Palm, edição de mesa existente) | Hoje carrega itens do banco para `cart` no `loadOrder`. Adicionar **deduplicação no `loadOrder`** do `use-palm-cart`: se vier do banco 2 linhas com mesmo `product_id + note + waiter`, mergear somando quantidade. |
+
+**4. Lógica da tag "por X" (regra única)**
 ```
-
-Mudanças técnicas:
-- Novos blocos no `LayoutBlock`: `senhaTitle` (linha "SENHA: 146" grande no topo) e `itemTable` (linha tabular com qtd/nome/unit/total alinhados em 4 colunas monoespaçadas).
-- Em `createReceiptLayoutModel`, no ramo `docType === "SENHA"`:
-  1. `senhaTitle` no topo (antes do título do estabelecimento).
-  2. Título (header) menor abaixo.
-  3. Linhas info: Data, Venda (ID curto), Vendedor=BALCÃO, Caixa=waiterName, Cliente.
-  4. Cabeçalho da tabela (`Qtd | Item | Unit | Total`).
-  5. Itens via `itemTable` com `product_price` e `subtotal` (agora com preço, não só nome).
-  6. Linha TOTAL.
-  7. Footer.
-- `renderBlocksToHtml`: renderizar `senhaTitle` com fonte ~`f.senha * 0.6` (grande mas cabendo), e `itemTable` em grid CSS 4 colunas (`grid-template-columns: 2.5em 1fr 4em 4em`) para alinhar como na foto.
-- ESC/POS (`thermal-printer.ts` `renderLayout`): tratar os 2 novos blocos com padding fixo de espaços (Courier monoespaçada) para sair igual no papel.
-
-### 2. Atualizar chamadas de `printSenha` para passar mais dados
-
-`src/lib/print-receipt.ts` → `printSenha(senha, items, opts?)`:
-- Aceitar `opts: { waiterName?, orderId?, customerName?, total? }`.
-- `buildSenhaHtml` recebe os mesmos campos extras.
-
-Atualizar callers:
-- `OrderSuccess.tsx`: passar `waiterName` (do contexto), `orderId` (passar via prop nova), `total` (somar do cart) e `customerName` (opcional, hoje não existe → usa "CONSUMIDOR FINAL").
-- `OrderReview.tsx` (que renderiza `OrderSuccess`): passar `waiterName` e `orderId` resultante do `create_order`.
-- `PrintConfigPanel.tsx` preview: passar dados de exemplo (Venda 114162, Caixa "Carlos", total).
-
-### 3. Toggle "Imprimir senha do balcão"
-
-`print-config.ts`:
-- Adicionar `printSenhaEnabled: boolean` (default `true`) ao `PrintConfig` e `DEFAULT_CONFIG`.
-- Mergear no `loadPrintConfig`/`syncPrintConfigFromDb` como os outros campos.
-
-`PrintConfigPanel.tsx` (aba Configurações):
-- Novo `Switch` "Imprimir senha automaticamente no BALCÃO" perto dos toggles de visibleSections.
-
-`OrderSuccess.tsx`:
-- No `useEffect` de auto-print, checar `loadPrintConfig().printSenhaEnabled` antes de chamar `printSenha`. Botão "Imprimir novamente" continua funcionando manualmente independente do toggle.
-
-`print-receipt.ts` `printSenha`:
-- Se `printSenhaEnabled === false` e a chamada veio do auto-print → retornar `false` cedo. (O botão manual passa um flag `force: true` para ignorar o toggle.)
-
-### 4. Testes
-
-Adicionar em `src/lib/__tests__/`:
-- `receipt-layout.senha.test.ts`: garante que blocos SENHA contêm `senhaTitle`, header com data, linhas Vendedor/Caixa/Cliente, e `itemTable` com preços.
-- Atualizar `senha.test.ts` se necessário (formato `#001` continua o mesmo na UI; no cupom mostramos o número puro "146" → ajustar para tirar o `#` só na exibição do cupom, mantendo `#146` na UI do TableGrid).
+mostrar tag se: waiters.length > 1  ||  (waiters.length === 1 && waiters[0] !== orderMainWaiter)
+formato: "por João" (1)  |  "por João, Maria" (vários)
+```
+Nunca exibir o nome do mesmo garçom duas vezes na mesma linha — `Set` na lista.
 
 ### Arquivos afetados
-- `src/lib/print-config.ts` — campo `printSenhaEnabled`
-- `src/lib/receipt-layout.ts` — novos blocos + ramo SENHA reescrito
-- `src/lib/receipt-html.ts` — render dos novos blocos + CSS de grid
-- `src/lib/thermal-printer.ts` — render ESC/POS dos novos blocos
-- `src/lib/print-receipt.ts` — assinatura `printSenha` + checagem do toggle
-- `src/components/palm/OrderSuccess.tsx` — passar dados extras + respeitar toggle
-- `src/components/palm/OrderReview.tsx` — propagar `orderId`/`waiterName` para `OrderSuccess`
-- `src/components/admin/PrintConfigPanel.tsx` — Switch novo + preview com dados completos
-- `src/lib/__tests__/receipt-layout.senha.test.ts` — novo
+- `src/lib/order-items-group.ts` — **novo**, helpers `groupItemsByProductAndWaiter` + `summarizeItemWaiters`
+- `src/lib/__tests__/order-items-group.test.ts` — **novo**, casos: 2 garçons mesmo produto, mesmo garçom 2 linhas (dedupe), nota diferente não agrupa
+- `src/hooks/use-palm-cart.ts` — dedupe no `loadOrder`
+- `src/components/kitchen/KanbanCard.tsx` — usar summarize + tag de garçons
+- `src/components/cashier/CloseOrder.tsx` — usar summarize + tag de garçons
+- `src/pages/Pdv.tsx` — trocar map cru por summarize
+- `src/components/palm/CartItemRow.tsx` — guard contra tag redundante
 
 ### Notas
-- Sem mudanças de banco.
-- "CONSUMIDOR FINAL" é hardcoded por enquanto (fluxo do BALCÃO hoje não captura cliente). Se quiser, futuramente conectamos ao mesmo input de cliente do PDV.
-- O número da venda vem dos últimos 6 dígitos hex do `order.id` para caber na linha.
+- Sem mudança de banco. As linhas continuam separadas em `order_items` (preserva comissão/estatísticas por garçom). A unificação é só visual.
+- A tela do **Kanban da cozinha** mostrar quem anotou ajuda na hora de preparar (cozinheiro sabe a quem perguntar dúvida do pedido).
+
