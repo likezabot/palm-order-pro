@@ -40,13 +40,16 @@ describe("createReceiptLayoutModel — fluxo crítico impressão (fonte única)"
     expect(blocks.some((b) => b.kind === "banner" && (b as any).text.includes("CONTA"))).toBe(true);
   });
 
-  it("SENHA tem bloco senha e não tem total", () => {
+  it("SENHA usa layout estilo recibo (senhaTitle + itemTable) e sem total/qtyLine", () => {
     const { blocks } = createReceiptLayoutModel(
       { docType: "SENHA", senha: "042", items: baseItems },
       DEFAULT_CONFIG,
     );
-    expect(blocks.some((b) => b.kind === "senha" && (b as any).text === "042")).toBe(true);
+    expect(blocks[0].kind).toBe("senhaTitle");
+    expect(blocks.some((b) => b.kind === "itemTableHeader")).toBe(true);
+    expect(blocks.some((b) => b.kind === "itemTableRow")).toBe(true);
     expect(blocks.some((b) => b.kind === "total")).toBe(false);
+    expect(blocks.some((b) => b.kind === "qtyLine")).toBe(false);
   });
 
   it("respeita visibleSections — oculta título/garçom/data/footer/notas", () => {
