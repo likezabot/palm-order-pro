@@ -18,6 +18,8 @@ const Palm = () => {
     () => localStorage.getItem("waiter_name") || "",
   );
   const [successOrderId, setSuccessOrderId] = useState<string | undefined>(undefined);
+  const [customerName, setCustomerName] = useState("");
+  const [successCustomerName, setSuccessCustomerName] = useState<string | undefined>(undefined);
   const cartState = usePalmCart();
   const {
     tableName,
@@ -61,6 +63,8 @@ const Palm = () => {
   const resetOrder = () => {
     reset();
     setSuccessOrderId(undefined);
+    setCustomerName("");
+    setSuccessCustomerName(undefined);
     setStep("grid");
   };
 
@@ -90,6 +94,7 @@ const Palm = () => {
         allowLocalPrint={tableName === "BALCÃO" && !existingOrderId}
         waiterName={waiterName}
         orderId={successOrderId}
+        customerName={successCustomerName}
       />
     );
   }
@@ -110,15 +115,18 @@ const Palm = () => {
         onUpdateQuantity={updateQuantity}
         onUpdateNote={updateNote}
         onRemove={removeItem}
-        onSuccess={(s: string, newOrderId?: string) => {
+        onSuccess={(s: string, newOrderId?: string, custName?: string) => {
           setSenha(s);
           setSuccessOrderId(newOrderId);
+          setSuccessCustomerName(custName);
           setStep("success");
         }}
         onCloseAccount={() => setStep("close")}
         onRedirectToExisting={(name, orderId) => {
           handleSelectTable(name, orderId);
         }}
+        customerName={customerName}
+        onCustomerNameChange={setCustomerName}
       />
     );
   }
