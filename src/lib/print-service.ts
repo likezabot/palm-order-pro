@@ -269,7 +269,70 @@ export async function autoPrintUpdate(order: {
 export const autoPrintDelta = autoPrintUpdate;
 
 /**
- * Reimpressão manual — não verifica claim, sempre imprime.
+ * Resultado das impressões manuais.
+ * - ok: true se ao menos uma das vias (bridge local OU central) foi acionada
+ * - reason: código curto p/ UI exibir mensagem
+ * - queued: true se foi enfileirado p/ Central
+ * - bridgeOk: true se a bridge local respondeu OK
+ */
+export interface ManualPrintResult {
+  ok: boolean;
+  reason:
+    | "success"
+    | "queued_only"
+    | "no_items"
+    | "no_delta"
+    | "bridge_failed"
+    | "error";
+  queued: boolean;
+  bridgeOk: boolean;
+}
+
+/**
+ * Sempre enfileira na Central (PrintStation) e em paralelo tenta imprimir
+ * localmente via bridge. Não toca em print_status do pedido — é manual.
+ */
+async function enqueueAndPrint(
+  orderId: string,
+  tableValue: string,
+  printType: PrintJobType,
+  payload: Uint8Array,
+  bridgeAttempt: () => Promise<boolean>,
+): Promise<ManualPrintResult> {
+  // 1. Sempre tenta enfileirar na Central (se modo bridge)
+  let queued = false;
+  try {
+    const cfg = loadPrintConfig();
+    if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
+      await enqueuePrintJob({
+        orderId,
+        tableName: tableValue,
+        printType,
+        payloadB64: encodePayloadB64(payload),
+        bridgeUrl: cfg.bridgeUrl,
+        lastError: null,
+      });
+      queued = true;
+    }
+  } catch (e) {
+    debugLog.error("queue", "falha ao enfileirar manual", e);
+  }
+
+  // 2. Tenta bridge local
+  let bridgeOk = false;
+  try {
+    bridgeOk = await bridgeAttempt();
+  } catch (e) {
+    debugLog.error("print", "manual bridge erro", e);
+  }
+
+  if (bridgeOk) return { ok: true, reason: "success", queued, bridgeOk: true };
+  if (queued) return { ok: true, reason: "queued_only", queued: true, bridgeOk: false };
+  return { ok: false, reason: "bridge_failed", queued: false, bridgeOk: false };
+}
+
+/**
+ * Reimpressão manual — comanda completa.
  */
 export async function manualPrintOrder(order: {
   id: string;
@@ -277,16 +340,27 @@ export async function manualPrintOrder(order: {
   original_table_name?: string | null;
   waiter_name: string | null;
   total: number | null;
-}): Promise<boolean> {
+}): Promise<ManualPrintResult> {
   const { data: items } = await supabase
     .from("order_items")
     .select("*")
     .eq("order_id", order.id);
 
-  if (!items || items.length === 0) return false;
+  if (!items || items.length === 0)
+    return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  return await printReceipt(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0);
+  const cfg = loadPrintConfig();
+  const payload = buildEscPosReceipt(
+    tableValue,
+    order.waiter_name || "N/A",
+    items as any[],
+    order.total || 0,
+    cfg,
+  );
+  return enqueueAndPrint(order.id, tableValue, "full", payload, () =>
+    printReceipt(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0),
+  );
 }
 
 export async function manualPrintDelta(order: {
@@ -294,7 +368,7 @@ export async function manualPrintDelta(order: {
   table_name: string;
   original_table_name?: string | null;
   waiter_name: string | null;
-}): Promise<boolean> {
+}): Promise<ManualPrintResult> {
   const { data } = await supabase
     .from("orders")
     .select("delta_items")
@@ -302,10 +376,15 @@ export async function manualPrintDelta(order: {
     .single();
 
   const deltaItems = (data as any)?.delta_items as PrintableItem[] | null;
-  if (!deltaItems || deltaItems.length === 0) return false;
+  if (!deltaItems || deltaItems.length === 0)
+    return { ok: false, reason: "no_delta", queued: false, bridgeOk: false };
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  return await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
+  const cfg = loadPrintConfig();
+  const payload = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg);
+  return enqueueAndPrint(order.id, tableValue, "delta", payload, () =>
+    printDelta(tableValue, order.waiter_name || "N/A", deltaItems),
+  );
 }
 
 export async function manualPrintBill(order: {
@@ -314,14 +393,25 @@ export async function manualPrintBill(order: {
   original_table_name?: string | null;
   waiter_name: string | null;
   total: number | null;
-}): Promise<boolean> {
+}): Promise<ManualPrintResult> {
   const { data: items } = await supabase
     .from("order_items")
     .select("*")
     .eq("order_id", order.id);
 
-  if (!items || items.length === 0) return false;
+  if (!items || items.length === 0)
+    return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  return await printBill(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0);
+  const cfg = loadPrintConfig();
+  const payload = buildEscPosBill(
+    tableValue,
+    order.waiter_name || "N/A",
+    items as any[],
+    order.total || 0,
+    cfg,
+  );
+  return enqueueAndPrint(order.id, tableValue, "bill", payload, () =>
+    printBill(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0),
+  );
 }
