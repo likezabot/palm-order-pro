@@ -1,14 +1,14 @@
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Monitor, Settings, Download } from "lucide-react";
+import { Smartphone, Monitor, Settings, Download, ChefHat, ShoppingBag } from "lucide-react";
 import { useFeedback } from "@/hooks/use-feedback";
 import { getAppVersion } from "@/lib/version-check";
 import { RecentItemsPanel } from "@/components/home/RecentItemsPanel";
 
 const modes = [
-  { label: "ATENDIMENTO / PALM", path: "/palm", emoji: "📱" },
-  { label: "PDV / CAIXA", path: "/pdv", emoji: "🖥️" },
-  { label: "PAINEL COZINHA", path: "/kitchen", emoji: "👨‍🍳" },
-  { label: "ADMIN", path: "/admin", emoji: "⚙️" },
+  { label: "ATENDIMENTO / PALM", path: "/palm", Icon: Smartphone },
+  { label: "PDV / CAIXA", path: "/pdv", Icon: ShoppingBag },
+  { label: "PAINEL COZINHA", path: "/kitchen", Icon: ChefHat },
+  { label: "ADMIN", path: "/admin", Icon: Settings },
 ];
 
 const Index = () => {
@@ -17,31 +17,39 @@ const Index = () => {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
-      <div className="text-center mb-2">
-        <h1 className="text-3xl font-extrabold tracking-tight text-primary">
+      <div className="text-center mb-2 animate-fade-in-up">
+        <h1 className="text-4xl font-black tracking-widest brand-gradient-text">
           PLANO B
         </h1>
-        <p className="text-lg font-semibold text-muted-foreground">ESPETARIA</p>
+        <p className="text-sm font-bold tracking-[0.4em] text-muted-foreground mt-1">
+          ESPETARIA
+        </p>
       </div>
 
-      <div className="flex w-full max-w-sm flex-col gap-4">
-        {modes.map((mode) => (
-          <button
-            key={mode.path}
-            onClick={() => {
-              playFeedback("click");
-              navigate(mode.path);
-            }}
-            className="flex items-center gap-4 rounded-lg bg-card p-5 text-left text-lg font-semibold text-card-foreground transition-all duration-150 active:scale-[0.97] hover:bg-secondary border border-border min-h-[64px]"
-          >
-            <span className="text-2xl">{mode.emoji}</span>
-            <span>{mode.label}</span>
-          </button>
-        ))}
+      <div className="flex w-full max-w-sm flex-col gap-3">
+        {modes.map((mode, i) => {
+          const Icon = mode.Icon;
+          return (
+            <button
+              key={mode.path}
+              onClick={() => {
+                playFeedback("click");
+                navigate(mode.path);
+              }}
+              style={{ animationDelay: `${i * 60}ms` }}
+              className="group flex items-center gap-4 rounded-xl bg-card p-5 text-left text-lg font-semibold text-card-foreground border border-border shadow-card transition-all duration-200 active:scale-[0.97] hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-glow min-h-[64px] animate-fade-in-up"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15 transition-colors">
+                <Icon size={22} strokeWidth={2.25} />
+              </span>
+              <span className="flex-1">{mode.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Instalação dedicada por modo */}
-      <div className="w-full max-w-sm rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col gap-3">
+      <div className="w-full max-w-sm rounded-xl border border-primary/30 surface-elevated p-4 flex flex-col gap-3 shadow-card animate-fade-in-up" style={{ animationDelay: "260ms" }}>
         <div className="flex items-center gap-2 mb-1">
           <Download className="h-5 w-5 text-primary shrink-0" />
           <p className="font-semibold text-card-foreground text-sm">
@@ -57,9 +65,11 @@ const Index = () => {
               playFeedback("click");
               navigate("/instalar/palm");
             }}
-            className="flex flex-col items-center gap-1 rounded-lg bg-card border border-border p-3 active:scale-[0.97] transition-transform min-h-[80px]"
+            className="flex flex-col items-center gap-1.5 rounded-xl bg-card border border-border p-3 active:scale-[0.97] hover:border-primary/40 transition-all min-h-[88px]"
           >
-            <Smartphone className="h-6 w-6 text-primary" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <Smartphone className="h-5 w-5" />
+            </span>
             <span className="text-xs font-bold text-foreground">Atendimento</span>
             <span className="text-[10px] text-muted-foreground">/palm</span>
           </button>
@@ -68,9 +78,11 @@ const Index = () => {
               playFeedback("click");
               navigate("/instalar/cozinha");
             }}
-            className="flex flex-col items-center gap-1 rounded-lg bg-card border border-border p-3 active:scale-[0.97] transition-transform min-h-[80px]"
+            className="flex flex-col items-center gap-1.5 rounded-xl bg-card border border-border p-3 active:scale-[0.97] hover:border-primary/40 transition-all min-h-[88px]"
           >
-            <Monitor className="h-6 w-6 text-primary" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <Monitor className="h-5 w-5" />
+            </span>
             <span className="text-xs font-bold text-foreground">Cozinha</span>
             <span className="text-[10px] text-muted-foreground">/kitchen</span>
           </button>

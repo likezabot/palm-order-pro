@@ -22,6 +22,7 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          glow: "hsl(var(--primary-glow))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -71,6 +72,14 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      backgroundImage: {
+        "brand-gradient": "var(--brand-gradient)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        card: "var(--shadow-card)",
+        glow: "var(--shadow-glow-primary)",
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
@@ -96,6 +105,18 @@ export default {
           "0%": { opacity: "0", transform: "translateY(4px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "scale-in": {
+          "0%": { opacity: "0", transform: "scale(0.92)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -104,6 +125,9 @@ export default {
         "print-feed": "print-feed 1.4s linear infinite",
         "print-bounce": "print-bounce 0.6s ease-in-out infinite",
         "fade-in": "fade-in 0.25s ease-out",
+        "fade-in-up": "fade-in-up 0.4s ease-out both",
+        "scale-in": "scale-in 0.25s ease-out both",
+        shimmer: "shimmer 1.6s linear infinite",
       },
     },
   },
