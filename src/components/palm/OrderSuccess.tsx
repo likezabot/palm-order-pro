@@ -117,14 +117,15 @@ const OrderSuccess = ({
 
     let delay: number;
     if (!shouldShowBadge) {
-      delay = 3000;
+      // Pedido de mesa (sem senha/impressão local) — volta imediato
+      delay = 700;
     } else if (!bridgeMode) {
-      delay = 5000;
-    } else if (status === "success" || status === "error") {
       delay = 2500;
+    } else if (status === "success" || status === "error") {
+      delay = 1500;
     } else {
       // ainda imprimindo — fallback amplo (timeout interno do print = 8s)
-      delay = 12000;
+      delay = 9000;
     }
 
     const timer = setTimeout(() => {
