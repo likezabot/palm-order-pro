@@ -95,11 +95,6 @@ const OrderReview = ({
         sendingRef.current = false;
         safeSet("error");
         playFeedback("error");
-        toast({
-          title: "Tempo esgotado",
-          description: "Verifique a conexão e tente de novo.",
-          variant: "destructive",
-        });
       }
     }, SEND_TIMEOUT_MS);
 
@@ -239,14 +234,8 @@ const OrderReview = ({
       if (!mountedRef.current) return;
       if (r.ok) {
         setReprintStatus("success");
-        toast({ title: "Senha reimpressa" });
       } else {
         setReprintStatus("error");
-        toast({
-          title: "Não foi possível reimprimir",
-          description: r.reason,
-          variant: "destructive",
-        });
       }
       // volta ao idle após 2.5s
       setTimeout(() => {
