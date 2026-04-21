@@ -27,8 +27,8 @@ import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
-  new: { label: "NOVO", color: "bg-primary text-primary-foreground", next: "preparing", nextLabel: "▶ PREPARAR" },
-  preparing: { label: "PREPARO", color: "bg-warning text-warning-foreground", next: "done", nextLabel: "✅ PRONTO" },
+  new: { label: "AGUARDANDO", color: "bg-blue-500 text-white", next: "preparing", nextLabel: "▶ PREPARAR" },
+  preparing: { label: "EM PREPARO", color: "bg-warning text-warning-foreground", next: "done", nextLabel: "✅ PRONTO" },
   done: { label: "PRONTO", color: "bg-success text-success-foreground" },
   paid: { label: "PAGO", color: "bg-muted text-muted-foreground" },
 };
@@ -146,6 +146,33 @@ const Pdv = () => {
     prevDoneIdsRef.current = currentDoneIds;
   }, [orders, playFeedback, toast]);
 
+  // Auto-promove pedidos "new" → "preparing" (operador opera só com 3 status visuais; "new" é transitório)
+  const autoPromotedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const newOnes = orders.filter((o) => o.status === "new" && !autoPromotedRef.current.has(o.id));
+    if (newOnes.length === 0) return;
+    newOnes.forEach((o) => autoPromotedRef.current.add(o.id));
+    (async () => {
+      for (const o of newOnes) {
+        await supabase.rpc("update_order_status", { p_order_id: o.id, p_status: "preparing" });
+      }
+      queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+    })();
+  }, [orders, queryClient]);
+
+  const handleAdvance = useCallback(async (order: Order) => {
+    const nextMap: Record<string, string | null> = { new: "preparing", preparing: "done", done: null };
+    const next = nextMap[order.status];
+    if (!next) return;
+    const { error } = await supabase.rpc("update_order_status", { p_order_id: order.id, p_status: next });
+    if (error) {
+      toast({ title: "Erro ao avançar status", description: error.message, variant: "destructive" });
+      return;
+    }
+    playFeedback("click");
+    queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+  }, [queryClient, toast, playFeedback]);
+
   const handlePayment = async (shouldPrint: boolean) => {
     if (!selectedOrder || sending) return;
     setSending(true);
@@ -243,7 +270,7 @@ const Pdv = () => {
           {orders.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-lg">Aguardando pedidos...</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
               {[...orders]
                 .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
                 .map((order) => (
@@ -253,6 +280,9 @@ const Pdv = () => {
                     itemCount={itemsByOrderId.get(order.id) || 0}
                     selected={selectedId === order.id}
                     onSelect={() => { setSelectedId(order.id); setShowPayment(false); }}
+                    onAdvance={handleAdvance}
+                    onPrint={handlePrint}
+                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
                   />
                 ))}
             </div>
