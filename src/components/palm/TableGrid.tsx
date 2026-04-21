@@ -353,6 +353,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
               const hasDuplicates = duplicateCount > 1;
               const isOccupied = !!order;
               const isWaitingPayment = order?.status === "done";
+              const isServed = !!order?.served_at && !isWaitingPayment && !hasDuplicates;
               const customName =
                 order && order.table_name !== (order.original_table_name ?? table)
                   ? order.table_name
@@ -370,6 +371,8 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                 statusColor = "bg-amber-500/20 border-amber-500 text-amber-500";
                 pulseClass = "animate-pulse-active ring-2 ring-amber-500/50";
                 pulseColor = "rgba(245, 158, 11, 0.4)";
+              } else if (isServed) {
+                statusColor = "bg-blue-500/20 border-blue-500 text-blue-400";
               } else if (isOccupied) {
                 statusColor = "bg-red-500/20 border-red-500 text-red-500";
                 pulseClass = "animate-pulse-active ring-2 ring-red-500/50";
@@ -377,47 +380,81 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
               }
 
               return (
-                <button
+                <div
                   key={table}
-                  onClick={() => handleTableClick(table, order?.id)}
                   style={{ "--pulse-color": pulseColor } as any}
-                  title={hasDuplicates ? `${duplicateCount} pedidos ativos nesta mesa — verifique no Admin` : undefined}
                   className={`
-                    relative aspect-square flex flex-col items-center justify-center rounded-2xl border-[3px] transition-all active:scale-95
+                    relative aspect-square rounded-2xl border-[3px] transition-all
                     ${statusColor} ${pulseClass}
-                    ${!isOccupied ? 'hover:bg-emerald-500/30' : 'border-solid shadow-lg'}
+                    ${isOccupied ? 'border-solid shadow-lg' : ''}
                   `}
                 >
+                  <button
+                    type="button"
+                    onClick={() => handleTableClick(table, order?.id)}
+                    title={hasDuplicates ? `${duplicateCount} pedidos ativos nesta mesa — verifique no Admin` : undefined}
+                    className={`absolute inset-0 flex flex-col items-center justify-center rounded-2xl active:scale-95 transition-transform ${!isOccupied ? 'hover:bg-emerald-500/30' : ''}`}
+                  >
+                    {customName ? (
+                      <span className="text-base font-black leading-tight truncate w-full text-center px-1">
+                        {customName}
+                      </span>
+                    ) : (
+                      <span className="text-2xl font-black leading-none">{table}</span>
+                    )}
+                    {isOccupied && (
+                      <div className="mt-1 flex flex-col items-center leading-tight">
+                        <span className="text-[10px] font-bold opacity-80 uppercase truncate w-full text-center px-1">
+                          {order.waiter_name || "---"}
+                        </span>
+                        <span className="text-xs font-bold">
+                          {(order as any).item_count > 0
+                            ? `${(order as any).item_count} · ${formatCurrency(order.total)}`
+                            : formatCurrency(order.total)}
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
+                          <Clock size={10} />
+                          {formatTime(order.created_at)} · {elapsed(order.created_at)}
+                        </span>
+                      </div>
+                    )}
+                  </button>
+
                   {hasDuplicates && (
-                    <div className="absolute -top-2 -right-2 flex items-center gap-0.5 rounded-full bg-yellow-500 px-1.5 py-0.5 text-[10px] font-black text-black shadow-lg ring-2 ring-background">
+                    <div className="absolute -top-2 -right-2 z-10 flex items-center gap-0.5 rounded-full bg-yellow-500 px-1.5 py-0.5 text-[10px] font-black text-black shadow-lg ring-2 ring-background pointer-events-none">
                       <AlertTriangle size={11} strokeWidth={3} />
                       <span>{duplicateCount}</span>
                     </div>
                   )}
-                  {customName ? (
-                    <span className="text-base font-black leading-tight truncate w-full text-center px-1">
-                      {customName}
-                    </span>
-                  ) : (
-                    <span className="text-2xl font-black leading-none">{table}</span>
+
+                  {isOccupied && !isWaitingPayment && !hasDuplicates && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleServed(order.id, !!order.served_at);
+                      }}
+                      disabled={servingId === order.id}
+                      title={isServed && order.served_at ? `Servido há ${elapsed(order.served_at)} — toque para desmarcar` : "Marcar como servido"}
+                      className={`absolute -bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-lg ring-2 ring-background active:scale-90 transition-all disabled:opacity-60 ${
+                        isServed
+                          ? "bg-blue-500 text-white"
+                          : "bg-card border border-border text-foreground hover:border-blue-500/60"
+                      }`}
+                    >
+                      {servingId === order.id ? (
+                        <Loader2 size={10} className="animate-spin" />
+                      ) : isServed ? (
+                        <Check size={10} strokeWidth={3} />
+                      ) : (
+                        <UtensilsCrossed size={10} />
+                      )}
+                      <span className="leading-none">
+                        {isServed && order.served_at ? `Servido · ${elapsed(order.served_at)}` : "Servir"}
+                      </span>
+                    </button>
                   )}
-                  {isOccupied && (
-                    <div className="mt-1 flex flex-col items-center leading-tight">
-                      <span className="text-[10px] font-bold opacity-80 uppercase truncate w-full text-center px-1">
-                        {order.waiter_name || "---"}
-                      </span>
-                      <span className="text-xs font-bold">
-                        {(order as any).item_count > 0
-                          ? `${(order as any).item_count} · ${formatCurrency(order.total)}`
-                          : formatCurrency(order.total)}
-                      </span>
-                      <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
-                        <Clock size={10} />
-                        {formatTime(order.created_at)} · {elapsed(order.created_at)}
-                      </span>
-                    </div>
-                  )}
-                </button>
+                </div>
               );
             })}
           </div>
