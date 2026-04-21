@@ -96,7 +96,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
         ),
       }));
     },
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
   });
 
   useEffect(() => {

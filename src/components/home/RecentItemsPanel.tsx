@@ -79,7 +79,7 @@ export function RecentItemsList() {
 
   useEffect(() => {
     fetchItems();
-    const id = setInterval(fetchItems, 15_000);
+    const id = setInterval(fetchItems, 30_000);
     return () => clearInterval(id);
   }, []);
 

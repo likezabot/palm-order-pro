@@ -23,10 +23,10 @@ const queryClient = new QueryClient({
     queries: {
       // Cache offline parcial: mantém última versão visível mesmo sem rede.
       networkMode: "offlineFirst",
-      staleTime: 30_000,
+      staleTime: 60_000,
       gcTime: 30 * 60_000,
       retry: 2,
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,
     },
   },
 });

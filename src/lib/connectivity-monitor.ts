@@ -21,9 +21,9 @@ let internetTimer: ReturnType<typeof setInterval> | null = null;
 let backendTimer: ReturnType<typeof setInterval> | null = null;
 let stalenessTimer: ReturnType<typeof setInterval> | null = null;
 
-const INTERNET_INTERVAL = 30_000;
-const BACKEND_INTERVAL = 60_000;
-const STALENESS_INTERVAL = 15_000;
+const INTERNET_INTERVAL = 60_000;
+const BACKEND_INTERVAL = 120_000;
+const STALENESS_INTERVAL = 30_000;
 const PING_TIMEOUT = 3_500;
 
 async function pingInternet(): Promise<boolean> {

@@ -46,7 +46,7 @@ const Kitchen = () => {
         return aServed - bServed;
       });
     },
-    refetchInterval: 5000,
+    refetchInterval: 15_000,
   });
 
   const { data: allItems = [] } = useQuery({
@@ -56,7 +56,7 @@ const Kitchen = () => {
       if (error) throw error;
       return data as OrderItem[];
     },
-    refetchInterval: 5000,
+    refetchInterval: 15_000,
   });
 
   // Realtime subscription
