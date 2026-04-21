@@ -12,9 +12,25 @@ import { formatTableLabel } from "@/lib/utils";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 
 const STATUS_LABEL: Record<string, string> = {
-  new: "NOVO",
+  new: "AGUARDANDO",
   preparing: "EM PREPARO",
   done: "PRONTO",
+};
+
+const STATUS_VERB: Record<string, string> = {
+  new: "aguardando",
+  preparing: "em preparo",
+  done: "pronto",
+};
+
+const ADVANCE_LABEL: Record<string, string> = {
+  new: "▶ INICIAR PREPARO",
+  preparing: "✅ MARCAR PRONTO",
+};
+
+const ADVANCE_BTN: Record<string, string> = {
+  new: "bg-warning text-warning-foreground",
+  preparing: "bg-success text-success-foreground",
 };
 
 const STATUS_CHIP: Record<string, string> = {
@@ -39,18 +55,28 @@ interface OrderCardProps {
 }
 
 const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: OrderCardProps) => {
-  const elapsed = useElapsedTime(order.created_at);
+  // Tempo NA ETAPA atual
+  const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const wasPrinted = order.print_status === "printed";
   const printFailed = order.print_status === "failed";
   const isPending = order.print_status === "pending" || order.print_status === "printing";
   const status = order.status || "new";
   const next = NEXT_STATUS[status];
 
+  // Borda de urgência baseada em tempo na etapa
+  const stageMin = Math.floor((Date.now() - new Date(order.updated_at || order.created_at).getTime()) / 60000);
+  const isCritical = stageMin >= 25;
+  const isAlert = !isCritical && stageMin >= 10;
+
   const accentBorder = status === "done"
     ? "border-l-4 border-l-success"
-    : printFailed
+    : isCritical
       ? "border-l-4 border-l-destructive"
-      : "border-l-4 border-l-transparent";
+      : isAlert
+        ? "border-l-4 border-l-warning"
+        : printFailed
+          ? "border-l-4 border-l-destructive"
+          : "border-l-4 border-l-transparent";
 
   return (
     <div
