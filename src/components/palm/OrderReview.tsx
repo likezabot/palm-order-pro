@@ -247,7 +247,7 @@ const OrderReview = ({
   };
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden">
+    <div className="flex h-screen-safe flex-col overflow-hidden">
       <div className="shrink-0 bg-background border-b border-border p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button
           onClick={() => {

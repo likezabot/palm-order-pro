@@ -162,7 +162,7 @@ const Admin = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col bg-slate-50/50 ${staffMode ? "staff-mode" : ""}`}>
+    <div className={`min-h-screen-safe flex flex-col bg-slate-50/50 ${staffMode ? "staff-mode" : ""}`}>
       <AdminHeader
         staffMode={staffMode}
         onToggleStaffMode={() => setStaffMode((v) => !v)}

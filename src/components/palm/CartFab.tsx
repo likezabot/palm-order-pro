@@ -17,7 +17,11 @@ export const CartFab = ({ itemCount, total, onClick }: Props) => {
         onClick();
       }}
       aria-label={`Ver pedido — ${itemCount} ${itemCount === 1 ? "item" : "itens"} — R$ ${total.toFixed(2)}`}
-      className="fixed bottom-5 right-5 z-20 flex items-center gap-3 rounded-full bg-brand-gradient pl-5 pr-6 py-4 font-bold text-primary-foreground shadow-glow active:scale-[0.95] transition-transform duration-150 min-h-[64px] ring-4 ring-primary/20 animate-scale-in"
+      style={{
+        bottom: "calc(1.25rem + env(safe-area-inset-bottom))",
+        right: "calc(1.25rem + env(safe-area-inset-right))",
+      }}
+      className="fixed z-20 flex items-center gap-3 rounded-full bg-brand-gradient pl-5 pr-6 py-4 font-bold text-primary-foreground shadow-glow active:scale-[0.95] transition-transform duration-150 min-h-[64px] ring-4 ring-primary/20 animate-scale-in"
     >
       <div className="relative">
         <ShoppingCart size={26} />

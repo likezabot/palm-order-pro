@@ -16,7 +16,7 @@ const Index = () => {
   const { playFeedback } = useFeedback();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
+    <div className="flex min-h-screen-safe flex-col items-center justify-center gap-6 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
       <div className="text-center mb-2 animate-fade-in-up">
         <h1 className="text-4xl font-black tracking-widest brand-gradient-text">
           PLANO B

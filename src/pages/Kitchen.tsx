@@ -97,8 +97,8 @@ const Kitchen = () => {
   const done = orders.filter((o) => o.status === "done");
 
   return (
-    <div className="md:h-screen flex flex-col md:overflow-hidden">
-      <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2">
+    <div className="min-h-screen-safe md:h-screen-dvh flex flex-col md:overflow-hidden">
+      <div className="border-b border-border p-3 sm:p-4 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pt-[calc(1rem+env(safe-area-inset-top))] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <button onClick={() => navigate("/")} className="text-muted-foreground shrink-0">
             <ArrowLeft size={24} />
@@ -119,7 +119,7 @@ const Kitchen = () => {
         </button>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 min-h-0 md:overflow-hidden overflow-y-auto">
+      <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 min-h-0 md:overflow-hidden overflow-y-auto">
         <KanbanColumn
           title="NOVOS"
           colorClass="text-primary"

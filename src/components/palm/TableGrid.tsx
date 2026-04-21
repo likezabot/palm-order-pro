@@ -172,7 +172,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 
   if (editingWaiter) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
+      <div className="flex min-h-screen-safe flex-col items-center justify-center p-4 bg-background">
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-primary mb-2">BEM-VINDO</h1>
@@ -202,9 +202,9 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background p-4 pb-10">
+    <div className="flex min-h-screen-safe flex-col bg-background p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-5 gap-2 min-w-0">
         <button
           onClick={() => {
             playFeedback("click");
@@ -263,7 +263,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                   return (
                     <div
                       key={order.id}
-                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border surface-elevated p-3 min-w-[120px] transition-all hover:border-primary/50 shadow-card"
+                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border surface-elevated p-3 min-w-[112px] transition-all hover:border-primary/50 shadow-card"
                     >
                       <button
                         onClick={() => handleTableClick("BALCÃO", order.id)}
@@ -316,7 +316,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
           {/* ── MESAS Section ── */}
           <h2 className="text-lg font-bold mb-3 px-1">MESAS</h2>
 
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 [@media(min-width:380px)]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
             {TABLES.map((table) => {
               // Casar pelo número físico (original_table_name) — assim mesas
               // renomeadas para "João" continuam ligadas ao botão "1".

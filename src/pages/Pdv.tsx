@@ -203,9 +203,9 @@ const Pdv = () => {
   const cfg = selectedOrder ? statusConfig[selectedOrder.status] || statusConfig.new : null;
 
   return (
-    <div className={`min-h-screen flex flex-col bg-background ${staffMode ? "staff-mode" : ""}`}>
+    <div className={`min-h-screen-safe flex flex-col bg-background ${staffMode ? "staff-mode" : ""}`}>
       {/* Header */}
-      <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="border-b border-border p-3 sm:p-4 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pt-[calc(1rem+env(safe-area-inset-top))] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <button onClick={() => navigate("/")} className="text-muted-foreground shrink-0">
             <ArrowLeft size={24} />

@@ -75,6 +75,20 @@ export default {
       backgroundImage: {
         "brand-gradient": "var(--brand-gradient)",
       },
+      spacing: {
+        "safe-top": "env(safe-area-inset-top, 0px)",
+        "safe-bottom": "env(safe-area-inset-bottom, 0px)",
+        "safe-left": "env(safe-area-inset-left, 0px)",
+        "safe-right": "env(safe-area-inset-right, 0px)",
+      },
+      height: {
+        "screen-dvh": "100dvh",
+        "screen-svh": "100svh",
+      },
+      minHeight: {
+        "screen-dvh": "100dvh",
+        "screen-svh": "100svh",
+      },
       boxShadow: {
         soft: "var(--shadow-soft)",
         card: "var(--shadow-card)",

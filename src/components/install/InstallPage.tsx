@@ -17,7 +17,7 @@ const InstallPage = ({ title, subtitle, emoji, ctaTarget }: Props) => {
   const { playFeedback } = useFeedback();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 bg-background">
+    <div className="flex min-h-screen-safe flex-col items-center justify-center gap-6 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-background">
       <button
         onClick={() => navigate("/")}
         className="absolute top-4 left-4 flex items-center gap-2 text-muted-foreground"
