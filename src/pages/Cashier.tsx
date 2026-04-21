@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, Pencil, CheckCircle2, Users, Package, Clock, ChevronRight, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Printer, Pencil, CheckCircle2, Users, Package, Clock, ChevronRight, AlertTriangle, DollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order } from "@/lib/types";
 import CloseOrder from "@/components/cashier/CloseOrder";

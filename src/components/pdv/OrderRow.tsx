@@ -180,4 +180,4 @@ export const OrderRow = ({ order, itemCount, selected, onSelect, onAdvance, onPr
   );
 };
 
-export default Cashier;
+export { OrderRow };
