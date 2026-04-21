@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import ConnectionStatusBanner from "@/components/print-station/ConnectionStatusBanner";
+import PrintQueuePanel from "@/components/print-station/PrintQueuePanel";
 import { loadPrintConfig } from "@/lib/print-config";
 
 const PrintStation = () => {
@@ -210,6 +211,7 @@ const PrintStation = () => {
           </CardHeader>
 
           <CardContent className="p-0">
+            <PrintQueuePanel />
             {/* Aviso técnico sobre silent print */}
             <div className="bg-blue-50 border-b border-blue-100 p-4 flex items-start gap-3">
               <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
