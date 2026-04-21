@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Printer, Send, User, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";

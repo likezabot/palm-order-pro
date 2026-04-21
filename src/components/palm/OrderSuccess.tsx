@@ -111,15 +111,23 @@ const OrderSuccess = ({
     return () => clearTimeout(timer);
   }, [shouldShowBadge, bridgeMode, runPrint]);
 
-  // Auto-reset: aguarda impressão terminar (success/error) ou usa fallback maior
+  // Auto-reset: para mesas, dispara imediatamente (próximo frame).
+  // Para pedidos com badge (BALCÃO + impressão), aguarda impressão terminar ou fallback.
   useEffect(() => {
     if (resetFiredRef.current) return;
 
-    let delay: number;
+    // Pedido de mesa: reset instantâneo no próximo frame (sem timeout perceptível)
     if (!shouldShowBadge) {
-      // Pedido de mesa (sem senha/impressão local) — volta imediato
-      delay = 700;
-    } else if (!bridgeMode) {
+      const raf = requestAnimationFrame(() => {
+        if (resetFiredRef.current) return;
+        resetFiredRef.current = true;
+        onReset();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+
+    let delay: number;
+    if (!bridgeMode) {
       delay = 2500;
     } else if (status === "success" || status === "error") {
       delay = 1500;
