@@ -128,7 +128,7 @@ const OrderSuccess = ({
       const timer = setTimeout(() => {
         if (resetFiredRef.current) return;
         resetFiredRef.current = true;
-        onReset();
+        onResetRef.current();
       }, 800);
       return () => clearTimeout(timer);
     }
@@ -146,10 +146,10 @@ const OrderSuccess = ({
     const timer = setTimeout(() => {
       if (resetFiredRef.current) return;
       resetFiredRef.current = true;
-      onReset();
+      onResetRef.current();
     }, delay);
     return () => clearTimeout(timer);
-  }, [shouldShowBadge, bridgeMode, status, onReset]);
+  }, [shouldShowBadge, bridgeMode, status]);
 
   const handleManualPrint = useCallback(() => {
     runPrint(true);
