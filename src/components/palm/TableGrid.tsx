@@ -22,6 +22,30 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   const [editingWaiter, setEditingWaiter] = useState(!waiterName);
   const [tempWaiterName, setTempWaiterName] = useState(waiterName);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
+  const [servingId, setServingId] = useState<string | null>(null);
+
+  const handleToggleServed = async (orderId: string, currentlyServed: boolean) => {
+    if (servingId) return;
+    playFeedback("click");
+    setServingId(orderId);
+    const { error } = await supabase
+      .from("orders")
+      .update({ served_at: currentlyServed ? null : new Date().toISOString() })
+      .eq("id", orderId);
+    setServingId(null);
+    if (error) {
+      toast({
+        title: "Erro ao atualizar",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["active-orders"] });
+    if (!currentlyServed) {
+      playFeedback("success");
+    }
+  };
 
   const handleReprint = async (orderId: string) => {
     if (reprintingId) return;
