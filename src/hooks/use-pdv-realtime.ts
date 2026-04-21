@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
+import { debugLog } from "@/lib/debug-logger";
 import type { Order } from "@/lib/types";
 
 /**
@@ -68,15 +69,16 @@ export function usePdvRealtime() {
   });
 
   useEffect(() => {
-    console.log("[PDV] Inscrevendo canal Realtime...");
+    const channelName = `pdv-realtime-${crypto.randomUUID()}`;
+    debugLog.info("realtime", `→ inscrevendo canal ${channelName}`);
 
     const channel = supabase
-      .channel(`pdv-realtime-${crypto.randomUUID()}`)
+      .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
         queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
         const newOrder = payload.new as Order;
-        console.log(`[PDV Realtime] INSERT recebido: ${newOrder.id} — Mesa ${newOrder.table_name}`);
+        debugLog.info("realtime", `[${channelName}] INSERT orders`, { id: newOrder.id, table: newOrder.table_name });
         playFeedbackRef.current("notification");
         toastRef.current({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
         const eventKey = `${newOrder.id}:insert`;
@@ -90,7 +92,9 @@ export function usePdvRealtime() {
         const printReset = updated.print_status === 'pending' && (old as Partial<Order>).print_status !== 'pending';
 
         if (totalChanged || printReset) {
-          console.log(`[PDV Realtime] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name} (totalChanged=${totalChanged}, printReset=${printReset})`);
+          debugLog.info("realtime", `[${channelName}] UPDATE relevante`, {
+            id: updated.id, table: updated.table_name, totalChanged, printReset, printStatus: updated.print_status,
+          });
           const eventKey = `${updated.id}:upd:${updated.updated_at}`;
           tryAutoPrintRef.current(updated, eventKey, true);
         }
@@ -99,11 +103,15 @@ export function usePdvRealtime() {
         queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
       })
       .subscribe((status) => {
-        console.log(`[PDV Realtime] Status: ${status}`);
-        setRealtimeStatus(status === "SUBSCRIBED" ? "online" : "offline");
+        const online = status === "SUBSCRIBED";
+        debugLog[online ? "success" : "warn"]("realtime", `[${channelName}] status: ${status}`);
+        setRealtimeStatus(online ? "online" : "offline");
       });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      debugLog.info("realtime", `← removendo canal ${channelName}`);
+      supabase.removeChannel(channel);
+    };
   }, [queryClient]);
 
   return { realtimeStatus };

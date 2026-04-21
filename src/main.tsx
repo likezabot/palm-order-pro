@@ -3,6 +3,12 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { startPrintQueueWorker } from "./lib/print-queue-worker";
+import { debugLog } from "./lib/debug-logger";
+
+debugLog.info(
+  "system",
+  "Plano B PDV iniciado — use __plbLogs(), __plbLogsText() ou __plbLogsCopy() no DevTools",
+);
 
 // Disparar verificação de versão SEM bloquear a renderização.
 // Se houver atualização, ela limpa caches em background e recarrega.

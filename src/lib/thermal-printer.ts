@@ -11,6 +11,7 @@ import {
   type LayoutBlock,
   type ReceiptItem,
 } from "./receipt-layout";
+import { debugLog } from "./debug-logger";
 
 // ESC/POS Commands
 const ESC = 27;
@@ -100,23 +101,31 @@ export async function checkBridgeStatus(
   url: string
 ): Promise<{ online: boolean; printer_connected: boolean; error?: string }> {
   const healthUrl = url.replace(/\/print$/, "/health");
+  const t0 = performance.now();
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 1500);
 
     const response = await fetch(healthUrl, { signal: controller.signal, cache: "no-cache" });
     clearTimeout(id);
+    const ms = Math.round(performance.now() - t0);
 
-    if (!response.ok)
+    if (!response.ok) {
+      debugLog.warn("bridge", `health HTTP ${response.status} (${ms}ms)`, { url: healthUrl });
       return { online: false, printer_connected: false, error: `HTTP ${response.status}` };
+    }
 
     const data = await response.json();
+    const printerOk = !!data.printer_connected;
+    debugLog[printerOk ? "success" : "warn"]("bridge", `health OK em ${ms}ms — printer_connected=${printerOk}`, { url: healthUrl });
     return {
       online: true,
-      printer_connected: !!data.printer_connected,
-      error: data.printer_connected ? undefined : "Impressora USB nao detectada na ponte",
+      printer_connected: printerOk,
+      error: printerOk ? undefined : "Impressora USB nao detectada na ponte",
     };
-  } catch {
+  } catch (e: any) {
+    const ms = Math.round(performance.now() - t0);
+    debugLog.warn("bridge", `health falhou em ${ms}ms: ${e?.message ?? "indisponível"}`, { url: healthUrl });
     return {
       online: false,
       printer_connected: false,
@@ -126,8 +135,8 @@ export async function checkBridgeStatus(
 }
 
 export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
-  const ts = new Date().toLocaleTimeString();
-  console.log(`[thermal-bridge ${ts}] Enviando payload (${payload.length} bytes)`);
+  const t0 = performance.now();
+  debugLog.info("print", `→ enviando ${payload.length} bytes para bridge`, { url });
   const base64 = btoa(String.fromCharCode(...payload));
 
   try {
@@ -142,21 +151,24 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
       }),
     });
 
+    const ms = Math.round(performance.now() - t0);
+
     if (!response.ok) {
       const result = await response.json().catch(() => ({ error: "?" }));
-      console.error(`[thermal-bridge] HTTP ${response.status}: ${result.error}`);
+      debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${result.error ?? "?"}`, { url });
       return false;
     }
 
     const result = await response.json();
     if (result.success) {
-      console.log("[thermal-bridge] Cupom enviado para a impressora.");
+      debugLog.success("print", `✓ cupom enviado em ${ms}ms (${payload.length} bytes)`);
       return true;
     }
-    console.error(`[thermal-bridge] Falha: ${result.error}`);
+    debugLog.error("print", `✗ bridge respondeu success=false em ${ms}ms: ${result.error ?? "?"}`);
     return false;
   } catch (e: any) {
-    console.error("[thermal-bridge] Falha de conexao:", e.message);
+    const ms = Math.round(performance.now() - t0);
+    debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${e?.message ?? e}`, { url });
     return false;
   }
 }
