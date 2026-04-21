@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Printer, Send, User, RotateCw } from "lucide-react";
+import { ArrowLeft, Printer, Send, User, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
@@ -53,7 +53,7 @@ const OrderReview = ({
   const [printType, setPrintType] = useState<PrintType>("extra");
   const [showConfirm, setShowConfirm] = useState(false);
   const [conflict, setConflict] = useState<{ orderId: string; tableName: string } | null>(null);
-  const [reprinting, setReprinting] = useState(false);
+  const [reprintStatus, setReprintStatus] = useState<"idle" | "printing" | "success" | "error">("idle");
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
 
@@ -232,23 +232,28 @@ const OrderReview = ({
   const handleReprint = async () => {
     if (reprintingRef.current || !existingOrderId) return;
     reprintingRef.current = true;
-    setReprinting(true);
+    if (mountedRef.current) setReprintStatus("printing");
     try {
       playFeedback("click");
       const r = await reprintSenhaForOrder(existingOrderId);
       if (!mountedRef.current) return;
       if (r.ok) {
+        setReprintStatus("success");
         toast({ title: "Senha reimpressa" });
       } else {
+        setReprintStatus("error");
         toast({
           title: "Não foi possível reimprimir",
           description: r.reason,
           variant: "destructive",
         });
       }
+      // volta ao idle após 2.5s
+      setTimeout(() => {
+        if (mountedRef.current) setReprintStatus("idle");
+      }, 2500);
     } finally {
       reprintingRef.current = false;
-      if (mountedRef.current) setReprinting(false);
     }
   };
 
@@ -268,15 +273,42 @@ const OrderReview = ({
           <h2 className="text-xl font-bold">
             {isBalcao ? `BALCÃO ${senha || "Novo"}` : `Mesa: ${tableName}`}
           </h2>
-          {isBalcao && existingOrderId && (
-            <button
-              onClick={handleReprint}
-              disabled={reprinting}
-              className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm font-bold text-secondary-foreground active:scale-95 transition-transform disabled:opacity-40 disabled:pointer-events-none"
-            >
-              <RotateCw size={16} className={reprinting ? "animate-spin" : ""} /> Reimprimir senha
-            </button>
-          )}
+          {isBalcao && existingOrderId && (() => {
+            const isReprinting = reprintStatus === "printing";
+            const colorCls =
+              reprintStatus === "success"
+                ? "bg-success text-success-foreground"
+                : reprintStatus === "error"
+                  ? "bg-destructive text-destructive-foreground"
+                  : "bg-secondary text-secondary-foreground";
+            const Icon =
+              reprintStatus === "success"
+                ? CheckCircle2
+                : reprintStatus === "error"
+                  ? AlertTriangle
+                  : RotateCw;
+            const label =
+              reprintStatus === "printing"
+                ? "Reimprimindo..."
+                : reprintStatus === "success"
+                  ? "Impresso ✓"
+                  : reprintStatus === "error"
+                    ? "Falhou"
+                    : "Reimprimir senha";
+            return (
+              <button
+                onClick={handleReprint}
+                disabled={isReprinting}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold active:scale-95 transition-all disabled:pointer-events-none ${colorCls}`}
+              >
+                <Icon
+                  size={16}
+                  className={isReprinting ? "animate-spin" : reprintStatus !== "idle" ? "animate-fade-in" : ""}
+                />
+                {label}
+              </button>
+            );
+          })()}
         </div>
         {isBalcao && !existingOrderId && onCustomerNameChange && (
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2">
