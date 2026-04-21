@@ -1,88 +1,90 @@
 
 
-## Caixa e PDV — grid unificado de pedidos com marcador de "feito"
+## Caixa — painel de mesas em cards completos
 
-Simplificar as listas de pedidos no **Caixa** e no **PDV**: remover a separação por status (Aguardando / Em Preparo / Prontos p/ Pagamento) e exibir todos os pedidos abertos juntos em **layout de grade (colunas)** em vez de lista vertical. Adicionar um **marcador visual** indicando que o pedido já foi feito/enviado (impresso na cozinha).
+Refatorar a aba **Caixa** (`src/pages/Cashier.tsx`) para um painel visual de mesas em grid, com cards autoexplicativos e ações rápidas inline. Sem alterar banco, RPCs, realtime, impressão ou fluxo de pagamento.
 
-Sem mudar lógica, banco, RPCs, fluxo de pagamento ou impressão.
+### 1. Grid responsivo
 
-### 1. `src/pages/Cashier.tsx` — Caixa
+- `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4` (já parcial — aumentar gap e garantir altura uniforme com `auto-rows-fr`).
+- Cards com altura mínima consistente (`min-h-[200px]`) para parecerem "blocos de mesa" robustos.
 
-**Remoção:**
-- Não há discriminação por status hoje (já é uma lista única) — manter assim. O texto do usuário "não precisa aparecer isso na aba de caixa" se aplica a remover qualquer aparência de status: garantir que **não exibe** badges de "AGUARDANDO/PRONTO" (já não exibe).
+### 2. Estrutura do card (3 zonas)
 
-**Mudança de layout (lista → grade):**
-- Container atual `space-y-3` → `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3`.
-- Cards passam de "linha horizontal" (`flex justify-between`) para **card vertical compacto**:
-  - Topo: nome da mesa em destaque (`text-2xl font-black`).
-  - Meio: total grande em laranja (`text-primary text-2xl`).
-  - Rodapé: 3 botões em linha (Imprimir, Editar, **FECHAR** principal).
-- Mantém `border-2 border-border bg-card rounded-xl shadow-sm` + `hover:border-primary/40 transition-colors`.
+**Topo** (linha 1):
+- Nome da mesa em destaque (`text-2xl font-black`) + subtítulo "(Mesa X)" se renomeada.
+- Badge de **status do pedido** à direita, baseado em `order.status`:
+  - `new` → chip azul "NOVO" (`bg-blue-500/15 text-blue-400 border-blue-500/30`)
+  - `preparing` → chip laranja "EM PREPARO" (`bg-warning/15 text-warning border-warning/30`)
+  - `done` → chip verde "PRONTO" (`bg-success/15 text-success border-success/30`)
+- Badge secundário de **impressão** (linha abaixo do status, menor):
+  - `printed` → "✓ Impresso" verde discreto
+  - `failed` → "⚠ Falha" vermelho discreto
+  - `pending`/`printing` → "Aguardando" cinza
 
-**Marcador "pedido feito":**
-- Quando `order.print_status === "printed"`: adicionar chip pequeno no canto superior direito do card com `CheckCircle2` verde + texto **"FEITO"** (`bg-success/15 text-success border border-success/30 rounded-full px-2 py-0.5 text-xs font-bold`).
-- Quando `pending`: nenhum chip (silencioso).
-- Quando `failed`: chip vermelho discreto **"⚠ FALHA"** (mesmo estilo, cor destructive) — opcional mas útil para o caixa saber.
+**Meio** (resumo):
+- Linha com ícone `Users` + nome do garçom (se existir).
+- Linha com ícone `Package` + contador de itens (busca via query adicional `order_items` agrupada — uma única query `.in("order_id", ids)` para evitar N+1).
+- Linha com ícone `Clock` + tempo decorrido (usa hook existente `useElapsedTime`).
 
-### 2. `src/pages/Pdv.tsx` — PDV
+**Base** (valor + ações):
+- Total grande: `R$ XX,XX` em `text-3xl text-primary font-black`.
+- Linha de ações compacta:
+  - Botão ícone **Imprimir** (`Printer`) — chama `manualPrintOrder` (mantém atual).
+  - Botão ícone **Editar** (`Pencil`) — navega para `/palm` (mantém atual).
+  - Botão ícone **Avançar status** (`ChevronRight`) — só aparece se `status !== "done"`; chama `supabase.rpc("update_order_status", { p_order_id, p_status: next })` onde next = `new→preparing→done`. Mostra toast de confirmação.
+  - Botão principal **FECHAR** (gradient brasa, flex-1) — abre `CloseOrder` (mantém atual).
 
-**Remoção da discriminação por status:**
-- Remover as 3 chamadas a `<OrderSection>` (Aguardando / Em Preparo / Prontos p/ Pagamento).
-- Remover o uso de `groupedOrders` na render (manter o `useMemo` se quiser, mas não usar) — ou eliminar para limpeza.
-- Remover o hook de som "novo pedido pronto" (`prevDoneIdsRef` + `useEffect`)? **Manter** — é feedback útil e não depende da exibição visual; só não emite mais o toast com nome de seção. *(Optar por manter intacto para preservar comportamento.)*
+### 3. Estados visuais
 
-**Mudança de layout (lista vertical agrupada → grade única):**
-- O painel esquerdo passa a renderizar **um único grid** com todos os pedidos ordenados por `created_at` ascendente (mais antigo primeiro):
-  ```
-  grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3
-  ```
-- Cada card usa o componente atual `OrderRow` adaptado para modo "card" (ver item 3) — ou criar `OrderCard` novo reusando o mesmo arquivo via prop `variant="card"`.
-- Header da seção vira simples: **"Fila de Pedidos (N)"** sem subtítulos por status.
+- Card hover: `hover:border-primary/40 hover:shadow-glow transition-all`.
+- Card de pedido **PRONTO** (`status === "done"`): borda esquerda destacada `border-l-4 border-l-success` para ganhar atenção do operador.
+- Card com falha de impressão: borda esquerda `border-l-4 border-l-destructive`.
+- Tap no corpo do card (área não-botão) → seleciona e abre `CloseOrder` (mesmo destino do FECHAR), reduzindo cliques.
 
-**Marcador "pedido feito":**
-- O card de pedido continua mostrando o `CheckCircle2` que `OrderRow` já renderiza quando `print_status === "printed"`, mas agora com **chip explícito "FEITO"** em vez de só ícone, no topo do card.
-- Manter `print_status` no painel direito (já existe — Aguardando impressão / Impresso às HH:MM / Falha).
+### 4. Dados extras necessários
 
-### 3. `src/components/pdv/OrderRow.tsx` — adaptação para grade
+Adicionar **uma query única** para contar itens por pedido sem alterar schema:
+```ts
+const { data: itemCounts } = useQuery({
+  queryKey: ["cashier-item-counts", orders.map(o => o.id)],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from("order_items")
+      .select("order_id, quantity")
+      .in("order_id", orders.map(o => o.id));
+    // reduce → Map<order_id, totalQty>
+  },
+  enabled: orders.length > 0,
+});
+```
+Atualiza junto do `refetchInterval: 5000` existente.
 
-Refatorar para suportar layout de **card** (não só linha):
-- Remover dependência de `flex items-center justify-between` horizontal → mudar para `flex flex-col gap-2 p-3` (vertical).
-- Hierarquia dentro do card:
-  - **Topo**: nome da mesa grande + chip "FEITO" à direita se impresso.
-  - **Meio**: contador de itens · garçom (texto pequeno) + tempo decorrido em chip.
-  - **Inferior**: total à direita em destaque + badges de urgência abaixo se aplicável.
-- Manter todos os estados visuais existentes: `selected`, `isUrgent` (animate-pulse + borda destrutiva), `isLate`, `waitingPay`.
-- Manter borda lateral colorida (`border-l-4`) — agora indicando idade/urgência apenas (não status), pois `OrderSection` é removida.
-- Como `OrderSection` deixa de ser usada no PDV, o prop `accentBorder` recebe um valor padrão calculado dentro do próprio `OrderRow`:
-  - normal → `border-l-border`
-  - urgente → `border-l-destructive`
-  - atrasado → `border-l-warning`
-  - waitingPay → `border-l-warning`
+### 5. Responsividade
 
-### 4. `src/components/pdv/OrderSection.tsx`
+- 320–639px: 1 coluna.
+- 640–1023px: 2 colunas.
+- 1024–1279px: 3 colunas.
+- ≥1280px: 4 colunas.
+- `gap-4` (16px) com `p-4` no container.
 
-- **Não deletar** o arquivo (evita quebrar imports/testes em outros lugares se houver), mas o PDV deixa de importá-lo. Marcar como "deprecated" via comentário no topo:
-  ```ts
-  // DEPRECATED: agora o PDV usa um grid único de OrderRow.
-  ```
+### 6. Comportamento preservado
 
-### 5. Comportamento preservado (sem mudanças)
+- ✅ Realtime: `refetchInterval: 5000` mantido (e Realtime de `usePdvRealtime` não é usado aqui — Caixa usa polling, igual antes).
+- ✅ Pagamento: `CloseOrder` + RPC `pay_order` intactos.
+- ✅ Impressão: `manualPrintOrder` intacto.
+- ✅ Edição: navegação `/palm?orderId=...` intacta.
+- ✅ Tema dark + paleta atual (laranja brasa).
 
-- Banco, RPCs (`pay_order`), realtime (`usePdvRealtime`), impressão (`manualPrintOrder`/`Delta`/`Bill`), fluxo de pagamento, identificação do cliente, modo garçom (`staffMode`), confirmação de impressão.
-- Painel direito do PDV (detalhes do pedido + botões de ação): inalterado.
-- Tela `CloseOrder`: inalterada.
-- Som ao novo pedido pronto: inalterado.
-- Ordem de exibição: mais antigo primeiro (FIFO), igual ao atual após remover agrupamento.
+### Arquivos afetados (1)
 
-### Arquivos afetados (3)
+- `src/pages/Cashier.tsx` — refatoração visual + nova query de contagem de itens + handler de avanço de status.
 
-- `src/pages/Cashier.tsx` — grid + chip "FEITO".
-- `src/pages/Pdv.tsx` — remover seções por status, usar grid único.
-- `src/components/pdv/OrderRow.tsx` — refatorar para layout de card vertical, calcular borda interna, exibir chip "FEITO".
+### Sem alterações
+- Banco, RPCs, edge functions, `CloseOrder.tsx`, `print-service.ts`, `usePdvRealtime`, fluxo Palm.
+- Sem dependências novas.
 
 ### Resultado esperado
 
-- **Caixa**: mesas abertas em grade responsiva (1 col mobile → 4 col desktop), cards compactos com mesa, total e ações; chip verde "FEITO" quando o cupom da cozinha já saiu.
-- **PDV**: mesma fila visualmente uniforme — sem títulos "Aguardando / Em Preparo / Prontos" — apenas cards ordenados por chegada, em grid (1/2/3 colunas conforme largura), com marcadores de urgência e "FEITO" preservando hierarquia.
-- Zero impacto em comportamento, dados ou fluxo de pagamento/impressão.
+Painel de mesas em grid 1/2/3/4 colunas; cada card mostra **mesa, status (NOVO/PREPARO/PRONTO), itens, garçom, tempo decorrido, valor em destaque e impressão**; ações rápidas (imprimir, editar, avançar status, fechar) embutidas no card; tap no corpo abre o fechamento. Pagamento, impressão e atualização em tempo real continuam funcionando exatamente como antes.
 
