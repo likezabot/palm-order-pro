@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Smartphone, Monitor, Settings, Download } from "lucide-react";
 import { useFeedback } from "@/hooks/use-feedback";
 import { getAppVersion } from "@/lib/version-check";
+import { RecentItemsPanel } from "@/components/home/RecentItemsPanel";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", path: "/palm", emoji: "📱" },
@@ -75,6 +76,8 @@ const Index = () => {
           </button>
         </div>
       </div>
+
+      <RecentItemsPanel />
 
       <p className="mt-2 text-[10px] text-muted-foreground/50 select-none">
         v1.14.0 ({getAppVersion().slice(0, 10)})
