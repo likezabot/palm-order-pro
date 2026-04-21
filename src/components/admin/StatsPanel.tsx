@@ -157,7 +157,7 @@ const StatsPanel = () => {
   // Realtime invalidation when an order is paid
   useEffect(() => {
     const ch = supabase
-      .channel("stats-orders-rt")
+      .channel(`stats-orders-rt-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, () => {
         queryClient.invalidateQueries({ queryKey: ["stats-orders"] });
       })
