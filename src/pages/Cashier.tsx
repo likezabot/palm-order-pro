@@ -12,9 +12,25 @@ import { formatTableLabel } from "@/lib/utils";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 
 const STATUS_LABEL: Record<string, string> = {
-  new: "NOVO",
+  new: "AGUARDANDO",
   preparing: "EM PREPARO",
   done: "PRONTO",
+};
+
+const STATUS_VERB: Record<string, string> = {
+  new: "aguardando",
+  preparing: "em preparo",
+  done: "pronto",
+};
+
+const ADVANCE_LABEL: Record<string, string> = {
+  new: "▶ INICIAR PREPARO",
+  preparing: "✅ MARCAR PRONTO",
+};
+
+const ADVANCE_BTN: Record<string, string> = {
+  new: "bg-warning text-warning-foreground",
+  preparing: "bg-success text-success-foreground",
 };
 
 const STATUS_CHIP: Record<string, string> = {
@@ -39,18 +55,28 @@ interface OrderCardProps {
 }
 
 const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: OrderCardProps) => {
-  const elapsed = useElapsedTime(order.created_at);
+  // Tempo NA ETAPA atual
+  const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const wasPrinted = order.print_status === "printed";
   const printFailed = order.print_status === "failed";
   const isPending = order.print_status === "pending" || order.print_status === "printing";
   const status = order.status || "new";
   const next = NEXT_STATUS[status];
 
+  // Borda de urgência baseada em tempo na etapa
+  const stageMin = Math.floor((Date.now() - new Date(order.updated_at || order.created_at).getTime()) / 60000);
+  const isCritical = stageMin >= 25;
+  const isAlert = !isCritical && stageMin >= 10;
+
   const accentBorder = status === "done"
     ? "border-l-4 border-l-success"
-    : printFailed
+    : isCritical
       ? "border-l-4 border-l-destructive"
-      : "border-l-4 border-l-transparent";
+      : isAlert
+        ? "border-l-4 border-l-warning"
+        : printFailed
+          ? "border-l-4 border-l-destructive"
+          : "border-l-4 border-l-transparent";
 
   return (
     <div
@@ -101,12 +127,13 @@ const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: Or
           <Package className="w-3.5 h-3.5 shrink-0" />
           <span>{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
         </div>
-        {elapsed && (
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 shrink-0" />
-            <span>{elapsed}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            <span className="font-bold text-foreground">há {elapsed || "agora"}</span>{" "}
+            <span>{STATUS_VERB[status] || ""}</span>
+          </span>
+        </div>
       </div>
 
       {/* Base: total + ações */}
@@ -129,22 +156,23 @@ const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: Or
           >
             <Pencil size={18} />
           </button>
-          {next && (
+          {next ? (
             <button
               onClick={() => onAdvance(order)}
-              className="p-2.5 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
+              className={`flex-1 rounded-lg px-3 py-2.5 font-black text-sm tracking-wide active:scale-95 transition-transform min-h-[44px] ${ADVANCE_BTN[status] || "bg-secondary text-foreground"}`}
               title={`Avançar para ${STATUS_LABEL[next]}`}
               aria-label="Avançar status"
             >
-              <ChevronRight size={18} />
+              {ADVANCE_LABEL[status] || <ChevronRight size={18} />}
+            </button>
+          ) : (
+            <button
+              onClick={() => onClose(order)}
+              className="flex-1 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 font-black text-primary-foreground active:scale-95 transition-transform min-h-[44px] text-sm tracking-wide"
+            >
+              💰 FECHAR
             </button>
           )}
-          <button
-            onClick={() => onClose(order)}
-            className="flex-1 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 font-black text-primary-foreground active:scale-95 transition-transform min-h-[44px] text-sm tracking-wide"
-          >
-            FECHAR
-          </button>
         </div>
       </div>
     </div>
