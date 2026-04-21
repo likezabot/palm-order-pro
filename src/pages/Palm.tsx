@@ -8,6 +8,7 @@ import CloseOrder from "@/components/cashier/CloseOrder";
 import { Order } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { usePalmCart } from "@/hooks/use-palm-cart";
+import TabIdBadge from "@/components/TabIdBadge";
 
 type Step = "grid" | "menu" | "review" | "success" | "close";
 
