@@ -76,7 +76,7 @@ const Admin = () => {
       if (error) throw error;
       return data as Order[];
     },
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
   });
 
   const { orderMap, productsByCategory, handleDragEnd, handleResetOrder } =

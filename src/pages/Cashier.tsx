@@ -200,7 +200,7 @@ const Cashier = () => {
       if (error) throw error;
       return data as Order[];
     },
-    refetchInterval: 5000,
+    refetchInterval: 20_000,
   });
 
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
@@ -221,7 +221,7 @@ const Cashier = () => {
       return map;
     },
     enabled: orderIds.length > 0,
-    refetchInterval: 5000,
+    refetchInterval: 20_000,
   });
 
   const handlePrint = (order: Order) => {

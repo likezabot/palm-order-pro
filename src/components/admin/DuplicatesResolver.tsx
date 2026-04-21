@@ -46,7 +46,7 @@ const DuplicatesResolver = () => {
       if (error) throw error;
       return (data ?? []) as OrderRow[];
     },
-    refetchInterval: 5000,
+    refetchInterval: 20_000,
   });
 
   const duplicateGroups: DuplicateGroup[] = useMemo(() => {

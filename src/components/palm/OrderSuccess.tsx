@@ -116,14 +116,14 @@ const OrderSuccess = ({
   useEffect(() => {
     if (resetFiredRef.current) return;
 
-    // Pedido de mesa: reset instantâneo no próximo frame (sem timeout perceptível)
+    // Pedido de mesa: pequeno delay (~800ms) para feedback visual antes de voltar à grade
     if (!shouldShowBadge) {
-      const raf = requestAnimationFrame(() => {
+      const timer = setTimeout(() => {
         if (resetFiredRef.current) return;
         resetFiredRef.current = true;
         onReset();
-      });
-      return () => cancelAnimationFrame(raf);
+      }, 800);
+      return () => clearTimeout(timer);
     }
 
     let delay: number;
