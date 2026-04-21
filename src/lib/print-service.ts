@@ -151,8 +151,18 @@ export async function autoPrintOrder(order: {
     await completePrint(order.id);
     return { printed: true, reason: "success" };
   } else {
+    // Bridge falhou → enfileira ESC/POS para retry automático
+    const cfg = loadPrintConfig();
+    const payload = buildEscPosReceipt(
+      tableValue,
+      order.waiter_name || "N/A",
+      items,
+      order.total || 0,
+      cfg,
+    );
+    await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
     await failPrint(order.id, "print_failed");
-    return { printed: false, reason: "print_failed" };
+    return { printed: false, reason: "bridge_offline_queued" };
   }
 }
 
