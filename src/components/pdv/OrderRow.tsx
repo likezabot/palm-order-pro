@@ -47,7 +47,7 @@ interface OrderRowProps {
   onClose?: (order: Order) => void;
 }
 
-export const OrderRow = ({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }: OrderRowProps) => {
+export const OrderRow = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }, ref) => {
   // Cronômetro do TEMPO NA ETAPA ATUAL (updated_at)
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const wasPrinted = order.print_status === "printed";
