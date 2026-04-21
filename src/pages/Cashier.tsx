@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, Pencil, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Printer, Pencil, CheckCircle2, Users, Package, Clock, ChevronRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order } from "@/lib/types";
 import CloseOrder from "@/components/cashier/CloseOrder";
@@ -9,6 +9,147 @@ import { manualPrintOrder } from "@/lib/print-service";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { formatTableLabel } from "@/lib/utils";
+import { useElapsedTime } from "@/hooks/use-elapsed-time";
+
+const STATUS_LABEL: Record<string, string> = {
+  new: "NOVO",
+  preparing: "EM PREPARO",
+  done: "PRONTO",
+};
+
+const STATUS_CHIP: Record<string, string> = {
+  new: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  preparing: "bg-warning/15 text-warning border-warning/30",
+  done: "bg-success/15 text-success border-success/30",
+};
+
+const NEXT_STATUS: Record<string, string | null> = {
+  new: "preparing",
+  preparing: "done",
+  done: null,
+};
+
+interface OrderCardProps {
+  order: Order;
+  itemCount: number;
+  onPrint: (o: Order) => void;
+  onEdit: (o: Order) => void;
+  onAdvance: (o: Order) => void;
+  onClose: (o: Order) => void;
+}
+
+const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: OrderCardProps) => {
+  const elapsed = useElapsedTime(order.created_at);
+  const wasPrinted = order.print_status === "printed";
+  const printFailed = order.print_status === "failed";
+  const isPending = order.print_status === "pending" || order.print_status === "printing";
+  const status = order.status || "new";
+  const next = NEXT_STATUS[status];
+
+  const accentBorder = status === "done"
+    ? "border-l-4 border-l-success"
+    : printFailed
+      ? "border-l-4 border-l-destructive"
+      : "border-l-4 border-l-transparent";
+
+  return (
+    <div
+      className={`relative flex flex-col gap-3 rounded-xl bg-card border-2 border-border ${accentBorder} p-4 shadow-sm hover:border-primary/40 hover:shadow-glow transition-all min-h-[200px] cursor-pointer`}
+      onClick={() => onClose(order)}
+    >
+      {/* Topo: mesa + status */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-black text-2xl text-foreground leading-tight break-words">
+            {formatTableLabel(order.table_name, order.original_table_name)}
+          </p>
+          {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+            <p className="text-xs font-bold text-muted-foreground mt-0.5">(Mesa {order.original_table_name})</p>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
+            {STATUS_LABEL[status] || status.toUpperCase()}
+          </span>
+          {wasPrinted && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success border border-success/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+              <CheckCircle2 className="w-2.5 h-2.5" /> Impresso
+            </span>
+          )}
+          {printFailed && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+              <AlertTriangle className="w-2.5 h-2.5" /> Falha
+            </span>
+          )}
+          {isPending && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted text-muted-foreground border border-border px-1.5 py-0.5 text-[9px] font-bold uppercase">
+              Aguardando
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Meio: resumo */}
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {order.waiter_name && (
+          <div className="flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate font-semibold text-foreground/80">{order.waiter_name}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <Package className="w-3.5 h-3.5 shrink-0" />
+          <span>{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
+        </div>
+        {elapsed && (
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            <span>{elapsed}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Base: total + ações */}
+      <div className="mt-auto flex flex-col gap-2">
+        <p className="text-primary font-black text-3xl leading-none">R$ {(order.total || 0).toFixed(2)}</p>
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => onPrint(order)}
+            className="p-2.5 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
+            title="Imprimir"
+            aria-label="Imprimir"
+          >
+            <Printer size={18} />
+          </button>
+          <button
+            onClick={() => onEdit(order)}
+            className="p-2.5 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
+            title="Editar"
+            aria-label="Editar"
+          >
+            <Pencil size={18} />
+          </button>
+          {next && (
+            <button
+              onClick={() => onAdvance(order)}
+              className="p-2.5 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
+              title={`Avançar para ${STATUS_LABEL[next]}`}
+              aria-label="Avançar status"
+            >
+              <ChevronRight size={18} />
+            </button>
+          )}
+          <button
+            onClick={() => onClose(order)}
+            className="flex-1 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 font-black text-primary-foreground active:scale-95 transition-transform min-h-[44px] text-sm tracking-wide"
+          >
+            FECHAR
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Cashier = () => {
   const navigate = useNavigate();
@@ -31,6 +172,27 @@ const Cashier = () => {
     refetchInterval: 5000,
   });
 
+  const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
+
+  const { data: itemCountMap = new Map<string, number>() } = useQuery({
+    queryKey: ["cashier-item-counts", orderIds],
+    queryFn: async () => {
+      if (orderIds.length === 0) return new Map<string, number>();
+      const { data, error } = await supabase
+        .from("order_items")
+        .select("order_id, quantity")
+        .in("order_id", orderIds);
+      if (error) throw error;
+      const map = new Map<string, number>();
+      (data || []).forEach((r: { order_id: string; quantity: number }) => {
+        map.set(r.order_id, (map.get(r.order_id) || 0) + (r.quantity || 0));
+      });
+      return map;
+    },
+    enabled: orderIds.length > 0,
+    refetchInterval: 5000,
+  });
+
   const handlePrint = async (order: Order) => {
     playFeedback("click");
     const success = await manualPrintOrder(order);
@@ -44,6 +206,27 @@ const Cashier = () => {
   const handleEdit = (order: Order) => {
     playFeedback("click");
     navigate(`/palm?orderId=${order.id}&tableName=${order.table_name}`);
+  };
+
+  const handleAdvance = async (order: Order) => {
+    playFeedback("click");
+    const next = NEXT_STATUS[order.status];
+    if (!next) return;
+    const { error } = await supabase.rpc("update_order_status", {
+      p_order_id: order.id,
+      p_status: next,
+    });
+    if (error) {
+      toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `Status: ${STATUS_LABEL[next]}` });
+    queryClient.invalidateQueries({ queryKey: ["cashier-orders"] });
+  };
+
+  const handleOpenClose = (order: Order) => {
+    playFeedback("click");
+    setSelectedOrder(order);
   };
 
   if (selectedOrder) {
@@ -66,77 +249,27 @@ const Cashier = () => {
           <ArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-bold uppercase tracking-tight">CAIXA</h1>
+        <span className="ml-auto text-xs text-muted-foreground font-semibold">
+          {orders.length} {orders.length === 1 ? "mesa aberta" : "mesas abertas"}
+        </span>
       </div>
 
       <div className="flex-1 p-4">
         {orders.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">Nenhuma mesa aberta</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {orders.map((order) => {
-              const wasPrinted = order.print_status === "printed";
-              const printFailed = order.print_status === "failed";
-              return (
-                <div
-                  key={order.id}
-                  className="relative flex flex-col gap-3 rounded-xl bg-card border-2 border-border p-4 shadow-sm hover:border-primary/40 transition-colors"
-                >
-                  {/* Status chip top-right */}
-                  {wasPrinted && (
-                    <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-success/15 text-success border border-success/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
-                      <CheckCircle2 className="w-3 h-3" /> FEITO
-                    </span>
-                  )}
-                  {printFailed && (
-                    <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-destructive/15 text-destructive border border-destructive/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
-                      ⚠ FALHA
-                    </span>
-                  )}
-
-                  {/* Table name */}
-                  <div className="pr-16">
-                    <p className="font-black text-2xl text-foreground leading-tight break-words">
-                      {formatTableLabel(order.table_name, order.original_table_name)}
-                    </p>
-                    {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-                      <p className="text-xs font-bold text-muted-foreground mt-0.5">(Mesa {order.original_table_name})</p>
-                    )}
-                  </div>
-
-                  {/* Total */}
-                  <p className="text-primary font-black text-2xl">R$ {(order.total || 0).toFixed(2)}</p>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 mt-auto">
-                    <button
-                      onClick={() => handlePrint(order)}
-                      className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
-                      title="Imprimir"
-                      aria-label="Imprimir"
-                    >
-                      <Printer size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(order)}
-                      className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
-                      title="Editar"
-                      aria-label="Editar"
-                    >
-                      <Pencil size={20} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        playFeedback("click");
-                        setSelectedOrder(order);
-                      }}
-                      className="flex-1 rounded-lg bg-primary px-4 py-3 font-black text-primary-foreground active:scale-95 transition-transform min-h-[48px]"
-                    >
-                      FECHAR
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr">
+            {orders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                itemCount={itemCountMap.get(order.id) || 0}
+                onPrint={handlePrint}
+                onEdit={handleEdit}
+                onAdvance={handleAdvance}
+                onClose={handleOpenClose}
+              />
+            ))}
           </div>
         )}
       </div>
