@@ -1,6 +1,6 @@
 import { Order, OrderItem } from "@/lib/types";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
-import { Clock, Flame } from "lucide-react";
+import { Clock, Flame, UtensilsCrossed } from "lucide-react";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
 
 interface CardProps {
