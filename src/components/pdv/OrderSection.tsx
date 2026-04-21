@@ -39,7 +39,6 @@ export const OrderSection = ({ title, accent, orders, itemsByOrderId, selectedId
             itemCount={itemsByOrderId.get(order.id) || 0}
             selected={selectedId === order.id}
             onSelect={() => onSelect(order.id)}
-            accentBorder={a.border}
           />
         ))
       )}
