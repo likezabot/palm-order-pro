@@ -93,7 +93,6 @@ const Index = () => {
         </div>
       </div>
 
-      <RecentItemsPanel />
 
       <p className="mt-2 text-[10px] text-muted-foreground/50 select-none">
         v1.14.0 ({getAppVersion().slice(0, 10)})
