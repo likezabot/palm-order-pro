@@ -79,6 +79,7 @@ export const OrderRow = forwardRef<HTMLDivElement, OrderRowProps>(({ order, item
 
   return (
     <div
+      ref={ref}
       onClick={onSelect}
       className={`relative flex flex-col p-3 rounded-xl border-l-4 border-2 ${borderAccent} transition-all cursor-pointer ${
         selected
