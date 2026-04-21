@@ -93,8 +93,17 @@ export const OrderRow = forwardRef<HTMLDivElement, OrderRowProps>(({ order, item
       {/* Header: Mesa + Status */}
       <div className="flex items-start justify-between gap-2 min-w-0">
         <div className="min-w-0 flex-1">
-          <div className="font-black text-xl leading-tight break-words">
-            {formatTableLabel(order.table_name, order.original_table_name)}
+          <div className="font-black text-xl leading-tight break-words flex items-center gap-1.5">
+            <span>{formatTableLabel(order.table_name, order.original_table_name)}</span>
+            {order.served_at && (
+              <span
+                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-success/15 text-success border border-success/30 shrink-0"
+                title={`Servido às ${new Date(order.served_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
+                aria-label="Pedido servido"
+              >
+                <UtensilsCrossed className="w-3 h-3" />
+              </span>
+            )}
           </div>
           {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
             <div className="text-[10px] font-bold text-muted-foreground">(Mesa {order.original_table_name})</div>
