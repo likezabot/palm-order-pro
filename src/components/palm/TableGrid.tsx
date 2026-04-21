@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFeedback } from "@/hooks/use-feedback";
-import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, AlertTriangle, Printer } from "lucide-react";
+import { UserCircle, RefreshCw, Loader2, ArrowLeft, Plus, Store, Clock, AlertTriangle, Printer, UtensilsCrossed, Check } from "lucide-react";
 import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
