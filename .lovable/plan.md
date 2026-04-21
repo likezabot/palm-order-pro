@@ -1,50 +1,121 @@
 
 
-## Corrigir header coberto pela status bar do iPhone (notch/Dynamic Island)
+## Hardening do fluxo de envio de pedido (anti-multiclique, anti-race, sem overlay travado)
 
-### Problema
-No iPhone, o topo da tela do MenuView (e demais páginas) é renderizado **atrás** da barra de status do iOS. Isso esconde:
-- O botão "Voltar" (sobreposto pelo relógio "20:47")
-- O nome da mesa e os botões de **renomear** e **mover mesa** (sobrepostos pelos ícones de bateria/sinal)
+### Causa raiz
 
-Causa raiz: o `index.html` usa `viewport-fit=cover` + `apple-mobile-web-app-status-bar-style: black-translucent`, que pedem ao iOS para renderizar sob a status bar. Em `src/index.css`, o `body` aplica safe-area só nas laterais (`padding-left/right`), faltando o **topo**.
+A tela `OrderReview` permite múltiplos disparos concorrentes do envio:
 
-### Solução
+1. **Botões do `AlertDialog` "Deseja imprimir?"** (`Enviar e imprimir` / `Enviar sem imprimir`) são `<button>` puros, **sem `disabled`**. Dois toques rápidos (~50ms) disparam `handleFinalize` duas vezes antes do `setSending(true)` propagar — a guarda `if (sending) return` lê estado **stale**.
+2. O guard usa `useState` em vez de `useRef`, então não bloqueia chamadas no mesmo tick.
+3. Não há **timeout de segurança**: se a RPC travar (rede ruim no celular), o botão fica em `"ENVIANDO..."` para sempre.
+4. `OrderSuccess` usa `min-h-screen` (100vh) em vez de `h-[100dvh]` — em iPhone com safe-area + body com `padding-top/bottom`, o verde "vaza" acima e abaixo do conteúdo (faixas verdes nas screenshots). Combinado com transição de step, dá o efeito de "overlay verde grande quebrado".
+5. Em caso de erro silencioso (ex.: throw fora do catch, navegação interrompida), `sending` nunca volta a `false`.
+6. Sem cancelamento/ignore de respostas tardias — se o usuário recarregar/voltar e a RPC responder depois, há `setState` em componente desmontado.
 
-**1. Adicionar safe-area no topo globalmente (`src/index.css`)**
-- Acrescentar `padding-top: env(safe-area-inset-top)` no `body` (já tem `padding-left/right`).
-- Acrescentar `padding-bottom: env(safe-area-inset-bottom)` para evitar que a barra inferior do iPhone cubra conteúdo em outras telas.
+### Solução (refator estrutural mas pequeno em superfície)
 
-**2. Ajustar containers full-height que usam `h-[100dvh]`**
-Componentes como `MenuView` usam `h-[100dvh]` e ocupam 100% da viewport, **ignorando o padding do body**. Para esses, o safe-area precisa ser aplicado dentro do próprio container.
+**1. Lock por `useRef` + máquina de estados explícita em `OrderReview`**
 
-Aplicar em:
-- `src/components/palm/MenuView.tsx` — header recebe `pt-[env(safe-area-inset-top)]` (somado ao `p-2.5` existente via classe utilitária).
-- `src/components/palm/OrderReview.tsx` — mesma correção no header se também usa `100dvh`.
-
-Padrão a aplicar no header:
+Substituir `const [sending, setSending] = useState(false)` por uma máquina:
 ```tsx
-<div className="shrink-0 bg-background border-b border-border p-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))]">
+type SendState = "idle" | "sending" | "success" | "error";
+const [sendState, setSendState] = useState<SendState>("idle");
+const sendingRef = useRef(false);          // lock síncrono real
+const mountedRef = useRef(true);
+useEffect(() => () => { mountedRef.current = false; }, []);
+
+const safeSet = (s: SendState) => { if (mountedRef.current) setSendState(s); };
 ```
 
-**3. Verificar outras páginas full-screen com risco**
-Inspecionar e aplicar mesmo tratamento se necessário em:
-- `src/pages/Kitchen.tsx`
-- `src/pages/Cashier.tsx`
-- `src/pages/Pdv.tsx`
-- `src/pages/Admin.tsx`
-- `src/pages/Index.tsx` (home)
+`handleFinalize` no topo:
+```tsx
+if (sendingRef.current) return;            // bloqueio síncrono — imune a stale state
+sendingRef.current = true;
+safeSet("sending");
+setShowConfirm(false);
+```
 
-Se já usam o body padding (não forçam altura 100dvh com layout próprio), o passo 1 já resolve. Caso forcem altura/topo zero, aplicar `pt-[env(safe-area-inset-top)]` no primeiro elemento.
+No `finally`, sempre liberar o lock:
+```tsx
+} finally {
+  sendingRef.current = false;
+  // safeSet("idle") só se ainda estamos na tela (sucesso navega para fora)
+  if (mountedRef.current && sendState !== "success") safeSet("idle");
+}
+```
 
-### Resultado esperado
-- iPhone com notch/Dynamic Island: header desce ~47px abaixo da status bar; "Voltar", nome da mesa e ícones (✏️ renomear / ⇄ mover) ficam totalmente visíveis e clicáveis.
-- Android e desktop: `env(safe-area-inset-top)` resolve para `0px` — nenhum impacto visual.
-- Sem mudança de banco, sem mudança de comportamento, só CSS.
+**2. Timeout de segurança de 20s**
+
+Antes do `await supabase.rpc(...)`, criar:
+```tsx
+const timeoutId = setTimeout(() => {
+  if (sendingRef.current) {
+    sendingRef.current = false;
+    safeSet("error");
+    toast({ title: "Tempo esgotado", description: "Verifique a conexão e tente de novo.", variant: "destructive" });
+  }
+}, 20000);
+```
+Limpar no `finally` com `clearTimeout(timeoutId)`.
+
+**3. Botões do AlertDialog realmente desabilitados durante envio**
+
+Em `OrderReview.tsx`, os dois botões "Enviar e imprimir" / "Enviar sem imprimir" passam a ter:
+```tsx
+<button
+  type="button"
+  disabled={sendState === "sending"}
+  onClick={() => handleFinalize(true)}
+  className="... disabled:opacity-40 disabled:pointer-events-none"
+>
+```
+Adicionar `pointer-events-none` quando `sending` para garantir bloqueio mesmo durante animação de fechamento do Radix.
+
+**4. Trigger do dialog também protegido**
+
+`OrderReviewFooter` já recebe `sending` — passar `sendState === "sending"` no lugar e garantir que `onFinalize` (que abre o `AlertDialog`) seja ignorado se o lock estiver ativo. No `OrderReview`:
+```tsx
+onFinalize={() => { if (!sendingRef.current) setShowConfirm(true); }}
+```
+
+**5. Corrigir `OrderSuccess` para não vazar nas safe-areas**
+
+Em `src/components/palm/OrderSuccess.tsx`:
+- Trocar `min-h-screen` por `min-h-[100dvh] w-full fixed inset-0` para cobrir a viewport real do iPhone (incluindo área da safe-area, já que o `bg-success` é intencional como fundo cheio).
+- Adicionar `overflow-hidden` para garantir que nada extrapole.
+- Adicionar `mountedRef` + `clearTimeout` defensivo (já existe parcial, reforçar).
+- Garantir que o `setTimeout(onReset, ...)` só dispare uma vez (`useRef` flag), evitando reset duplo se o componente reabrir.
+
+**6. Ignorar respostas tardias de RPC**
+
+Adicionar um `requestIdRef` que incrementa a cada `handleFinalize`. Após o `await`, comparar:
+```tsx
+const myReq = ++requestIdRef.current;
+const { data, error } = await supabase.rpc(...);
+if (myReq !== requestIdRef.current) return;   // request antiga, descarta
+```
+
+**7. Botão `Reimprimir senha` (no header) também precisa de lock** — está disparando RPC sem proteção contra duplo toque. Adicionar `useRef` próprio (`reprintingRef`) + `disabled` visual.
 
 ### Arquivos afetados
-- `src/index.css` — body ganha `padding-top` e `padding-bottom` com safe-area.
-- `src/components/palm/MenuView.tsx` — header com padding-top safe-area.
-- `src/components/palm/OrderReview.tsx` — mesmo ajuste se aplicável.
-- Demais páginas: revisão rápida durante implementação; ajuste só onde o layout força topo zero.
+
+- **`src/components/palm/OrderReview.tsx`** — máquina de estados (`idle/sending/success/error`), `useRef` lock, `mountedRef`, timeout de 20s, `requestIdRef`, botões do AlertDialog com `disabled` + `pointer-events-none`, lock no botão "Reimprimir senha".
+- **`src/components/palm/OrderReviewFooter.tsx`** — receber `sendState` em vez de `sending`, expor `disabled` correto, garantir `pointer-events-none` durante envio.
+- **`src/components/palm/OrderSuccess.tsx`** — `fixed inset-0` + `min-h-[100dvh]` + `overflow-hidden`, ref para `onReset` único, cleanup robusto de timers.
+
+### Resultado esperado
+
+- Tocar 10x rápido em "Enviar e imprimir" → 1 RPC apenas; demais cliques ignorados silenciosamente.
+- RPC travada por mais de 20s → toast de erro, botão volta para "FINALIZAR PEDIDO" usável.
+- Sem faixa verde "vazando" acima/abaixo no iPhone — `OrderSuccess` cobre a viewport inteira corretamente.
+- Sem `setState` em componente desmontado (sem warnings no console).
+- Sem botão eternamente em "ENVIANDO...".
+- Visual idêntico ao atual em fluxo normal — só fica robusto sob uso agressivo.
+
+### Notas
+
+- Sem mudança de banco, sem mudança de RPCs, sem mudança de tipos.
+- Preserva 100% do comportamento de impressão, conflito de mesa e versão otimista.
+- Não altera o `Button` global (`src/components/ui/button.tsx`) — o lock fica local ao fluxo crítico para não afetar performance de cliques rotineiros.
 
