@@ -74,7 +74,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 
   useEffect(() => {
     const channel = supabase
-      .channel("orders-changes")
+      .channel(`orders-changes-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
