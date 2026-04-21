@@ -250,11 +250,23 @@ const OrderReview = ({
       }
 
       playFeedback("success");
-      const newOrderId =
+      const createObj =
         createData && typeof createData === "object" && !Array.isArray(createData)
-          ? (createData as any).id
-          : undefined;
+          ? (createData as any)
+          : null;
+      const newOrderId = createObj?.id as string | undefined;
       safeSet("success");
+      if (newOrderId) {
+        writeOptimisticOrder({
+          id: newOrderId,
+          table_name: tableName,
+          original_table_name: originalTableName || tableName,
+          total,
+          waiter_name: waiterName || null,
+          created_at: createObj?.created_at,
+          item_count: cartItemCount,
+        });
+      }
       onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
     } catch (err: any) {
       if (myReq !== requestIdRef.current || timedOut) return;
