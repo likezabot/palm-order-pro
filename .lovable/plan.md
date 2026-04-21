@@ -1,82 +1,55 @@
 
 
-## Tema Claro/Escuro com toggle discreto na Home
+## Botão "Servido" nos cards de mesa
 
-Hoje o sistema é fixo em **dark mode** (`--background: 0 0% 5.1%`). Vou adicionar um modo claro com paleta cuidadosamente equilibrada e um botão discreto sol/lua na Home.
+Hoje os cards de mesa ocupada (TableGrid no Palm) mostram garçom, valor e tempo, mas não há marcação visual de que o pedido **já foi entregue ao cliente** — útil pra distinguir mesas em produção das mesas que estão comendo.
 
-### Paletas
+### Mudanças
 
-**Modo Escuro** (atual, mantido como padrão)
-- bg `#0D0D0D` · card `#141414` · texto `#F5F5F5` · muted `#ADADAD`
-- primary `#E25822` (laranja brasa) — contraste AA sobre dark
+**1. Campo no banco**
+- Nova coluna `served_at timestamptz` na tabela `orders` (nullable). Quando preenchida = mesa servida. Quando null = ainda não servida.
+- Mantém `status` atual intacto (não bagunça fluxo do Kitchen/Cashier).
 
-**Modo Claro** (novo)
-- bg `#FAFAF9` (off-white quente, evita branco puro que cansa)
-- card `#FFFFFF` · surface-elevated `#F4F4F2`
-- texto `#0F0F0F` (quase preto, máximo contraste)
-- muted-foreground `#5C5C5C` (AA sobre bg claro)
-- border/input `#E5E5E3`
-- primary `#C8471A` (laranja brasa **mais escuro** — original `#E25822` falha contraste em texto branco sobre fundo claro; este passa AA)
-- success `#15803D` · warning `#A16207` · destructive `#DC2626` (todos AA)
+**2. Botão "✓ Servido" dentro do card de mesa ocupada**
+- Aparece como pequeno chip discreto no canto inferior do card (overlay, não intercepta clique principal de abrir a mesa).
+- **Não servida** → botão outline com ícone `UtensilsCrossed`, label "Servir" (clicar marca como servido)
+- **Já servida** → badge sólido verde com ícone `Check`, label "Servido · 12min" (mostra tempo desde que foi servido). Clicar reabre confirmação para desmarcar (caso de erro).
 
-### Implementação
+**3. Estado visual da mesa servida**
+- Mesa ocupada normal → mantém vermelho atual
+- Mesa servida (comendo) → muda para **azul suave** (`bg-blue-500/20 border-blue-500`), pulso desliga. Comunica "estável, comendo".
+- Mesa aguardando pagamento (`status=done`) → mantém âmbar atual (prioridade sobre servido).
+- Mesa com duplicatas → mantém amarelo (prioridade máxima).
 
-**1. CSS (`src/index.css`)**
-- Mover variáveis atuais de `:root` para `.dark`
-- Adicionar bloco `:root` (ou `.light`) com a paleta clara acima
-- Default: aplicar `.dark` no `<html>` se não houver preferência salva (mantém comportamento atual)
+Ordem de prioridade visual: duplicatas > aguardando pagto > servida > ocupada > livre.
 
-**2. Hook `src/hooks/use-theme.ts` (novo)**
-- Lê `localStorage("plano-b-theme")` → `"light" | "dark" | "system"`
-- Aplica/remove classe `dark` no `document.documentElement`
-- Escuta `prefers-color-scheme` quando em modo `system`
-- Default = `dark` (preserva visual atual de quem já usa)
-
-**3. Componente `src/components/ThemeToggle.tsx` (novo)**
-- Botão circular discreto (40×40, ícone Sun/Moon do lucide)
-- Transição suave de ícone
-- Posicionado **na Home**, canto superior direito, dentro do safe-area
-- `aria-label="Alternar tema"`
-
-**4. Inicialização (`src/main.tsx`)**
-- Pequeno script inline antes do React montar para evitar **flash** de tema errado:
-  ```ts
-  const t = localStorage.getItem("plano-b-theme") ?? "dark";
-  if (t === "dark") document.documentElement.classList.add("dark");
-  ```
-
-**5. Tailwind (`tailwind.config.ts`)**
-- Confirmar `darkMode: ["class"]` (já está assim por padrão no shadcn)
-
-### Verificação de legibilidade
-
-| Combinação claro | Contraste | WCAG |
-|---|---|---|
-| `#0F0F0F` em `#FAFAF9` | 19.8:1 | AAA |
-| `#5C5C5C` em `#FAFAF9` | 6.9:1 | AA |
-| `#FFFFFF` em `#C8471A` (botão primary) | 4.6:1 | AA |
-| `#0F0F0F` em `#FFFFFF` (card) | 21:1 | AAA |
-
-| Combinação escuro | Contraste | WCAG |
-|---|---|---|
-| `#F5F5F5` em `#0D0D0D` | 18.5:1 | AAA |
-| `#ADADAD` em `#0D0D0D` | 8.3:1 | AAA |
-| `#FFFFFF` em `#E25822` | 4.5:1 | AA |
-
-### Onde aparece o toggle
-- Apenas na **Home** (`/`), canto superior direito — discreto, não polui telas de operação (PDV/Palm/Kitchen/Admin já têm headers próprios e mantêm o tema escolhido).
+**4. Reset automático**
+- Quando o pedido é fechado/pago (status vira `paid`/`canceled`), `served_at` não importa mais (mesa some da grade).
+- Quando garçom **adiciona novos itens** a uma mesa já servida, opcionalmente resetamos `served_at = null` automaticamente? → **sim**, faz sentido: se chegou rodada nova, mesa volta a "em produção" até ser servida de novo. Implementado via trigger no insert de `order_items` que zera `served_at` do pedido pai.
 
 ### Arquivos
-- **Novo**: `src/hooks/use-theme.ts`
-- **Novo**: `src/components/ThemeToggle.tsx`
-- **Editado**: `src/index.css` — paletas claro/escuro
-- **Editado**: `src/pages/Index.tsx` — monta `<ThemeToggle />`
-- **Editado**: `src/main.tsx` — script anti-flash
+
+**Migração SQL**
+- `ALTER TABLE orders ADD COLUMN served_at timestamptz`
+- Trigger `reset_served_at_on_new_items` em `order_items` (after insert) → `UPDATE orders SET served_at = NULL WHERE id = NEW.order_id AND served_at IS NOT NULL`
+- Atualizar policy de update em `orders` (já é aberta para POS, sem mudança)
+
+**Editado**: `src/components/palm/TableGrid.tsx`
+- Buscar `served_at` no select dos `active-orders`
+- Renderizar chip "Servir / Servido" no card
+- Handler `handleToggleServed(orderId, currentlyServed)` → update no Supabase + invalidate query
+- Lógica de cor inclui novo estado servido
+
+**Editado (opcional, se quiser refletir também)**: `src/components/admin/OrdersTab.tsx`
+- Mostrar coluna/badge "Servido às HH:MM" — só leitura. **Vou pular nesta tarefa** para manter escopo enxuto; posso adicionar depois se quiser.
+
+### Detalhes técnicos
+- Realtime: já existe canal em `orders` que invalida a query — mudança em `served_at` será refletida automaticamente em todos os Palms abertos.
+- Sem mudanças no Kitchen — `served_at` é metadata do garçom, não do fluxo de cozinha.
+- Tempo desde servido reaproveita helper `useElapsedTime` já existente.
 
 ### Resultado
-- Toggle discreto sol/lua na Home alterna entre os dois modos
-- Preferência persiste em `localStorage`
-- Sem flash ao recarregar
-- Todas as telas existentes funcionam em ambos os temas (já usam tokens semânticos `bg-background`, `text-foreground`, etc.)
-- Contraste AA/AAA garantido em ambos os modos
+- Garçom toca "Servir" quando entrega prato → card vira azul, mostra "Servido · 3min"
+- Visualmente distingue: vermelho (em produção) vs azul (comendo) vs âmbar (pedindo conta)
+- Se chegar nova rodada, mesa volta automaticamente para vermelho até nova servida
 
