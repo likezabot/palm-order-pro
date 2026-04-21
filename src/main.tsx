@@ -2,6 +2,7 @@ import { checkAndUpdateVersion } from "./lib/version-check";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { startPrintQueueWorker } from "./lib/print-queue-worker";
 
 // Disparar verificação de versão SEM bloquear a renderização.
 // Se houver atualização, ela limpa caches em background e recarrega.
@@ -9,6 +10,10 @@ checkAndUpdateVersion();
 
 // Renderiza imediatamente — não esperamos nada.
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Worker da fila local de impressão (fallback do bridge .exe).
+// Roda em background e tenta reimprimir jobs pendentes a cada 15s.
+startPrintQueueWorker();
 
 // --- PWA Service Worker ---
 const isInIframe = (() => {

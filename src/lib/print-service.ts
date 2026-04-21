@@ -8,6 +8,41 @@
 import { supabase } from "@/integrations/supabase/client";
 import { printReceipt, printDelta, printBill } from "@/lib/print-receipt";
 import { formatPrintTableValue } from "@/lib/utils";
+import { loadPrintConfig } from "@/lib/print-config";
+import {
+  buildEscPosReceipt,
+  buildEscPosDelta,
+  buildEscPosBill,
+} from "@/lib/thermal-printer";
+import { encodePayloadB64, enqueuePrintJob, type PrintJobType } from "@/lib/print-queue";
+
+/**
+ * Quando o bridge falha, enfileira o payload ESC/POS para retry posterior.
+ * No-op se config não estiver em modo bridge (no browser não há fallback).
+ * Idempotente por (orderId, printType).
+ */
+async function enqueueOnBridgeFailure(
+  orderId: string,
+  tableName: string,
+  printType: PrintJobType,
+  payload: Uint8Array,
+): Promise<void> {
+  try {
+    const cfg = loadPrintConfig();
+    if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
+    await enqueuePrintJob({
+      orderId,
+      tableName,
+      printType,
+      payloadB64: encodePayloadB64(payload),
+      bridgeUrl: cfg.bridgeUrl,
+      lastError: "bridge_offline",
+    });
+    console.warn(`[print-service] Bridge offline → job enfileirado (${printType}, mesa ${tableName})`);
+  } catch (e) {
+    console.error("[print-service] Falha ao enfileirar job:", e);
+  }
+}
 
 interface PrintableItem {
   product_name: string;
@@ -116,8 +151,18 @@ export async function autoPrintOrder(order: {
     await completePrint(order.id);
     return { printed: true, reason: "success" };
   } else {
+    // Bridge falhou → enfileira ESC/POS para retry automático
+    const cfg = loadPrintConfig();
+    const payload = buildEscPosReceipt(
+      tableValue,
+      order.waiter_name || "N/A",
+      items,
+      order.total || 0,
+      cfg,
+    );
+    await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
     await failPrint(order.id, "print_failed");
-    return { printed: false, reason: "print_failed" };
+    return { printed: false, reason: "bridge_offline_queued" };
   }
 }
 
@@ -161,18 +206,23 @@ export async function autoPrintUpdate(order: {
 
   let success = false;
   let reason = "unknown";
+  let payloadForQueue: Uint8Array | null = null;
+  let queueType: PrintJobType = "full";
 
   try {
+    const cfg = loadPrintConfig();
     if (printType === "bill") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
       success = await printBill(tableValue, order.waiter_name || "N/A", items, order.total || 0);
       reason = success ? "bill_success" : "print_failed";
+      if (!success) { payloadForQueue = buildEscPosBill(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "bill"; }
     } else if (printType === "full") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
       success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
       reason = success ? "full_success" : "print_failed";
+      if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
     } else if (printType === "extra") {
       if (!deltaItems || deltaItems.length === 0) {
         await failPrint(order.id, "no_delta_items");
@@ -180,16 +230,19 @@ export async function autoPrintUpdate(order: {
       }
       success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
       reason = success ? "delta_success" : "print_failed";
+      if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
     } else {
       // Fallback legado
       if (deltaItems && deltaItems.length > 0) {
         success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
         reason = success ? "delta_success" : "print_failed";
+        if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
       } else {
         const items = await fetchAllItems();
         if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
         success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
         reason = success ? "full_fallback" : "print_failed";
+        if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
       }
     }
   } catch (err) {
@@ -200,6 +253,11 @@ export async function autoPrintUpdate(order: {
   if (success) {
     await completePrint(order.id);
   } else {
+    if (payloadForQueue) {
+      await enqueueOnBridgeFailure(order.id, tableValue, queueType, payloadForQueue);
+      await failPrint(order.id, reason);
+      return { printed: false, reason: "bridge_offline_queued" };
+    }
     await failPrint(order.id, reason);
   }
 

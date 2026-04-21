@@ -50,6 +50,13 @@ export function usePdvRealtime() {
           : `Impresso automaticamente — Mesa ${order.table_name}`;
         console.log(`[PDV AutoPrint] ${msg}`);
         toastRef.current({ title: msg });
+      } else if (result.reason === "bridge_offline_queued") {
+        console.warn(`[PDV AutoPrint] Bridge offline — Mesa ${order.table_name} enfileirada.`);
+        toastRef.current({
+          title: `Bridge offline — Mesa ${order.table_name}`,
+          description: "Pedido enfileirado. Será reimpresso automaticamente quando o bridge voltar.",
+          variant: "destructive",
+        });
       } else {
         console.warn(`[PDV AutoPrint] Não imprimiu: ${result.reason}`);
       }
