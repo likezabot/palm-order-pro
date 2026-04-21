@@ -15,6 +15,7 @@ import {
   buildEscPosBill,
 } from "@/lib/thermal-printer";
 import { encodePayloadB64, enqueuePrintJob, type PrintJobType } from "@/lib/print-queue";
+import { debugLog } from "@/lib/debug-logger";
 
 /**
  * Quando o bridge falha, enfileira o payload ESC/POS para retry posterior.
@@ -38,9 +39,9 @@ async function enqueueOnBridgeFailure(
       bridgeUrl: cfg.bridgeUrl,
       lastError: "bridge_offline",
     });
-    console.warn(`[print-service] Bridge offline → job enfileirado (${printType}, mesa ${tableName})`);
+    debugLog.warn("queue", `enfileirado (${printType}) — mesa ${tableName}, pedido ${orderId}`);
   } catch (e) {
-    console.error("[print-service] Falha ao enfileirar job:", e);
+    debugLog.error("queue", `falha ao enfileirar job (${printType})`, e);
   }
 }
 
@@ -108,7 +109,7 @@ export async function autoPrintOrder(order: {
   waiter_name: string | null;
   total: number | null;
 }): Promise<{ printed: boolean; reason: string }> {
-  console.log(`[print-service] AutoPrint: Pedido ${order.id} Mesa ${order.table_name}`);
+  debugLog.info("print", `autoPrintOrder iniciado — pedido ${order.id} mesa ${order.table_name}`);
 
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) return { printed: false, reason: "already_claimed" };
@@ -176,7 +177,7 @@ export async function autoPrintUpdate(order: {
   waiter_name: string | null;
   total: number | null;
 }): Promise<{ printed: boolean; reason: string }> {
-  console.log(`[print-service] AutoPrintUpdate: Pedido ${order.id} Mesa ${order.table_name}`);
+  debugLog.info("print", `autoPrintUpdate iniciado — pedido ${order.id} mesa ${order.table_name}`);
 
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) return { printed: false, reason: "already_claimed" };
@@ -193,7 +194,7 @@ export async function autoPrintUpdate(order: {
     order.original_table_name ?? (orderData as any)?.original_table_name ?? null;
   const tableValue = formatPrintTableValue(order.table_name, originalName);
 
-  console.log(`[print-service] print_type=${printType}, delta_items=${deltaItems?.length ?? 0}`);
+  debugLog.info("print", `print_type=${printType ?? "(nulo)"} delta_items=${deltaItems?.length ?? 0}`);
 
   const fetchAllItems = async (): Promise<PrintableItem[]> => {
     for (let attempt = 0; attempt < 6; attempt++) {

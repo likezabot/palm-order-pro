@@ -18,6 +18,7 @@ import {
   subscribePrintQueue,
   type PrintJob,
 } from "@/lib/print-queue";
+import { debugLog } from "@/lib/debug-logger";
 
 const TICK_MS = 15_000;
 const MAX_PER_CYCLE = 3;
