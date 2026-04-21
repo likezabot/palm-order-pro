@@ -38,6 +38,70 @@ function ItemRow({ item }: { item: FlatItem }) {
   );
 }
 
+export function RecentItemsList() {
+  const [items, setItems] = useState<FlatItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  async function fetchItems() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("orders")
+      .select("id, table_name, waiter_name, updated_at, status, order_items(product_name, quantity, waiter_name)")
+      .in("status", ["new", "preparing", "done"])
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    if (error || !data) {
+      setLoading(false);
+      return;
+    }
+
+    const flat: FlatItem[] = [];
+    for (const order of data) {
+      const orderItems = (order.order_items as any[]) || [];
+      for (let i = 0; i < orderItems.length; i++) {
+        const it = orderItems[i];
+        flat.push({
+          key: `${order.id}-${i}`,
+          product_name: it.product_name,
+          quantity: it.quantity,
+          table_name: order.table_name,
+          waiter_name: it.waiter_name || order.waiter_name,
+          updated_at: order.updated_at,
+        });
+        if (flat.length >= 30) break;
+      }
+      if (flat.length >= 30) break;
+    }
+    setItems(flat);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    fetchItems();
+    const id = setInterval(fetchItems, 15_000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (loading && items.length === 0) {
+    return <p className="text-xs text-muted-foreground py-4 text-center">Carregando…</p>;
+  }
+  if (items.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground py-4 text-center">
+        Nenhum pedido em andamento.
+      </p>
+    );
+  }
+  return (
+    <div>
+      {items.map((it) => (
+        <ItemRow key={it.key} item={it} />
+      ))}
+    </div>
+  );
+}
+
 export function RecentItemsPanel() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<FlatItem[]>([]);
