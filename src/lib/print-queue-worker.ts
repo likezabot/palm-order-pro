@@ -93,15 +93,17 @@ export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnlin
       processed++;
 
       if (ok) {
+        debugLog.success("queue", `retry ✓ pedido ${job.orderId} (${job.printType}) — tentativa ${job.attempts + 1}`);
         // Marca pedido como impresso (RPC existente, idempotente — só fecha
         // se estiver em 'printing'; se já estava 'printed' nada acontece)
         try {
           await supabase.rpc("complete_order_print", { p_order_id: job.orderId } as any);
         } catch (e) {
-          console.warn("[print-queue-worker] complete_order_print falhou (não-crítico):", e);
+          debugLog.warn("queue", `complete_order_print falhou (não-crítico) pedido ${job.orderId}`, e);
         }
         await removePrintJob(job.id);
       } else {
+        debugLog.warn("queue", `retry ✗ pedido ${job.orderId} (${job.printType}) — tentativa ${job.attempts + 1}`);
         await incrementAttempts(job.id, "retry_failed");
       }
     }
@@ -116,14 +118,14 @@ function scheduleTick() {
   if (intervalId) clearInterval(intervalId);
   intervalId = setInterval(() => {
     if (typeof document !== "undefined" && document.hidden) return;
-    tickPrintQueue().catch((e) => console.warn("[print-queue-worker] tick error:", e));
+    tickPrintQueue().catch((e) => debugLog.warn("queue", "tick error", e));
   }, TICK_MS);
 }
 
 export function startPrintQueueWorker() {
   if (started) return;
   started = true;
-  console.log("[print-queue-worker] Iniciado");
+  debugLog.info("queue", "worker iniciado (tick a cada 15s)");
 
   // Tick rápido ao subir e quando a fila recebe novo job
   setTimeout(() => tickPrintQueue().catch(() => {}), 2000);
