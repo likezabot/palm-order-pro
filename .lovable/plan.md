@@ -1,90 +1,99 @@
 
 
-## Caixa — painel de mesas em cards completos
+## Fila de Pedidos (PDV/Caixa) — blocos quadrados unificados
 
-Refatorar a aba **Caixa** (`src/pages/Cashier.tsx`) para um painel visual de mesas em grid, com cards autoexplicativos e ações rápidas inline. Sem alterar banco, RPCs, realtime, impressão ou fluxo de pagamento.
+Refatorar a área de **fila de pedidos** do `Pdv.tsx` e do `Cashier.tsx` para o mesmo padrão **grid de blocos compactos**, com troca de status em 1 clique e cronômetro de tempo no status atual. Sem mexer em banco, RPCs, realtime, impressão, pagamento ou seleção.
 
-### 1. Grid responsivo
+### 1. Mapeamento de status (sem alterar banco)
 
-- `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4` (já parcial — aumentar gap e garantir altura uniforme com `auto-rows-fr`).
-- Cards com altura mínima consistente (`min-h-[200px]`) para parecerem "blocos de mesa" robustos.
+Os 3 status do banco continuam exatamente os mesmos (`new`, `preparing`, `done`), mas a UI usa o vocabulário pedido:
 
-### 2. Estrutura do card (3 zonas)
+| Banco | Label UI | Cor chip |
+|---|---|---|
+| `new` | **AGUARDANDO** | azul |
+| `preparing` | **EM PREPARO** | laranja |
+| `done` | **PRONTO** | verde |
 
-**Topo** (linha 1):
-- Nome da mesa em destaque (`text-2xl font-black`) + subtítulo "(Mesa X)" se renomeada.
-- Badge de **status do pedido** à direita, baseado em `order.status`:
-  - `new` → chip azul "NOVO" (`bg-blue-500/15 text-blue-400 border-blue-500/30`)
-  - `preparing` → chip laranja "EM PREPARO" (`bg-warning/15 text-warning border-warning/30`)
-  - `done` → chip verde "PRONTO" (`bg-success/15 text-success border-success/30`)
-- Badge secundário de **impressão** (linha abaixo do status, menor):
-  - `printed` → "✓ Impresso" verde discreto
-  - `failed` → "⚠ Falha" vermelho discreto
-  - `pending`/`printing` → "Aguardando" cinza
+### 2. Regra "pedido novo já entra como EM PREPARO"
 
-**Meio** (resumo):
-- Linha com ícone `Users` + nome do garçom (se existir).
-- Linha com ícone `Package` + contador de itens (busca via query adicional `order_items` agrupada — uma única query `.in("order_id", ids)` para evitar N+1).
-- Linha com ícone `Clock` + tempo decorrido (usa hook existente `useElapsedTime`).
+No `Pdv.tsx`, adicionar `useEffect` leve que, ao detectar pedidos com `status === "new"`, chama `supabase.rpc("update_order_status", { p_order_id, p_status: "preparing" })` em background, com guarda em `Set<string>` (uma vez por pedido). Resultado: do ponto de vista do operador, todo pedido novo aparece já como **EM PREPARO** (transição ~1s).
 
-**Base** (valor + ações):
-- Total grande: `R$ XX,XX` em `text-3xl text-primary font-black`.
-- Linha de ações compacta:
-  - Botão ícone **Imprimir** (`Printer`) — chama `manualPrintOrder` (mantém atual).
-  - Botão ícone **Editar** (`Pencil`) — navega para `/palm` (mantém atual).
-  - Botão ícone **Avançar status** (`ChevronRight`) — só aparece se `status !== "done"`; chama `supabase.rpc("update_order_status", { p_order_id, p_status: next })` onde next = `new→preparing→done`. Mostra toast de confirmação.
-  - Botão principal **FECHAR** (gradient brasa, flex-1) — abre `CloseOrder` (mantém atual).
+Sem alterar Palm, banco ou triggers.
 
-### 3. Estados visuais
+### 3. Tempo no status atual
 
-- Card hover: `hover:border-primary/40 hover:shadow-glow transition-all`.
-- Card de pedido **PRONTO** (`status === "done"`): borda esquerda destacada `border-l-4 border-l-success` para ganhar atenção do operador.
-- Card com falha de impressão: borda esquerda `border-l-4 border-l-destructive`.
-- Tap no corpo do card (área não-botão) → seleciona e abre `CloseOrder` (mesmo destino do FECHAR), reduzindo cliques.
+A coluna `orders.updated_at` já é renovada pela RPC `update_order_status` e por inserts. Usar **`updated_at`** como referência do "tempo na etapa":
 
-### 4. Dados extras necessários
+- Hook existente `useElapsedTime(order.updated_at)` no chip principal do bloco.
+- Label adapta-se ao status: "há 5min aguardando" / "há 8min em preparo" / "há 2min pronto".
+- Ao avançar status, a RPC atualiza `updated_at` → cronômetro reinicia automaticamente.
 
-Adicionar **uma query única** para contar itens por pedido sem alterar schema:
-```ts
-const { data: itemCounts } = useQuery({
-  queryKey: ["cashier-item-counts", orders.map(o => o.id)],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from("order_items")
-      .select("order_id, quantity")
-      .in("order_id", orders.map(o => o.id));
-    // reduce → Map<order_id, totalQty>
-  },
-  enabled: orders.length > 0,
-});
+### 4. Refatorar `OrderRow.tsx` para "bloco operacional"
+
+Layout do bloco (compacto, ~180px altura mínima):
+
+```text
+┌─────────────────────────────┐
+│ MESA 7        [EM PREPARO]  │  topo
+│               [✓ Impresso]  │
+├─────────────────────────────┤
+│ 👤 João  ·  📦 4 itens      │  meio
+│ ⏱ há 8min em preparo        │
+├─────────────────────────────┤
+│ R$ 87,50                    │  base
+│ [✅ MARCAR PRONTO] [🖨][✎]  │
+└─────────────────────────────┘
 ```
-Atualiza junto do `refetchInterval: 5000` existente.
 
-### 5. Responsividade
+**Botão de avançar status (1 clique, no bloco):**
+- `new` → "▶ INICIAR PREPARO" (transitório; auto-promovido)
+- `preparing` → "✅ MARCAR PRONTO" (CTA verde)
+- `done` no PDV → "💰 FECHAR" (abre painel/Caixa)
+- Chama `supabase.rpc("update_order_status", ...)` + invalida query.
+- `e.stopPropagation()` para não conflitar com clique de seleção do bloco.
 
-- 320–639px: 1 coluna.
+**Borda lateral (urgência sobre etapa atual, baseada em `updated_at`):**
+- normal: `border-l-transparent`
+- alerta (>10min mesma etapa): `border-l-warning`
+- crítico (>25min mesma etapa): `border-l-destructive` + `animate-pulse-active`
+- Selecionado: `border-primary bg-primary/10` (mantido).
+
+### 5. PDV (`src/pages/Pdv.tsx`) — fila vira grid uniforme
+
+- Grid: `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr`.
+- `OrderRow` recebe novas props: `onAdvance(order)` e `statusSince` (= `order.updated_at`).
+- Handler `handleAdvance` chama RPC + invalida `pdv-orders`.
+- Painel direito de detalhes/pagamento: **inalterado**.
+- `useEffect` de auto-promoção `new → preparing` (item 2).
+
+### 6. Caixa (`src/pages/Cashier.tsx`)
+
+- `OrderCard` interno usa `useElapsedTime(order.updated_at)` para o cronômetro principal.
+- Trocar label `NOVO` → `AGUARDANDO`.
+- Botão de avançar vira CTA principal quando `status !== "done"` ("✅ MARCAR PRONTO" / "▶ INICIAR PREPARO"); "💰 FECHAR" continua como CTA quando `done`.
+- Grid mantido em `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr`.
+
+### 7. Responsividade
+
+- < 640px: 1 coluna, blocos `min-h-[180px]`.
 - 640–1023px: 2 colunas.
 - 1024–1279px: 3 colunas.
-- ≥1280px: 4 colunas.
-- `gap-4` (16px) com `p-4` no container.
+- ≥ 1280px: 4 colunas.
+- Painel direito do PDV continua como sidebar `lg:` (sem mudança).
 
-### 6. Comportamento preservado
+### Arquivos afetados (3)
 
-- ✅ Realtime: `refetchInterval: 5000` mantido (e Realtime de `usePdvRealtime` não é usado aqui — Caixa usa polling, igual antes).
-- ✅ Pagamento: `CloseOrder` + RPC `pay_order` intactos.
-- ✅ Impressão: `manualPrintOrder` intacto.
-- ✅ Edição: navegação `/palm?orderId=...` intacta.
-- ✅ Tema dark + paleta atual (laranja brasa).
-
-### Arquivos afetados (1)
-
-- `src/pages/Cashier.tsx` — refatoração visual + nova query de contagem de itens + handler de avanço de status.
+- `src/components/pdv/OrderRow.tsx` — refatorar para bloco operacional, props `onAdvance`/`statusSince`, botão de avançar status, cronômetro em `updated_at`, label `AGUARDANDO`, borda por urgência da etapa.
+- `src/pages/Pdv.tsx` — ajustar grid (auto-rows-fr + breakpoints), passar `onAdvance`/`statusSince` ao `OrderRow`, `useEffect` de auto-promoção, handler `handleAdvance`.
+- `src/pages/Cashier.tsx` — `OrderCard` usa `updated_at` para tempo, label `AGUARDANDO`, botão avançar como CTA principal pré-pagamento.
 
 ### Sem alterações
-- Banco, RPCs, edge functions, `CloseOrder.tsx`, `print-service.ts`, `usePdvRealtime`, fluxo Palm.
+- Banco, schema, RPCs (`update_order_status`, `pay_order`, `create_order_*`).
+- Realtime (`usePdvRealtime`), polling do Caixa (`refetchInterval: 5000`).
+- Impressão (`manualPrintOrder`), pagamento (`CloseOrder`, painel direito do PDV), Palm.
 - Sem dependências novas.
 
 ### Resultado esperado
 
-Painel de mesas em grid 1/2/3/4 colunas; cada card mostra **mesa, status (NOVO/PREPARO/PRONTO), itens, garçom, tempo decorrido, valor em destaque e impressão**; ações rápidas (imprimir, editar, avançar status, fechar) embutidas no card; tap no corpo abre o fechamento. Pagamento, impressão e atualização em tempo real continuam funcionando exatamente como antes.
+PDV e Caixa exibem a fila como **grid de blocos compactos** (1/2/3/4 colunas), cada bloco mostrando **mesa, garçom, itens, valor, status (AGUARDANDO/EM PREPARO/PRONTO) e tempo na etapa atual**. Status muda **com 1 clique no próprio bloco**. Pedidos novos viram **EM PREPARO** automaticamente. Cronômetro reinicia ao trocar de etapa. Pagamento, impressão, realtime e seleção continuam funcionando exatamente como antes.
 
