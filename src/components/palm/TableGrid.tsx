@@ -7,6 +7,8 @@ import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { RecentItemsList } from "@/components/home/RecentItemsPanel";
 
 interface TableGridProps {
   onSelectTable: (tableName: string, existingOrderId?: string) => void;
