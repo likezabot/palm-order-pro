@@ -1,61 +1,116 @@
 
 
-## Fixes de estabilidade — Realtime, localStorage e forwardRef
+## Fallback de impressão — fila local com retry automático
 
-Aplicar 3 correções de estabilidade identificadas na auditoria, **sem tocar** no fluxo de impressão (bridge `.exe`, `print-service.ts`, `thermal-printer.ts`, `print-station`, `lp-bridge.js`, `BRIDGE_INSTRUCTIONS.md`).
+Adicionar uma camada de resiliência ao pipeline de impressão: quando o bridge `.exe` falhar, o pedido vai para uma **fila local em IndexedDB**, e um worker tenta reimprimir periodicamente até o bridge voltar.
 
-### 1. Realtime — nomes de canal únicos por aba
+### Arquitetura
 
-**Problema:** canais com nome fixo (`pdv-realtime-v3`, `kitchen-realtime`, etc.) causam `CHANNEL_ERROR` quando o mesmo dispositivo abre 2+ abas/PWAs.
+```
+autoPrintOrder/Delta → tenta bridge
+                       ├── sucesso → complete_order_print + remove da fila
+                       └── falha   → fail_order_print + ENFILEIRA em IndexedDB
+                                       ↓
+                           PrintQueueWorker (a cada 15s)
+                                       ↓
+                           pingBridge() OK? → reprocessa fila (FIFO)
+```
 
-**Fix:** sufixar com `crypto.randomUUID()` na criação do canal — Supabase passa a tratar cada aba como cliente independente.
+### 1. Nova lib: `src/lib/print-queue.ts`
 
-Arquivos:
-- `src/hooks/use-pdv-realtime.ts` → `pdv-realtime-v3` → `pdv-realtime-${uuid}`
-- `src/pages/Kitchen.tsx` → `kitchen-realtime` → `kitchen-realtime-${uuid}`
-- `src/pages/PrintStation.tsx` → idem se houver canal fixo
-- `src/pages/Palm.tsx` → idem se houver canal fixo
+Fila persistente em **IndexedDB** (sobrevive a reload, fechamento de aba, queda de energia). Não usa localStorage para evitar limite de 5MB e bloqueio síncrono.
 
-Sem mudança em handlers, eventos, queries ou lógica de auto-print.
+API:
+- `enqueuePrintJob(job)` — adiciona à fila
+- `getPrintQueue()` — lista jobs pendentes
+- `removePrintJob(id)` — remove após sucesso
+- `incrementAttempts(id, error)` — registra falha
+- `clearPrintQueue()` — limpa tudo (admin)
 
-### 2. `force-update.ts` — preservar configs locais
+Schema do job:
+```ts
+{
+  id: string;             // uuid local
+  orderId: string;
+  tableName: string;
+  payload: ReceiptPayload; // o HTML/comandos já renderizados
+  printType: 'full' | 'delta' | 'bill';
+  attempts: number;
+  lastError?: string;
+  createdAt: number;
+  lastAttemptAt?: number;
+}
+```
 
-**Problema:** `localStorage.clear()` (ou remoção agressiva) apaga `waiter_name`, `print-config`, `autoprint`, favoritos, configs do bridge etc.
+DB: `print-queue-db` v1, store `jobs` keyPath `id`, índice por `createdAt`.
 
-**Fix:** trocar para remoção seletiva apenas das chaves de versão/anti-loop:
-- `app_version`
-- `app_last_reload_ts`
-- (mantém `sessionStorage.clear()` — é seguro)
+### 2. Atualizar `src/lib/print-service.ts`
 
-Preserva 100% das configs do PDV/Palm/bridge. Arquivo: `src/lib/force-update.ts`.
+Nos pontos onde hoje chama `fail_order_print` por erro de bridge, **antes** disso enfileira o job. Idempotente: se já existe job para `orderId+printType`, atualiza em vez de duplicar.
 
-### 3. `OrderRow.tsx` — corrigir warning de `forwardRef`
+```ts
+catch (err) {
+  await enqueuePrintJob({ orderId, tableName, payload, printType });
+  await supabase.rpc('fail_order_print', { p_order_id: orderId, p_error: err.message });
+  return { printed: false, reason: 'bridge_offline_queued' };
+}
+```
 
-**Problema:** componentes filhos do Radix (`Tooltip`/`Button`) recebem `ref` mas o `OrderRow` é função simples → warning "Function components cannot be given refs".
+### 3. Worker: `src/lib/print-queue-worker.ts`
 
-**Fix:** envolver `OrderRow` em `React.forwardRef<HTMLDivElement, OrderRowProps>(...)` e encaminhar `ref` ao container raiz. Sem mudança visual nem de comportamento.
+Singleton iniciado uma vez no `main.tsx`. Loop com `setInterval(15_000)`:
 
-### Garantias (não muda nada do .exe)
+1. Se fila vazia → `idle`.
+2. `pingBridge()` (HEAD/GET no `lp-bridge` em `localhost:porta/health`).
+3. Bridge offline → não tenta, marca `lastAttemptAt`.
+4. Bridge online → para cada job (FIFO, max 3 por ciclo):
+   - Reenvia via `thermal-printer.printRaw(payload)`.
+   - Sucesso → `complete_order_print(orderId)` + `removePrintJob(id)`.
+   - Falha → `incrementAttempts(id, err)`. Após 10 tentativas, marca como `dead` (mantém no histórico, não tenta mais).
+5. Backoff exponencial leve: jobs com >3 tentativas só reprocessam após 1min.
 
-- Bridge USB (`bridge/lp-bridge.js`, `start-bridge.bat`): **intocado**.
-- `src/lib/print-service.ts`, `print-receipt.ts`, `thermal-printer.ts`, `receipt-html.ts`, `receipt-layout.ts`, `print-iframe.ts`, `reprint-senha.ts`: **intocados**.
-- Página `PrintStation.tsx`: só ajuste de nome de canal (se aplicável); handlers de impressão preservados.
-- Auto-print do PDV (`autoPrintOrder` / `autoPrintDelta` em `usePdvRealtime`): preservado — apenas o nome do canal muda.
-- RPCs `claim_order_print` / `complete_order_print` / `fail_order_print`: **intocadas**.
+Pausa o worker quando `document.hidden` para não consumir bateria/CPU em background.
 
-### Arquivos afetados (4-5)
+### 4. UI: status da fila no `PrintStation.tsx`
 
-- `src/hooks/use-pdv-realtime.ts`
-- `src/pages/Kitchen.tsx`
-- `src/pages/PrintStation.tsx` (se tiver canal fixo)
-- `src/pages/Palm.tsx` (se tiver canal fixo)
-- `src/lib/force-update.ts`
-- `src/components/pdv/OrderRow.tsx`
+Adicionar um painel pequeno no topo:
+- Badge "Fila: 0" (verde) / "Fila: N" (warning) / "Fila: N (offline)" (destructive).
+- Botão "Reprocessar agora" → força `worker.tick()`.
+- Botão "Limpar fila" (com confirm) → `clearPrintQueue()`.
+- Lista expansível com jobs (mesa, tipo, tentativas, último erro).
+
+Hook novo: `src/hooks/use-print-queue.ts` — escuta mudanças via `BroadcastChannel('print-queue')` que o worker emite a cada operação.
+
+### 5. Notificação ao usuário
+
+No PDV, quando `autoPrintOrder` retornar `bridge_offline_queued`:
+- Toast warning: "Bridge offline — pedido enfileirado (Mesa X). Reprocessará automaticamente."
+- Não bloqueia fluxo.
+
+### 6. Garantias
+
+- **Bridge `.exe` intocado** — só consumimos o endpoint que já existe.
+- **RPCs intocadas** — só usamos `fail_order_print` / `complete_order_print` que já existem.
+- **Realtime intocado**.
+- **Idempotência**: dedupe por `orderId+printType`. Reimpressões duplicadas são impossíveis porque `complete_order_print` só fecha quando `print_status = 'printing'`.
+- **Sem migração de banco** — fila é 100% client-side.
+
+### Arquivos novos
+- `src/lib/print-queue.ts`
+- `src/lib/print-queue-worker.ts`
+- `src/hooks/use-print-queue.ts`
+
+### Arquivos modificados
+- `src/lib/print-service.ts` — enfileira em catch
+- `src/main.tsx` — inicia worker
+- `src/pages/PrintStation.tsx` — UI da fila
+- `src/hooks/use-pdv-realtime.ts` — toast quando `reason === 'bridge_offline_queued'`
 
 ### Resultado esperado
 
-- Múltiplas abas/PWAs do PDV no mesmo dispositivo deixam de derrubar o Realtime.
-- Botão "Forçar atualização" não apaga mais nome do garçom, configs de impressora ou autoprint.
-- Console limpo do warning de `forwardRef` no PDV.
-- Bridge `.exe` e todo o pipeline de impressão seguem **idênticos** ao atual.
+- Bridge cai → pedido vai pra fila, operador vê toast.
+- Bridge volta → fila esvazia sozinha em até 15s, sem clique.
+- Recarregar página/fechar aba **não perde** jobs (IndexedDB persiste).
+- PrintStation mostra status real-time da fila.
+- Zero impacto em pedidos quando bridge está saudável.
 
