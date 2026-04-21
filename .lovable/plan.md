@@ -1,50 +1,49 @@
 
 
-## Navegação instantânea + cache offline persistente
+## Limpeza dos dados de hoje + mover "Últimos lançamentos" para o Palm
 
-### Problema
-- React Query mantém cache em memória (já com `networkMode: "offlineFirst"`), mas ao recarregar/perder rede o cache evapora.
-- Service Worker atual (`public/sw.js`) faz **network-first** em tudo same-origin → chamadas ao Supabase nem passam por ele (cross-origin), e nada de dados fica disponível offline.
-- Ao voltar do Menu para a TableGrid, o componente remonta e re-fetcha, então mesmo com cache em memória pode haver flash. Precisamos: (a) cache **persistente** entre reloads, (b) responder offline com último valor conhecido.
+### Parte 1 — Limpar dados de hoje (sem afetar estatísticas)
 
-### Solução
+**Estado atual no banco**
+- 23 pedidos criados hoje (16 pagos, 7 ativos).
+- Estatísticas históricas devem ficar intactas — só queremos zerar o "dia".
 
-**1. Persistir cache do React Query em IndexedDB**
-- Adicionar `@tanstack/react-query-persist-client` + `@tanstack/query-async-storage-persister` + `idb-keyval`.
-- Em `App.tsx`, trocar `QueryClientProvider` por `PersistQueryClientProvider` com persister IndexedDB.
-- Configuração: `maxAge: 24h`, `buster` = build stamp (invalida cache em deploy novo), persistir só queries com `["active-orders"]`, `["table-count"]`, `["products"]`, `["menu"]` (whitelist via `dehydrateOptions.shouldDehydrateQuery`).
-- Resultado: ao abrir o app/voltar à grade, dados aparecem **instantâneos do disco**, e o refetch acontece em background.
+**Estratégia: hard delete dos pedidos de hoje**
+Como as estatísticas (StatsPanel/admin) são calculadas **a partir de `orders.created_at`**, "não entrar na conta" = remover esses pedidos de hoje completamente. Não há tabela separada de histórico/estatísticas — tudo é derivado. Então:
 
-**2. Cache de respostas Supabase REST no Service Worker (stale-while-revalidate)**
-- Atualizar `public/sw.js` para interceptar requisições GET para `*.supabase.co/rest/v1/*` com estratégia **stale-while-revalidate**:
-  - Responder do cache imediatamente (se houver).
-  - Disparar fetch em paralelo e atualizar o cache.
-- Isso cobre o caso de "offline real" (sem rede): a query do React Query recebe a última resposta do Supabase via SW, e a UI continua funcional.
-- Manter POST/PATCH/DELETE intocados (passam direto, nunca cacheados).
-- Não cachear `/auth/*` nem realtime websockets.
+- Migração SQL one-shot que apaga:
+  - `order_items` cujos `order_id` pertencem a pedidos com `created_at::date = CURRENT_DATE` (timezone do servidor).
+  - `orders` com `created_at::date = CURRENT_DATE` (todos os status: new, preparing, done, paid).
+  - `cash_movements` criados hoje (pra não ter saldo "fantasma" no caixa do dia).
+  - `cash_register` aberto hoje volta ao estado limpo (fecha registros abertos de hoje).
+- Não toca em `products`, `profiles`, `settings`, `stock_movements`.
+- Não toca em pedidos de dias anteriores (estatísticas históricas preservadas).
 
-**3. Bump de versão do cache**
-- `CACHE_NAME` continua usando `BUILD_STAMP` — limpa cache antigo automaticamente em cada deploy.
-- Adicionar segundo cache `plano-b-api-${BUILD_STAMP}` para respostas Supabase, separado dos assets.
+A migração roda **uma vez** no momento da aprovação. Não fica no app como botão recorrente.
 
-**4. TableGrid: usar `placeholderData` + `keepPreviousData`**
-- Em `useQuery(["active-orders"])`, adicionar `placeholderData: (prev) => prev` para evitar flash de loading entre montagens dentro da mesma sessão.
-- Já temos cache otimista (do plano anterior) — agora soma-se cache persistente em disco.
+### Parte 2 — Mover "Últimos lançamentos" para o Palm
+
+**Local atual**: `RecentItemsPanel` aparece em `src/pages/Index.tsx` (Home).
+**Novo local**: Dentro da `TableGrid` (Palm), no header — um **ícone de relógio discreto** ao lado do botão "NOVO PEDIDO" (BALCÃO).
+
+**Mudanças**
+- **`src/pages/Index.tsx`**: remove `<RecentItemsPanel />` e seu import.
+- **`src/components/palm/TableGrid.tsx`**:
+  - Importar `Clock` (já importado) e o `RecentItemsPanel`.
+  - Adicionar pequeno botão ícone-only `Clock` (24×24, `text-muted-foreground`, sem borda) **inline ao lado direito** do título "BALCÃO" no header da seção (linha 271-274), ou acima do botão "NOVO PEDIDO".
+  - Clicar abre um **Sheet/Drawer** (lateral ou bottom sheet) com o `RecentItemsPanel` embutido, sem ocupar espaço fixo da tela.
+- **`RecentItemsPanel`**: mínima refatoração — atualmente é um `Collapsible` com botão próprio. Vamos extrair o **conteúdo da lista** (a parte do `fetchItems` + render) e usar dentro do Sheet, sem o trigger expansível duplicado. Mantém o componente original funcionando (caso queira reusar) mas exporta também `<RecentItemsList />`.
+
+**Por que Sheet e não inline**: o Palm já é denso (header + balcão + grid de mesas). Um painel expansível inline empurraria a grade pra baixo. Sheet abre por cima, fecha rápido — combina com "discreto".
 
 ### Arquivos
-- **Editado** `package.json` — adicionar `@tanstack/react-query-persist-client`, `@tanstack/query-async-storage-persister`, `idb-keyval`.
-- **Editado** `src/App.tsx` — trocar provider por `PersistQueryClientProvider`, configurar persister IndexedDB com whitelist de queries e buster por build.
-- **Editado** `public/sw.js` — adicionar handler stale-while-revalidate para Supabase REST, cache `plano-b-api-*` separado.
-- **Editado** `src/components/palm/TableGrid.tsx` — adicionar `placeholderData: (prev) => prev` na query de `active-orders`.
-
-### Observações técnicas
-- O SW só roda em produção (já filtrado em `main.tsx` para preview/iframe) — então o stale-while-revalidate não atrapalha o editor.
-- IndexedDB persiste mesmo sem SW, então o cache de queries funciona também no preview.
-- `buster` = `__APP_VERSION__` (já injetado pelo Vite) garante que após deploy o cache antigo é descartado.
-- Realtime continua sobrescrevendo dados frescos por cima do cache persistido — sem risco de mostrar dados velhos por muito tempo quando online.
+- **Migração SQL** (criada e executada uma vez): apaga pedidos/items/movimentos de hoje.
+- **Editado** `src/pages/Index.tsx` — remove `RecentItemsPanel`.
+- **Editado** `src/components/home/RecentItemsPanel.tsx` — exporta `RecentItemsList` (só o conteúdo) além do componente atual.
+- **Editado** `src/components/palm/TableGrid.tsx` — adiciona ícone `Clock` discreto ao lado do "BALCÃO" + Sheet com a lista.
 
 ### Resultado
-- Voltar do Menu para a TableGrid: dados aparecem **no mesmo frame**, sem skeleton/loading.
-- Recarregar a aba offline: app abre com último estado conhecido em vez de tela em branco.
-- Conexão volta: realtime + refetch em background atualizam silenciosamente.
+- Dia "zerado": grade do Palm vazia, sem pedidos pendentes, sem movimentos de caixa de hoje. Estatísticas dos dias anteriores intactas.
+- Home mais limpa (sem o painel de lançamentos).
+- No Palm, o garçom toca no relógio discreto ao lado de "BALCÃO" → abre painel lateral com os últimos lançamentos.
 
