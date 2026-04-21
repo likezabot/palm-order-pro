@@ -1,3 +1,4 @@
+// DEPRECATED: o PDV agora usa um grid único de OrderRow. Mantido para compatibilidade.
 import type { Order } from "@/lib/types";
 import { OrderRow } from "./OrderRow";
 
