@@ -341,6 +341,13 @@ const Cashier = () => {
           </div>
         )}
       </div>
+
+      <PrintChoiceDialog
+        order={printOrder}
+        open={!!printOrder}
+        onOpenChange={(o) => { if (!o) setPrintOrder(null); }}
+        onChoose={handlePrintChoice}
+      />
     </div>
   );
 };
