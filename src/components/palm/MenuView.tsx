@@ -151,7 +151,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 bg-background border-b border-border p-2.5">
+      <div className="shrink-0 bg-background border-b border-border p-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))]">
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <button
             onClick={() => {
