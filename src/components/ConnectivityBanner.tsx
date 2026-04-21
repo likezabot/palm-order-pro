@@ -1,84 +1,105 @@
-import { useMemo } from "react";
-import { Wifi, WifiOff, AlertTriangle, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Wifi, WifiOff, WifiLow, Loader2 } from "lucide-react";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { forceConnectivityCheck } from "@/lib/connectivity-monitor";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
+import { debugLog } from "@/lib/debug-logger";
 
 /**
- * Banner sutil no topo. Só renderiza quando há problema.
- * Auto-dismiss quando tudo voltar.
+ * Indicador discreto de conectividade (canto inferior esquerdo).
+ * - Verde: tudo OK → ícone esmaece (quase invisível)
+ * - Amarelo: realtime/backend instável → reconnect automático em background
+ * - Vermelho: sem internet
+ * Click → força reconexão manual.
  */
+
+function tryReconnectRealtime() {
+  try {
+    const rt = (supabase as unknown as { realtime?: { disconnect?: () => void; connect?: () => void } }).realtime;
+    rt?.disconnect?.();
+    rt?.connect?.();
+    debugLog.info("realtime", "auto-reconnect disparado");
+  } catch {
+    /* noop */
+  }
+}
+
 export default function ConnectivityBanner() {
   const conn = useConnectivity();
+  const [reconnecting, setReconnecting] = useState(false);
+  const lastAutoRef = useRef(0);
 
-  const view = useMemo(() => {
-    if (conn.isOffline) {
-      return {
-        tone: "destructive" as const,
-        icon: <WifiOff className="h-4 w-4" />,
-        title: "Sem internet",
-        desc: "Trabalhando offline. Pedidos serão sincronizados ao reconectar.",
-      };
-    }
-    if (conn.realtime === "offline" || conn.realtime === "degraded") {
-      return {
-        tone: "warning" as const,
-        icon: <AlertTriangle className="h-4 w-4" />,
-        title: "Atualizações em tempo real instáveis",
-        desc: "Recarregando dados periodicamente como fallback.",
-      };
-    }
-    if (conn.backend === "offline") {
-      return {
-        tone: "warning" as const,
-        icon: <AlertTriangle className="h-4 w-4" />,
-        title: "Conexão com servidor degradada",
-        desc: "Algumas ações podem demorar mais que o normal.",
-      };
-    }
-    return null;
-  }, [conn]);
+  // Auto-reconnect com backoff: tenta a cada 15s enquanto degradado/offline-realtime
+  // (se internet estiver OK).
+  useEffect(() => {
+    if (conn.isOffline) return; // sem internet, não adianta tentar
+    const needsReconnect =
+      conn.realtime === "degraded" ||
+      conn.realtime === "offline" ||
+      conn.backend === "offline";
+    if (!needsReconnect) return;
 
-  if (!view || conn.isFullyOnline) return null;
-
-  const handleReconnect = async () => {
-    // Força reconnect dos canais Realtime e re-checa pings.
-    try {
-      const rt = (supabase as unknown as { realtime?: { disconnect?: () => void; connect?: () => void } }).realtime;
-      rt?.disconnect?.();
-      rt?.connect?.();
-    } catch {
-      /* noop */
+    const now = Date.now();
+    if (now - lastAutoRef.current > 15_000) {
+      lastAutoRef.current = now;
+      setReconnecting(true);
+      tryReconnectRealtime();
+      forceConnectivityCheck().finally(() => {
+        setTimeout(() => setReconnecting(false), 1200);
+      });
     }
+
+    const id = setInterval(() => {
+      lastAutoRef.current = Date.now();
+      setReconnecting(true);
+      tryReconnectRealtime();
+      forceConnectivityCheck().finally(() => {
+        setTimeout(() => setReconnecting(false), 1200);
+      });
+    }, 15_000);
+
+    return () => clearInterval(id);
+  }, [conn.isOffline, conn.realtime, conn.backend]);
+
+  // Decide aparência
+  let Icon = Wifi;
+  let tone = "text-muted-foreground/40"; // quase invisível quando OK
+  let title = "Conexão estável";
+
+  if (conn.isOffline) {
+    Icon = WifiOff;
+    tone = "text-destructive";
+    title = "Sem internet — trabalhando offline";
+  } else if (conn.realtime === "offline" || conn.backend === "offline") {
+    Icon = WifiLow;
+    tone = "text-warning";
+    title = "Conexão instável — reconectando automaticamente";
+  } else if (conn.realtime === "degraded") {
+    Icon = WifiLow;
+    tone = "text-warning/80";
+    title = "Tempo real instável — reconectando";
+  }
+
+  const handleClick = async () => {
+    setReconnecting(true);
+    tryReconnectRealtime();
     await forceConnectivityCheck();
+    setTimeout(() => setReconnecting(false), 1200);
   };
 
-  const bg =
-    view.tone === "destructive"
-      ? "bg-destructive text-destructive-foreground"
-      : "bg-warning text-warning-foreground";
-
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={`${bg} px-3 py-2 text-sm flex items-center gap-3 sticky top-0 z-50 shadow-md`}
+    <button
+      type="button"
+      onClick={handleClick}
+      title={`${title} (clique para reconectar)`}
+      aria-label={title}
+      className="fixed bottom-2 left-2 z-50 inline-flex items-center justify-center h-7 w-7 rounded-full bg-background/70 backdrop-blur-sm border border-border/50 hover:bg-background transition shadow-sm"
     >
-      <span className="shrink-0">{view.icon}</span>
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold leading-tight truncate">{view.title}</div>
-        <div className="text-xs opacity-90 truncate">{view.desc}</div>
-      </div>
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={handleReconnect}
-        className="shrink-0 h-8"
-      >
-        <RefreshCw className="h-3.5 w-3.5 mr-1" />
-        Reconectar
-      </Button>
-    </div>
+      {reconnecting ? (
+        <Loader2 className={`h-3.5 w-3.5 animate-spin ${tone}`} />
+      ) : (
+        <Icon className={`h-3.5 w-3.5 ${tone}`} />
+      )}
+    </button>
   );
 }
