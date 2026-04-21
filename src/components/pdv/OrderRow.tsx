@@ -4,6 +4,18 @@ import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
 import type { Order } from "@/lib/types";
 
+const STATUS_LABEL: Record<string, string> = {
+  new: "NOVO",
+  preparing: "EM PREPARO",
+  done: "PRONTO",
+};
+
+const STATUS_CHIP: Record<string, string> = {
+  new: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  preparing: "bg-warning/15 text-warning border-warning/30",
+  done: "bg-success/15 text-success border-success/30",
+};
+
 interface OrderRowProps {
   order: Order;
   itemCount: number;
