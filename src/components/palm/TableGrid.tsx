@@ -7,6 +7,8 @@ import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { RecentItemsList } from "@/components/home/RecentItemsPanel";
 
 interface TableGridProps {
   onSelectTable: (tableName: string, existingOrderId?: string) => void;
@@ -271,6 +273,29 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
             <div className="flex items-center gap-2 mb-3">
               <Store size={18} className="text-primary" />
               <h2 className="text-lg font-bold">BALCÃO</h2>
+              <Sheet>
+                <SheetTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => playFeedback("click")}
+                    aria-label="Últimos lançamentos"
+                    className="ml-auto p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/60 active:scale-95 transition-all"
+                  >
+                    <Clock size={18} />
+                  </button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[88vw] sm:max-w-sm overflow-y-auto">
+                  <SheetHeader>
+                    <SheetTitle className="flex items-center gap-2">
+                      <Clock size={18} className="text-primary" />
+                      Últimos lançamentos
+                    </SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-4">
+                    <RecentItemsList />
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
 
             <button
