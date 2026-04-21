@@ -1,34 +1,39 @@
 
 
-## Compactar lista do carrinho + corrigir itens duplicados
+## Aba "Últimos lançamentos" na Home
 
-Dois ajustes na tela de revisão da Mesa (OrderReview):
+Adicionar uma seção visual logo abaixo dos botões de modo na tela inicial (`/`) mostrando os itens mais recentes que foram lançados em qualquer pedido aberto, com garçom e tempo decorrido. Apenas leitura, sem afetar o fluxo do POS.
 
-### 1. Espaçamento menor entre os itens
-Atualmente cada `CartItemRow` é um cartão com `p-4` (16px interno) e a lista usa `gap-3` (12px) + `p-3` no container. Visualmente "respira demais" — usuário quer compacto.
+### Comportamento
 
-Mudanças em `src/components/palm/OrderReview.tsx`:
-- Container da lista: `gap-3 p-3` → `gap-2 p-2`
+- **Onde**: nova seção colapsável (fechada por padrão) na home, abaixo dos cards de instalação.
+- **Cabeçalho** "Últimos lançamentos" + ícone de relógio. Toca para expandir/recolher.
+- **O que mostra**: últimos **30 itens** (linhas de `order_items`) inseridos em pedidos com status `new`, `preparing` ou `done` (mesas abertas).
+- **Cada linha exibe**:
+  - `2x Bovino` (qtd + nome)
+  - Mesa de origem (ex: `Mesa 5` ou `BALCÃO`) em badge pequeno
+  - Garçom (`por Wilson`) em texto cinza
+  - Tempo decorrido (`5min`, `1h12`) à direita, usando o hook `useElapsedTime` que já existe
+- **Atualização**: refetch a cada 15s via `setInterval` enquanto a seção está aberta. Sem realtime/subscriptions para manter leve.
+- **Estado vazio**: "Nenhum pedido em andamento."
 
-Mudanças em `src/components/palm/CartItemRow.tsx`:
-- Card: `p-4` → `p-2.5`
-- `mt-2` do input observação → `mt-1.5`
-- `mt-2` do botão REMOVER → `mt-1.5`
-- Tag "POR JACIR": `mt-1` → `mt-0.5`
+### Limitação técnica conhecida
 
-Resultado: cada card fica ~30% mais baixo, lista comprimida, ainda touch-friendly (botões +/- continuam 36px).
+A tabela `order_items` **não tem `created_at`**. Para ordenar por "mais recente" usaremos o `updated_at` do pedido pai como aproximação:
 
-### 2. Bug: mesmo produto/garçom aparecendo em linhas separadas
-Nas screenshots vejo "Bovino POR JACIR" + "Skol POR JACIR" + "Bovino POR JACIR" como 3 cards distintos, quando deveria ser 2 cards (Bovino x2, Skol x1). A dedupe no `loadOrder` falha quando os `waiter_name` vêm normalizados diferente (ex.: `"Jacir"` vs `"jacir"` vs `null`).
+1. Buscar últimos 20 pedidos ativos ordenados por `updated_at desc`.
+2. Para cada um, puxar seus `order_items` (já vêm em uma única query com `select=...,order_items(*)`).
+3. Achatar tudo em uma lista linear, mostrar os 30 primeiros itens (pedido mais recente primeiro, depois itens dentro do pedido na ordem que vieram).
+4. O "tempo decorrido" exibido é o do **pedido**, não do item individual — isso é aceito pois batch de itens chega junto e não há timestamp por item.
 
-Correção em `src/hooks/use-palm-cart.ts`, função `loadOrder`:
-- Normalizar a chave de dedupe usando `(waiter_name || "").trim().toUpperCase()` para que variações de caixa/espaço/null não criem entradas separadas.
-- Mesma normalização precisa ser aplicada na key do React em `OrderReview` (`key={...}`) para evitar warning de keys duplicadas.
+Isso é mencionado em uma nota visual discreta? Não — fica transparente para o usuário, comportamento "natural".
 
 ### Arquivos afetados
-- `src/components/palm/OrderReview.tsx` — padding da lista + key normalizada
-- `src/components/palm/CartItemRow.tsx` — padding interno do card
-- `src/hooks/use-palm-cart.ts` — normalização da chave de dedupe no `loadOrder`
 
-Sem mudança de banco. Preserva tag "POR X" quando há garçons diferentes.
+- **Novo**: `src/components/home/RecentItemsPanel.tsx` — componente da seção, fetch + render + expand/collapse com `useState`.
+- **Editado**: `src/pages/Index.tsx` — importar e renderizar `<RecentItemsPanel />` ao final do conteúdo.
+
+Reusa: `useElapsedTime` (já existe), tokens de design já usados na home (`bg-card`, `border-border`, `text-muted-foreground`), `lucide-react` ícones (`Clock`, `ChevronDown`).
+
+Sem mudança de banco. Sem mudança de tipos. Só leitura via `supabase.from('orders').select('id, table_name, waiter_name, updated_at, status, order_items(product_name, quantity, waiter_name)').in('status', ['new','preparing','done']).order('updated_at', { ascending: false }).limit(20)`.
 
