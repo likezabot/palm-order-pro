@@ -206,18 +206,23 @@ export async function autoPrintUpdate(order: {
 
   let success = false;
   let reason = "unknown";
+  let payloadForQueue: Uint8Array | null = null;
+  let queueType: PrintJobType = "full";
 
   try {
+    const cfg = loadPrintConfig();
     if (printType === "bill") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
       success = await printBill(tableValue, order.waiter_name || "N/A", items, order.total || 0);
       reason = success ? "bill_success" : "print_failed";
+      if (!success) { payloadForQueue = buildEscPosBill(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "bill"; }
     } else if (printType === "full") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
       success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
       reason = success ? "full_success" : "print_failed";
+      if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
     } else if (printType === "extra") {
       if (!deltaItems || deltaItems.length === 0) {
         await failPrint(order.id, "no_delta_items");
@@ -225,16 +230,19 @@ export async function autoPrintUpdate(order: {
       }
       success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
       reason = success ? "delta_success" : "print_failed";
+      if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
     } else {
       // Fallback legado
       if (deltaItems && deltaItems.length > 0) {
         success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
         reason = success ? "delta_success" : "print_failed";
+        if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
       } else {
         const items = await fetchAllItems();
         if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
         success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
         reason = success ? "full_fallback" : "print_failed";
+        if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
       }
     }
   } catch (err) {
@@ -245,6 +253,11 @@ export async function autoPrintUpdate(order: {
   if (success) {
     await completePrint(order.id);
   } else {
+    if (payloadForQueue) {
+      await enqueueOnBridgeFailure(order.id, tableValue, queueType, payloadForQueue);
+      await failPrint(order.id, reason);
+      return { printed: false, reason: "bridge_offline_queued" };
+    }
     await failPrint(order.id, reason);
   }
 
