@@ -6,6 +6,17 @@ import { startPrintQueueWorker } from "./lib/print-queue-worker";
 import { debugLog } from "./lib/debug-logger";
 import { startConnectivityMonitor } from "./lib/connectivity-monitor";
 
+// Anti-flash: aplica tema salvo antes do React montar.
+// Default = dark (preserva visual atual).
+try {
+  const t = localStorage.getItem("plano-b-theme");
+  if (t !== "light") {
+    document.documentElement.classList.add("dark");
+  }
+} catch {
+  document.documentElement.classList.add("dark");
+}
+
 debugLog.info(
   "system",
   "Plano B PDV iniciado — use __plbLogs(), __plbLogsText() ou __plbLogsCopy() no DevTools",
