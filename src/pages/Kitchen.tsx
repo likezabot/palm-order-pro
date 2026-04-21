@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import KanbanColumn from "@/components/kitchen/KanbanColumn";
 import { useFeedback } from "@/hooks/use-feedback";
-import TabIdBadge from "@/components/TabIdBadge";
+
 
 const SOUND_KEY = "kitchen-sound-enabled";
 
@@ -105,7 +105,6 @@ const Kitchen = () => {
             <ArrowLeft size={24} />
           </button>
           <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">PAINEL COZINHA</h1>
-          <TabIdBadge />
         </div>
         <button
           onClick={toggleSound}

@@ -2,6 +2,7 @@ import { ArrowLeft, Eye, EyeOff, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import DuplicatesResolver from "@/components/admin/DuplicatesResolver";
 import SettingsDialog from "@/components/admin/SettingsDialog";
+import TabIdBadge from "@/components/TabIdBadge";
 import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
@@ -38,6 +39,7 @@ export const AdminHeader = ({
           <span className="hidden sm:inline">Painel de Controle</span>
           <span className="sm:hidden">Admin</span>
         </h1>
+        <TabIdBadge />
       </div>
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
         <DuplicatesResolver />
