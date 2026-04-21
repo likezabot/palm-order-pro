@@ -1,49 +1,62 @@
 
 
-## Limpeza dos dados de hoje + mover "Últimos lançamentos" para o Palm
+## Sistema lento — reduzir polling redundante e manter Palm fluido
 
-### Parte 1 — Limpar dados de hoje (sem afetar estatísticas)
+### Diagnóstico
+Cada tela tem `refetchInterval` de 5s **somado a Realtime + invalidações otimistas + `refetchOnWindowFocus`**. Resultado: a cada 5s o app dispara 2-4 queries grandes (com joins `order_items`) em paralelo. Em rede mais fraca, isso satura e tudo "engrossa".
 
-**Estado atual no banco**
-- 23 pedidos criados hoje (16 pagos, 7 ativos).
-- Estatísticas históricas devem ficar intactas — só queremos zerar o "dia".
+Lista de timers ativos hoje (visíveis ao mesmo tempo no Palm):
+- `TableGrid["active-orders"]` — refetch 5s + Realtime + tick 30s
+- `RecentItemsPanel` — `setInterval(fetchItems, 15s)` mesmo fechado (lista nova)
+- `connectivity-monitor` — internet 30s, backend 60s, staleness 15s
+- `print-queue-worker` — tick 15s
+- `refetchOnWindowFocus: true` global → cada toggle de aba dispara refetch em todas
 
-**Estratégia: hard delete dos pedidos de hoje**
-Como as estatísticas (StatsPanel/admin) são calculadas **a partir de `orders.created_at`**, "não entrar na conta" = remover esses pedidos de hoje completamente. Não há tabela separada de histórico/estatísticas — tudo é derivado. Então:
+### Mudanças
 
-- Migração SQL one-shot que apaga:
-  - `order_items` cujos `order_id` pertencem a pedidos com `created_at::date = CURRENT_DATE` (timezone do servidor).
-  - `orders` com `created_at::date = CURRENT_DATE` (todos os status: new, preparing, done, paid).
-  - `cash_movements` criados hoje (pra não ter saldo "fantasma" no caixa do dia).
-  - `cash_register` aberto hoje volta ao estado limpo (fecha registros abertos de hoje).
-- Não toca em `products`, `profiles`, `settings`, `stock_movements`.
-- Não toca em pedidos de dias anteriores (estatísticas históricas preservadas).
+**1. Realtime já cobre — derrubar `refetchInterval` redundante**
+- `TableGrid` (`active-orders`): `refetchInterval: 5000` → **`30_000`** (Realtime invalida em <1s; polling vira só rede de segurança).
+- `Kitchen` (orders + items): `5000` → **`15_000`**.
+- `Cashier` (orders + items): `5000` → **`20_000`**.
+- `Admin` (orders): `5000` → **`30_000`**.
+- `DuplicatesResolver`: `5000` → **`20_000`** (raro, não precisa quase-realtime).
+- `Pdv` já está em 10s — manter.
+- `StatsPanel` — manter (30s/60s já é razoável).
 
-A migração roda **uma vez** no momento da aprovação. Não fica no app como botão recorrente.
+**2. RecentItemsPanel: só pollar quando o Sheet está aberto**
+- Hoje o `RecentItemsList` faz `setInterval(fetchItems, 15s)` no mount. Como agora vive dentro do `Sheet`, **só monta quando aberto** — bom. Mas o componente velho `RecentItemsPanel` também ainda existe; manter intacto. Confirmar que `Sheet` desmonta o conteúdo ao fechar (default do Radix) — então o interval some sozinho.
+- Subir intervalo de 15s → **30s** mesmo aberto (o painel é informativo, não crítico).
 
-### Parte 2 — Mover "Últimos lançamentos" para o Palm
+**3. Defaults globais do React Query mais conservadores**
+- `staleTime: 30_000` → **`60_000`** (60s) — reduz refetch em focus dentro do mesmo minuto.
+- `refetchOnWindowFocus: true` → **`"always"` apenas para queries críticas; default `false`**. Mudar para `false` no provider; deixar Realtime cuidar de fresh data.
+- Manter `networkMode: "offlineFirst"` e `placeholderData: prev => prev` que já adicionamos.
 
-**Local atual**: `RecentItemsPanel` aparece em `src/pages/Index.tsx` (Home).
-**Novo local**: Dentro da `TableGrid` (Palm), no header — um **ícone de relógio discreto** ao lado do botão "NOVO PEDIDO" (BALCÃO).
+**4. Connectivity monitor: aliviar pings**
+- `INTERNET_INTERVAL`: 30s → **60s**.
+- `BACKEND_INTERVAL`: 60s → **120s**.
+- `STALENESS_INTERVAL`: 15s → **30s**.
+- Realtime já reporta heartbeats; pings frequentes ao Google e Supabase só pra "saber que tá online" custam round-trips em mobile.
 
-**Mudanças**
-- **`src/pages/Index.tsx`**: remove `<RecentItemsPanel />` e seu import.
-- **`src/components/palm/TableGrid.tsx`**:
-  - Importar `Clock` (já importado) e o `RecentItemsPanel`.
-  - Adicionar pequeno botão ícone-only `Clock` (24×24, `text-muted-foreground`, sem borda) **inline ao lado direito** do título "BALCÃO" no header da seção (linha 271-274), ou acima do botão "NOVO PEDIDO".
-  - Clicar abre um **Sheet/Drawer** (lateral ou bottom sheet) com o `RecentItemsPanel` embutido, sem ocupar espaço fixo da tela.
-- **`RecentItemsPanel`**: mínima refatoração — atualmente é um `Collapsible` com botão próprio. Vamos extrair o **conteúdo da lista** (a parte do `fetchItems` + render) e usar dentro do Sheet, sem o trigger expansível duplicado. Mantém o componente original funcionando (caso queira reusar) mas exporta também `<RecentItemsList />`.
-
-**Por que Sheet e não inline**: o Palm já é denso (header + balcão + grid de mesas). Um painel expansível inline empurraria a grade pra baixo. Sheet abre por cima, fecha rápido — combina com "discreto".
+**5. Tela verde "PEDIDO ENVIADO" — manter rápida (~1s) como o usuário pediu**
+- Hoje, para mesa (`!shouldShowBadge`), reset é em `requestAnimationFrame` (instantâneo demais — quase pisca).
+- Mudar para **800ms** com `setTimeout`: dá tempo de ver o checkmark animado, sentir feedback de fluidez, e voltar pra grade. O cache otimista garante que a grade já vem com a mesa vermelha.
+- Para badge (BALCÃO + impressão), **não mexer** (mantém 1500/2500/9000ms conforme estado).
 
 ### Arquivos
-- **Migração SQL** (criada e executada uma vez): apaga pedidos/items/movimentos de hoje.
-- **Editado** `src/pages/Index.tsx` — remove `RecentItemsPanel`.
-- **Editado** `src/components/home/RecentItemsPanel.tsx` — exporta `RecentItemsList` (só o conteúdo) além do componente atual.
-- **Editado** `src/components/palm/TableGrid.tsx` — adiciona ícone `Clock` discreto ao lado do "BALCÃO" + Sheet com a lista.
+- `src/App.tsx` — `staleTime: 60_000`, `refetchOnWindowFocus: false`.
+- `src/components/palm/TableGrid.tsx` — `refetchInterval: 30_000`.
+- `src/pages/Kitchen.tsx` — `5000` → `15_000` nas duas queries.
+- `src/pages/Cashier.tsx` — `5000` → `20_000` nas duas.
+- `src/pages/Admin.tsx` — `5000` → `30_000`.
+- `src/components/admin/DuplicatesResolver.tsx` — `5000` → `20_000`.
+- `src/components/home/RecentItemsPanel.tsx` — interval `15_000` → `30_000` no `RecentItemsList`.
+- `src/lib/connectivity-monitor.ts` — INTERNET 60s, BACKEND 120s, STALENESS 30s.
+- `src/components/palm/OrderSuccess.tsx` — para `!shouldShowBadge`, trocar `requestAnimationFrame` por `setTimeout(800)`.
 
-### Resultado
-- Dia "zerado": grade do Palm vazia, sem pedidos pendentes, sem movimentos de caixa de hoje. Estatísticas dos dias anteriores intactas.
-- Home mais limpa (sem o painel de lançamentos).
-- No Palm, o garçom toca no relógio discreto ao lado de "BALCÃO" → abre painel lateral com os últimos lançamentos.
+### Resultado esperado
+- Tráfego de rede em background cai em ~70% (de ~12 requests/min para ~3-4/min em estado ocioso).
+- UI continua "ao vivo" porque Realtime já entrega INSERT/UPDATE em <1s.
+- Tela verde de sucesso fica visível ~1s, com feedback nítido de "deu certo" antes de voltar à grade já atualizada (cache otimista).
+- Sem mudança de comportamento funcional, só menos pressão de rede/CPU.
 
