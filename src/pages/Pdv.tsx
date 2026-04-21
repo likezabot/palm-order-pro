@@ -23,6 +23,7 @@ import { formatTableLabel } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderRow } from "@/components/pdv/OrderRow";
 import { PrintSettingsDialog } from "@/components/pdv/PrintSettingsDialog";
+import TabIdBadge from "@/components/TabIdBadge";
 import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
 
@@ -242,6 +243,7 @@ const Pdv = () => {
             <span className="hidden sm:inline">{realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}</span>
             <span className="sm:hidden">●</span>
           </Badge>
+          <TabIdBadge className="admin-only" />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
