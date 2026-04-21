@@ -1,55 +1,48 @@
 
 
-## Botão "Servido" nos cards de mesa
+## Refinar botão "Servir" + propagar status para Cozinha e PDV
 
-Hoje os cards de mesa ocupada (TableGrid no Palm) mostram garçom, valor e tempo, mas não há marcação visual de que o pedido **já foi entregue ao cliente** — útil pra distinguir mesas em produção das mesas que estão comendo.
+### Problemas atuais
+1. Chip "Servir" é grande, com borda dupla e label longo — polui o card
+2. Após servir, o chip continua ocupando espaço com "Servido · 12min"
+3. Cozinha (Kanban) e PDV (Caixa) não sabem que a mesa foi servida — sem feedback visual
 
 ### Mudanças
 
-**1. Campo no banco**
-- Nova coluna `served_at timestamptz` na tabela `orders` (nullable). Quando preenchida = mesa servida. Quando null = ainda não servida.
-- Mantém `status` atual intacto (não bagunça fluxo do Kitchen/Cashier).
+**1. Botão "Servir" mais elegante (`src/components/palm/TableGrid.tsx`)**
+- **Não servida**: ícone `UtensilsCrossed` sozinho num botão circular pequeno (32×32) no canto superior direito do card, fundo `bg-background/60 backdrop-blur`, borda sutil. Sem label de texto. Tooltip "Marcar como servido".
+- **Servida**: o chip **some completamente**. O próprio card já comunica via cor azul + badge "Servido HH:MM" discreto no rodapé (substitui o tempo de produção).
+- Para **desmarcar** (caso de erro): toque longo (long-press 600ms) no card servido abre confirmação "Desmarcar como servido?". Mantém UI limpa sem botão visível.
 
-**2. Botão "✓ Servido" dentro do card de mesa ocupada**
-- Aparece como pequeno chip discreto no canto inferior do card (overlay, não intercepta clique principal de abrir a mesa).
-- **Não servida** → botão outline com ícone `UtensilsCrossed`, label "Servir" (clicar marca como servido)
-- **Já servida** → badge sólido verde com ícone `Check`, label "Servido · 12min" (mostra tempo desde que foi servido). Clicar reabre confirmação para desmarcar (caso de erro).
+**2. Avisar Cozinha (`src/pages/Kitchen.tsx` + `KanbanCard.tsx`)**
+- Buscar `served_at` no select de orders
+- Card do kanban ganha **badge "✓ Servido HH:MM"** verde no canto quando `served_at != null`
+- Ordem visual: cards servidos descem para o final da coluna (são prioridade baixa pra cozinha)
+- Realtime já cobre — `orders` está no `supabase_realtime` publication
 
-**3. Estado visual da mesa servida**
-- Mesa ocupada normal → mantém vermelho atual
-- Mesa servida (comendo) → muda para **azul suave** (`bg-blue-500/20 border-blue-500`), pulso desliga. Comunica "estável, comendo".
-- Mesa aguardando pagamento (`status=done`) → mantém âmbar atual (prioridade sobre servido).
-- Mesa com duplicatas → mantém amarelo (prioridade máxima).
+**3. Avisar PDV/Caixa (`src/components/pdv/OrderRow.tsx` + `OrderSection.tsx`)**
+- Buscar `served_at` no select
+- Linha do pedido ganha **ícone `UtensilsCrossed` verde + tooltip "Servido HH:MM"** ao lado do nome da mesa
+- Útil pro caixa saber que pode cobrar com mais confiança
 
-Ordem de prioridade visual: duplicatas > aguardando pagto > servida > ocupada > livre.
-
-**4. Reset automático**
-- Quando o pedido é fechado/pago (status vira `paid`/`canceled`), `served_at` não importa mais (mesa some da grade).
-- Quando garçom **adiciona novos itens** a uma mesa já servida, opcionalmente resetamos `served_at = null` automaticamente? → **sim**, faz sentido: se chegou rodada nova, mesa volta a "em produção" até ser servida de novo. Implementado via trigger no insert de `order_items` que zera `served_at` do pedido pai.
+**4. Realtime já garantido**
+- Migração anterior aplicou `REPLICA IDENTITY FULL` em `orders` — payloads completos chegam em todos os listeners
+- Palm, Kitchen e PDV já têm canais subscritos em `orders` que invalidam queries
 
 ### Arquivos
+- **Editado**: `src/components/palm/TableGrid.tsx` — chip redesenhado (ícone-only), long-press para desmarcar, badge "Servido HH:MM" no rodapé
+- **Editado**: `src/components/kitchen/KanbanCard.tsx` — badge servido + leitura de `served_at`
+- **Editado**: `src/pages/Kitchen.tsx` — incluir `served_at` no select; ordenar servidos no fim
+- **Editado**: `src/components/pdv/OrderRow.tsx` — ícone servido ao lado da mesa
+- **Editado**: `src/components/pdv/OrderSection.tsx` (se necessário) — passar `served_at` adiante
+- **Editado**: `src/pages/Pdv.tsx` — incluir `served_at` no select
 
-**Migração SQL**
-- `ALTER TABLE orders ADD COLUMN served_at timestamptz`
-- Trigger `reset_served_at_on_new_items` em `order_items` (after insert) → `UPDATE orders SET served_at = NULL WHERE id = NEW.order_id AND served_at IS NOT NULL`
-- Atualizar policy de update em `orders` (já é aberta para POS, sem mudança)
-
-**Editado**: `src/components/palm/TableGrid.tsx`
-- Buscar `served_at` no select dos `active-orders`
-- Renderizar chip "Servir / Servido" no card
-- Handler `handleToggleServed(orderId, currentlyServed)` → update no Supabase + invalidate query
-- Lógica de cor inclui novo estado servido
-
-**Editado (opcional, se quiser refletir também)**: `src/components/admin/OrdersTab.tsx`
-- Mostrar coluna/badge "Servido às HH:MM" — só leitura. **Vou pular nesta tarefa** para manter escopo enxuto; posso adicionar depois se quiser.
-
-### Detalhes técnicos
-- Realtime: já existe canal em `orders` que invalida a query — mudança em `served_at` será refletida automaticamente em todos os Palms abertos.
-- Sem mudanças no Kitchen — `served_at` é metadata do garçom, não do fluxo de cozinha.
-- Tempo desde servido reaproveita helper `useElapsedTime` já existente.
+### Sem mudanças no banco
+Coluna `served_at` e trigger de reset já existem.
 
 ### Resultado
-- Garçom toca "Servir" quando entrega prato → card vira azul, mostra "Servido · 3min"
-- Visualmente distingue: vermelho (em produção) vs azul (comendo) vs âmbar (pedindo conta)
-- Se chegar nova rodada, mesa volta automaticamente para vermelho até nova servida
+- Card do Palm fica **limpo**: ícone discreto canto superior quando não servido, badge "Servido HH:MM" sutil no rodapé quando servido
+- Cozinha vê em tempo real quais mesas já estão comendo (badge verde + ordem ajustada)
+- Caixa vê em tempo real quais mesas já foram servidas (ícone na linha do pedido)
+- Long-press evita toques acidentais ao desmarcar
 
