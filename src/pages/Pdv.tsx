@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { useFeedback } from "@/hooks/use-feedback";
 import { formatTableLabel } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
-import { OrderSection } from "@/components/pdv/OrderSection";
+import { OrderRow } from "@/components/pdv/OrderRow";
 import { PrintSettingsDialog } from "@/components/pdv/PrintSettingsDialog";
 import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
@@ -235,40 +235,27 @@ const Pdv = () => {
 
       {/* Main content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_420px] overflow-hidden">
-        {/* Left: Order list */}
-        <div className="overflow-y-auto p-4 space-y-4 border-r border-border">
+        {/* Left: Order grid */}
+        <div className="overflow-y-auto p-4 space-y-3 border-r border-border">
           <h2 className="text-base font-black text-muted-foreground uppercase tracking-wider">
             Fila de Pedidos ({orders.length})
           </h2>
           {orders.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-lg">Aguardando pedidos...</div>
           ) : (
-            <>
-              <OrderSection
-                title="Aguardando"
-                accent="success"
-                orders={groupedOrders.new}
-                itemsByOrderId={itemsByOrderId}
-                selectedId={selectedId}
-                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
-              />
-              <OrderSection
-                title="Em Preparo"
-                accent="warning"
-                orders={groupedOrders.preparing}
-                itemsByOrderId={itemsByOrderId}
-                selectedId={selectedId}
-                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
-              />
-              <OrderSection
-                title="Prontos p/ Pagamento"
-                accent="destructive"
-                orders={groupedOrders.done}
-                itemsByOrderId={itemsByOrderId}
-                selectedId={selectedId}
-                onSelect={(id) => { setSelectedId(id); setShowPayment(false); }}
-              />
-            </>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {[...orders]
+                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                .map((order) => (
+                  <OrderRow
+                    key={order.id}
+                    order={order}
+                    itemCount={itemsByOrderId.get(order.id) || 0}
+                    selected={selectedId === order.id}
+                    onSelect={() => { setSelectedId(order.id); setShowPayment(false); }}
+                  />
+                ))}
+            </div>
           )}
         </div>
 

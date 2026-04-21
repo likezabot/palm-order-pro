@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, Pencil } from "lucide-react";
+import { ArrowLeft, Printer, Pencil, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Order, OrderItem } from "@/lib/types";
+import { Order } from "@/lib/types";
 import CloseOrder from "@/components/cashier/CloseOrder";
 import { manualPrintOrder } from "@/lib/print-service";
 import { useToast } from "@/hooks/use-toast";
@@ -68,51 +68,77 @@ const Cashier = () => {
         <h1 className="text-xl font-bold uppercase tracking-tight">CAIXA</h1>
       </div>
 
-      <div className="flex-1 p-4 space-y-3">
-        {orders.length === 0 && (
+      <div className="flex-1 p-4">
+        {orders.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">Nenhuma mesa aberta</p>
-        )}
-        {orders.map((order) => (
-          <div
-            key={order.id}
-            className="flex items-center justify-between rounded-xl bg-card border-2 border-border p-4 shadow-sm"
-          >
-            <div className="flex-1">
-              <p className="font-black text-xl text-foreground">
-                {formatTableLabel(order.table_name, order.original_table_name)}
-                {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-                  <span className="ml-2 text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
-                )}
-              </p>
-              <p className="text-primary font-black text-lg">R$ {(order.total || 0).toFixed(2)}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handlePrint(order)}
-                className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform"
-                title="Imprimir"
-              >
-                <Printer size={20} />
-              </button>
-              <button
-                onClick={() => handleEdit(order)}
-                className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform"
-                title="Editar"
-              >
-                <Pencil size={20} />
-              </button>
-              <button
-                onClick={() => {
-                  playFeedback("click");
-                  setSelectedOrder(order);
-                }}
-                className="rounded-lg bg-primary px-5 py-3 font-black text-primary-foreground active:scale-95 transition-transform min-h-[48px]"
-              >
-                FECHAR
-              </button>
-            </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {orders.map((order) => {
+              const wasPrinted = order.print_status === "printed";
+              const printFailed = order.print_status === "failed";
+              return (
+                <div
+                  key={order.id}
+                  className="relative flex flex-col gap-3 rounded-xl bg-card border-2 border-border p-4 shadow-sm hover:border-primary/40 transition-colors"
+                >
+                  {/* Status chip top-right */}
+                  {wasPrinted && (
+                    <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-success/15 text-success border border-success/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
+                      <CheckCircle2 className="w-3 h-3" /> FEITO
+                    </span>
+                  )}
+                  {printFailed && (
+                    <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-destructive/15 text-destructive border border-destructive/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
+                      ⚠ FALHA
+                    </span>
+                  )}
+
+                  {/* Table name */}
+                  <div className="pr-16">
+                    <p className="font-black text-2xl text-foreground leading-tight break-words">
+                      {formatTableLabel(order.table_name, order.original_table_name)}
+                    </p>
+                    {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+                      <p className="text-xs font-bold text-muted-foreground mt-0.5">(Mesa {order.original_table_name})</p>
+                    )}
+                  </div>
+
+                  {/* Total */}
+                  <p className="text-primary font-black text-2xl">R$ {(order.total || 0).toFixed(2)}</p>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 mt-auto">
+                    <button
+                      onClick={() => handlePrint(order)}
+                      className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
+                      title="Imprimir"
+                      aria-label="Imprimir"
+                    >
+                      <Printer size={20} />
+                    </button>
+                    <button
+                      onClick={() => handleEdit(order)}
+                      className="p-3 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
+                      title="Editar"
+                      aria-label="Editar"
+                    >
+                      <Pencil size={20} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        playFeedback("click");
+                        setSelectedOrder(order);
+                      }}
+                      className="flex-1 rounded-lg bg-primary px-4 py-3 font-black text-primary-foreground active:scale-95 transition-transform min-h-[48px]"
+                    >
+                      FECHAR
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

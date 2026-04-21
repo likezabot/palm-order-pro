@@ -9,23 +9,33 @@ interface OrderRowProps {
   itemCount: number;
   selected: boolean;
   onSelect: () => void;
-  accentBorder: string;
+  /** Optional: if not provided, computed from urgency state */
+  accentBorder?: string;
 }
 
 export const OrderRow = ({ order, itemCount, selected, onSelect, accentBorder }: OrderRowProps) => {
   const elapsed = useElapsedTime(order.created_at);
   const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const wasPrinted = order.print_status === "printed";
+  const printFailed = order.print_status === "failed";
 
   const ageMin = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60000);
   const isUrgent = ageMin >= 40;
   const isLate = !isUrgent && ageMin >= 20;
   const waitingPay = order.status === "done" && ageMin >= 10;
 
+  const computedBorder =
+    accentBorder ??
+    (isUrgent
+      ? "border-l-destructive"
+      : isLate || waitingPay
+        ? "border-l-warning"
+        : "border-l-border");
+
   return (
     <button
       onClick={onSelect}
-      className={`w-full flex items-center justify-between p-4 rounded-lg border-l-4 border ${accentBorder} transition-all text-left ${
+      className={`w-full flex flex-col gap-2 p-3 rounded-lg border-l-4 border ${computedBorder} transition-all text-left ${
         selected
           ? "border-primary bg-primary/10"
           : isUrgent
@@ -34,40 +44,56 @@ export const OrderRow = ({ order, itemCount, selected, onSelect, accentBorder }:
       }`}
       style={isUrgent ? ({ ["--pulse-color" as any]: "hsl(var(--destructive) / 0.35)" } as React.CSSProperties) : undefined}
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="flex flex-col items-center justify-center min-w-[64px] px-2 py-1 rounded bg-muted/40">
-          <Clock size={14} className="text-muted-foreground" />
-          <span className="text-sm font-black text-foreground leading-none mt-1">{elapsed || "agora"}</span>
-          <span className="text-[10px] text-muted-foreground mt-0.5">{time}</span>
+      {/* Top: Table name + FEITO chip */}
+      <div className="flex items-start justify-between gap-2 min-w-0">
+        <div className="font-black text-2xl flex items-center gap-2 leading-tight min-w-0 flex-1 break-words">
+          {formatTableLabel(order.table_name, order.original_table_name)}
+          {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
+            <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
+          )}
         </div>
-        <div className="min-w-0">
-          <div className="font-black text-2xl flex items-center gap-2 leading-tight">
-            {formatTableLabel(order.table_name, order.original_table_name)}
-            {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-              <span className="text-xs font-bold text-muted-foreground">(Mesa {order.original_table_name})</span>
-            )}
-            {wasPrinted && <CheckCircle2 className="w-4 h-4 text-success" />}
-          </div>
-          <div className="text-sm text-muted-foreground truncate">
-            {itemCount} {itemCount === 1 ? "item" : "itens"} · {order.waiter_name || "—"}
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {isUrgent && (
-              <Badge className="bg-destructive text-destructive-foreground text-xs gap-1">
-                <Flame className="w-3 h-3" /> URGENTE
-              </Badge>
-            )}
-            {isLate && (
-              <Badge className="bg-warning text-warning-foreground text-xs">⚠ ATRASADO</Badge>
-            )}
-            {waitingPay && !isUrgent && !isLate && (
-              <Badge className="bg-warning text-warning-foreground text-xs">AGUARDANDO PAGAMENTO</Badge>
-            )}
-          </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {wasPrinted && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-success/15 text-success border border-success/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
+              <CheckCircle2 className="w-3 h-3" /> FEITO
+            </span>
+          )}
+          {printFailed && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 text-destructive border border-destructive/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
+              ⚠ FALHA
+            </span>
+          )}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <span className="font-black text-xl text-primary">R$ {(order.total || 0).toFixed(2)}</span>
+
+      {/* Middle: items · waiter + elapsed chip */}
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="text-sm text-muted-foreground truncate min-w-0">
+          {itemCount} {itemCount === 1 ? "item" : "itens"} · {order.waiter_name || "—"}
+        </div>
+        <div className="flex items-center gap-1 shrink-0 px-2 py-0.5 rounded bg-muted/40">
+          <Clock size={12} className="text-muted-foreground" />
+          <span className="text-xs font-black text-foreground leading-none">{elapsed || "agora"}</span>
+          <span className="text-[10px] text-muted-foreground ml-1">{time}</span>
+        </div>
+      </div>
+
+      {/* Bottom: total + urgency badges */}
+      <div className="flex items-end justify-between gap-2 mt-1">
+        <div className="flex flex-wrap gap-1.5 min-w-0">
+          {isUrgent && (
+            <Badge className="bg-destructive text-destructive-foreground text-xs gap-1">
+              <Flame className="w-3 h-3" /> URGENTE
+            </Badge>
+          )}
+          {isLate && (
+            <Badge className="bg-warning text-warning-foreground text-xs">⚠ ATRASADO</Badge>
+          )}
+          {waitingPay && !isUrgent && !isLate && (
+            <Badge className="bg-warning text-warning-foreground text-xs">AGUARDANDO PAG.</Badge>
+          )}
+        </div>
+        <span className="font-black text-xl text-primary shrink-0">R$ {(order.total || 0).toFixed(2)}</span>
       </div>
     </button>
   );
