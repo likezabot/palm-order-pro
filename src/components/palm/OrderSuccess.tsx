@@ -51,6 +51,13 @@ const OrderSuccess = ({
     };
   }, []);
 
+  // Mantém referência estável do onReset — evita re-disparar o effect de auto-reset
+  // quando o parent re-renderiza (Realtime/cache invalidations recriam a callback).
+  const onResetRef = useRef(onReset);
+  useEffect(() => {
+    onResetRef.current = onReset;
+  }, [onReset]);
+
   const buildPrintArgs = useCallback(() => {
     const items = (cart || []).map((i) => ({
       product_name: i.product.name,
