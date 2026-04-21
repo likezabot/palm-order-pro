@@ -1,4 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { queryPersister, shouldPersistQuery } from "@/lib/query-persister";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -50,8 +52,23 @@ const AnimatedRoutes = () => {
   );
 };
 
+// Buster do cache persistente: muda a cada deploy (via __APP_VERSION__).
+declare const __APP_VERSION__: string;
+const CACHE_BUSTER =
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <PersistQueryClientProvider
+    client={queryClient}
+    persistOptions={{
+      persister: queryPersister,
+      maxAge: 24 * 60 * 60 * 1000, // 24h
+      buster: CACHE_BUSTER,
+      dehydrateOptions: {
+        shouldDehydrateQuery: (query) => shouldPersistQuery(query as any),
+      },
+    }}
+  >
     <TooltipProvider>
       <UpdateBanner />
       <ConnectivityBanner />
@@ -61,7 +78,7 @@ const App = () => (
         <AnimatedRoutes />
       </BrowserRouter>
     </TooltipProvider>
-  </QueryClientProvider>
+  </PersistQueryClientProvider>
 );
 
 export default App;

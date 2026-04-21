@@ -77,6 +77,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 
   const { data: activeOrders, isLoading } = useQuery({
     queryKey: ["active-orders"],
+    placeholderData: (prev) => prev,
     queryFn: async () => {
       const { data, error } = await supabase
           .from("orders")
