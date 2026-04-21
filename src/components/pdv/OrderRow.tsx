@@ -179,4 +179,5 @@ export const OrderRow = forwardRef<HTMLDivElement, OrderRowProps>(({ order, item
       </div>
     </div>
   );
-};
+});
+OrderRow.displayName = "OrderRow";
