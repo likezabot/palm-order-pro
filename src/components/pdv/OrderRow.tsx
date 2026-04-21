@@ -4,6 +4,18 @@ import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
 import type { Order } from "@/lib/types";
 
+const STATUS_LABEL: Record<string, string> = {
+  new: "NOVO",
+  preparing: "EM PREPARO",
+  done: "PRONTO",
+};
+
+const STATUS_CHIP: Record<string, string> = {
+  new: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  preparing: "bg-warning/15 text-warning border-warning/30",
+  done: "bg-success/15 text-success border-success/30",
+};
+
 interface OrderRowProps {
   order: Order;
   itemCount: number;
@@ -53,14 +65,17 @@ export const OrderRow = ({ order, itemCount, selected, onSelect, accentBorder }:
           )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${STATUS_CHIP[order.status] || STATUS_CHIP.new}`}>
+            {STATUS_LABEL[order.status] || order.status.toUpperCase()}
+          </span>
           {wasPrinted && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-success/15 text-success border border-success/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
-              <CheckCircle2 className="w-3 h-3" /> FEITO
+            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success border border-success/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+              <CheckCircle2 className="w-2.5 h-2.5" /> Feito
             </span>
           )}
           {printFailed && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 text-destructive border border-destructive/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide">
-              ⚠ FALHA
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+              ⚠ Falha
             </span>
           )}
         </div>
