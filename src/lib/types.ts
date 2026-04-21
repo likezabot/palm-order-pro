@@ -35,6 +35,7 @@ export interface Order {
   print_claimed_at?: string | null;
   print_last_error?: string | null;
   version?: number;
+  served_at?: string | null;
 }
 
 export interface OrderItem {

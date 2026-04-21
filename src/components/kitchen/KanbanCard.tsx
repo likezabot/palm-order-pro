@@ -1,6 +1,6 @@
 import { Order, OrderItem } from "@/lib/types";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
-import { Clock, Flame } from "lucide-react";
+import { Clock, Flame, UtensilsCrossed } from "lucide-react";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
 
 interface CardProps {
@@ -34,9 +34,16 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
   const summarized = summarizeItemWaiters(items, order.waiter_name || "");
   const sideBorder = statusBorder[order.status] ?? "border-l-border";
 
+  const servedAt = order.served_at;
+  const servedTime = servedAt
+    ? new Date(servedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
   return (
     <div
       className={`rounded-xl bg-card border border-border/70 border-l-[5px] ${sideBorder} p-4 space-y-2 transition-all shadow-card animate-fade-in-up ${
+        servedAt ? "opacity-75" : ""
+      } ${
         isUrgent ? "ring-1 ring-destructive/40" : isLate ? "ring-1 ring-warning/30" : ""
       } ${pulse ? "animate-pulse-active" : ""}`}
       style={pulse ? ({ ["--pulse-color" as any]: "hsl(var(--primary) / 0.4)" } as React.CSSProperties) : undefined}
@@ -49,9 +56,17 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
             ? `Mesa ${order.original_table_name} · ${order.table_name}`
             : `Mesa ${order.table_name}`}
         </span>
-        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-black ${timeBadgeClass}`}>
-          {isUrgent ? <Flame size={14} /> : <Clock size={14} />}
-          <span>{elapsed || "agora"}</span>
+        <div className="flex items-center gap-1.5">
+          {servedTime && (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-black bg-success/15 text-success border border-success/30" title={`Servido às ${servedTime}`}>
+              <UtensilsCrossed size={12} />
+              <span>{servedTime}</span>
+            </div>
+          )}
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-black ${timeBadgeClass}`}>
+            {isUrgent ? <Flame size={14} /> : <Clock size={14} />}
+            <span>{elapsed || "agora"}</span>
+          </div>
         </div>
       </div>
 

@@ -38,7 +38,13 @@ const Kitchen = () => {
         .in("status", ["new", "preparing", "done"])
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data as Order[];
+      // Pedidos servidos vão para o final (prioridade baixa pra cozinha)
+      const rows = (data as Order[]) ?? [];
+      return [...rows].sort((a, b) => {
+        const aServed = a.served_at ? 1 : 0;
+        const bServed = b.served_at ? 1 : 0;
+        return aServed - bServed;
+      });
     },
     refetchInterval: 5000,
   });

@@ -379,6 +379,23 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                 pulseColor = "rgba(239, 68, 68, 0.4)";
               }
 
+              // Long-press para desmarcar quando já está servido
+              const longPressTimer = { current: null as number | null };
+              const startLongPress = () => {
+                if (!isServed || !order) return;
+                longPressTimer.current = window.setTimeout(() => {
+                  if (window.confirm("Desmarcar como servido?")) {
+                    handleToggleServed(order.id, true);
+                  }
+                }, 600);
+              };
+              const cancelLongPress = () => {
+                if (longPressTimer.current !== null) {
+                  window.clearTimeout(longPressTimer.current);
+                  longPressTimer.current = null;
+                }
+              };
+
               return (
                 <div
                   key={table}
@@ -392,7 +409,11 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                   <button
                     type="button"
                     onClick={() => handleTableClick(table, order?.id)}
-                    title={hasDuplicates ? `${duplicateCount} pedidos ativos nesta mesa — verifique no Admin` : undefined}
+                    onPointerDown={startLongPress}
+                    onPointerUp={cancelLongPress}
+                    onPointerLeave={cancelLongPress}
+                    onPointerCancel={cancelLongPress}
+                    title={hasDuplicates ? `${duplicateCount} pedidos ativos nesta mesa — verifique no Admin` : isServed ? "Mantenha pressionado para desmarcar como servido" : undefined}
                     className={`absolute inset-0 flex flex-col items-center justify-center rounded-2xl active:scale-95 transition-transform ${!isOccupied ? 'hover:bg-emerald-500/30' : ''}`}
                   >
                     {customName ? (
@@ -412,10 +433,17 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                             ? `${(order as any).item_count} · ${formatCurrency(order.total)}`
                             : formatCurrency(order.total)}
                         </span>
-                        <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
-                          <Clock size={10} />
-                          {formatTime(order.created_at)} · {elapsed(order.created_at)}
-                        </span>
+                        {isServed && order.served_at ? (
+                          <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
+                            <Check size={10} strokeWidth={3} />
+                            Servido · {formatTime(order.served_at)}
+                          </span>
+                        ) : (
+                          <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold opacity-90">
+                            <Clock size={10} />
+                            {formatTime(order.created_at)} · {elapsed(order.created_at)}
+                          </span>
+                        )}
                       </div>
                     )}
                   </button>
@@ -427,31 +455,23 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                     </div>
                   )}
 
-                  {isOccupied && !isWaitingPayment && !hasDuplicates && (
+                  {isOccupied && !isWaitingPayment && !hasDuplicates && !isServed && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleToggleServed(order.id, !!order.served_at);
+                        handleToggleServed(order.id, false);
                       }}
                       disabled={servingId === order.id}
-                      title={isServed && order.served_at ? `Servido há ${elapsed(order.served_at)} — toque para desmarcar` : "Marcar como servido"}
-                      className={`absolute -bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-lg ring-2 ring-background active:scale-90 transition-all disabled:opacity-60 ${
-                        isServed
-                          ? "bg-blue-500 text-white"
-                          : "bg-card border border-border text-foreground hover:border-blue-500/60"
-                      }`}
+                      title="Marcar como servido"
+                      aria-label="Marcar como servido"
+                      className="absolute top-1.5 right-1.5 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-background/70 backdrop-blur-sm border border-border/60 text-foreground/80 hover:bg-blue-500 hover:text-white hover:border-blue-500 active:scale-90 transition-all disabled:opacity-60 shadow-sm"
                     >
                       {servingId === order.id ? (
-                        <Loader2 size={10} className="animate-spin" />
-                      ) : isServed ? (
-                        <Check size={10} strokeWidth={3} />
+                        <Loader2 size={14} className="animate-spin" />
                       ) : (
-                        <UtensilsCrossed size={10} />
+                        <UtensilsCrossed size={14} />
                       )}
-                      <span className="leading-none">
-                        {isServed && order.served_at ? `Servido · ${elapsed(order.served_at)}` : "Servir"}
-                      </span>
                     </button>
                   )}
                 </div>
