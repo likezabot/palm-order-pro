@@ -21,10 +21,13 @@ const KanbanColumn = ({
   return (
     <div className={`border-b md:border-b-0 md:border-r border-border md:last:border-r-0 flex flex-col md:h-full md:min-h-0 ${bgClass ?? ""}`}>
       {/* Cabeçalho */}
-      <div className={`md:sticky md:top-0 z-10 p-3 border-b-2 ${borderClass} bg-card/95 backdrop-blur`}>
+      <div className={`md:sticky md:top-0 z-10 p-3 border-b-2 ${borderClass} bg-card/95 backdrop-blur flex items-center justify-between gap-2`}>
         <h2 className={`text-lg font-black uppercase tracking-wide ${colorClass}`}>
-          {title} <span className="text-muted-foreground font-bold">({orders.length})</span>
+          {title}
         </h2>
+        <span className={`flex items-center justify-center min-w-[2rem] h-8 px-2.5 rounded-full text-base font-black ${colorClass} bg-current/10`} style={{ backgroundColor: "hsl(var(--card))" }}>
+          {orders.length}
+        </span>
       </div>
 
       {/* Lista — rola só no desktop; no mobile expande naturalmente */}

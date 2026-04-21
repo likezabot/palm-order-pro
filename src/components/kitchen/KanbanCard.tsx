@@ -12,6 +12,12 @@ interface CardProps {
   pulse?: boolean;
 }
 
+const statusBorder: Record<string, string> = {
+  new: "border-l-primary",
+  preparing: "border-l-warning",
+  done: "border-l-success",
+};
+
 const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }: CardProps) => {
   const elapsed = useElapsedTime(order.created_at);
   const time = new Date(order.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -26,11 +32,12 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
       : "bg-muted text-muted-foreground";
 
   const summarized = summarizeItemWaiters(items, order.waiter_name || "");
+  const sideBorder = statusBorder[order.status] ?? "border-l-border";
 
   return (
     <div
-      className={`rounded-lg bg-card border-2 p-4 space-y-2 transition-all ${
-        isUrgent ? "border-destructive" : isLate ? "border-warning" : "border-border"
+      className={`rounded-xl bg-card border border-border/70 border-l-[5px] ${sideBorder} p-4 space-y-2 transition-all shadow-card animate-fade-in-up ${
+        isUrgent ? "ring-1 ring-destructive/40" : isLate ? "ring-1 ring-warning/30" : ""
       } ${pulse ? "animate-pulse-active" : ""}`}
       style={pulse ? ({ ["--pulse-color" as any]: "hsl(var(--primary) / 0.4)" } as React.CSSProperties) : undefined}
     >
@@ -42,7 +49,7 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
             ? `Mesa ${order.original_table_name} · ${order.table_name}`
             : `Mesa ${order.table_name}`}
         </span>
-        <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-sm font-black ${timeBadgeClass}`}>
+        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-black ${timeBadgeClass}`}>
           {isUrgent ? <Flame size={14} /> : <Clock size={14} />}
           <span>{elapsed || "agora"}</span>
         </div>
@@ -76,7 +83,7 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
             e.stopPropagation();
             onAction(order.id);
           }}
-          className={`relative z-10 w-full mt-2 rounded-lg p-3 font-black text-base transition-colors duration-150 min-h-[56px] touch-manipulation cursor-pointer ${actionColor}`}
+          className={`relative z-10 w-full mt-2 rounded-xl p-3 font-black text-base transition-all duration-150 min-h-[56px] touch-manipulation cursor-pointer active:scale-[0.97] shadow-soft ${actionColor}`}
         >
           {actionLabel}
         </button>

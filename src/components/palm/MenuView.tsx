@@ -151,7 +151,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 bg-background border-b border-border p-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))]">
+      <div className="shrink-0 glass-card p-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))]">
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <button
             onClick={() => {
@@ -199,15 +199,15 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         </div>
 
         {/* Search field */}
-        <div className="relative mb-1.5">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative mb-1.5 group">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <input
             type="text"
             inputMode="search"
             placeholder="Buscar item no cardápio..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-full border border-border bg-card pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+            className="w-full rounded-2xl border border-border bg-card pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground shadow-soft focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all"
           />
           {search && (
             <button
@@ -229,10 +229,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                 playFeedback("click");
                 setActiveCategory("favoritos");
               }}
-              className={`flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
+              className={`flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
                 activeCategory === "favoritos"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground border border-border"
+                  ? "bg-brand-gradient text-primary-foreground shadow-soft"
+                  : "bg-card text-muted-foreground border border-border hover:border-primary/40"
               }`}
             >
               <Star size={16} className="fill-current" aria-label="Favoritos" />
@@ -244,10 +244,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   playFeedback("click");
                   setActiveCategory(cat);
                 }}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
                   activeCategory === cat
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-card text-muted-foreground border border-border"
+                    ? "bg-brand-gradient text-primary-foreground shadow-soft"
+                    : "bg-card text-muted-foreground border border-border hover:border-primary/40"
                 }`}
               >
                 {CATEGORY_LABELS[cat]}
@@ -356,19 +356,19 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   <button
                     key={product.id}
                     onClick={() => onAdd(product)}
-                    className="relative flex flex-col rounded-xl bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10"
+                    className="relative flex flex-col rounded-2xl bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10 hover:border-primary/40 shadow-soft hover:shadow-card"
                   >
                     <span className="font-semibold text-base text-foreground leading-tight">
                       {product.name}
                     </span>
-                    <span className="mt-1 text-sm text-primary font-bold">
+                    <span className="mt-1 text-sm font-black brand-gradient-text">
                       R$ {product.price.toFixed(2)}
                     </span>
                     <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
                       + ADD
                     </span>
                     {qty > 0 && (
-                      <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary text-sm font-black text-primary-foreground border-2 border-background px-1.5">
+                      <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow">
                         {qty}
                       </span>
                     )}

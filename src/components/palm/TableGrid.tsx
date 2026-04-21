@@ -250,9 +250,9 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
 
             <button
               onClick={handleNewBalcao}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/50 bg-primary/10 p-4 text-primary font-bold transition-all active:scale-[0.98] hover:bg-primary/20 mb-3"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-gradient p-4 text-primary-foreground font-black tracking-wide transition-all active:scale-[0.98] mb-3 shadow-glow hover:shadow-card"
             >
-              <Plus size={20} />
+              <Plus size={20} className="animate-pulse" />
               NOVO PEDIDO
             </button>
 
@@ -263,13 +263,13 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
                   return (
                     <div
                       key={order.id}
-                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border bg-card p-3 min-w-[110px] transition-all hover:border-primary/50"
+                      className="flex-shrink-0 flex flex-col items-start gap-1 rounded-xl border border-border surface-elevated p-3 min-w-[120px] transition-all hover:border-primary/50 shadow-card"
                     >
                       <button
                         onClick={() => handleTableClick("BALCÃO", order.id)}
                         className="flex flex-col items-start gap-1 w-full active:scale-95 transition-transform"
                       >
-                        <span className="text-lg font-black text-primary">{getSenha(order)}</span>
+                        <span className="text-2xl font-black brand-gradient-text leading-none">{getSenha(order)}</span>
                         <div className="flex items-center gap-1 text-muted-foreground">
                           <Clock size={12} />
                           <span className="text-xs font-bold">{formatTime(order.created_at)}</span>

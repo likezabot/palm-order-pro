@@ -142,16 +142,19 @@ const OrderSuccess = ({
   const isPrinting = status === "printing";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-hidden bg-success p-6 text-center min-h-[100dvh]">
-      <div className="rounded-full bg-white/20 p-6 animate-pulse-success">
-        <CheckCircle size={100} className="text-white" />
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-hidden p-6 text-center min-h-[100dvh] bg-gradient-to-br from-success via-success to-emerald-700">
+      <div className="relative">
+        <div className="absolute inset-0 rounded-full bg-white/30 animate-ping opacity-60" />
+        <div className="relative rounded-full bg-white/20 p-6 animate-scale-in ring-4 ring-white/20">
+          <CheckCircle size={100} className="text-white" />
+        </div>
       </div>
-      <div className="space-y-2">
-        <h1 className="text-4xl font-black text-white tracking-tighter">PEDIDO ENVIADO! ✅</h1>
+      <div className="space-y-2 animate-fade-in-up">
+        <h1 className="text-4xl font-black text-white tracking-tight drop-shadow-lg">PEDIDO ENVIADO!</h1>
         {shouldShowBadge && (
           <>
-            <p className="text-xl font-bold text-white/80 uppercase">Sua Senha:</p>
-            <p className="text-8xl font-black text-white mt-1">{senha}</p>
+            <p className="text-xl font-bold text-white/85 uppercase tracking-widest">Sua Senha</p>
+            <p className="text-7xl sm:text-8xl font-black text-white mt-1 drop-shadow-2xl tabular-nums">{senha}</p>
 
             <div className="pt-4">
               <PrintStatusBadge
