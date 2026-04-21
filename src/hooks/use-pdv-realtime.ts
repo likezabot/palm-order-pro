@@ -64,7 +64,7 @@ export function usePdvRealtime() {
     console.log("[PDV] Inscrevendo canal Realtime...");
 
     const channel = supabase
-      .channel("pdv-realtime-v3")
+      .channel(`pdv-realtime-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
         queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
