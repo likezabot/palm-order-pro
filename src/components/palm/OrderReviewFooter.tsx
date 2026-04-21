@@ -48,12 +48,15 @@ const OrderReviewFooter = ({
       )}
 
       <button
+        type="button"
         onClick={() => {
+          if (sending) return;
           playFeedback("click");
           onFinalize();
         }}
         disabled={sending || cartEmpty}
-        className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 min-h-[56px]"
+        aria-busy={sending}
+        className="w-full rounded-lg bg-success p-4 text-lg font-bold text-success-foreground transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none min-h-[56px]"
       >
         {sending ? "ENVIANDO..." : existingOrderId ? "✅ ATUALIZAR PEDIDO" : "✅ FINALIZAR PEDIDO"}
       </button>

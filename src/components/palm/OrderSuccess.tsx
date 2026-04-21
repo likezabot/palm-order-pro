@@ -23,6 +23,15 @@ const OrderSuccess = ({
   customerName,
 }: Props) => {
   const printedRef = useRef(false);
+  const resetFiredRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const buildPrintArgs = useCallback(() => {
     const items = (cart || []).map((i) => ({
@@ -40,7 +49,6 @@ const OrderSuccess = ({
   const handleAutoPrint = useCallback(() => {
     if (!allowLocalPrint || !senha) return;
     const { items, total } = buildPrintArgs();
-    // Auto: respeita toggle (force=false)
     printSenha(senha, items, {
       waiterName,
       orderId,
@@ -53,7 +61,6 @@ const OrderSuccess = ({
   const handleManualPrint = useCallback(() => {
     if (!senha) return;
     const { items, total } = buildPrintArgs();
-    // Manual: ignora toggle (force=true)
     printSenha(senha, items, {
       waiterName,
       orderId,
@@ -67,7 +74,7 @@ const OrderSuccess = ({
     if (allowLocalPrint && senha && !printedRef.current) {
       printedRef.current = true;
       const timer = setTimeout(() => {
-        handleAutoPrint();
+        if (mountedRef.current) handleAutoPrint();
       }, 800);
       return () => clearTimeout(timer);
     }
@@ -75,12 +82,16 @@ const OrderSuccess = ({
 
   useEffect(() => {
     const delay = allowLocalPrint && senha ? 5000 : 3000;
-    const timer = setTimeout(onReset, delay);
+    const timer = setTimeout(() => {
+      if (resetFiredRef.current) return;
+      resetFiredRef.current = true;
+      onReset();
+    }, delay);
     return () => clearTimeout(timer);
   }, [allowLocalPrint, onReset, senha]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-success p-6 text-center">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-hidden bg-success p-6 text-center">
       <div className="rounded-full bg-white/20 p-6 animate-pulse-success">
         <CheckCircle size={100} className="text-white" />
       </div>
@@ -91,6 +102,7 @@ const OrderSuccess = ({
             <p className="text-xl font-bold text-white/80 uppercase">Sua Senha:</p>
             <p className="text-8xl font-black text-white mt-1">{senha}</p>
             <button
+              type="button"
               onClick={handleManualPrint}
               className="mt-8 flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl"
             >

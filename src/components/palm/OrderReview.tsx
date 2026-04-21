@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Printer, Send, User, RotateCw } from "lucide-react";
 import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,28 +40,77 @@ interface Props {
   onCustomerNameChange?: (name: string) => void;
 }
 
+type SendState = "idle" | "sending" | "success" | "error";
+const SEND_TIMEOUT_MS = 20000;
+
 const OrderReview = ({
   tableName, originalTableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
   customerName, onCustomerNameChange,
 }: Props) => {
   const isBalcao = tableName === "BALCÃO";
-  const [sending, setSending] = useState(false);
+  const [sendState, setSendState] = useState<SendState>("idle");
   const [printType, setPrintType] = useState<PrintType>("extra");
   const [showConfirm, setShowConfirm] = useState(false);
   const [conflict, setConflict] = useState<{ orderId: string; tableName: string } | null>(null);
+  const [reprinting, setReprinting] = useState(false);
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
+
+  const sendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const requestIdRef = useRef(0);
+  const reprintingRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const safeSet = (s: SendState) => {
+    if (mountedRef.current) setSendState(s);
+  };
 
   const showWaiterTag = useMemo(() => {
     const uniqueWaiters = new Set(cart.map((i) => i.waiter_name || waiterName).filter(Boolean));
     return uniqueWaiters.size > 1;
   }, [cart, waiterName]);
 
+  const isSending = sendState === "sending";
+
   const handleFinalize = async (shouldPrint: boolean) => {
-    if (sending || cart.length === 0) return;
-    setSending(true);
+    // Lock síncrono — imune a stale state de useState
+    if (sendingRef.current || cart.length === 0) return;
+    sendingRef.current = true;
+    safeSet("sending");
     setShowConfirm(false);
+
+    const myReq = ++requestIdRef.current;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      if (sendingRef.current && requestIdRef.current === myReq) {
+        timedOut = true;
+        sendingRef.current = false;
+        safeSet("error");
+        playFeedback("error");
+        toast({
+          title: "Tempo esgotado",
+          description: "Verifique a conexão e tente de novo.",
+          variant: "destructive",
+        });
+      }
+    }, SEND_TIMEOUT_MS);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      sendingRef.current = false;
+      if (mountedRef.current && sendState !== "success") {
+        // Garante UI usável após erro/conflito
+        if (!timedOut) safeSet("idle");
+      }
+    };
 
     try {
       if (existingOrderId) {
@@ -85,85 +134,88 @@ const OrderReview = ({
           p_expected_version: orderVersion ?? undefined,
           p_should_print: shouldPrint,
         };
-        console.log("[OrderReview] UPDATE payload:", JSON.stringify(payload, null, 2));
 
         const { data: rpcResult, error: rpcError } = await supabase.rpc("update_order_items", payload as any);
-        console.log("[OrderReview] UPDATE result:", rpcResult, "error:", rpcError);
+
+        // Descarta resposta tardia (request mais nova já foi disparada ou timeout)
+        if (myReq !== requestIdRef.current || timedOut) return;
 
         if (rpcError) {
           const msg = rpcError.message || "";
           if (msg.includes("version_conflict")) {
             toast({ title: "Mesa alterada por outro aparelho", description: "Recarregue a mesa e tente de novo.", variant: "destructive" });
-            setSending(false);
             return;
           }
           if (msg.includes("order_not_editable")) {
             toast({ title: "Pedido já fechado", description: "Esse pedido não pode mais ser editado.", variant: "destructive" });
-            setSending(false);
             return;
           }
           throw rpcError;
         }
-      } else {
-        let newSenha = senha || "";
-        if (tableName === "BALCÃO") {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const { count } = await supabase
-            .from("orders")
-            .select("id", { count: "exact", head: true })
-            .eq("table_name", "BALCÃO")
-            .gte("created_at", today.toISOString());
-          newSenha = `#${((count || 0) + 1).toString().padStart(3, "0")}`;
-        }
-
-        const rpcItems = cart.map((item) => ({
-          product_id: item.product.id.length === 36 ? item.product.id : null,
-          product_name: item.product.name,
-          product_price: item.product.price,
-          quantity: item.quantity,
-          note: item.note || null,
-          subtotal: item.product.price * item.quantity,
-          waiter_name: item.waiter_name || waiterName || null,
-        }));
-
-        const payload = {
-          p_table_name: tableName,
-          p_waiter_name: waiterName,
-          p_total: total,
-          p_items: rpcItems,
-          p_should_print: shouldPrint,
-          p_original_table_name: originalTableName || tableName,
-        };
-        console.log("[OrderReview] CREATE payload:", JSON.stringify(payload, null, 2));
-
-        const { data: createData, error: createError } = await supabase.rpc("create_order", payload as any);
-        console.log("[OrderReview] CREATE result:", createData, "error:", createError);
-        if (createError) {
-          const msg = createError.message || "";
-          const match = msg.match(/table_already_in_use:([0-9a-f-]+):(.+)$/i);
-          if (match) {
-            playFeedback("error");
-            setConflict({ orderId: match[1], tableName: match[2].trim() });
-            setSending(false);
-            return;
-          }
-          throw createError;
-        }
 
         playFeedback("success");
-        // RPC retorna { id, ... } — propaga o id para a tela de sucesso (cupom da senha).
-        const newOrderId =
-          createData && typeof createData === "object" && !Array.isArray(createData)
-            ? (createData as any).id
-            : undefined;
-        onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
+        safeSet("success");
+        onSuccess("");
         return;
       }
 
+      // CREATE flow
+      let newSenha = senha || "";
+      if (tableName === "BALCÃO") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const { count } = await supabase
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .eq("table_name", "BALCÃO")
+          .gte("created_at", today.toISOString());
+        if (myReq !== requestIdRef.current || timedOut) return;
+        newSenha = `#${((count || 0) + 1).toString().padStart(3, "0")}`;
+      }
+
+      const rpcItems = cart.map((item) => ({
+        product_id: item.product.id.length === 36 ? item.product.id : null,
+        product_name: item.product.name,
+        product_price: item.product.price,
+        quantity: item.quantity,
+        note: item.note || null,
+        subtotal: item.product.price * item.quantity,
+        waiter_name: item.waiter_name || waiterName || null,
+      }));
+
+      const payload = {
+        p_table_name: tableName,
+        p_waiter_name: waiterName,
+        p_total: total,
+        p_items: rpcItems,
+        p_should_print: shouldPrint,
+        p_original_table_name: originalTableName || tableName,
+      };
+
+      const { data: createData, error: createError } = await supabase.rpc("create_order", payload as any);
+
+      if (myReq !== requestIdRef.current || timedOut) return;
+
+      if (createError) {
+        const msg = createError.message || "";
+        const match = msg.match(/table_already_in_use:([0-9a-f-]+):(.+)$/i);
+        if (match) {
+          playFeedback("error");
+          setConflict({ orderId: match[1], tableName: match[2].trim() });
+          return;
+        }
+        throw createError;
+      }
+
       playFeedback("success");
-      onSuccess("");
+      const newOrderId =
+        createData && typeof createData === "object" && !Array.isArray(createData)
+          ? (createData as any).id
+          : undefined;
+      safeSet("success");
+      onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
     } catch (err: any) {
+      if (myReq !== requestIdRef.current || timedOut) return;
       console.error("[OrderReview] Erro completo:", err);
       playFeedback("error");
       const desc = [err?.message, err?.details, err?.hint].filter(Boolean).join(" — ") || "Tente novamente.";
@@ -172,7 +224,31 @@ const OrderReview = ({
         description: desc,
         variant: "destructive",
       });
-      setSending(false);
+    } finally {
+      cleanup();
+    }
+  };
+
+  const handleReprint = async () => {
+    if (reprintingRef.current || !existingOrderId) return;
+    reprintingRef.current = true;
+    setReprinting(true);
+    try {
+      playFeedback("click");
+      const r = await reprintSenhaForOrder(existingOrderId);
+      if (!mountedRef.current) return;
+      if (r.ok) {
+        toast({ title: "Senha reimpressa" });
+      } else {
+        toast({
+          title: "Não foi possível reimprimir",
+          description: r.reason,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      reprintingRef.current = false;
+      if (mountedRef.current) setReprinting(false);
     }
   };
 
@@ -194,22 +270,11 @@ const OrderReview = ({
           </h2>
           {isBalcao && existingOrderId && (
             <button
-              onClick={async () => {
-                playFeedback("click");
-                const r = await reprintSenhaForOrder(existingOrderId);
-                if (r.ok) {
-                  toast({ title: "Senha reimpressa" });
-                } else {
-                  toast({
-                    title: "Não foi possível reimprimir",
-                    description: r.reason,
-                    variant: "destructive",
-                  });
-                }
-              }}
-              className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm font-bold text-secondary-foreground active:scale-95 transition-transform"
+              onClick={handleReprint}
+              disabled={reprinting}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm font-bold text-secondary-foreground active:scale-95 transition-transform disabled:opacity-40 disabled:pointer-events-none"
             >
-              <RotateCw size={16} /> Reimprimir senha
+              <RotateCw size={16} className={reprinting ? "animate-spin" : ""} /> Reimprimir senha
             </button>
           )}
         </div>
@@ -244,16 +309,26 @@ const OrderReview = ({
 
       <OrderReviewFooter
         total={total}
-        sending={sending}
+        sending={isSending}
         cartEmpty={cart.length === 0}
         existingOrderId={existingOrderId}
         printType={printType}
         onPrintTypeChange={setPrintType}
         onCloseAccount={onCloseAccount}
-        onFinalize={() => setShowConfirm(true)}
+        onFinalize={() => {
+          if (sendingRef.current) return;
+          setShowConfirm(true);
+        }}
       />
 
-      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+      <AlertDialog
+        open={showConfirm}
+        onOpenChange={(open) => {
+          // Não deixa o Radix fechar/abrir enquanto envia
+          if (sendingRef.current) return;
+          setShowConfirm(open);
+        }}
+      >
         <AlertDialogContent className="max-w-[90vw] rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
@@ -263,18 +338,25 @@ const OrderReview = ({
           </AlertDialogHeader>
           <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
             <button
+              type="button"
+              disabled={isSending}
               onClick={() => handleFinalize(true)}
-              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none"
             >
               <Printer size={20} /> Enviar e imprimir
             </button>
             <button
+              type="button"
+              disabled={isSending}
               onClick={() => handleFinalize(false)}
-              className="flex items-center justify-center gap-2 w-full rounded-xl bg-secondary p-4 text-lg font-bold text-secondary-foreground active:scale-[0.98] transition-all"
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-secondary p-4 text-lg font-bold text-secondary-foreground active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none"
             >
               <Send size={20} /> Enviar sem imprimir
             </button>
-            <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
+            <AlertDialogCancel
+              disabled={isSending}
+              className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground disabled:opacity-40 disabled:pointer-events-none"
+            >
               Cancelar
             </AlertDialogCancel>
           </AlertDialogFooter>
