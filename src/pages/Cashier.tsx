@@ -60,8 +60,8 @@ const Cashier = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="border-b border-border p-4 flex items-center gap-4">
+    <div className="min-h-screen-safe flex flex-col">
+      <div className="border-b border-border p-4 pt-[calc(1rem+env(safe-area-inset-top))] flex items-center gap-4">
         <button onClick={() => navigate("/")} className="text-muted-foreground">
           <ArrowLeft size={24} />
         </button>

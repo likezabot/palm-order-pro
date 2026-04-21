@@ -70,8 +70,8 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col pb-28">
-      <div className="border-b border-border p-4 flex items-center gap-4">
+    <div className="min-h-screen-safe flex flex-col pb-28">
+      <div className="border-b border-border p-4 pt-[calc(1rem+env(safe-area-inset-top))] flex items-center gap-4">
         <button
           onClick={() => {
             playFeedback("click");
@@ -111,7 +111,7 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t border-border">
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-background/95 backdrop-blur border-t border-border">
         <button
           onClick={() => {
             playFeedback("click");

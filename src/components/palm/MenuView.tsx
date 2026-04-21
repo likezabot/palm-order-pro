@@ -149,7 +149,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   };
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden">
+    <div className="flex h-screen-safe flex-col overflow-hidden">
       {/* Header */}
       <div className="shrink-0 glass-card p-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))]">
         <div className="flex items-center justify-between gap-2 mb-1.5">

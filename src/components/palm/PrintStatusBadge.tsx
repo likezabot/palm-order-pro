@@ -25,7 +25,7 @@ const PrintStatusBadge = ({
   if (status === "idle" && !labelIdle) return null;
 
   const base =
-    "inline-flex flex-col items-stretch gap-2 rounded-xl px-4 py-3 text-sm font-bold min-w-[220px] max-w-[280px] mx-auto";
+    "inline-flex flex-col items-stretch gap-2 rounded-xl px-4 py-3 text-sm font-bold w-full max-w-[280px] mx-auto";
 
   if (status === "idle") {
     return (
