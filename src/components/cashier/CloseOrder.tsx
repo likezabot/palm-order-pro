@@ -28,6 +28,7 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
+  const queryClient = useQueryClient();
 
   const { data: items = [] } = useQuery({
     queryKey: ["order-items", order.id],
@@ -48,6 +49,18 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
     setSending(true);
     setShowConfirm(false);
 
+    // Optimistic removal from active-orders/cashier-orders caches
+    const cacheKeys = [["active-orders"], ["cashier-orders"]] as const;
+    await Promise.all(
+      cacheKeys.map((key) => queryClient.cancelQueries({ queryKey: key as any }))
+    );
+    const snapshots = cacheKeys.map((key) => [key, queryClient.getQueryData(key as any)] as const);
+    cacheKeys.forEach((key) => {
+      queryClient.setQueryData(key as any, (old: Order[] | undefined) =>
+        Array.isArray(old) ? old.filter((o) => o.id !== order.id) : old
+      );
+    });
+
     try {
       const { error } = await supabase.rpc("pay_order", {
         p_order_id: order.id,
@@ -60,9 +73,12 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
 
       playFeedback("success");
       toast({ title: "Mesa fechada!" });
+      cacheKeys.forEach((key) => queryClient.invalidateQueries({ queryKey: key as any }));
       onClosed();
     } catch (err) {
       console.error(err);
+      // Rollback
+      snapshots.forEach(([key, data]) => queryClient.setQueryData(key as any, data));
       playFeedback("error");
       toast({ title: "Erro ao fechar conta", variant: "destructive" });
       setSending(false);
