@@ -1,39 +1,50 @@
 
 
-## Aba "Últimos lançamentos" na Home
+## Corrigir header coberto pela status bar do iPhone (notch/Dynamic Island)
 
-Adicionar uma seção visual logo abaixo dos botões de modo na tela inicial (`/`) mostrando os itens mais recentes que foram lançados em qualquer pedido aberto, com garçom e tempo decorrido. Apenas leitura, sem afetar o fluxo do POS.
+### Problema
+No iPhone, o topo da tela do MenuView (e demais páginas) é renderizado **atrás** da barra de status do iOS. Isso esconde:
+- O botão "Voltar" (sobreposto pelo relógio "20:47")
+- O nome da mesa e os botões de **renomear** e **mover mesa** (sobrepostos pelos ícones de bateria/sinal)
 
-### Comportamento
+Causa raiz: o `index.html` usa `viewport-fit=cover` + `apple-mobile-web-app-status-bar-style: black-translucent`, que pedem ao iOS para renderizar sob a status bar. Em `src/index.css`, o `body` aplica safe-area só nas laterais (`padding-left/right`), faltando o **topo**.
 
-- **Onde**: nova seção colapsável (fechada por padrão) na home, abaixo dos cards de instalação.
-- **Cabeçalho** "Últimos lançamentos" + ícone de relógio. Toca para expandir/recolher.
-- **O que mostra**: últimos **30 itens** (linhas de `order_items`) inseridos em pedidos com status `new`, `preparing` ou `done` (mesas abertas).
-- **Cada linha exibe**:
-  - `2x Bovino` (qtd + nome)
-  - Mesa de origem (ex: `Mesa 5` ou `BALCÃO`) em badge pequeno
-  - Garçom (`por Wilson`) em texto cinza
-  - Tempo decorrido (`5min`, `1h12`) à direita, usando o hook `useElapsedTime` que já existe
-- **Atualização**: refetch a cada 15s via `setInterval` enquanto a seção está aberta. Sem realtime/subscriptions para manter leve.
-- **Estado vazio**: "Nenhum pedido em andamento."
+### Solução
 
-### Limitação técnica conhecida
+**1. Adicionar safe-area no topo globalmente (`src/index.css`)**
+- Acrescentar `padding-top: env(safe-area-inset-top)` no `body` (já tem `padding-left/right`).
+- Acrescentar `padding-bottom: env(safe-area-inset-bottom)` para evitar que a barra inferior do iPhone cubra conteúdo em outras telas.
 
-A tabela `order_items` **não tem `created_at`**. Para ordenar por "mais recente" usaremos o `updated_at` do pedido pai como aproximação:
+**2. Ajustar containers full-height que usam `h-[100dvh]`**
+Componentes como `MenuView` usam `h-[100dvh]` e ocupam 100% da viewport, **ignorando o padding do body**. Para esses, o safe-area precisa ser aplicado dentro do próprio container.
 
-1. Buscar últimos 20 pedidos ativos ordenados por `updated_at desc`.
-2. Para cada um, puxar seus `order_items` (já vêm em uma única query com `select=...,order_items(*)`).
-3. Achatar tudo em uma lista linear, mostrar os 30 primeiros itens (pedido mais recente primeiro, depois itens dentro do pedido na ordem que vieram).
-4. O "tempo decorrido" exibido é o do **pedido**, não do item individual — isso é aceito pois batch de itens chega junto e não há timestamp por item.
+Aplicar em:
+- `src/components/palm/MenuView.tsx` — header recebe `pt-[env(safe-area-inset-top)]` (somado ao `p-2.5` existente via classe utilitária).
+- `src/components/palm/OrderReview.tsx` — mesma correção no header se também usa `100dvh`.
 
-Isso é mencionado em uma nota visual discreta? Não — fica transparente para o usuário, comportamento "natural".
+Padrão a aplicar no header:
+```tsx
+<div className="shrink-0 bg-background border-b border-border p-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))]">
+```
+
+**3. Verificar outras páginas full-screen com risco**
+Inspecionar e aplicar mesmo tratamento se necessário em:
+- `src/pages/Kitchen.tsx`
+- `src/pages/Cashier.tsx`
+- `src/pages/Pdv.tsx`
+- `src/pages/Admin.tsx`
+- `src/pages/Index.tsx` (home)
+
+Se já usam o body padding (não forçam altura 100dvh com layout próprio), o passo 1 já resolve. Caso forcem altura/topo zero, aplicar `pt-[env(safe-area-inset-top)]` no primeiro elemento.
+
+### Resultado esperado
+- iPhone com notch/Dynamic Island: header desce ~47px abaixo da status bar; "Voltar", nome da mesa e ícones (✏️ renomear / ⇄ mover) ficam totalmente visíveis e clicáveis.
+- Android e desktop: `env(safe-area-inset-top)` resolve para `0px` — nenhum impacto visual.
+- Sem mudança de banco, sem mudança de comportamento, só CSS.
 
 ### Arquivos afetados
-
-- **Novo**: `src/components/home/RecentItemsPanel.tsx` — componente da seção, fetch + render + expand/collapse com `useState`.
-- **Editado**: `src/pages/Index.tsx` — importar e renderizar `<RecentItemsPanel />` ao final do conteúdo.
-
-Reusa: `useElapsedTime` (já existe), tokens de design já usados na home (`bg-card`, `border-border`, `text-muted-foreground`), `lucide-react` ícones (`Clock`, `ChevronDown`).
-
-Sem mudança de banco. Sem mudança de tipos. Só leitura via `supabase.from('orders').select('id, table_name, waiter_name, updated_at, status, order_items(product_name, quantity, waiter_name)').in('status', ['new','preparing','done']).order('updated_at', { ascending: false }).limit(20)`.
+- `src/index.css` — body ganha `padding-top` e `padding-bottom` com safe-area.
+- `src/components/palm/MenuView.tsx` — header com padding-top safe-area.
+- `src/components/palm/OrderReview.tsx` — mesmo ajuste se aplicável.
+- Demais páginas: revisão rápida durante implementação; ajuste só onde o layout força topo zero.
 
