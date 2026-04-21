@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Printer, Send, User, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
@@ -56,6 +57,44 @@ const OrderReview = ({
   const [reprintStatus, setReprintStatus] = useState<"idle" | "printing" | "success" | "error">("idle");
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
+  const queryClient = useQueryClient();
+
+  const cartItemCount = useMemo(
+    () => cart.reduce((sum, i) => sum + (i.quantity || 0), 0),
+    [cart],
+  );
+
+  const writeOptimisticOrder = (order: {
+    id: string;
+    table_name: string;
+    original_table_name?: string | null;
+    status?: string;
+    total: number;
+    waiter_name?: string | null;
+    created_at?: string;
+    served_at?: string | null;
+    item_count: number;
+  }) => {
+    queryClient.setQueryData<any[] | undefined>(["active-orders"], (prev) => {
+      const next = {
+        id: order.id,
+        table_name: order.table_name,
+        original_table_name: order.original_table_name ?? order.table_name,
+        status: order.status ?? "new",
+        total: order.total,
+        waiter_name: order.waiter_name ?? null,
+        created_at: order.created_at ?? new Date().toISOString(),
+        served_at: order.served_at ?? null,
+        item_count: order.item_count,
+      };
+      if (!prev) return prev;
+      const idx = prev.findIndex((o: any) => o.id === order.id);
+      if (idx === -1) return [...prev, next];
+      const merged = [...prev];
+      merged[idx] = { ...merged[idx], ...next };
+      return merged;
+    });
+  };
 
   const sendingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -150,6 +189,14 @@ const OrderReview = ({
 
         playFeedback("success");
         safeSet("success");
+        writeOptimisticOrder({
+          id: existingOrderId,
+          table_name: tableName,
+          original_table_name: originalTableName || tableName,
+          total,
+          waiter_name: waiterName || null,
+          item_count: cartItemCount,
+        });
         onSuccess("");
         return;
       }
@@ -203,11 +250,23 @@ const OrderReview = ({
       }
 
       playFeedback("success");
-      const newOrderId =
+      const createObj =
         createData && typeof createData === "object" && !Array.isArray(createData)
-          ? (createData as any).id
-          : undefined;
+          ? (createData as any)
+          : null;
+      const newOrderId = createObj?.id as string | undefined;
       safeSet("success");
+      if (newOrderId) {
+        writeOptimisticOrder({
+          id: newOrderId,
+          table_name: tableName,
+          original_table_name: originalTableName || tableName,
+          total,
+          waiter_name: waiterName || null,
+          created_at: createObj?.created_at,
+          item_count: cartItemCount,
+        });
+      }
       onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
     } catch (err: any) {
       if (myReq !== requestIdRef.current || timedOut) return;
