@@ -57,6 +57,44 @@ const OrderReview = ({
   const [reprintStatus, setReprintStatus] = useState<"idle" | "printing" | "success" | "error">("idle");
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
+  const queryClient = useQueryClient();
+
+  const cartItemCount = useMemo(
+    () => cart.reduce((sum, i) => sum + (i.quantity || 0), 0),
+    [cart],
+  );
+
+  const writeOptimisticOrder = (order: {
+    id: string;
+    table_name: string;
+    original_table_name?: string | null;
+    status?: string;
+    total: number;
+    waiter_name?: string | null;
+    created_at?: string;
+    served_at?: string | null;
+    item_count: number;
+  }) => {
+    queryClient.setQueryData<any[] | undefined>(["active-orders"], (prev) => {
+      const next = {
+        id: order.id,
+        table_name: order.table_name,
+        original_table_name: order.original_table_name ?? order.table_name,
+        status: order.status ?? "new",
+        total: order.total,
+        waiter_name: order.waiter_name ?? null,
+        created_at: order.created_at ?? new Date().toISOString(),
+        served_at: order.served_at ?? null,
+        item_count: order.item_count,
+      };
+      if (!prev) return prev;
+      const idx = prev.findIndex((o: any) => o.id === order.id);
+      if (idx === -1) return [...prev, next];
+      const merged = [...prev];
+      merged[idx] = { ...merged[idx], ...next };
+      return merged;
+    });
+  };
 
   const sendingRef = useRef(false);
   const mountedRef = useRef(true);
