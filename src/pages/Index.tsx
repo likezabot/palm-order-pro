@@ -3,6 +3,7 @@ import { Smartphone, Monitor, Settings, Download, ChefHat, ShoppingBag } from "l
 import { useFeedback } from "@/hooks/use-feedback";
 import { getAppVersion } from "@/lib/version-check";
 import { RecentItemsPanel } from "@/components/home/RecentItemsPanel";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", path: "/palm", Icon: Smartphone },
@@ -16,7 +17,10 @@ const Index = () => {
   const { playFeedback } = useFeedback();
 
   return (
-    <div className="flex min-h-screen-safe flex-col items-center justify-center gap-6 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+    <div className="relative flex min-h-screen-safe flex-col items-center justify-center gap-6 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+      <div className="absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] z-10">
+        <ThemeToggle />
+      </div>
       <div className="text-center mb-2 animate-fade-in-up">
         <h1 className="text-4xl font-black tracking-widest brand-gradient-text">
           PLANO B
