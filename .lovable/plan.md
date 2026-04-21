@@ -1,95 +1,88 @@
 
 
-## Revisão de responsividade — viewport real, safe-area e telas pequenas
+## Caixa e PDV — grid unificado de pedidos com marcador de "feito"
 
-Polimento estrutural de layout para funcionar de 320px a tablets, em retrato e paisagem, com notch, barra dinâmica do navegador e teclado virtual. Sem mudar visual, comportamento, banco ou lógica.
+Simplificar as listas de pedidos no **Caixa** e no **PDV**: remover a separação por status (Aguardando / Em Preparo / Prontos p/ Pagamento) e exibir todos os pedidos abertos juntos em **layout de grade (colunas)** em vez de lista vertical. Adicionar um **marcador visual** indicando que o pedido já foi feito/enviado (impresso na cozinha).
 
-### Causa raiz dos problemas atuais
+Sem mudar lógica, banco, RPCs, fluxo de pagamento ou impressão.
 
-1. **Conflito body × páginas full-height**: `body` em `index.css` aplica `padding-top/bottom: env(safe-area-inset-*)`. Páginas usam `min-h-screen` (100vh) e componentes como `MenuView`/`OrderReview` usam `h-[100dvh]`. Como o `dvh`/`vh` é medido **antes** do padding do body, o conteúdo total = `100dvh + safe-area` → estoura a viewport em iPhones com notch (scroll vertical indesejado, footer cortado, header sobreposto).
-2. **`min-h-screen` em vez de `min-h-dvh`**: 8 páginas usam `min-h-screen` (100vh fixo). No mobile, a barra do navegador some/aparece e cria saltos visuais; com teclado virtual aberto, layouts esticam para fora da tela visível.
-3. **CartFab `fixed bottom-5 right-5`**: ignora `env(safe-area-inset-bottom)` — em iPhones com home indicator fica colado no indicador.
-4. **Kitchen `md:h-screen`**: no desktop trava em 100vh; com barra do navegador dinâmica no iPad em paisagem, perde linha.
-5. **TableGrid `grid-cols-3` fixo**: em telas de 320px (iPhone SE 1ª gen, Galaxy Fold dobrado) os 3 cards ficam < 90px e o conteúdo do botão (senha + nome garçom + valor + horário) quebra/transborda. Sem fallback para `grid-cols-2`.
-6. **PrintStatusBadge `min-w-[220px] max-w-[280px]`**: em 320px com padding do pai, pode estourar a largura disponível.
-7. **`maximum-scale=1.0, user-scalable=no`** no viewport meta: aceitável para PWA, mas combinado com inputs `font-size: 16px` (já presente) ok — sem mudança aqui.
-8. **Headers com muitos botões em paisagem estreita** (`Pdv.tsx`, `Kitchen.tsx`, `Admin.tsx`): já usam `flex-wrap` mas alguns `truncate` faltam em chips de garçom/título.
+### 1. `src/pages/Cashier.tsx` — Caixa
 
-### Estratégia
+**Remoção:**
+- Não há discriminação por status hoje (já é uma lista única) — manter assim. O texto do usuário "não precisa aparecer isso na aba de caixa" se aplica a remover qualquer aparência de status: garantir que **não exibe** badges de "AGUARDANDO/PRONTO" (já não exibe).
 
-Padronizar **uma única regra de altura responsiva** baseada em `dvh` que respeita safe-area, e remover `padding` do body — movendo safe-area para containers de página individuais que precisam (headers/footers fixos), evitando o duplo desconto.
+**Mudança de layout (lista → grade):**
+- Container atual `space-y-3` → `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3`.
+- Cards passam de "linha horizontal" (`flex justify-between`) para **card vertical compacto**:
+  - Topo: nome da mesa em destaque (`text-2xl font-black`).
+  - Meio: total grande em laranja (`text-primary text-2xl`).
+  - Rodapé: 3 botões em linha (Imprimir, Editar, **FECHAR** principal).
+- Mantém `border-2 border-border bg-card rounded-xl shadow-sm` + `hover:border-primary/40 transition-colors`.
 
-### Mudanças
+**Marcador "pedido feito":**
+- Quando `order.print_status === "printed"`: adicionar chip pequeno no canto superior direito do card com `CheckCircle2` verde + texto **"FEITO"** (`bg-success/15 text-success border border-success/30 rounded-full px-2 py-0.5 text-xs font-bold`).
+- Quando `pending`: nenhum chip (silencioso).
+- Quando `failed`: chip vermelho discreto **"⚠ FALHA"** (mesmo estilo, cor destructive) — opcional mas útil para o caixa saber.
 
-#### 1. `src/index.css` — base
-- **Remover** `padding-top/bottom` do `body` (mantém `padding-left/right` para landscape com notch lateral).
-- Adicionar utilidade global `.h-screen-safe` e `.min-h-screen-safe`:
-  ```css
-  .h-screen-safe { height: 100dvh; height: calc(100dvh); }
-  .min-h-screen-safe { min-height: 100svh; min-height: 100dvh; }
+### 2. `src/pages/Pdv.tsx` — PDV
+
+**Remoção da discriminação por status:**
+- Remover as 3 chamadas a `<OrderSection>` (Aguardando / Em Preparo / Prontos p/ Pagamento).
+- Remover o uso de `groupedOrders` na render (manter o `useMemo` se quiser, mas não usar) — ou eliminar para limpeza.
+- Remover o hook de som "novo pedido pronto" (`prevDoneIdsRef` + `useEffect`)? **Manter** — é feedback útil e não depende da exibição visual; só não emite mais o toast com nome de seção. *(Optar por manter intacto para preservar comportamento.)*
+
+**Mudança de layout (lista vertical agrupada → grade única):**
+- O painel esquerdo passa a renderizar **um único grid** com todos os pedidos ordenados por `created_at` ascendente (mais antigo primeiro):
   ```
-  Fallback `100svh` para iOS antigos sem `dvh`.
-- Adicionar `.pt-safe`, `.pb-safe`, `.px-safe` utilities usando `env(safe-area-inset-*)` com fallback `0px`.
-- `html, body { height: 100%; overscroll-behavior-y: none; }` para evitar bounce/pull-to-refresh quebrando layouts fixos.
+  grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3
+  ```
+- Cada card usa o componente atual `OrderRow` adaptado para modo "card" (ver item 3) — ou criar `OrderCard` novo reusando o mesmo arquivo via prop `variant="card"`.
+- Header da seção vira simples: **"Fila de Pedidos (N)"** sem subtítulos por status.
 
-#### 2. `tailwind.config.ts` — tokens
-- Adicionar spacing `safe-top`, `safe-bottom` mapeando para `env(safe-area-inset-*)`.
-- Adicionar `minHeight: { 'screen-dvh': '100dvh', 'screen-svh': '100svh' }` e `height: { 'screen-dvh': '100dvh' }`.
+**Marcador "pedido feito":**
+- O card de pedido continua mostrando o `CheckCircle2` que `OrderRow` já renderiza quando `print_status === "printed"`, mas agora com **chip explícito "FEITO"** em vez de só ícone, no topo do card.
+- Manter `print_status` no painel direito (já existe — Aguardando impressão / Impresso às HH:MM / Falha).
 
-#### 3. Substituir `min-h-screen` → `min-h-dvh` (com fallback)
-Páginas afetadas: `Index.tsx`, `Pdv.tsx`, `Cashier.tsx`, `Admin.tsx`, `NotFound.tsx`, `ForceUpdate.tsx`, `InstallPage.tsx`, `PrintStation.tsx`, `ProductForm.tsx`, `CloseOrder.tsx`, `TableGrid.tsx` (2 ocorrências).
-- Trocar por `min-h-dvh` (Tailwind 3.4+ suporta nativamente; senão usar classe `min-h-screen-safe`).
+### 3. `src/components/pdv/OrderRow.tsx` — adaptação para grade
 
-#### 4. Componentes de tela cheia (`MenuView`, `OrderReview`)
-- Trocar `h-[100dvh]` por `h-dvh` (Tailwind nativo) — mantém comportamento mas sem string mágica.
-- Como removemos `padding-top` do body, o `pt-[calc(0.625rem+env(safe-area-inset-top))]` no header continua válido e correto (agora é o **único** desconto, sem somar duas vezes).
+Refatorar para suportar layout de **card** (não só linha):
+- Remover dependência de `flex items-center justify-between` horizontal → mudar para `flex flex-col gap-2 p-3` (vertical).
+- Hierarquia dentro do card:
+  - **Topo**: nome da mesa grande + chip "FEITO" à direita se impresso.
+  - **Meio**: contador de itens · garçom (texto pequeno) + tempo decorrido em chip.
+  - **Inferior**: total à direita em destaque + badges de urgência abaixo se aplicável.
+- Manter todos os estados visuais existentes: `selected`, `isUrgent` (animate-pulse + borda destrutiva), `isLate`, `waitingPay`.
+- Manter borda lateral colorida (`border-l-4`) — agora indicando idade/urgência apenas (não status), pois `OrderSection` é removida.
+- Como `OrderSection` deixa de ser usada no PDV, o prop `accentBorder` recebe um valor padrão calculado dentro do próprio `OrderRow`:
+  - normal → `border-l-border`
+  - urgente → `border-l-destructive`
+  - atrasado → `border-l-warning`
+  - waitingPay → `border-l-warning`
 
-#### 5. `Kitchen.tsx`
-- Trocar `md:h-screen` por `md:h-dvh`.
-- Garantir que o grid das colunas use `min-h-0` em todos os pais para permitir scroll interno correto em paisagem.
+### 4. `src/components/pdv/OrderSection.tsx`
 
-#### 6. `CartFab.tsx`
-- `bottom-5` → `bottom-[calc(1.25rem+env(safe-area-inset-bottom))]`.
-- `right-5` → `right-[calc(1.25rem+env(safe-area-inset-right))]`.
+- **Não deletar** o arquivo (evita quebrar imports/testes em outros lugares se houver), mas o PDV deixa de importá-lo. Marcar como "deprecated" via comentário no topo:
+  ```ts
+  // DEPRECATED: agora o PDV usa um grid único de OrderRow.
+  ```
 
-#### 7. `OrderReviewFooter.tsx`
-- Já usa `pb-[calc(1rem+env(safe-area-inset-bottom))]` ✓ (mantém).
+### 5. Comportamento preservado (sem mudanças)
 
-#### 8. `TableGrid.tsx` — grid de mesas
-- `grid-cols-3 md:grid-cols-4 lg:grid-cols-5` → `grid-cols-2 [@media(min-width:380px)]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-5`.
-- Reduzir `gap-3` para `gap-2 sm:gap-3` em telas estreitas.
-- Cards de BALCÃO: `min-w-[120px]` → `min-w-[112px]` para caber 2.5 cards em 320px.
+- Banco, RPCs (`pay_order`), realtime (`usePdvRealtime`), impressão (`manualPrintOrder`/`Delta`/`Bill`), fluxo de pagamento, identificação do cliente, modo garçom (`staffMode`), confirmação de impressão.
+- Painel direito do PDV (detalhes do pedido + botões de ação): inalterado.
+- Tela `CloseOrder`: inalterada.
+- Som ao novo pedido pronto: inalterado.
+- Ordem de exibição: mais antigo primeiro (FIFO), igual ao atual após remover agrupamento.
 
-#### 9. `PrintStatusBadge.tsx`
-- `min-w-[220px] max-w-[280px]` → `w-full max-w-[280px]` + container pai com `px-4` — adapta naturalmente.
+### Arquivos afetados (3)
 
-#### 10. Headers densos (Pdv, Admin, Kitchen)
-- Auditoria rápida: garantir `min-w-0` + `truncate` em títulos/chips que podem estourar; adicionar `flex-wrap` onde falta.
-
-#### 11. Teclado virtual (inputs em modais/forms)
-- Em `OrderReview` (input nome cliente) e `MenuView` (busca): garantir que o container scroll pai tenha `overflow-y-auto` e o input rolagem natural — já ok pela estrutura `flex-col h-dvh`. Sem JS.
-- Adicionar `scroll-padding-bottom: env(safe-area-inset-bottom)` no `html` para que `scrollIntoView` de inputs respeite teclado.
-
-#### 12. Orientação paisagem
-- `MenuView`/`OrderReview`: já são flex-col com header/footer fixos e content scroll — funciona em paisagem com a correção de altura.
-- `Kitchen` paisagem mobile: hoje vira scroll vertical de 3 colunas empilhadas (`grid-cols-1` < md). Manter, mas trocar breakpoint `md` para `sm` no grid (`grid-cols-1 sm:grid-cols-3`) para aproveitar paisagem em celular.
-
-### Arquivos afetados (15)
-
-**Base (2):** `src/index.css`, `tailwind.config.ts`.
-
-**Páginas (10):** `src/pages/Index.tsx`, `Pdv.tsx`, `Cashier.tsx`, `Admin.tsx`, `Kitchen.tsx`, `NotFound.tsx`, `ForceUpdate.tsx`, `PrintStation.tsx`, `src/components/install/InstallPage.tsx`, `src/components/admin/ProductForm.tsx`, `src/components/cashier/CloseOrder.tsx`.
-
-**Componentes (4):** `src/components/palm/TableGrid.tsx`, `MenuView.tsx`, `OrderReview.tsx`, `CartFab.tsx`, `PrintStatusBadge.tsx`.
-
-### Sem alterações
-- Nenhuma mudança em banco, RPCs, hooks, lógica de negócio, fluxo de envio/impressão, componentes shadcn (`button.tsx`, `dialog.tsx` etc.).
-- Visual idêntico em telas onde já funcionava — só corrige overflow, cortes e safe-area.
-- Sem dependências novas. CSS-first; nada de JS para detectar viewport (exceto o que já existe).
+- `src/pages/Cashier.tsx` — grid + chip "FEITO".
+- `src/pages/Pdv.tsx` — remover seções por status, usar grid único.
+- `src/components/pdv/OrderRow.tsx` — refatorar para layout de card vertical, calcular borda interna, exibir chip "FEITO".
 
 ### Resultado esperado
-- iPhone SE (375×667), iPhone 14 (390×844), iPhone 14 Pro Max (430×932), Galaxy S8 (360×740), Galaxy Fold dobrado (280×653), Pixel 7 (412×915) e tablets (iPad 768×1024, iPad Pro 1024×1366) — todos sem cortes, sem scroll horizontal, sem elementos atrás de notch/home indicator.
-- Paisagem em celular: header/footer não cobrem conteúdo; Kitchen aproveita 3 colunas a partir de 640px.
-- Barra dinâmica do Safari/Chrome mobile: layout não "pula" ao rolar (graças a `dvh`).
-- Teclado virtual: input focado fica visível; footer não invade a área do teclado.
+
+- **Caixa**: mesas abertas em grade responsiva (1 col mobile → 4 col desktop), cards compactos com mesa, total e ações; chip verde "FEITO" quando o cupom da cozinha já saiu.
+- **PDV**: mesma fila visualmente uniforme — sem títulos "Aguardando / Em Preparo / Prontos" — apenas cards ordenados por chegada, em grid (1/2/3 colunas conforme largura), com marcadores de urgência e "FEITO" preservando hierarquia.
+- Zero impacto em comportamento, dados ou fluxo de pagamento/impressão.
 
