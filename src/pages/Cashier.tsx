@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, Pencil, CheckCircle2, Users, Package, Clock, ChevronRight, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Printer, Pencil, CheckCircle2, Users, Package, Clock, ChevronRight, AlertTriangle, DollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Order } from "@/lib/types";
 import CloseOrder from "@/components/cashier/CloseOrder";
@@ -24,8 +24,8 @@ const STATUS_VERB: Record<string, string> = {
 };
 
 const ADVANCE_LABEL: Record<string, string> = {
-  new: "▶ INICIAR PREPARO",
-  preparing: "✅ MARCAR PRONTO",
+  new: "▶ PREPARAR",
+  preparing: "✅ PRONTO",
 };
 
 const ADVANCE_BTN: Record<string, string> = {
@@ -78,19 +78,26 @@ const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: Or
           ? "border-l-4 border-l-destructive"
           : "border-l-4 border-l-transparent";
 
+  // Texto do tempo padronizado
+  const getTimeLabel = () => {
+    if (!elapsed || elapsed === "agora") return "agora";
+    const statusText = status === "new" ? "Aguardando" : status === "preparing" ? "Em preparo" : "Pronto";
+    return `${statusText} há ${elapsed}`;
+  };
+
   return (
     <div
-      className={`relative flex flex-col gap-3 rounded-xl bg-card border-2 border-border ${accentBorder} p-4 shadow-sm hover:border-primary/40 hover:shadow-glow transition-all min-h-[200px] cursor-pointer`}
+      className={`relative flex flex-col p-3 rounded-xl bg-card border-2 border-border ${accentBorder} shadow-sm hover:border-primary/40 hover:shadow-md transition-all cursor-pointer min-h-[160px]`}
       onClick={() => onClose(order)}
     >
-      {/* Topo: mesa + status */}
+      {/* Header: Mesa + Status */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="font-black text-2xl text-foreground leading-tight break-words">
+          <p className="font-black text-xl text-foreground leading-tight break-words">
             {formatTableLabel(order.table_name, order.original_table_name)}
           </p>
           {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-            <p className="text-xs font-bold text-muted-foreground mt-0.5">(Mesa {order.original_table_name})</p>
+            <p className="text-[10px] font-bold text-muted-foreground mt-0.5">(Mesa {order.original_table_name})</p>
           )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -115,65 +122,59 @@ const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: Or
         </div>
       </div>
 
-      {/* Meio: resumo */}
-      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {/* Info central compacta */}
+      <div className="flex-1 flex flex-col justify-center gap-1 py-1">
         {order.waiter_name && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Users className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate font-semibold text-foreground/80">{order.waiter_name}</span>
+            <span className="truncate font-medium text-foreground/80">{order.waiter_name}</span>
           </div>
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Package className="w-3.5 h-3.5 shrink-0" />
           <span>{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock className="w-3.5 h-3.5 shrink-0" />
-          <span>
-            <span className="font-bold text-foreground">há {elapsed || "agora"}</span>{" "}
-            <span>{STATUS_VERB[status] || ""}</span>
-          </span>
+          <span className="font-medium text-foreground">{getTimeLabel()}</span>
         </div>
       </div>
 
-      {/* Base: total + ações */}
-      <div className="mt-auto flex flex-col gap-2">
-        <p className="text-primary font-black text-3xl leading-none">R$ {(order.total || 0).toFixed(2)}</p>
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+      {/* Base: ações */}
+      <div className="flex items-center gap-1 pt-2 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={() => onPrint(order)}
+          className="p-2 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0 hover:bg-secondary/80"
+          title="Imprimir"
+          aria-label="Imprimir"
+        >
+          <Printer size={16} />
+        </button>
+        <button
+          onClick={() => onEdit(order)}
+          className="p-2 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0 hover:bg-secondary/80"
+          title="Editar"
+          aria-label="Editar"
+        >
+          <Pencil size={16} />
+        </button>
+        {next ? (
           <button
-            onClick={() => onPrint(order)}
-            className="p-2.5 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
-            title="Imprimir"
-            aria-label="Imprimir"
+            onClick={() => onAdvance(order)}
+            className={`flex-1 rounded-lg px-3 py-2 font-black text-xs tracking-wide active:scale-95 transition-transform min-h-[36px] ${ADVANCE_BTN[status] || "bg-secondary text-foreground"}`}
+            title={`Avançar para ${STATUS_LABEL[next]}`}
+            aria-label="Avançar status"
           >
-            <Printer size={18} />
+            {ADVANCE_LABEL[status] || <ChevronRight size={16} />}
           </button>
+        ) : (
           <button
-            onClick={() => onEdit(order)}
-            className="p-2.5 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
-            title="Editar"
-            aria-label="Editar"
+            onClick={() => onClose(order)}
+            className="flex-1 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-3 py-2 font-black text-xs tracking-wide text-primary-foreground active:scale-95 transition-transform min-h-[36px]"
           >
-            <Pencil size={18} />
+            <DollarSign size={14} className="inline mr-1" /> FECHAR
           </button>
-          {next ? (
-            <button
-              onClick={() => onAdvance(order)}
-              className={`flex-1 rounded-lg px-3 py-2.5 font-black text-sm tracking-wide active:scale-95 transition-transform min-h-[44px] ${ADVANCE_BTN[status] || "bg-secondary text-foreground"}`}
-              title={`Avançar para ${STATUS_LABEL[next]}`}
-              aria-label="Avançar status"
-            >
-              {ADVANCE_LABEL[status] || <ChevronRight size={18} />}
-            </button>
-          ) : (
-            <button
-              onClick={() => onClose(order)}
-              className="flex-1 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 font-black text-primary-foreground active:scale-95 transition-transform min-h-[44px] text-sm tracking-wide"
-            >
-              💰 FECHAR
-            </button>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -282,11 +283,11 @@ const Cashier = () => {
         </span>
       </div>
 
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-3 sm:p-4">
         {orders.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">Nenhuma mesa aberta</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
             {orders.map((order) => (
               <OrderCard
                 key={order.id}

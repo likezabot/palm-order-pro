@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -263,8 +263,8 @@ const Pdv = () => {
       {/* Main content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_420px] overflow-hidden">
         {/* Left: Order grid */}
-        <div className="overflow-y-auto p-4 space-y-3 border-r border-border">
-          <h2 className="text-base font-black text-muted-foreground uppercase tracking-wider">
+        <div className="overflow-y-auto p-3 sm:p-4 space-y-3 border-r border-border">
+          <h2 className="text-sm font-black text-muted-foreground uppercase tracking-wider">
             Fila de Pedidos ({orders.length})
           </h2>
           {orders.length === 0 ? (
@@ -282,6 +282,7 @@ const Pdv = () => {
                     onSelect={() => { setSelectedId(order.id); setShowPayment(false); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
+                    onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
                   />
                 ))}
@@ -395,132 +396,104 @@ const Pdv = () => {
                 {selectedItems.length === 0 ? (
                   <p className="text-muted-foreground text-sm">Carregando itens...</p>
                 ) : (
-                  summarizeItemWaiters(selectedItems, selectedOrder.waiter_name || "").map((item, idx) => {
-                    const tag = formatWaiterTag(item.waiters, selectedOrder.waiter_name);
-                    return (
-                      <div key={`${item.product_id || item.product_name}-${idx}`}>
-                        <div className="flex justify-between text-lg gap-2">
-                          <span className="font-semibold min-w-0 break-words">
-                            {item.quantity}x {item.product_name}
-                            {tag && (
-                              <span className="ml-2 inline-block text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded align-middle">
-                                {tag}
-                              </span>
-                            )}
-                          </span>
-                          <span className="font-bold shrink-0">R$ {item.subtotal.toFixed(2)}</span>
+                  <>
+                    {selectedItems.map((item) => (
+                      <div key={item.id} className="flex justify-between items-start gap-2">
+                        <div className="flex-1">
+                          <div className="font-semibold">{item.quantity}x {item.product_name}</div>
+                          {item.note && <div className="text-xs text-muted-foreground italic">{item.note}</div>}
                         </div>
-                        {item.note && (
-                          <p className="text-sm text-muted-foreground ml-4">OBS: {item.note}</p>
-                        )}
+                        <div className="font-mono text-sm">R$ {(item.subtotal || 0).toFixed(2)}</div>
                       </div>
-                    );
-                  })
+                    ))}
+                    <div className="border-t border-border pt-2 flex justify-between text-lg font-bold">
+                      <span>TOTAL</span>
+                      <span className="text-primary">R$ {total.toFixed(2)}</span>
+                    </div>
+                  </>
                 )}
               </div>
 
-              <div className="border-t border-border pt-3 flex justify-between text-2xl font-black">
-                <span>TOTAL</span>
-                <span className="text-primary">R$ {total.toFixed(2)}</span>
-              </div>
-
-              {/* Print buttons */}
-              <div className="space-y-3 pt-2">
-                <div className="grid grid-cols-3 gap-2">
-                  {selectedOrder.delta_items && (
-                    <button
-                      onClick={() => confirmPrintAction(async () => {
-                        const ok = await manualPrintDelta(selectedOrder);
-                        toast({ title: ok ? "Acréscimo impresso!" : "Sem acréscimo para imprimir", variant: ok ? "default" : "destructive" });
-                      })}
-                      className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
-                    >
-                      <FilePlus size={16} />
-                      ACRÉSCIMO
-                    </button>
-                  )}
-                  <button
-                    onClick={() => confirmPrintAction(async () => {
-                      const ok = await manualPrintOrder(selectedOrder);
-                      if (!ok) toast({ title: "Sem itens para imprimir", variant: "destructive" });
-                      else toast({ title: "Cupom enviado para impressão!" });
-                    })}
-                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
-                  >
-                    <FileText size={16} />
-                    PEDIDO
-                  </button>
-                  <button
-                    onClick={() => confirmPrintAction(async () => {
-                      const ok = await manualPrintBill(selectedOrder);
-                      toast({ title: ok ? "Conta impressa!" : "Sem itens para imprimir", variant: ok ? "default" : "destructive" });
-                    })}
-                    className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card p-3 font-semibold text-foreground hover:bg-secondary transition-colors text-sm font-bold min-h-[64px]"
-                  >
-                    <Receipt size={16} />
-                    CONTA
-                  </button>
-                </div>
-
+              <div className="flex flex-wrap gap-2 pt-2">
                 <button
-                  onClick={() => { setShowPayment(true); }}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-success p-5 font-black text-success-foreground min-h-[64px] text-lg active:scale-[0.98] transition-all shadow-lg"
+                  onClick={() => handlePrint(selectedOrder)}
+                  className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-4 py-3 font-bold text-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
                 >
-                  <DollarSign size={22} /> FECHAR CONTA
+                  <Printer size={18} /> Imprimir
                 </button>
+                <button
+                  onClick={() => navigate(`/palm?orderId=${selectedOrder.id}&tableName=${selectedOrder.table_name}`)}
+                  className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-4 py-3 font-bold text-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                >
+                  <Pencil size={18} /> Editar
+                </button>
+                {selectedOrder.status !== "done" && (
+                  <button
+                    onClick={() => handleAdvance(selectedOrder)}
+                    className="flex-1 min-w-[100px] rounded-lg bg-success px-4 py-3 font-bold text-success-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 size={18} /> {statusConfig[selectedOrder.status]?.nextLabel || "Avançar"}
+                  </button>
+                )}
+                {selectedOrder.status === "done" && (
+                  <button
+                    onClick={() => setShowPayment(true)}
+                    className="flex-1 min-w-[100px] rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-3 font-bold text-primary-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <DollarSign size={18} /> FECHAR MESA
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
       </div>
-      {/* Payment print confirmation */}
+
+      {/* Dialogs */}
       <AlertDialog open={showPayConfirm} onOpenChange={setShowPayConfirm}>
-        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl">Tem certeza que quer fechar a mesa?</AlertDialogTitle>
+            <AlertDialogTitle>Confirmar fechamento?</AlertDialogTitle>
             <AlertDialogDescription>
-              Escolha se deseja fechar a conta com ou sem impressão do comprovante.
+              Mesa {selectedOrder ? formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name) : ""} — Total: R$ {total.toFixed(2)}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
-            <button
-              onClick={() => handlePayment(true)}
-              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
-            >
-              <Printer size={20} /> Fechar e imprimir
-            </button>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowPayConfirm(false)}>Cancelar</AlertDialogCancel>
             <button
               onClick={() => handlePayment(false)}
-              className="flex items-center justify-center gap-2 w-full rounded-xl bg-secondary p-4 text-lg font-bold text-secondary-foreground active:scale-[0.98] transition-all"
+              disabled={sending}
+              className="rounded-lg bg-secondary px-4 py-2 font-bold text-foreground disabled:opacity-40"
             >
-              <CheckCircle2 size={20} /> Fechar sem imprimir
+              {sending ? "..." : "Fechar sem imprimir"}
             </button>
-            <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
-              Cancelar
-            </AlertDialogCancel>
+            <button
+              onClick={() => handlePayment(true)}
+              disabled={sending}
+              className="rounded-lg bg-success px-4 py-2 font-bold text-success-foreground disabled:opacity-40"
+            >
+              {sending ? "..." : "✅ Fechar e imprimir"}
+            </button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reprint confirmation */}
-      <AlertDialog open={showPrintConfirm} onOpenChange={(open) => { setShowPrintConfirm(open); if (!open) setPendingPrint(null); }}>
-        <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+      <AlertDialog open={showPrintConfirm} onOpenChange={setShowPrintConfirm}>
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl">Deseja imprimir?</AlertDialogTitle>
+            <AlertDialogTitle>Reimprimir comprovante?</AlertDialogTitle>
             <AlertDialogDescription>
-              Confirme para enviar a impressão.
+              Deseja reimprimir o comprovante da mesa?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col">
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowPrintConfirm(false)}>Cancelar</AlertDialogCancel>
             <button
               onClick={executePendingPrint}
-              className="flex items-center justify-center gap-2 w-full rounded-xl bg-primary p-4 text-lg font-bold text-primary-foreground active:scale-[0.98] transition-all"
+              className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground"
             >
-              <Printer size={20} /> Sim, imprimir
+              Sim, reimprimir
             </button>
-            <AlertDialogCancel className="w-full rounded-xl p-4 h-auto text-base border-none text-muted-foreground">
-              Cancelar
-            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
