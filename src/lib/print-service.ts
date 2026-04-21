@@ -8,6 +8,41 @@
 import { supabase } from "@/integrations/supabase/client";
 import { printReceipt, printDelta, printBill } from "@/lib/print-receipt";
 import { formatPrintTableValue } from "@/lib/utils";
+import { loadPrintConfig } from "@/lib/print-config";
+import {
+  buildEscPosReceipt,
+  buildEscPosDelta,
+  buildEscPosBill,
+} from "@/lib/thermal-printer";
+import { encodePayloadB64, enqueuePrintJob, type PrintJobType } from "@/lib/print-queue";
+
+/**
+ * Quando o bridge falha, enfileira o payload ESC/POS para retry posterior.
+ * No-op se config não estiver em modo bridge (no browser não há fallback).
+ * Idempotente por (orderId, printType).
+ */
+async function enqueueOnBridgeFailure(
+  orderId: string,
+  tableName: string,
+  printType: PrintJobType,
+  payload: Uint8Array,
+): Promise<void> {
+  try {
+    const cfg = loadPrintConfig();
+    if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
+    await enqueuePrintJob({
+      orderId,
+      tableName,
+      printType,
+      payloadB64: encodePayloadB64(payload),
+      bridgeUrl: cfg.bridgeUrl,
+      lastError: "bridge_offline",
+    });
+    console.warn(`[print-service] Bridge offline → job enfileirado (${printType}, mesa ${tableName})`);
+  } catch (e) {
+    console.error("[print-service] Falha ao enfileirar job:", e);
+  }
+}
 
 interface PrintableItem {
   product_name: string;
