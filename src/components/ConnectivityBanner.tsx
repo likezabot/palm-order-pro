@@ -45,10 +45,9 @@ export default function ConnectivityBanner() {
   const handleReconnect = async () => {
     // Força reconnect dos canais Realtime e re-checa pings.
     try {
-      // @ts-expect-error — método interno do client estável o suficiente
-      supabase.realtime?.disconnect?.();
-      // @ts-expect-error
-      supabase.realtime?.connect?.();
+      const rt = (supabase as unknown as { realtime?: { disconnect?: () => void; connect?: () => void } }).realtime;
+      rt?.disconnect?.();
+      rt?.connect?.();
     } catch {
       /* noop */
     }
