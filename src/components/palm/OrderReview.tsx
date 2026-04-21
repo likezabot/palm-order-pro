@@ -189,6 +189,14 @@ const OrderReview = ({
 
         playFeedback("success");
         safeSet("success");
+        writeOptimisticOrder({
+          id: existingOrderId,
+          table_name: tableName,
+          original_table_name: originalTableName || tableName,
+          total,
+          waiter_name: waiterName || null,
+          item_count: cartItemCount,
+        });
         onSuccess("");
         return;
       }
