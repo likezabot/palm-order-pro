@@ -5,7 +5,8 @@ import { ArrowLeft, Printer, Pencil, CheckCircle2, Users, Package, Clock, Chevro
 import { useNavigate } from "react-router-dom";
 import { Order } from "@/lib/types";
 import CloseOrder from "@/components/cashier/CloseOrder";
-import { manualPrintOrder } from "@/lib/print-service";
+import PrintChoiceDialog, { type PrintChoice } from "@/components/cashier/PrintChoiceDialog";
+import { manualPrintOrder, manualPrintBill, manualPrintDelta, type ManualPrintResult } from "@/lib/print-service";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { formatTableLabel } from "@/lib/utils";
@@ -186,6 +187,7 @@ const Cashier = () => {
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [printOrder, setPrintOrder] = useState<Order | null>(null);
 
   const { data: orders = [] } = useQuery({
     queryKey: ["cashier-orders"],
@@ -222,13 +224,50 @@ const Cashier = () => {
     refetchInterval: 5000,
   });
 
-  const handlePrint = async (order: Order) => {
+  const handlePrint = (order: Order) => {
     playFeedback("click");
-    const success = await manualPrintOrder(order);
-    if (success) {
-      toast({ title: `Cupom enviado para ${formatTableLabel(order.table_name, order.original_table_name)}` });
+    setPrintOrder(order);
+  };
+
+  const handlePrintChoice = async (choice: PrintChoice) => {
+    const order = printOrder;
+    setPrintOrder(null);
+    if (!order) return;
+
+    const label = formatTableLabel(order.table_name, order.original_table_name);
+    let result: ManualPrintResult;
+    try {
+      if (choice === "full") result = await manualPrintOrder(order);
+      else if (choice === "bill") result = await manualPrintBill(order);
+      else result = await manualPrintDelta(order);
+    } catch (err) {
+      console.error(err);
+      playFeedback("error");
+      toast({ title: "Erro inesperado ao imprimir", variant: "destructive" });
+      return;
+    }
+
+    if (result.ok && result.bridgeOk) {
+      playFeedback("success");
+      toast({
+        title: `Cupom enviado para ${label}`,
+        description: result.queued ? "Também encaminhado à central." : undefined,
+      });
+    } else if (result.ok && result.queued) {
+      playFeedback("success");
+      toast({
+        title: "Enviado à central de impressão",
+        description: `Impressora local indisponível — ${label} entrou na fila.`,
+      });
+    } else if (result.reason === "no_items") {
+      playFeedback("error");
+      toast({ title: "Mesa sem itens cadastrados", variant: "destructive" });
+    } else if (result.reason === "no_delta") {
+      playFeedback("error");
+      toast({ title: "Nenhum acréscimo recente para reimprimir", variant: "destructive" });
     } else {
-      toast({ title: "Erro ao imprimir", variant: "destructive" });
+      playFeedback("error");
+      toast({ title: "Falha ao imprimir", description: "Sem bridge local nem central configurada.", variant: "destructive" });
     }
   };
 
@@ -302,6 +341,13 @@ const Cashier = () => {
           </div>
         )}
       </div>
+
+      <PrintChoiceDialog
+        order={printOrder}
+        open={!!printOrder}
+        onOpenChange={(o) => { if (!o) setPrintOrder(null); }}
+        onChoose={handlePrintChoice}
+      />
     </div>
   );
 };
