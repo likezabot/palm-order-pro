@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { Clock, CheckCircle2, Users, Package, Printer, Pencil, ChevronRight, AlertTriangle, DollarSign } from "lucide-react";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
@@ -46,7 +47,7 @@ interface OrderRowProps {
   onClose?: (order: Order) => void;
 }
 
-export const OrderRow = ({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }: OrderRowProps) => {
+export const OrderRow = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }, ref) => {
   // Cronômetro do TEMPO NA ETAPA ATUAL (updated_at)
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const wasPrinted = order.print_status === "printed";
@@ -78,6 +79,7 @@ export const OrderRow = ({ order, itemCount, selected, onSelect, onAdvance, onPr
 
   return (
     <div
+      ref={ref}
       onClick={onSelect}
       className={`relative flex flex-col p-3 rounded-xl border-l-4 border-2 ${borderAccent} transition-all cursor-pointer ${
         selected
@@ -178,4 +180,5 @@ export const OrderRow = ({ order, itemCount, selected, onSelect, onAdvance, onPr
       </div>
     </div>
   );
-};
+});
+OrderRow.displayName = "OrderRow";

@@ -55,7 +55,7 @@ const Kitchen = () => {
   // Realtime subscription
   useEffect(() => {
     const channel = supabase
-      .channel("kitchen-realtime")
+      .channel(`kitchen-realtime-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
         queryClient.invalidateQueries({ queryKey: ["kitchen-orders"] });
       })
