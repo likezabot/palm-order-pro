@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import "./index.css";
 import { startPrintQueueWorker } from "./lib/print-queue-worker";
 import { debugLog } from "./lib/debug-logger";
+import { startConnectivityMonitor } from "./lib/connectivity-monitor";
 
 debugLog.info(
   "system",
@@ -20,6 +21,10 @@ createRoot(document.getElementById("root")!).render(<App />);
 // Worker da fila local de impressão (fallback do bridge .exe).
 // Roda em background e tenta reimprimir jobs pendentes a cada 15s.
 startPrintQueueWorker();
+
+// Monitor de conectividade (internet + realtime + backend).
+// Não toca em backend: só observa e expõe estado pra UI.
+startConnectivityMonitor();
 
 // --- PWA Service Worker ---
 const isInIframe = (() => {

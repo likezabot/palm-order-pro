@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import UpdateBanner from "@/components/UpdateBanner";
+import ConnectivityBanner from "@/components/ConnectivityBanner";
 import Index from "./pages/Index";
 import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
@@ -15,7 +16,18 @@ import InstallPalm from "./pages/InstallPalm";
 import InstallKitchen from "./pages/InstallKitchen";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Cache offline parcial: mantém última versão visível mesmo sem rede.
+      networkMode: "offlineFirst",
+      staleTime: 30_000,
+      gcTime: 30 * 60_000,
+      retry: 2,
+      refetchOnWindowFocus: true,
+    },
+  },
+});
 
 const AnimatedRoutes = () => {
   const location = useLocation();
@@ -42,6 +54,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <UpdateBanner />
+      <ConnectivityBanner />
       <Toaster />
       <Sonner />
       <BrowserRouter>

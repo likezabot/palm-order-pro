@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
 import { debugLog } from "@/lib/debug-logger";
+import { reportRealtime, markRealtimeHeartbeat, subscribeConnectivity } from "@/lib/connectivity-store";
 import type { Order } from "@/lib/types";
 
 /**
@@ -75,6 +76,7 @@ export function usePdvRealtime() {
     const channel = supabase
       .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+        markRealtimeHeartbeat();
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
         queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
         const newOrder = payload.new as Order;
@@ -85,6 +87,7 @@ export function usePdvRealtime() {
         tryAutoPrintRef.current(newOrder, eventKey, false);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+        markRealtimeHeartbeat();
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
         const updated = payload.new as Order;
         const old = payload.old as Partial<Order>;
@@ -100,16 +103,37 @@ export function usePdvRealtime() {
         }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
+        markRealtimeHeartbeat();
         queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
       })
       .subscribe((status) => {
         const online = status === "SUBSCRIBED";
         debugLog[online ? "success" : "warn"]("realtime", `[${channelName}] status: ${status}`);
         setRealtimeStatus(online ? "online" : "offline");
+        reportRealtime(status);
       });
+
+    // Fallback polling: quando realtime estiver degradado/offline, recarrega a cada 10s.
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const unsubConn = subscribeConnectivity((s) => {
+      const needsPoll = s.realtime === "degraded" || s.realtime === "offline";
+      if (needsPoll && !pollTimer) {
+        debugLog.warn("realtime", "ativando fallback polling 10s");
+        pollTimer = setInterval(() => {
+          queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
+        }, 10_000);
+      } else if (!needsPoll && pollTimer) {
+        debugLog.success("realtime", "desativando fallback polling");
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    });
 
     return () => {
       debugLog.info("realtime", `← removendo canal ${channelName}`);
+      if (pollTimer) clearInterval(pollTimer);
+      unsubConn();
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
