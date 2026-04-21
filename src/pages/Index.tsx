@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Smartphone, Monitor, Settings, Download, ChefHat, ShoppingBag } from "lucide-react";
 import { useFeedback } from "@/hooks/use-feedback";
 import { getAppVersion } from "@/lib/version-check";
-import { RecentItemsPanel } from "@/components/home/RecentItemsPanel";
+
 import ThemeToggle from "@/components/ThemeToggle";
 
 const modes = [
