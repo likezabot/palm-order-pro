@@ -68,7 +68,7 @@ const PrintStation = () => {
     console.log("[PrintStation] Inscrevendo canal Realtime...");
 
     const channel = supabase
-      .channel("print-station-v3")
+      .channel(`print-station-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "orders" },
