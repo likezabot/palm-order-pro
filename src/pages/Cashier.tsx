@@ -127,12 +127,13 @@ const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: Or
           <Package className="w-3.5 h-3.5 shrink-0" />
           <span>{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
         </div>
-        {elapsed && (
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 shrink-0" />
-            <span>{elapsed}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            <span className="font-bold text-foreground">há {elapsed || "agora"}</span>{" "}
+            <span>{STATUS_VERB[status] || ""}</span>
+          </span>
+        </div>
       </div>
 
       {/* Base: total + ações */}
@@ -155,22 +156,23 @@ const OrderCard = ({ order, itemCount, onPrint, onEdit, onAdvance, onClose }: Or
           >
             <Pencil size={18} />
           </button>
-          {next && (
+          {next ? (
             <button
               onClick={() => onAdvance(order)}
-              className="p-2.5 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0"
+              className={`flex-1 rounded-lg px-3 py-2.5 font-black text-sm tracking-wide active:scale-95 transition-transform min-h-[44px] ${ADVANCE_BTN[status] || "bg-secondary text-foreground"}`}
               title={`Avançar para ${STATUS_LABEL[next]}`}
               aria-label="Avançar status"
             >
-              <ChevronRight size={18} />
+              {ADVANCE_LABEL[status] || <ChevronRight size={18} />}
+            </button>
+          ) : (
+            <button
+              onClick={() => onClose(order)}
+              className="flex-1 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 font-black text-primary-foreground active:scale-95 transition-transform min-h-[44px] text-sm tracking-wide"
+            >
+              💰 FECHAR
             </button>
           )}
-          <button
-            onClick={() => onClose(order)}
-            className="flex-1 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 font-black text-primary-foreground active:scale-95 transition-transform min-h-[44px] text-sm tracking-wide"
-          >
-            FECHAR
-          </button>
         </div>
       </div>
     </div>
