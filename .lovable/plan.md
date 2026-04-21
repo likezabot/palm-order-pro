@@ -1,48 +1,43 @@
 
 
-## Refinar botão "Servir" + propagar status para Cozinha e PDV
+## Voltar à grade de mesas com pedido novo já visível, sem timeout
 
-### Problemas atuais
-1. Chip "Servir" é grande, com borda dupla e label longo — polui o card
-2. Após servir, o chip continua ocupando espaço com "Servido · 12min"
-3. Cozinha (Kanban) e PDV (Caixa) não sabem que a mesa foi servida — sem feedback visual
+### Problema atual
+1. Em `OrderSuccess`, mesmo para pedidos de mesa (sem senha/impressão local), há um **timeout fixo de 700ms** antes de chamar `onReset()` e voltar à `TableGrid`.
+2. Quando a grade aparece, ela mostra o cache antigo até o realtime do Supabase invalidar a query `["active-orders"]` — o que adiciona mais alguns ms (e às vezes segundos em conexão ruim).
+3. O resultado é uma sensação de atraso de 1-2s entre "envio do pedido" e "vejo a mesa vermelha".
 
-### Mudanças
+### Solução
 
-**1. Botão "Servir" mais elegante (`src/components/palm/TableGrid.tsx`)**
-- **Não servida**: ícone `UtensilsCrossed` sozinho num botão circular pequeno (32×32) no canto superior direito do card, fundo `bg-background/60 backdrop-blur`, borda sutil. Sem label de texto. Tooltip "Marcar como servido".
-- **Servida**: o chip **some completamente**. O próprio card já comunica via cor azul + badge "Servido HH:MM" discreto no rodapé (substitui o tempo de produção).
-- Para **desmarcar** (caso de erro): toque longo (long-press 600ms) no card servido abre confirmação "Desmarcar como servido?". Mantém UI limpa sem botão visível.
+**1. Reset imediato para pedidos de mesa (`OrderSuccess.tsx`)**
+- Quando `!shouldShowBadge` (mesa, sem badge de senha/impressão local), chamar `onReset()` **na hora** (delay = 0, via `requestAnimationFrame` para garantir que o React mostre o checkmark por 1 frame e depois transicione).
+- Atualmente já está em 700ms — vamos zerar.
+- **Alternativa considerada**: pular completamente a tela `OrderSuccess` para mesas. Decisão: manter a tela mas instantânea, porque dá o feedback visual de "pedido enviado" que o garçom espera. O fade-out fica natural pela própria transição da grade.
 
-**2. Avisar Cozinha (`src/pages/Kitchen.tsx` + `KanbanCard.tsx`)**
-- Buscar `served_at` no select de orders
-- Card do kanban ganha **badge "✓ Servido HH:MM"** verde no canto quando `served_at != null`
-- Ordem visual: cards servidos descem para o final da coluna (são prioridade baixa pra cozinha)
-- Realtime já cobre — `orders` está no `supabase_realtime` publication
+**2. Atualização otimista do cache da grade (`OrderReview.tsx`)**
+- Após o RPC `create_order` / `update_order_items` retornar com sucesso, **antes** de chamar `onSuccess()`:
+  - Usar `queryClient.setQueryData(["active-orders"], ...)` para **inserir/atualizar** o pedido recém-criado direto no cache.
+  - Para criação: empurrar um objeto `{ id, table_name, original_table_name, status: "new", total, waiter_name, created_at, served_at: null, item_count: <soma cart> }` na lista.
+  - Para edição: substituir o pedido existente com os novos totais e item_count atualizado.
+- Assim, quando a `TableGrid` montar, o pedido **já está no cache** — a mesa aparece vermelha instantaneamente. O realtime do Supabase em seguida apenas confirma/refina os dados.
 
-**3. Avisar PDV/Caixa (`src/components/pdv/OrderRow.tsx` + `OrderSection.tsx`)**
-- Buscar `served_at` no select
-- Linha do pedido ganha **ícone `UtensilsCrossed` verde + tooltip "Servido HH:MM"** ao lado do nome da mesa
-- Útil pro caixa saber que pode cobrar com mais confiança
-
-**4. Realtime já garantido**
-- Migração anterior aplicou `REPLICA IDENTITY FULL` em `orders` — payloads completos chegam em todos os listeners
-- Palm, Kitchen e PDV já têm canais subscritos em `orders` que invalidam queries
+**3. Ajuste fino de transição**
+- Manter `OrderSuccess` com animação rápida (~250ms) para o checkmark, mas **não bloqueante**: `onReset()` dispara imediatamente; a grade já renderiza por baixo.
+- Para pedidos com badge (BALCÃO com impressão local), manter os tempos atuais (não mexer — usuário precisa ver senha).
 
 ### Arquivos
-- **Editado**: `src/components/palm/TableGrid.tsx` — chip redesenhado (ícone-only), long-press para desmarcar, badge "Servido HH:MM" no rodapé
-- **Editado**: `src/components/kitchen/KanbanCard.tsx` — badge servido + leitura de `served_at`
-- **Editado**: `src/pages/Kitchen.tsx` — incluir `served_at` no select; ordenar servidos no fim
-- **Editado**: `src/components/pdv/OrderRow.tsx` — ícone servido ao lado da mesa
-- **Editado**: `src/components/pdv/OrderSection.tsx` (se necessário) — passar `served_at` adiante
-- **Editado**: `src/pages/Pdv.tsx` — incluir `served_at` no select
+- **Editado**: `src/components/palm/OrderSuccess.tsx` — `delay = 0` quando `!shouldShowBadge`, usando `requestAnimationFrame` em vez de `setTimeout`.
+- **Editado**: `src/components/palm/OrderReview.tsx` — após sucesso do RPC, fazer `queryClient.setQueryData(["active-orders"], ...)` para inserir/mesclar o pedido otimisticamente. Importar `useQueryClient`.
+- **Sem mudanças**: realtime channel, banco, `TableGrid`.
 
-### Sem mudanças no banco
-Coluna `served_at` e trigger de reset já existem.
+### Detalhes técnicos
+- O `setQueryData` precisa ser tolerante: se a query nunca foi montada (cache vazio), ignora silenciosamente — quando a grade montar e fizer o fetch inicial, vai pegar do banco.
+- Para edição (`update_order_items`), o cache já tem o pedido — só atualizamos `total` e re-derivamos `item_count` somando `cart`.
+- Para criação, o `create_order` retorna `{ id, created_at }` — já temos tudo para construir o objeto.
+- Não mexemos em `print_status`/realtime: o canal continua chegando e refinando o estado real (caso outro garçom tenha mexido em paralelo).
 
 ### Resultado
-- Card do Palm fica **limpo**: ícone discreto canto superior quando não servido, badge "Servido HH:MM" sutil no rodapé quando servido
-- Cozinha vê em tempo real quais mesas já estão comendo (badge verde + ordem ajustada)
-- Caixa vê em tempo real quais mesas já foram servidas (ícone na linha do pedido)
-- Long-press evita toques acidentais ao desmarcar
+- Garçom toca "Enviar pedido" → vê checkmark verde por ~1 frame → grade aparece **com a mesa já vermelha/com valor**.
+- Sensação de instantâneo, sem depender de latência de rede do realtime.
+- Realtime continua funcionando como rede de segurança / sincronia entre dispositivos.
 
