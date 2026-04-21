@@ -1,99 +1,61 @@
 
 
-## Fila de Pedidos (PDV/Caixa) — blocos quadrados unificados
+## Fixes de estabilidade — Realtime, localStorage e forwardRef
 
-Refatorar a área de **fila de pedidos** do `Pdv.tsx` e do `Cashier.tsx` para o mesmo padrão **grid de blocos compactos**, com troca de status em 1 clique e cronômetro de tempo no status atual. Sem mexer em banco, RPCs, realtime, impressão, pagamento ou seleção.
+Aplicar 3 correções de estabilidade identificadas na auditoria, **sem tocar** no fluxo de impressão (bridge `.exe`, `print-service.ts`, `thermal-printer.ts`, `print-station`, `lp-bridge.js`, `BRIDGE_INSTRUCTIONS.md`).
 
-### 1. Mapeamento de status (sem alterar banco)
+### 1. Realtime — nomes de canal únicos por aba
 
-Os 3 status do banco continuam exatamente os mesmos (`new`, `preparing`, `done`), mas a UI usa o vocabulário pedido:
+**Problema:** canais com nome fixo (`pdv-realtime-v3`, `kitchen-realtime`, etc.) causam `CHANNEL_ERROR` quando o mesmo dispositivo abre 2+ abas/PWAs.
 
-| Banco | Label UI | Cor chip |
-|---|---|---|
-| `new` | **AGUARDANDO** | azul |
-| `preparing` | **EM PREPARO** | laranja |
-| `done` | **PRONTO** | verde |
+**Fix:** sufixar com `crypto.randomUUID()` na criação do canal — Supabase passa a tratar cada aba como cliente independente.
 
-### 2. Regra "pedido novo já entra como EM PREPARO"
+Arquivos:
+- `src/hooks/use-pdv-realtime.ts` → `pdv-realtime-v3` → `pdv-realtime-${uuid}`
+- `src/pages/Kitchen.tsx` → `kitchen-realtime` → `kitchen-realtime-${uuid}`
+- `src/pages/PrintStation.tsx` → idem se houver canal fixo
+- `src/pages/Palm.tsx` → idem se houver canal fixo
 
-No `Pdv.tsx`, adicionar `useEffect` leve que, ao detectar pedidos com `status === "new"`, chama `supabase.rpc("update_order_status", { p_order_id, p_status: "preparing" })` em background, com guarda em `Set<string>` (uma vez por pedido). Resultado: do ponto de vista do operador, todo pedido novo aparece já como **EM PREPARO** (transição ~1s).
+Sem mudança em handlers, eventos, queries ou lógica de auto-print.
 
-Sem alterar Palm, banco ou triggers.
+### 2. `force-update.ts` — preservar configs locais
 
-### 3. Tempo no status atual
+**Problema:** `localStorage.clear()` (ou remoção agressiva) apaga `waiter_name`, `print-config`, `autoprint`, favoritos, configs do bridge etc.
 
-A coluna `orders.updated_at` já é renovada pela RPC `update_order_status` e por inserts. Usar **`updated_at`** como referência do "tempo na etapa":
+**Fix:** trocar para remoção seletiva apenas das chaves de versão/anti-loop:
+- `app_version`
+- `app_last_reload_ts`
+- (mantém `sessionStorage.clear()` — é seguro)
 
-- Hook existente `useElapsedTime(order.updated_at)` no chip principal do bloco.
-- Label adapta-se ao status: "há 5min aguardando" / "há 8min em preparo" / "há 2min pronto".
-- Ao avançar status, a RPC atualiza `updated_at` → cronômetro reinicia automaticamente.
+Preserva 100% das configs do PDV/Palm/bridge. Arquivo: `src/lib/force-update.ts`.
 
-### 4. Refatorar `OrderRow.tsx` para "bloco operacional"
+### 3. `OrderRow.tsx` — corrigir warning de `forwardRef`
 
-Layout do bloco (compacto, ~180px altura mínima):
+**Problema:** componentes filhos do Radix (`Tooltip`/`Button`) recebem `ref` mas o `OrderRow` é função simples → warning "Function components cannot be given refs".
 
-```text
-┌─────────────────────────────┐
-│ MESA 7        [EM PREPARO]  │  topo
-│               [✓ Impresso]  │
-├─────────────────────────────┤
-│ 👤 João  ·  📦 4 itens      │  meio
-│ ⏱ há 8min em preparo        │
-├─────────────────────────────┤
-│ R$ 87,50                    │  base
-│ [✅ MARCAR PRONTO] [🖨][✎]  │
-└─────────────────────────────┘
-```
+**Fix:** envolver `OrderRow` em `React.forwardRef<HTMLDivElement, OrderRowProps>(...)` e encaminhar `ref` ao container raiz. Sem mudança visual nem de comportamento.
 
-**Botão de avançar status (1 clique, no bloco):**
-- `new` → "▶ INICIAR PREPARO" (transitório; auto-promovido)
-- `preparing` → "✅ MARCAR PRONTO" (CTA verde)
-- `done` no PDV → "💰 FECHAR" (abre painel/Caixa)
-- Chama `supabase.rpc("update_order_status", ...)` + invalida query.
-- `e.stopPropagation()` para não conflitar com clique de seleção do bloco.
+### Garantias (não muda nada do .exe)
 
-**Borda lateral (urgência sobre etapa atual, baseada em `updated_at`):**
-- normal: `border-l-transparent`
-- alerta (>10min mesma etapa): `border-l-warning`
-- crítico (>25min mesma etapa): `border-l-destructive` + `animate-pulse-active`
-- Selecionado: `border-primary bg-primary/10` (mantido).
+- Bridge USB (`bridge/lp-bridge.js`, `start-bridge.bat`): **intocado**.
+- `src/lib/print-service.ts`, `print-receipt.ts`, `thermal-printer.ts`, `receipt-html.ts`, `receipt-layout.ts`, `print-iframe.ts`, `reprint-senha.ts`: **intocados**.
+- Página `PrintStation.tsx`: só ajuste de nome de canal (se aplicável); handlers de impressão preservados.
+- Auto-print do PDV (`autoPrintOrder` / `autoPrintDelta` em `usePdvRealtime`): preservado — apenas o nome do canal muda.
+- RPCs `claim_order_print` / `complete_order_print` / `fail_order_print`: **intocadas**.
 
-### 5. PDV (`src/pages/Pdv.tsx`) — fila vira grid uniforme
+### Arquivos afetados (4-5)
 
-- Grid: `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr`.
-- `OrderRow` recebe novas props: `onAdvance(order)` e `statusSince` (= `order.updated_at`).
-- Handler `handleAdvance` chama RPC + invalida `pdv-orders`.
-- Painel direito de detalhes/pagamento: **inalterado**.
-- `useEffect` de auto-promoção `new → preparing` (item 2).
-
-### 6. Caixa (`src/pages/Cashier.tsx`)
-
-- `OrderCard` interno usa `useElapsedTime(order.updated_at)` para o cronômetro principal.
-- Trocar label `NOVO` → `AGUARDANDO`.
-- Botão de avançar vira CTA principal quando `status !== "done"` ("✅ MARCAR PRONTO" / "▶ INICIAR PREPARO"); "💰 FECHAR" continua como CTA quando `done`.
-- Grid mantido em `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr`.
-
-### 7. Responsividade
-
-- < 640px: 1 coluna, blocos `min-h-[180px]`.
-- 640–1023px: 2 colunas.
-- 1024–1279px: 3 colunas.
-- ≥ 1280px: 4 colunas.
-- Painel direito do PDV continua como sidebar `lg:` (sem mudança).
-
-### Arquivos afetados (3)
-
-- `src/components/pdv/OrderRow.tsx` — refatorar para bloco operacional, props `onAdvance`/`statusSince`, botão de avançar status, cronômetro em `updated_at`, label `AGUARDANDO`, borda por urgência da etapa.
-- `src/pages/Pdv.tsx` — ajustar grid (auto-rows-fr + breakpoints), passar `onAdvance`/`statusSince` ao `OrderRow`, `useEffect` de auto-promoção, handler `handleAdvance`.
-- `src/pages/Cashier.tsx` — `OrderCard` usa `updated_at` para tempo, label `AGUARDANDO`, botão avançar como CTA principal pré-pagamento.
-
-### Sem alterações
-- Banco, schema, RPCs (`update_order_status`, `pay_order`, `create_order_*`).
-- Realtime (`usePdvRealtime`), polling do Caixa (`refetchInterval: 5000`).
-- Impressão (`manualPrintOrder`), pagamento (`CloseOrder`, painel direito do PDV), Palm.
-- Sem dependências novas.
+- `src/hooks/use-pdv-realtime.ts`
+- `src/pages/Kitchen.tsx`
+- `src/pages/PrintStation.tsx` (se tiver canal fixo)
+- `src/pages/Palm.tsx` (se tiver canal fixo)
+- `src/lib/force-update.ts`
+- `src/components/pdv/OrderRow.tsx`
 
 ### Resultado esperado
 
-PDV e Caixa exibem a fila como **grid de blocos compactos** (1/2/3/4 colunas), cada bloco mostrando **mesa, garçom, itens, valor, status (AGUARDANDO/EM PREPARO/PRONTO) e tempo na etapa atual**. Status muda **com 1 clique no próprio bloco**. Pedidos novos viram **EM PREPARO** automaticamente. Cronômetro reinicia ao trocar de etapa. Pagamento, impressão, realtime e seleção continuam funcionando exatamente como antes.
+- Múltiplas abas/PWAs do PDV no mesmo dispositivo deixam de derrubar o Realtime.
+- Botão "Forçar atualização" não apaga mais nome do garçom, configs de impressora ou autoprint.
+- Console limpo do warning de `forwardRef` no PDV.
+- Bridge `.exe` e todo o pipeline de impressão seguem **idênticos** ao atual.
 
