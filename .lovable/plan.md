@@ -1,116 +1,103 @@
 
 
-## Fallback de impressão — fila local com retry automático
+## Verificação de conectividade — Internet + Realtime + Cache offline
 
-Adicionar uma camada de resiliência ao pipeline de impressão: quando o bridge `.exe` falhar, o pedido vai para uma **fila local em IndexedDB**, e um worker tenta reimprimir periodicamente até o bridge voltar.
+Adicionar uma camada client-side que monitora **três sinais independentes** e avisa o operador quando algo está instável, sem quebrar o fluxo atual nem mexer no backend/bridge.
+
+### Sinais monitorados
+
+1. **Internet (online/offline)**
+   - `navigator.onLine` + eventos `online`/`offline`
+   - Reforço com ping leve a `https://www.google.com/generate_204` a cada 30s (só quando "online" reportado, pra detectar wifi-sem-internet)
+
+2. **Realtime WebSocket**
+   - Já temos `realtimeStatus` no `usePdvRealtime`. Vou centralizar num **store global** (`connectivity-store.ts`) que qualquer canal pode reportar.
+   - Detecta instabilidade: status `CHANNEL_ERROR`, `TIMED_OUT`, `CLOSED` ou ausência de heartbeat por >45s.
+
+3. **Backend (Supabase REST)**
+   - Ping leve via `supabase.from("settings").select("key").limit(1)` a cada 60s.
+   - Detecta caso onde WebSocket caiu mas REST ainda funciona (modo degradado).
 
 ### Arquitetura
 
 ```
-autoPrintOrder/Delta → tenta bridge
-                       ├── sucesso → complete_order_print + remove da fila
-                       └── falha   → fail_order_print + ENFILEIRA em IndexedDB
-                                       ↓
-                           PrintQueueWorker (a cada 15s)
-                                       ↓
-                           pingBridge() OK? → reprocessa fila (FIFO)
+┌──────────────────────────────────────┐
+│  connectivity-store.ts (singleton)   │
+│  - internet: online/offline/unknown  │
+│  - realtime: online/degraded/offline │
+│  - backend:  online/offline          │
+│  - lastHeartbeat                     │
+│  - subscribers (Set<fn>)             │
+└──────────────────────────────────────┘
+        ▲                    │
+        │                    ▼
+   reportRealtime()    useConnectivity() hook
+        │                    │
+        │                    ▼
+   usePdvRealtime      <ConnectivityBanner />
+   (e outros canais)   (mostra avisos)
 ```
 
-### 1. Nova lib: `src/lib/print-queue.ts`
+### Componentes
 
-Fila persistente em **IndexedDB** (sobrevive a reload, fechamento de aba, queda de energia). Não usa localStorage para evitar limite de 5MB e bloqueio síncrono.
+**1. `src/lib/connectivity-store.ts`** (novo)
+- Estado global com pub/sub.
+- Métodos: `reportRealtime(status)`, `reportBackend(ok)`, `reportInternet(ok)`, `subscribe(fn)`, `getState()`.
+- Logs via `debugLog` (categoria nova: `"connectivity"`).
 
-API:
-- `enqueuePrintJob(job)` — adiciona à fila
-- `getPrintQueue()` — lista jobs pendentes
-- `removePrintJob(id)` — remove após sucesso
-- `incrementAttempts(id, error)` — registra falha
-- `clearPrintQueue()` — limpa tudo (admin)
+**2. `src/lib/connectivity-monitor.ts`** (novo)
+- Singleton iniciado no `main.tsx`.
+- Loop a cada 30s: ping internet (HEAD `generate_204` com timeout 3s).
+- Loop a cada 60s: ping backend (Supabase REST query mínima).
+- Listeners `window.online`/`offline`.
+- Pausa pings quando `document.hidden`.
 
-Schema do job:
-```ts
-{
-  id: string;             // uuid local
-  orderId: string;
-  tableName: string;
-  payload: ReceiptPayload; // o HTML/comandos já renderizados
-  printType: 'full' | 'delta' | 'bill';
-  attempts: number;
-  lastError?: string;
-  createdAt: number;
-  lastAttemptAt?: number;
-}
-```
+**3. `src/hooks/use-connectivity.ts`** (novo)
+- Hook que assina o store e devolve `{ internet, realtime, backend, isFullyOnline, isDegraded }`.
 
-DB: `print-queue-db` v1, store `jobs` keyPath `id`, índice por `createdAt`.
+**4. `src/components/ConnectivityBanner.tsx`** (novo)
+- Banner sutil no topo, só aparece quando há problema:
+  - 🔴 **Sem internet** — "Trabalhando offline. Pedidos serão sincronizados ao reconectar." (vermelho)
+  - 🟡 **Realtime instável** — "Atualizações em tempo real interrompidas. Recarregando dados a cada 10s." (amarelo)
+  - 🟡 **Backend lento** — "Conexão com servidor degradada." (amarelo)
+- Botão "Reconectar agora" → força reconnect do canal Realtime + ping backend.
+- Auto-dismiss quando tudo voltar.
 
-### 2. Atualizar `src/lib/print-service.ts`
+**5. Integração no `usePdvRealtime`**
+- Reporta status para o store (`reportRealtime`).
+- Quando detecta instabilidade prolongada (>45s sem evento), aumenta polling de `invalidateQueries` automaticamente (de 0 para a cada 10s) como fallback.
 
-Nos pontos onde hoje chama `fail_order_print` por erro de bridge, **antes** disso enfileira o job. Idempotente: se já existe job para `orderId+printType`, atualiza em vez de duplicar.
+**6. Cache offline parcial**
+- React Query já tem cache em memória. Vou:
+  - Aumentar `staleTime` para 5min nos `pdv-orders`/`pdv-items` quando offline.
+  - Configurar `networkMode: "offlineFirst"` nas queries críticas, garantindo que a UI sempre mostre a última versão conhecida mesmo sem rede.
+  - Adicionar `gcTime: 30 * 60 * 1000` (30min) pra não descartar dados durante quedas.
+  - Não vamos persistir no IndexedDB (escopo controlado) — o cache de sessão já cobre quedas curtas/médias.
 
-```ts
-catch (err) {
-  await enqueuePrintJob({ orderId, tableName, payload, printType });
-  await supabase.rpc('fail_order_print', { p_order_id: orderId, p_error: err.message });
-  return { printed: false, reason: 'bridge_offline_queued' };
-}
-```
+### Onde monta o banner
+- `App.tsx` no topo (acima das rotas), pra aparecer em qualquer página.
 
-### 3. Worker: `src/lib/print-queue-worker.ts`
-
-Singleton iniciado uma vez no `main.tsx`. Loop com `setInterval(15_000)`:
-
-1. Se fila vazia → `idle`.
-2. `pingBridge()` (HEAD/GET no `lp-bridge` em `localhost:porta/health`).
-3. Bridge offline → não tenta, marca `lastAttemptAt`.
-4. Bridge online → para cada job (FIFO, max 3 por ciclo):
-   - Reenvia via `thermal-printer.printRaw(payload)`.
-   - Sucesso → `complete_order_print(orderId)` + `removePrintJob(id)`.
-   - Falha → `incrementAttempts(id, err)`. Após 10 tentativas, marca como `dead` (mantém no histórico, não tenta mais).
-5. Backoff exponencial leve: jobs com >3 tentativas só reprocessam após 1min.
-
-Pausa o worker quando `document.hidden` para não consumir bateria/CPU em background.
-
-### 4. UI: status da fila no `PrintStation.tsx`
-
-Adicionar um painel pequeno no topo:
-- Badge "Fila: 0" (verde) / "Fila: N" (warning) / "Fila: N (offline)" (destructive).
-- Botão "Reprocessar agora" → força `worker.tick()`.
-- Botão "Limpar fila" (com confirm) → `clearPrintQueue()`.
-- Lista expansível com jobs (mesa, tipo, tentativas, último erro).
-
-Hook novo: `src/hooks/use-print-queue.ts` — escuta mudanças via `BroadcastChannel('print-queue')` que o worker emite a cada operação.
-
-### 5. Notificação ao usuário
-
-No PDV, quando `autoPrintOrder` retornar `bridge_offline_queued`:
-- Toast warning: "Bridge offline — pedido enfileirado (Mesa X). Reprocessará automaticamente."
-- Não bloqueia fluxo.
-
-### 6. Garantias
-
-- **Bridge `.exe` intocado** — só consumimos o endpoint que já existe.
-- **RPCs intocadas** — só usamos `fail_order_print` / `complete_order_print` que já existem.
-- **Realtime intocado**.
-- **Idempotência**: dedupe por `orderId+printType`. Reimpressões duplicadas são impossíveis porque `complete_order_print` só fecha quando `print_status = 'printing'`.
-- **Sem migração de banco** — fila é 100% client-side.
+### Garantias de segurança
+- **Bridge `.exe` intocado**.
+- **Backend intocado** — só consultas existentes.
+- **Pipeline de impressão intocado** — fila local já cobre offline.
+- **Realtime intocado** — só observamos status, não modificamos canais existentes.
+- Nenhuma migration.
 
 ### Arquivos novos
-- `src/lib/print-queue.ts`
-- `src/lib/print-queue-worker.ts`
-- `src/hooks/use-print-queue.ts`
+- `src/lib/connectivity-store.ts`
+- `src/lib/connectivity-monitor.ts`
+- `src/hooks/use-connectivity.ts`
+- `src/components/ConnectivityBanner.tsx`
 
 ### Arquivos modificados
-- `src/lib/print-service.ts` — enfileira em catch
-- `src/main.tsx` — inicia worker
-- `src/pages/PrintStation.tsx` — UI da fila
-- `src/hooks/use-pdv-realtime.ts` — toast quando `reason === 'bridge_offline_queued'`
+- `src/main.tsx` — inicia monitor
+- `src/App.tsx` — monta banner + ajusta defaults do QueryClient
+- `src/hooks/use-pdv-realtime.ts` — reporta status, fallback polling
 
 ### Resultado esperado
-
-- Bridge cai → pedido vai pra fila, operador vê toast.
-- Bridge volta → fila esvazia sozinha em até 15s, sem clique.
-- Recarregar página/fechar aba **não perde** jobs (IndexedDB persiste).
-- PrintStation mostra status real-time da fila.
-- Zero impacto em pedidos quando bridge está saudável.
+- Operador vê na hora se: caiu internet, caiu Realtime, ou backend está lento.
+- Pedidos antigos continuam visíveis offline (cache React Query).
+- Ao voltar a rede, banner some sozinho e dados re-sincronizam.
+- Console tem logs claros (categoria `connectivity`) para depuração.
 
