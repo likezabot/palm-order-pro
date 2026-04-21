@@ -1,103 +1,49 @@
 
 
-## Verificação de conectividade — Internet + Realtime + Cache offline
+## Botão Imprimir do Caixa → enviar à Central + perguntar tipo
 
-Adicionar uma camada client-side que monitora **três sinais independentes** e avisa o operador quando algo está instável, sem quebrar o fluxo atual nem mexer no backend/bridge.
+Hoje o botão impressora do card no **Caixa** chama `manualPrintOrder` direto, que tenta imprimir um cupom completo localmente via bridge. Problemas:
 
-### Sinais monitorados
+1. Não pergunta **o que** imprimir (comanda, conta, ou últimos acréscimos)
+2. Quando não há itens, mostra erro genérico "Sem itens para imprimir"
+3. Não registra/encaminha para a **Central de impressão** (PrintStation) — só dispara local
 
-1. **Internet (online/offline)**
-   - `navigator.onLine` + eventos `online`/`offline`
-   - Reforço com ping leve a `https://www.google.com/generate_204` a cada 30s (só quando "online" reportado, pra detectar wifi-sem-internet)
+### Mudanças
 
-2. **Realtime WebSocket**
-   - Já temos `realtimeStatus` no `usePdvRealtime`. Vou centralizar num **store global** (`connectivity-store.ts`) que qualquer canal pode reportar.
-   - Detecta instabilidade: status `CHANNEL_ERROR`, `TIMED_OUT`, `CLOSED` ou ausência de heartbeat por >45s.
+**1. Diálogo de escolha ao clicar 🖨 no card (Caixa)**
+- Novo componente `PrintChoiceDialog` com 3 opções + cancelar:
+  - **Comanda completa** (todos os itens) → `manualPrintOrder`
+  - **Conta / Fechamento** (com total + "Não é documento fiscal") → `manualPrintBill`
+  - **Últimos acréscimos** (delta_items) → `manualPrintDelta` *(desabilitado se não houver delta)*
+- Cada opção também publica o job na Central via RPC `enqueue_print_job` (ver passo 3) **antes** de tentar local — assim a PrintStation sempre recebe.
 
-3. **Backend (Supabase REST)**
-   - Ping leve via `supabase.from("settings").select("key").limit(1)` a cada 60s.
-   - Detecta caso onde WebSocket caiu mas REST ainda funciona (modo degradado).
+**2. Mensagens de erro mais claras**
+- "Sem itens" → "Mesa sem itens cadastrados"
+- "Sem delta" → "Nenhum acréscimo recente para reimprimir"
+- Sucesso local + falha central → toast informativo, não erro
 
-### Arquitetura
+**3. Sempre encaminhar à Central**
+- Toda impressão manual do Caixa enfileira também via `print-queue` (IndexedDB) marcada como `source: "manual"`, garantindo que a PrintStation aberta em outra máquina veja e possa reimprimir.
+- Se a bridge local responder OK, marca como concluído. Se falhar, fica na fila normal de retry.
 
-```
-┌──────────────────────────────────────┐
-│  connectivity-store.ts (singleton)   │
-│  - internet: online/offline/unknown  │
-│  - realtime: online/degraded/offline │
-│  - backend:  online/offline          │
-│  - lastHeartbeat                     │
-│  - subscribers (Set<fn>)             │
-└──────────────────────────────────────┘
-        ▲                    │
-        │                    ▼
-   reportRealtime()    useConnectivity() hook
-        │                    │
-        │                    ▼
-   usePdvRealtime      <ConnectivityBanner />
-   (e outros canais)   (mostra avisos)
+### Fluxo final
+
+```text
+[Card Caixa] 🖨  →  [Dialog: O que imprimir?]
+                       ├── Comanda completa  → enfileira + tenta bridge
+                       ├── Conta             → enfileira + tenta bridge
+                       ├── Acréscimos        → enfileira + tenta bridge
+                       └── Cancelar
 ```
 
-### Componentes
+### Arquivos
+- **Novo**: `src/components/cashier/PrintChoiceDialog.tsx`
+- **Editado**: `src/pages/Cashier.tsx` — substitui `handlePrint` direto por abertura do dialog
+- **Editado**: `src/lib/print-service.ts` — funções `manual*` passam a enfileirar na central antes de tentar local; mensagens de retorno mais ricas (`{ ok, reason }`)
 
-**1. `src/lib/connectivity-store.ts`** (novo)
-- Estado global com pub/sub.
-- Métodos: `reportRealtime(status)`, `reportBackend(ok)`, `reportInternet(ok)`, `subscribe(fn)`, `getState()`.
-- Logs via `debugLog` (categoria nova: `"connectivity"`).
-
-**2. `src/lib/connectivity-monitor.ts`** (novo)
-- Singleton iniciado no `main.tsx`.
-- Loop a cada 30s: ping internet (HEAD `generate_204` com timeout 3s).
-- Loop a cada 60s: ping backend (Supabase REST query mínima).
-- Listeners `window.online`/`offline`.
-- Pausa pings quando `document.hidden`.
-
-**3. `src/hooks/use-connectivity.ts`** (novo)
-- Hook que assina o store e devolve `{ internet, realtime, backend, isFullyOnline, isDegraded }`.
-
-**4. `src/components/ConnectivityBanner.tsx`** (novo)
-- Banner sutil no topo, só aparece quando há problema:
-  - 🔴 **Sem internet** — "Trabalhando offline. Pedidos serão sincronizados ao reconectar." (vermelho)
-  - 🟡 **Realtime instável** — "Atualizações em tempo real interrompidas. Recarregando dados a cada 10s." (amarelo)
-  - 🟡 **Backend lento** — "Conexão com servidor degradada." (amarelo)
-- Botão "Reconectar agora" → força reconnect do canal Realtime + ping backend.
-- Auto-dismiss quando tudo voltar.
-
-**5. Integração no `usePdvRealtime`**
-- Reporta status para o store (`reportRealtime`).
-- Quando detecta instabilidade prolongada (>45s sem evento), aumenta polling de `invalidateQueries` automaticamente (de 0 para a cada 10s) como fallback.
-
-**6. Cache offline parcial**
-- React Query já tem cache em memória. Vou:
-  - Aumentar `staleTime` para 5min nos `pdv-orders`/`pdv-items` quando offline.
-  - Configurar `networkMode: "offlineFirst"` nas queries críticas, garantindo que a UI sempre mostre a última versão conhecida mesmo sem rede.
-  - Adicionar `gcTime: 30 * 60 * 1000` (30min) pra não descartar dados durante quedas.
-  - Não vamos persistir no IndexedDB (escopo controlado) — o cache de sessão já cobre quedas curtas/médias.
-
-### Onde monta o banner
-- `App.tsx` no topo (acima das rotas), pra aparecer em qualquer página.
-
-### Garantias de segurança
-- **Bridge `.exe` intocado**.
-- **Backend intocado** — só consultas existentes.
-- **Pipeline de impressão intocado** — fila local já cobre offline.
-- **Realtime intocado** — só observamos status, não modificamos canais existentes.
-- Nenhuma migration.
-
-### Arquivos novos
-- `src/lib/connectivity-store.ts`
-- `src/lib/connectivity-monitor.ts`
-- `src/hooks/use-connectivity.ts`
-- `src/components/ConnectivityBanner.tsx`
-
-### Arquivos modificados
-- `src/main.tsx` — inicia monitor
-- `src/App.tsx` — monta banner + ajusta defaults do QueryClient
-- `src/hooks/use-pdv-realtime.ts` — reporta status, fallback polling
-
-### Resultado esperado
-- Operador vê na hora se: caiu internet, caiu Realtime, ou backend está lento.
-- Pedidos antigos continuam visíveis offline (cache React Query).
-- Ao voltar a rede, banner some sozinho e dados re-sincronizam.
-- Console tem logs claros (categoria `connectivity`) para depuração.
+### Detalhes técnicos
+- Reaproveita `enqueuePrintJob` já existente em `print-queue.ts`
+- Sem mudanças no backend/RPC — só client-side
+- Sem mudanças no `.exe` da bridge — protocolo idêntico
+- Botão impressora do card mostra badge se delta disponível
 
