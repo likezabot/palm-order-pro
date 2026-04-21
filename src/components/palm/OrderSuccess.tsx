@@ -1,7 +1,9 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { CheckCircle, Printer } from "lucide-react";
 import { printSenha } from "@/lib/print-receipt";
+import { loadPrintConfig } from "@/lib/print-config";
 import { CartItem } from "@/lib/types";
+import PrintStatusBadge, { PrintStatus } from "./PrintStatusBadge";
 
 interface Props {
   onReset: () => void;
@@ -12,6 +14,8 @@ interface Props {
   orderId?: string;
   customerName?: string;
 }
+
+const PRINT_TIMEOUT_MS = 8000;
 
 const OrderSuccess = ({
   onReset,
@@ -25,6 +29,20 @@ const OrderSuccess = ({
   const printedRef = useRef(false);
   const resetFiredRef = useRef(false);
   const mountedRef = useRef(true);
+  const printingRef = useRef(false);
+
+  // bridge mode resolved once on mount — avoids re-evaluating localStorage mid-flow
+  const [bridgeMode] = useState(() => {
+    try {
+      return loadPrintConfig().printMode === "bridge";
+    } catch {
+      return false;
+    }
+  });
+
+  const shouldShowBadge = allowLocalPrint && !!senha;
+  const initialStatus: PrintStatus = shouldShowBadge && bridgeMode ? "printing" : "idle";
+  const [status, setStatus] = useState<PrintStatus>(initialStatus);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -46,67 +64,111 @@ const OrderSuccess = ({
     return { items, total };
   }, [cart]);
 
-  const handleAutoPrint = useCallback(() => {
-    if (!allowLocalPrint || !senha) return;
-    const { items, total } = buildPrintArgs();
-    printSenha(senha, items, {
-      waiterName,
-      orderId,
-      customerName,
-      total,
-      force: false,
-    });
-  }, [allowLocalPrint, senha, buildPrintArgs, waiterName, orderId, customerName]);
+  const runPrint = useCallback(
+    async (force: boolean) => {
+      if (!senha || printingRef.current) return;
+      printingRef.current = true;
+      if (mountedRef.current) setStatus("printing");
 
-  const handleManualPrint = useCallback(() => {
-    if (!senha) return;
-    const { items, total } = buildPrintArgs();
-    printSenha(senha, items, {
-      waiterName,
-      orderId,
-      customerName,
-      total,
-      force: true,
-    });
-  }, [senha, buildPrintArgs, waiterName, orderId, customerName]);
+      const { items, total } = buildPrintArgs();
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        if (!printingRef.current) return;
+        timedOut = true;
+        printingRef.current = false;
+        if (mountedRef.current) setStatus("error");
+      }, PRINT_TIMEOUT_MS);
 
+      try {
+        const ok = await printSenha(senha, items, {
+          waiterName,
+          orderId,
+          customerName,
+          total,
+          force,
+        });
+        if (timedOut) return;
+        if (!mountedRef.current) return;
+        setStatus(ok ? "success" : "error");
+      } catch {
+        if (timedOut || !mountedRef.current) return;
+        setStatus("error");
+      } finally {
+        clearTimeout(timeoutId);
+        printingRef.current = false;
+      }
+    },
+    [senha, buildPrintArgs, waiterName, orderId, customerName],
+  );
+
+  // Auto-print uma única vez ao montar (se aplicável)
   useEffect(() => {
-    if (allowLocalPrint && senha && !printedRef.current) {
-      printedRef.current = true;
-      const timer = setTimeout(() => {
-        if (mountedRef.current) handleAutoPrint();
-      }, 800);
-      return () => clearTimeout(timer);
+    if (!shouldShowBadge || !bridgeMode || printedRef.current) return;
+    printedRef.current = true;
+    const timer = setTimeout(() => {
+      if (mountedRef.current) runPrint(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [shouldShowBadge, bridgeMode, runPrint]);
+
+  // Auto-reset: aguarda impressão terminar (success/error) ou usa fallback maior
+  useEffect(() => {
+    if (resetFiredRef.current) return;
+
+    let delay: number;
+    if (!shouldShowBadge) {
+      delay = 3000;
+    } else if (!bridgeMode) {
+      delay = 5000;
+    } else if (status === "success" || status === "error") {
+      delay = 2500;
+    } else {
+      // ainda imprimindo — fallback amplo (timeout interno do print = 8s)
+      delay = 12000;
     }
-  }, [allowLocalPrint, handleAutoPrint, senha]);
 
-  useEffect(() => {
-    const delay = allowLocalPrint && senha ? 5000 : 3000;
     const timer = setTimeout(() => {
       if (resetFiredRef.current) return;
       resetFiredRef.current = true;
       onReset();
     }, delay);
     return () => clearTimeout(timer);
-  }, [allowLocalPrint, onReset, senha]);
+  }, [shouldShowBadge, bridgeMode, status, onReset]);
+
+  const handleManualPrint = useCallback(() => {
+    runPrint(true);
+  }, [runPrint]);
+
+  const isPrinting = status === "printing";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-hidden bg-success p-6 text-center">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-hidden bg-success p-6 text-center min-h-[100dvh]">
       <div className="rounded-full bg-white/20 p-6 animate-pulse-success">
         <CheckCircle size={100} className="text-white" />
       </div>
       <div className="space-y-2">
         <h1 className="text-4xl font-black text-white tracking-tighter">PEDIDO ENVIADO! ✅</h1>
-        {allowLocalPrint && senha && (
+        {shouldShowBadge && (
           <>
             <p className="text-xl font-bold text-white/80 uppercase">Sua Senha:</p>
             <p className="text-8xl font-black text-white mt-1">{senha}</p>
+
+            <div className="pt-4">
+              <PrintStatusBadge
+                status={status}
+                labelIdle={!bridgeMode ? "Impressão local desativada" : undefined}
+                onRetry={status === "error" ? handleManualPrint : undefined}
+              />
+            </div>
+
             <button
               type="button"
               onClick={handleManualPrint}
-              className="mt-8 flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl"
+              disabled={isPrinting}
+              className="mt-6 inline-flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl disabled:opacity-50 disabled:pointer-events-none"
             >
-              <Printer size={24} /> IMPRIMIR NOVAMENTE
+              <Printer size={24} className={isPrinting ? "animate-print-bounce" : ""} />
+              {isPrinting ? "IMPRIMINDO..." : "IMPRIMIR NOVAMENTE"}
             </button>
           </>
         )}
