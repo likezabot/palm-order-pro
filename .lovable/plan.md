@@ -1,43 +1,50 @@
 
 
-## Voltar à grade de mesas com pedido novo já visível, sem timeout
+## Navegação instantânea + cache offline persistente
 
-### Problema atual
-1. Em `OrderSuccess`, mesmo para pedidos de mesa (sem senha/impressão local), há um **timeout fixo de 700ms** antes de chamar `onReset()` e voltar à `TableGrid`.
-2. Quando a grade aparece, ela mostra o cache antigo até o realtime do Supabase invalidar a query `["active-orders"]` — o que adiciona mais alguns ms (e às vezes segundos em conexão ruim).
-3. O resultado é uma sensação de atraso de 1-2s entre "envio do pedido" e "vejo a mesa vermelha".
+### Problema
+- React Query mantém cache em memória (já com `networkMode: "offlineFirst"`), mas ao recarregar/perder rede o cache evapora.
+- Service Worker atual (`public/sw.js`) faz **network-first** em tudo same-origin → chamadas ao Supabase nem passam por ele (cross-origin), e nada de dados fica disponível offline.
+- Ao voltar do Menu para a TableGrid, o componente remonta e re-fetcha, então mesmo com cache em memória pode haver flash. Precisamos: (a) cache **persistente** entre reloads, (b) responder offline com último valor conhecido.
 
 ### Solução
 
-**1. Reset imediato para pedidos de mesa (`OrderSuccess.tsx`)**
-- Quando `!shouldShowBadge` (mesa, sem badge de senha/impressão local), chamar `onReset()` **na hora** (delay = 0, via `requestAnimationFrame` para garantir que o React mostre o checkmark por 1 frame e depois transicione).
-- Atualmente já está em 700ms — vamos zerar.
-- **Alternativa considerada**: pular completamente a tela `OrderSuccess` para mesas. Decisão: manter a tela mas instantânea, porque dá o feedback visual de "pedido enviado" que o garçom espera. O fade-out fica natural pela própria transição da grade.
+**1. Persistir cache do React Query em IndexedDB**
+- Adicionar `@tanstack/react-query-persist-client` + `@tanstack/query-async-storage-persister` + `idb-keyval`.
+- Em `App.tsx`, trocar `QueryClientProvider` por `PersistQueryClientProvider` com persister IndexedDB.
+- Configuração: `maxAge: 24h`, `buster` = build stamp (invalida cache em deploy novo), persistir só queries com `["active-orders"]`, `["table-count"]`, `["products"]`, `["menu"]` (whitelist via `dehydrateOptions.shouldDehydrateQuery`).
+- Resultado: ao abrir o app/voltar à grade, dados aparecem **instantâneos do disco**, e o refetch acontece em background.
 
-**2. Atualização otimista do cache da grade (`OrderReview.tsx`)**
-- Após o RPC `create_order` / `update_order_items` retornar com sucesso, **antes** de chamar `onSuccess()`:
-  - Usar `queryClient.setQueryData(["active-orders"], ...)` para **inserir/atualizar** o pedido recém-criado direto no cache.
-  - Para criação: empurrar um objeto `{ id, table_name, original_table_name, status: "new", total, waiter_name, created_at, served_at: null, item_count: <soma cart> }` na lista.
-  - Para edição: substituir o pedido existente com os novos totais e item_count atualizado.
-- Assim, quando a `TableGrid` montar, o pedido **já está no cache** — a mesa aparece vermelha instantaneamente. O realtime do Supabase em seguida apenas confirma/refina os dados.
+**2. Cache de respostas Supabase REST no Service Worker (stale-while-revalidate)**
+- Atualizar `public/sw.js` para interceptar requisições GET para `*.supabase.co/rest/v1/*` com estratégia **stale-while-revalidate**:
+  - Responder do cache imediatamente (se houver).
+  - Disparar fetch em paralelo e atualizar o cache.
+- Isso cobre o caso de "offline real" (sem rede): a query do React Query recebe a última resposta do Supabase via SW, e a UI continua funcional.
+- Manter POST/PATCH/DELETE intocados (passam direto, nunca cacheados).
+- Não cachear `/auth/*` nem realtime websockets.
 
-**3. Ajuste fino de transição**
-- Manter `OrderSuccess` com animação rápida (~250ms) para o checkmark, mas **não bloqueante**: `onReset()` dispara imediatamente; a grade já renderiza por baixo.
-- Para pedidos com badge (BALCÃO com impressão local), manter os tempos atuais (não mexer — usuário precisa ver senha).
+**3. Bump de versão do cache**
+- `CACHE_NAME` continua usando `BUILD_STAMP` — limpa cache antigo automaticamente em cada deploy.
+- Adicionar segundo cache `plano-b-api-${BUILD_STAMP}` para respostas Supabase, separado dos assets.
+
+**4. TableGrid: usar `placeholderData` + `keepPreviousData`**
+- Em `useQuery(["active-orders"])`, adicionar `placeholderData: (prev) => prev` para evitar flash de loading entre montagens dentro da mesma sessão.
+- Já temos cache otimista (do plano anterior) — agora soma-se cache persistente em disco.
 
 ### Arquivos
-- **Editado**: `src/components/palm/OrderSuccess.tsx` — `delay = 0` quando `!shouldShowBadge`, usando `requestAnimationFrame` em vez de `setTimeout`.
-- **Editado**: `src/components/palm/OrderReview.tsx` — após sucesso do RPC, fazer `queryClient.setQueryData(["active-orders"], ...)` para inserir/mesclar o pedido otimisticamente. Importar `useQueryClient`.
-- **Sem mudanças**: realtime channel, banco, `TableGrid`.
+- **Editado** `package.json` — adicionar `@tanstack/react-query-persist-client`, `@tanstack/query-async-storage-persister`, `idb-keyval`.
+- **Editado** `src/App.tsx` — trocar provider por `PersistQueryClientProvider`, configurar persister IndexedDB com whitelist de queries e buster por build.
+- **Editado** `public/sw.js` — adicionar handler stale-while-revalidate para Supabase REST, cache `plano-b-api-*` separado.
+- **Editado** `src/components/palm/TableGrid.tsx` — adicionar `placeholderData: (prev) => prev` na query de `active-orders`.
 
-### Detalhes técnicos
-- O `setQueryData` precisa ser tolerante: se a query nunca foi montada (cache vazio), ignora silenciosamente — quando a grade montar e fizer o fetch inicial, vai pegar do banco.
-- Para edição (`update_order_items`), o cache já tem o pedido — só atualizamos `total` e re-derivamos `item_count` somando `cart`.
-- Para criação, o `create_order` retorna `{ id, created_at }` — já temos tudo para construir o objeto.
-- Não mexemos em `print_status`/realtime: o canal continua chegando e refinando o estado real (caso outro garçom tenha mexido em paralelo).
+### Observações técnicas
+- O SW só roda em produção (já filtrado em `main.tsx` para preview/iframe) — então o stale-while-revalidate não atrapalha o editor.
+- IndexedDB persiste mesmo sem SW, então o cache de queries funciona também no preview.
+- `buster` = `__APP_VERSION__` (já injetado pelo Vite) garante que após deploy o cache antigo é descartado.
+- Realtime continua sobrescrevendo dados frescos por cima do cache persistido — sem risco de mostrar dados velhos por muito tempo quando online.
 
 ### Resultado
-- Garçom toca "Enviar pedido" → vê checkmark verde por ~1 frame → grade aparece **com a mesa já vermelha/com valor**.
-- Sensação de instantâneo, sem depender de latência de rede do realtime.
-- Realtime continua funcionando como rede de segurança / sincronia entre dispositivos.
+- Voltar do Menu para a TableGrid: dados aparecem **no mesmo frame**, sem skeleton/loading.
+- Recarregar a aba offline: app abre com último estado conhecido em vez de tela em branco.
+- Conexão volta: realtime + refetch em background atualizam silenciosamente.
 
