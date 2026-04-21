@@ -155,6 +155,7 @@ export type Database = {
           print_status: string
           print_type: string | null
           printed_at: string | null
+          served_at: string | null
           status: string
           table_name: string
           total: number | null
@@ -175,6 +176,7 @@ export type Database = {
           print_status?: string
           print_type?: string | null
           printed_at?: string | null
+          served_at?: string | null
           status?: string
           table_name: string
           total?: number | null
@@ -195,6 +197,7 @@ export type Database = {
           print_status?: string
           print_type?: string | null
           printed_at?: string | null
+          served_at?: string | null
           status?: string
           table_name?: string
           total?: number | null
