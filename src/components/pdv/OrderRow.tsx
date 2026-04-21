@@ -179,5 +179,3 @@ export const OrderRow = ({ order, itemCount, selected, onSelect, onAdvance, onPr
     </div>
   );
 };
-
-export { OrderRow };
