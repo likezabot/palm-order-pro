@@ -1327,9 +1327,9 @@ async function answerCallback(callbackId: string, text?: string) {
   }
 }
 
-async function editTelegramMessage(chatId: number, messageId: number, text: string) {
+async function editTelegramMessage(chatId: number, messageId: number, text: string, keyboard?: InlineButton[][]) {
   if (isTestChat(chatId)) {
-    testCaptureBuffer.push({ chatId, text, kind: "edit", messageId });
+    testCaptureBuffer.push({ chatId, text, kind: "edit", messageId, keyboard });
     return;
   }
   try {
@@ -1340,7 +1340,7 @@ async function editTelegramMessage(chatId: number, messageId: number, text: stri
         chat_id: chatId,
         message_id: messageId,
         text,
-        reply_markup: { inline_keyboard: [] },
+        reply_markup: { inline_keyboard: keyboard ?? [] },
       }),
     });
   } catch (e) {
