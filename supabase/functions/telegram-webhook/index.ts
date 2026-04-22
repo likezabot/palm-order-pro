@@ -1981,15 +1981,5 @@ Deno.serve(async (req) => {
     console.error("Erro processando update:", err);
   }
 
-  // Em test mode, devolve o buffer capturado nesta MESMA request (isolates não compartilham memória).
-  if (currentChatIsTest) {
-    const captured = drainTestBuffer();
-    clearTestContext();
-    return new Response(JSON.stringify({ ok: true, captured }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  clearTestContext();
   return testOrPlain();
 });
