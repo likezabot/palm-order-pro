@@ -968,12 +968,22 @@ async function resolveTable(table: string): Promise<OrderRow | null> {
 
 async function resolveProduct(text: string): Promise<ProductResolution> {
   // Aplica singularize antes de buscar (cocas->coca, bovinos->bovino, aguas->agua).
-  const singular = singularize(normalize(text));
+  const original = normalize(text);
+  const singular = singularize(original);
   const norm = singular;
 
-  // 1. find_inventory_item_by_text (slug/aliases exato)
+  // 1. find_inventory_item_by_text (slug/aliases exato) — tenta singularizado
   const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: singular });
   let inventoryItem: any = Array.isArray(invExact) && invExact.length > 0 ? invExact[0] : null;
+
+  // 1b. Fallback: tenta também com a forma ORIGINAL (sem singularize) caso
+  // a singularização tenha mutilado um alias curto (ex.: "bois" → "boi").
+  if (!inventoryItem && original && original !== singular) {
+    const { data: invExactOrig } = await sb.rpc("find_inventory_item_by_text", { p_text: original });
+    if (Array.isArray(invExactOrig) && invExactOrig.length > 0) {
+      inventoryItem = invExactOrig[0];
+    }
+  }
 
   // 2. Fallback: busca direta em products por nome
   if (!inventoryItem) {
