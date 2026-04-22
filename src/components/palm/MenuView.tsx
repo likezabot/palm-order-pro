@@ -427,10 +427,17 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       <PorcoVariantDialog
         open={porcoOpen}
         onOpenChange={setPorcoOpen}
-        variants={porcoVariants.map((v) => ({
-          name: v.name === "porco" ? "Porco" : v.name === "panceta suína" ? "Panceta suína" : "Costela suína",
-          product: v.product,
-        }))}
+        variants={porcoVariants.map((v) => {
+          const display =
+            v.name === "porco"
+              ? "Porco"
+              : v.name === "panceta suína"
+              ? "Panceta suína"
+              : v.name === "costela suína"
+              ? "Costela suína"
+              : v.product?.name ?? v.name;
+          return { name: display, product: v.product };
+        })}
         isEsgotado={isEsgotado}
         getQty={getQty}
         onPick={(_name, product) => {
