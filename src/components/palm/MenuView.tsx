@@ -126,9 +126,19 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
     });
   }, [products, activeCategory, isSearching, search, hiddenProductNames, allHiddenNames]);
 
-  const filtered = isSearching
+  const filteredOrdered = isSearching
     ? filteredRaw
     : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
+
+  // Disponíveis primeiro, esgotados ao final (estável).
+  const filtered = useMemo(() => {
+    const withIdx = filteredOrdered.map((p, idx) => ({ p, idx, esgotado: isProductEsgotado(stockMap, p.id, recipes) }));
+    withIdx.sort((a, b) => {
+      if (a.esgotado !== b.esgotado) return a.esgotado ? 1 : -1;
+      return a.idx - b.idx;
+    });
+    return withIdx.map((x) => x.p);
+  }, [filteredOrdered, stockMap, recipes]);
 
   // Contador por categoria (soma quantidades).
   const categoryCounts = useMemo(() => {
