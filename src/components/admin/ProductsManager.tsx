@@ -16,6 +16,7 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { PorcoGroupBanner } from "./PorcoGroupBanner";
 
 interface Props {
   productsByCategory: Record<string, Product[]>;
