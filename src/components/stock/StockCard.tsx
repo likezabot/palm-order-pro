@@ -70,6 +70,7 @@ export default function StockCard({ item, onMovement, onEdit, onHistory }: Props
 
   return (
     <div
+      data-stock-item-id={item.id}
       className={cn(
         "relative flex flex-col rounded-2xl bg-card border p-3 shadow-soft hover:shadow-card transition-all",
         borderClass,

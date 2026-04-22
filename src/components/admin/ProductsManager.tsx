@@ -16,6 +16,7 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { PorcoGroupBanner } from "./PorcoGroupBanner";
 
 interface Props {
   productsByCategory: Record<string, Product[]>;
@@ -337,6 +338,9 @@ const ProductsManager = ({
 
       {/* Grid */}
       <div className={`px-3 ${selectionMode ? "pb-28" : "pb-10"}`}>
+        {!search && activeCategory === "espetos" && !hasFilters && (
+          <PorcoGroupBanner products={productsByCategory["espetos"] ?? []} />
+        )}
         {search ? (
           // Modo busca: lista todas categorias com header
           allFilteredIds.length === 0 ? (
