@@ -515,12 +515,18 @@ function parseCommand(raw: string): Command {
   }
 
 
-  // NOTIFICAÇÕES on/off
+  // NOTIFICAÇÕES on/off + atalhos diretos (silencia/muta/volta avisos)
   const notifM = text.match(/^(?:notificacoes|notificações|notif|alertas|avisos)\s+(on|off|ligar?|desligar?|ativa(?:r)?|desativa(?:r)?|sim|nao|não)$/);
   if (notifM) {
     const v = notifM[1];
     const on = ["on", "ligar", "liga", "ativar", "ativa", "sim"].includes(v);
     return { kind: "NOTIFY_TOGGLE", on };
+  }
+  if (/^(?:silencia(?:r)?|muta(?:r)?|silenciar\s+alertas|parar\s+avisos|para\s+avisos)$/.test(text)) {
+    return { kind: "NOTIFY_TOGGLE", on: false };
+  }
+  if (/^(?:desmuta(?:r)?|volta(?:r)?\s+avisos|ativa(?:r)?\s+avisos|liga(?:r)?\s+avisos)$/.test(text)) {
+    return { kind: "NOTIFY_TOGGLE", on: true };
   }
 
   // STATUS de mesa — bem permissivo:
