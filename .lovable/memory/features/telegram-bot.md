@@ -1,6 +1,6 @@
 ---
 name: Telegram bot
-description: Bot do Telegram edita pedidos por texto (mesa N + qty produto) e CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque <nome>). Whitelist em settings.telegram_allowed_chats. Suporta batch consolidado, undo 60s, fuzzy match, contexto por usuário em grupos, SET_TABLE, sugestões clicáveis e status de impressão.
+description: Bot do Telegram edita pedidos por texto (mesa N + qty produto), CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque/lista estoque) e suporta múltiplos comandos numa só mensagem (separadores \n, ;, |, //). Whitelist em settings.telegram_allowed_chats. Suporta batch consolidado, undo 60s, fuzzy match, contexto por usuário em grupos, SET_TABLE, sugestões clicáveis, status de impressão e amplos aliases naturais.
 type: feature
 ---
 Edge function `telegram-webhook` permite editar pedidos via texto:
