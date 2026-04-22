@@ -600,7 +600,6 @@ async function checkGroupOrReturn(product: Product): Promise<ProductResolution> 
 }
 
 // Sugere até 3 produtos próximos (token-by-token, ranqueado por nº de matches).
-// Sugere até 3 produtos próximos (token-by-token, ranqueado por nº de matches).
 async function suggestProducts(text: string): Promise<Product[]> {
   const norm = singularize(normalize(text));
   const tokens = norm.split(/\s+/).filter((t) => t.length >= 3 && !/^\d+$/.test(t));
