@@ -2658,12 +2658,15 @@ async function wzListCategoriesWithCount(): Promise<{ name: string; label: strin
     const c = r.category || "outros";
     counts.set(c, (counts.get(c) ?? 0) + 1);
   }
-  // Sempre mostra as 4 categorias do cardápio na ordem canônica.
-  const result = MENU_CATEGORIES.map((name) => ({
-    name,
-    label: wzCategoryLabel(name),
-    count: counts.get(name) ?? 0,
-  }));
+  // Mostra as 4 categorias do cardápio na ordem canônica, suprimindo as vazias
+  // (refeições, por exemplo, deixaram de ter estoque próprio).
+  const result = MENU_CATEGORIES
+    .map((name) => ({
+      name,
+      label: wzCategoryLabel(name),
+      count: counts.get(name) ?? 0,
+    }))
+    .filter((c) => c.count > 0);
   // Anexa categorias legacy não canônicas que ainda tenham itens (ex: "outros").
   for (const [name, count] of counts.entries()) {
     if (!MENU_CATEGORIES.includes(name as any) && count > 0) {
