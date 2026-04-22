@@ -92,10 +92,16 @@ function buildWaiterPickerMessage(names: string[], username?: string): string {
       "Peça ao admin para abrir o módulo *Admin* e criar seu nome em Garçons.";
   }
   return greet +
-    "Antes de começar, me diga *qual garçom você é* (precisa estar cadastrado no Palm).\n\n" +
-    "Garçons disponíveis:\n" +
-    names.map((n) => `  • ${n}`).join("\n") +
-    "\n\nResponda apenas com o nome (ex.: `" + names[0] + "`).";
+    "Antes de começar, toque no seu nome abaixo 👇\n" +
+    "(Você precisa estar cadastrado no Palm. Se não estiver, peça ao admin.)";
+}
+// Botões clicáveis com nomes dos garçons. callback_data: pw|<idx> (idx é a posição em listWaiterNames()).
+function buildWaiterPickerKeyboard(names: string[]): InlineButton[][] {
+  const rows: InlineButton[][] = [];
+  for (let i = 0; i < names.length && i < 24; i++) {
+    rows.push([{ text: `👤 ${names[i]}`, callback_data: `pw|${i}` }]);
+  }
+  return rows;
 }
 
 // Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
@@ -1821,6 +1827,30 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
+  // ─── PICK WAITER: pw|<idx> ───
+  if (data.startsWith("pw|")) {
+    if (typeof userId !== "number") {
+      await answerCallback(cbId, "Sem usuário");
+      return;
+    }
+    const idx = parseInt(data.slice(3), 10);
+    const names = await listWaiterNames();
+    if (!Number.isFinite(idx) || idx < 0 || idx >= names.length) {
+      await answerCallback(cbId, "Opção inválida");
+      await editTelegramMessage(chatId, messageId, "❌ Opção inválida. Mande qualquer mensagem para ver a lista de novo.");
+      return;
+    }
+    const picked = names[idx];
+    await setWaiterBinding(userId, picked, username);
+    await answerCallback(cbId, `Olá, ${picked}!`);
+    await editTelegramMessage(
+      chatId,
+      messageId,
+      `✅ Pronto! Você está identificado como *${picked}*.\n\nAgora pode mandar comandos:\n  • mesa 5 + 2 coca\n  • mesa 5 status\n  • ajuda\n\nPara trocar: /trocar`,
+    );
+    return;
+  }
+
   // ─── UNDO single: u|table|productId|qty|op ───
   if (data.startsWith("u|")) {
     cleanupUndos();
@@ -2061,7 +2091,7 @@ Deno.serve(async (req) => {
       const { error } = await sb.from("telegram_user_bindings").delete().eq("telegram_user_id", userId);
       if (error) console.warn("trocar:", error.message);
       const names = await listWaiterNames();
-      await sendTelegram(chatId, "🔄 Vínculo removido.\n\n" + buildWaiterPickerMessage(names, username));
+      await sendTelegram(chatId, "🔄 Vínculo removido.\n\n" + buildWaiterPickerMessage(names, username), buildWaiterPickerKeyboard(names));
       return testOrPlain();
     }
     if (typeof userId === "number" && (trimmedLower === "/quemsoueu" || trimmedLower === "quem sou eu")) {
@@ -2086,9 +2116,9 @@ Deno.serve(async (req) => {
           await sendTelegram(chatId, `✅ Pronto! Você está identificado como *${picked}*.\n\nAgora pode mandar comandos:\n  • mesa 5 + 2 coca\n  • mesa 5 status\n  • ajuda\n\nPara trocar: \`/trocar\``);
           return testOrPlain();
         }
-        // Não bateu — mostra a lista
+        // Não bateu — mostra a lista clicável
         const names = await listWaiterNames();
-        await sendTelegram(chatId, buildWaiterPickerMessage(names, username));
+        await sendTelegram(chatId, buildWaiterPickerMessage(names, username), buildWaiterPickerKeyboard(names));
         return testOrPlain();
       }
       waiter = bound;
