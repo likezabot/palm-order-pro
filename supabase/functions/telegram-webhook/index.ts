@@ -146,6 +146,11 @@ function normalize(s: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Garante espaço ao redor de operadores +/- colados a dígitos/letras.
+    // Ex.: "+2 coca" -> "+ 2 coca"; "mesa 5+2 coca" -> "mesa 5 + 2 coca".
+    .replace(/([+\-])(?=\S)/g, "$1 ")
+    .replace(/(\S)(?=[+\-]\s)/g, "$1 ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
