@@ -1,77 +1,73 @@
 ---
 name: Telegram bot
-description: Bot do Telegram edita pedidos por texto (mesa N + qty produto), CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque/lista estoque) E em modo CONVERSACIONAL (wizard guiado com botões e perguntas, estado em telegram_chat_state, TTL 5min) e suporta múltiplos comandos numa só mensagem (separadores \n, ;, |, //). Whitelist em settings.telegram_allowed_chats.
+description: Bot do Telegram edita pedidos por texto (mesa N + qty produto), CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque/lista estoque) E em modo CONVERSACIONAL v2 (wizard rico com navegação Voltar/Menu, top itens, contagem multi-item via carrinho, preview de operação em massa, undo, "fazer outra"). Estado persistido em telegram_chat_state (TTL 5min normal, 30min se carrinho). Whitelist em settings.telegram_allowed_chats.
 type: feature
 ---
 Edge function `telegram-webhook` permite editar pedidos via texto:
 - `mesa N + qty produto` → ADD (cria pedido se não existir, ou update_order_items com print extra)
 - `mesa N - qty produto` → REMOVE (sem impressão)
-- `mesa N ver pedido` → VIEW (também aceita variações naturais — ver abaixo)
+- `mesa N ver pedido` → VIEW
 - `mesa N` → SET_TABLE (fixa contexto sem executar; resposta `📍 Mesa N definida para os próximos comandos (15 min).`)
 - `ajuda` / `/start` / `/help` → HELP
 
-**Estoque (NOVO):**
-- `entrada 10 coca` / `entrou 5kg picanha` / `chegou 20 cerva` / `+ 10 coca` → STOCK_MOVEMENT type=in (chama RPC `apply_inventory_movement`).
+**Estoque (comandos diretos — inalterados):**
+- `entrada 10 coca` / `entrou 5kg picanha` / `chegou 20 cerva` / `+ 10 coca` → STOCK_MOVEMENT type=in.
 - `saida 2 coca` / `usei 1kg picanha` / `gastei 3 carvao` / `tirei 2 coca do estoque` → STOCK_MOVEMENT type=out.
 - `ajuste coca 50` / `setar coca para 50` / `atualiza coca = 30` / `contei 50 coca` / `marca coca 50` / `tem 12 coca` → STOCK_MOVEMENT type=adjustment.
-- `estoque coca` / `saldo coca` / `quanto tem de coca` / `quanta coca tem` / `qtd coca` / `tem coca?` → STOCK_QUERY (saldo de UM item).
-- `estoque` (sozinho) / `criticos` / `alertas` / `o que falta` / `precisa repor` → STOCK_CRITICAL.
-- `lista estoque` / `inventario` / `tudo do estoque` / `todos itens` / `estoque completo` → STOCK_LIST (NOVO; até 30 itens ativos com saldo, ordem alfabética).
-- Aliases extras pra movimentos: IN aceita `repor|abasteci|entregou|subir|reposicao`; OUT aceita `vendi|acabou|quebrou|descartei|perdi|baixa`.
+- `estoque coca` / `saldo coca` / `quanto tem de coca` → STOCK_QUERY.
+- `estoque` (sozinho) / `criticos` / `alertas` / `o que falta` → STOCK_CRITICAL.
+- `lista estoque` / `inventario` / `tudo do estoque` → STOCK_LIST.
+- Aliases extras: IN aceita `repor|abasteci|entregou|subir|reposicao`; OUT aceita `vendi|acabou|quebrou|descartei|perdi|baixa`.
 
-**Múltiplos comandos numa mensagem (NOVO):**
-- Separadores aceitos pelo `splitCommands(text)`: quebra de linha, `;`, ` | ` (com espaços), ` // ` (com espaços).
-- Auto-split por `mesa N` repetida na mesma linha (só se TODAS as partes contêm operador/ação reconhecível). Conservador: produtos com "mesa" no nome não quebram.
-- Limite de 10 comandos por mensagem mantido. Consolidação ADD/REMOVE da mesma mesa numa só impressão mantida.
-- Gatilhos são EXPLÍCITOS para nunca confundir com pedidos. Em particular: `-N produto` SEM mesa continua sendo REMOVE_NOMESA (pedido), não saída de estoque.
-- Resolver `resolveStockItem(text)`: 1) RPC `find_inventory_item_by_text` (slug/aliases exato); 2) match por inclusão de tokens em `inventory_items where is_active=true`; 3) fuzzy Levenshtein ≤2 nos tokens significativos. 0 hits → not_found. 1 → executa. 2–8 → ambíguo com botões.
-- Botões inline ambíguos: `callback_data` `s|<in|out|adj>|<itemId>|<qty>` (até 8 candidatos + Cancelar).
-- Undo de estoque (60s, in-memory): após cada movimento, botão `↩️ Desfazer (60s)` com `callback_data` `us|<token>`. `pendingStockUndos<token, {itemId, type, qty, previousStock, ts}>`. IN→OUT, OUT→IN, ADJUSTMENT→novo ADJUSTMENT com `previousStock`.
-- Note do movimento: `Telegram (<waiter_name>)`. Source: `telegram`.
-- Triggers `queue_stock_in` e `queue_stock_alert` continuam disparando notificações automáticas no grupo configurado — sem mudança lá.
+**Wizard v2 de Estoque (REFEITO — fluxo navegável e robusto):**
 
-**Gatilhos VIEW naturais:** parser detecta VIEW antes de ADD/REMOVE. Requer `mesa N` + 1 gatilho, SEM operador ADD/REMOVE e SEM padrão `<qty> <produto>`. Tokens: ver/ve, consulta/consultar/consulte, total/totais, pedido/pedidos, mostra/mostrar/mostre, lista/listar/liste, resumo, extrato, conta, quanto. Frases compostas (includes): "como esta", "como ta", "como anda".
+Gatilhos: `gerenciar estoque`, `menu estoque`, `controle estoque`, `wizard estoque`, `gerenciar`, `contagem`, `fazer contagem`. Comandos texto durante wizard: `/menu` ou `menu` volta ao principal, `/cancelar` ou `cancelar` mata o estado, `/voltar` ou `voltar` volta uma etapa.
 
-Parser também aceita variações naturais para pedidos: "adiciona 1 bovino na mesa 1", "coloca 2 coca na mesa 3", "mesa 2 tira 1 agua", "mesa 1 mais um bovino", "acrescenta tres bovinos na mesa 2". Operadores ADD: +, add, adiciona(r), coloca(r), poe, manda(r), bota(r), mais, soma(r), inclui(r), acrescenta(r). Operadores REMOVE: -, remove(r), tira(r), retira(r), cancela(r), menos, subtrai(r), exclui(r), desconta(r). Aceita números por extenso 1–10.
+Fluxo:
+1. **Menu principal rico** (`main_menu`): mostra contagem de itens ativos, críticos e zerados; categorias com contagem; rascunho de carrinho se houver. Botões: Entrada/Saída/Ajuste/Carrinho/Buscar/Por categoria/Críticos/Listar tudo/Fechar.
+2. **Picker de item** (`awaiting_item`): após escolher Entrada/Saída/Ajuste, mostra **top 5 mais movimentados nos últimos 30 dias** (query em `inventory_movements` agrupada). Cada botão exibe nome + saldo formatado. Atalhos: Buscar, Por categoria, Todos os itens.
+3. **Busca** (`awaiting_search`): texto livre faz ilike+RPC `find_inventory_item_by_text`. 1 resultado → vai pra qty. >1 → lista botões com saldo.
+4. **Quantidade contextual** (`awaiting_qty`): mostra cabeçalho com saldo atual, mínimo, ação. Sugestões inteligentes (top 4 do histórico do item específico ou geral, fallback `[1,5,10,24]` ou `[0,10,50,100]` para ajuste). Para `out` com saldo ≤ 10 mostra "Tirar tudo". Para `adj` mostra "Manter (X)" e "Zerar (0)". Botão "Digitar valor" abre `awaiting_qty_text`.
+5. **Texto livre de qty**: aceita `12`, `2.5`, `+24`, `-3`, `=50` (prefixo só clarifica intenção visual).
+6. **Review single** (`awaiting_review`): preview "Saldo: X → Y", avisos se ficará negativo/zerado/abaixo do mín. Botões: ✅ Confirmar, ➕ Confirmar e fazer outra, 🧾 Adicionar ao carrinho, ←/🏠/❌.
+7. **Resultado single**: mensagem com saldo antes/depois + botões: ↩️ Desfazer (60s, via `us|<token>` reusa `executeStockUndo`), ➕ Outra operação no item, 🏠 Menu estoque.
+8. **"Fazer outra"** (`wz|repeat`): aplica o movimento e abre o picker mantendo a ação.
+9. **Operação em massa** (`awaiting_mass_review`): preview top 5 com saldo antes→depois, contagem total, "Ver lista completa" mostra até 30. Confirmação obrigatória.
+10. **Modo Carrinho / Contagem multi** (`cart_main`, `cart_adding_item`, `cart_adding_qty`): adiciona várias operações no rascunho (jsonb em `data.cart`), exibe lista numerada com previsão de saldos, "Aplicar todos" executa em loop, "Sair sem salvar" descarta. TTL 30min.
 
-**Plural simples:** singularize() roda antes de resolveProduct/resolveStockItem. Conservador.
+Navegação:
+- `wzPushHistory` empilha step+data antes de transições; `wzGoBack` re-renderiza tela anterior pelo step.
+- Stack limitada a 8 frames (não duplica consecutivos).
+- Mensagens **editadas** via `editTelegramMessage` em vez de spam.
 
-**Regras v2:**
-- Estoque: agora controlado por gatilhos explícitos. Pedidos (ADD/REMOVE) continuam SEM mexer no saldo (consistência com PDV).
-- Whitelist obrigatória: `settings.telegram_allowed_chats`. Se vazio/ausente, bloqueia tudo.
-- Identificação: vinculação `telegram_user_bindings` (telegram_user_id → waiter_name). Bot lista garçons cadastrados em `profiles` (role='waiter') com botões inline (2 colunas se >3) + 🔄 Atualizar lista. `pw|<base64url(nome)>` é resiliente a reordenação. Comandos: `/trocar`, `/quemsoueu`, `/resetar` (só DM).
+Tabela `telegram_chat_state` (chat_id PK, step, data jsonb, expires_at, RLS service-only). Auto-limpeza best-effort por chamada.
+
+**Callbacks suportados (wizard v2):**
+- `wz|home` — menu principal
+- `wz|back` — voltar uma etapa (usa history)
+- `wz|cancel` — cancelar e limpar estado
+- `wz|act|<in|out|adj|list|crit>` — ação principal
+- `wz|search` — abre busca por texto
+- `wz|cats` — categorias (com contagem)
+- `wz|catview|<cat>` — vê itens de uma categoria sem ação definida
+- `wz|item|<itemId>` — selecionar item
+- `wz|scope|<all|cat>[|<cat>]` — escopo de operação em massa
+- `wz|qty|<n|other>` — quantidade sugerida ou abrir digitação
+- `wz|confirm` — confirmar (single ou massa)
+- `wz|repeat` — confirmar single e fazer outra
+- `wz|massview` — ver lista completa de operação em massa
+- `wz|cart|view|addnew|setact|<a>|add|apply|clear` — modo carrinho
+- `us|<token>` — undo de movimento (in-memory, 60s)
+
+**Gatilhos VIEW/parsing de pedidos:** sem mudança — mesmo comportamento.
+
+**Regras v2 (gerais):**
+- Estoque controlado por gatilhos explícitos. Pedidos (ADD/REMOVE) NÃO mexem no saldo.
+- Whitelist obrigatória: `settings.telegram_allowed_chats`. Se vazio, bloqueia tudo.
+- Identificação via `telegram_user_bindings` (telegram_user_id → waiter_name).
 - Bloqueia mesa "BALCÃO".
-- Em ambíguo nunca chuta (auto-pick determinístico só com folga ≥5).
-- Retry 3× em `version_conflict` via `withVersionRetry`.
+- Em ambíguo nunca chuta (auto-pick só com folga ≥5).
+- Retry 3× em `version_conflict`.
 - Dedupe por `update_id` em memória (TTL 5min).
-
-**Multi-comando, batch de impressão, fuzzy, autoPick, callbacks de pedidos (a|/r|/u|/ub|/x), modo turbo (contexto), preview (dry-run):** sem mudanças — comportamento original mantido.
-
-**Callbacks suportados:**
-- `pw|<b64>` — escolher garçom
-- `pw_refresh` — atualizar lista de garçons
-- `a|<table>|<product_id>|<qty>` — confirmar ADD em pedido
-- `r|<table>|<product_id>|<qty>` — confirmar REMOVE em pedido
-- `u|<table>|<product_id>|<qty>|<op>` — undo single de pedido
-- `ub|<token>` — undo batch de pedido
-- `s|<in|out|adj>|<itemId>|<qty>` — confirmar movimento de estoque
-- `us|<token>` — undo de movimento de estoque
-- `wz|act|<in|out|adj|list|crit>` — wizard: escolher ação (NOVO)
-- `wz|scope|<all|cat|search>[|<cat>]` — wizard: escolher escopo (NOVO)
-- `wz|pickitem|<itemId>` — wizard: selecionar item buscado (NOVO)
-- `wz|qty|<n|other>` — wizard: escolher quantidade sugerida ou pedir digitação (NOVO)
-- `wz|confirm` — wizard: confirmar operação em massa (NOVO)
-- `wz|cancel` — wizard: cancelar e limpar estado (NOVO)
-- `x` — cancelar
-
-**Wizard de Estoque (NOVO):**
-- Gatilhos: `gerenciar estoque`, `menu estoque`, `controle estoque`, `wizard estoque`, `gerenciar`. Comandos completos como `entrada 10 coca` continuam funcionando direto SEM passar pelo wizard.
-- Tabela `telegram_chat_state` (chat_id PK, step, data jsonb, expires_at, RLS service-only). TTL 5min, auto-limpeza best-effort a cada chamada.
-- Steps: `awaiting_action` → `awaiting_scope` → (`awaiting_item_search` se busca) → `awaiting_qty` → (`awaiting_confirm` se escopo amplo) → executa.
-- Quantidades sugeridas inteligentes: query nas últimas 60 movimentações filtradas por tipo (e item se single), agrupa, pega top 4 + defaults se faltar.
-- Escopo: `single` (item específico via search/pick), `all` (todos itens ativos, max 100), `category` (filtro por inventory_items.category).
-- Operações em massa SEMPRE pedem confirmação extra (`awaiting_confirm`). Single executa direto.
-- Texto livre durante step processado por `wzHandleTextInput`: nome do item (awaiting_item_search) ou número (awaiting_qty).
-- Resposta com até 15 itens detalhados, falhas listadas até 5.
 
 **Para liberar um chat:** inserir/atualizar `settings` com `key='telegram_allowed_chats'` e `value='[123456789]'`.
