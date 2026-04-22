@@ -475,7 +475,7 @@ const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
 const TEST_MODE = (Deno.env.get("TEST_MODE") ?? "").toLowerCase() === "true";
 const TEST_CHAT_ID_RAW = Deno.env.get("TEST_CHAT_ID");
 const TEST_CHAT_ID = TEST_CHAT_ID_RAW ? Number(TEST_CHAT_ID_RAW) : null;
-const TEST_TABLE_PREFIX = "T-";
+const TEST_TABLE_PREFIX = "999"; // mesas 9990-9999 reservadas para testes
 
 type CapturedMessage = { chatId: number; text: string; keyboard?: InlineButton[][]; kind: "send" | "edit" | "answer"; messageId?: number };
 let testCaptureBuffer: CapturedMessage[] = [];
@@ -509,7 +509,7 @@ async function cleanupTestData(): Promise<{ orders_deleted: number; items_delete
   const { data: testOrders } = await sb
     .from("orders")
     .select("id")
-    .or(`table_name.ilike.${TEST_TABLE_PREFIX}%,original_table_name.ilike.${TEST_TABLE_PREFIX}%`);
+    .or(`table_name.like.${TEST_TABLE_PREFIX}_,original_table_name.like.${TEST_TABLE_PREFIX}_`);
   const ids = (testOrders ?? []).map((o: any) => o.id);
   let itemsDeleted = 0;
   if (ids.length > 0) {
