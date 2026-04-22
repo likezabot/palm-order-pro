@@ -1,11 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Printer, RefreshCw, AlertCircle, CheckCircle2, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { autoPrintOrder, autoPrintDelta, manualPrintOrder } from "@/lib/print-service";
+import { manualPrintOrder } from "@/lib/print-service";
 import { Order } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +13,6 @@ import { loadPrintConfig } from "@/lib/print-config";
 
 const PrintStation = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [autoPrint, setAutoPrint] = useState(true);
   const [status, setStatus] = useState<"online" | "offline">("online");
   const [printedIds, setPrintedIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
@@ -27,12 +24,7 @@ const PrintStation = () => {
     return cfg.bridgeUrl.replace(/\/print\/?$/, "");
   })();
 
-  // Refs estáveis para uso dentro do listener Realtime
-  const autoPrintRef = useRef(autoPrint);
-  const printingRef = useRef<Set<string>>(new Set());
   const toastRef = useRef(toast);
-
-  useEffect(() => { autoPrintRef.current = autoPrint; }, [autoPrint]);
   useEffect(() => { toastRef.current = toast; }, [toast]);
 
   const fetchOrders = useCallback(async () => {
