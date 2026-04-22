@@ -1422,6 +1422,43 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       successTable: cmd.table,
     };
   }
+  if (cmd.kind === "REPORT") {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/daily-waiter-report`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await r.json().catch(() => ({}));
+      return { text: data?.preview || "📊 Relatório enviado." };
+    } catch (e) {
+      return { text: `❌ Falha ao gerar relatório: ${String((e as any)?.message ?? e)}` };
+    }
+  }
+  if (cmd.kind === "STOCK_CRITICAL") {
+    const { data } = await sb.from("inventory_items")
+      .select("name,current_stock,min_stock,unit")
+      .eq("is_active", true)
+      .order("current_stock", { ascending: true })
+      .limit(50);
+    const crit = (data ?? []).filter((i: any) =>
+      Number(i.current_stock) <= 0 ||
+      (Number(i.min_stock) > 0 && Number(i.current_stock) <= Number(i.min_stock))
+    );
+    if (crit.length === 0) return { text: "✅ Nenhum item em estoque crítico." };
+    const lines = crit.map((i: any) => {
+      const icon = Number(i.current_stock) <= 0 ? "🚨" : "⚠️";
+      return `${icon} ${i.name}: ${i.current_stock} ${i.unit || ""} (mín ${i.min_stock})`;
+    });
+    return { text: `📦 *Estoque crítico (${crit.length})*\n\n` + lines.join("\n") };
+  }
+  if (cmd.kind === "NOTIFY_TOGGLE") {
+    const newVal = JSON.stringify({
+      orders: cmd.on, payments: cmd.on, stock_critical: cmd.on, daily_report: cmd.on,
+    });
+    await sb.from("settings").upsert({ key: "telegram_notify_config", value: newVal }, { onConflict: "key" });
+    return { text: cmd.on ? "🔔 Notificações ATIVADAS." : "🔕 Notificações DESATIVADAS." };
+  }
   if (cmd.kind === "UNDO") {
     cleanupUndos();
     const chatId = _undoChatId();
