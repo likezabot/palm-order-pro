@@ -1714,6 +1714,11 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   if (cmd.kind === "HELP") return `ℹ️ (preview) Mostraria a ajuda.`;
   if (cmd.kind === "REPORT") return `📊 (preview) Geraria o relatório do dia.`;
   if (cmd.kind === "STOCK_CRITICAL") return `📦 (preview) Listaria itens em estoque crítico.`;
+  if (cmd.kind === "STOCK_MOVEMENT") {
+    const verb = cmd.type === "in" ? "Somaria" : cmd.type === "out" ? "Subtrairia" : "Definiria saldo de";
+    return `📦 (preview) ${verb} ${cmd.qty}${cmd.unit ? " " + cmd.unit : ""} em "${cmd.itemText}".`;
+  }
+  if (cmd.kind === "STOCK_QUERY") return `📦 (preview) Mostraria saldo de "${cmd.itemText}".`;
   if (cmd.kind === "NOTIFY_TOGGLE") return `🔔 (preview) ${cmd.on ? "Ativaria" : "Desativaria"} as notificações.`;
   if (cmd.kind === "TABLE_STATUS") return `📋 (preview) Mostraria o resumo rápido da mesa ${cmd.table}.`;
   if (cmd.kind === "PARSE_ERROR") {
