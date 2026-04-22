@@ -147,6 +147,7 @@ export default {
         "fade-in-up": "fade-in-up 0.4s ease-out both",
         "scale-in": "scale-in 0.25s ease-out both",
         shimmer: "shimmer 1.6s linear infinite",
+        "badge-pop": "badge-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
       },
     },
   },
