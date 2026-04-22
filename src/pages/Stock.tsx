@@ -122,8 +122,14 @@ export default function Stock() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold flex-1">Estoque</h1>
-          <Button onClick={() => setImportOpen(true)} size="sm" variant="outline">
-            <Download className="h-4 w-4 mr-1" /> Cardápio
+          <Button
+            onClick={() => setImportOpen(true)}
+            size="sm"
+            variant="outline"
+            title={pendingMenu === 0 ? "Tudo sincronizado" : `${pendingMenu} produtos novos no cardápio`}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Re-importar{pendingMenu > 0 ? ` (${pendingMenu})` : ""}
           </Button>
           <Button onClick={() => openEdit(null)} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Novo
