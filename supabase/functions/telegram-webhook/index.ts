@@ -447,7 +447,7 @@ type ProductGroup = {
 };
 
 type ProductResolution =
-  | { kind: "found"; product: Product }
+  | { kind: "found"; product: Product; fuzzyFrom?: string }
   | { kind: "ambiguous"; candidates: Product[] }
   | { kind: "not_found" }
   | { kind: "is_group_trigger"; group: ProductGroup; variants: string[] }
