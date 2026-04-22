@@ -12,6 +12,8 @@ import HistoryDialog from "@/components/stock/HistoryDialog";
 import ImportFromMenuDialog from "@/components/stock/ImportFromMenuDialog";
 import CriticalStockSection, { getCriticalItems } from "@/components/stock/CriticalStockSection";
 import { useInventoryItems } from "@/hooks/use-inventory";
+import { useAutoSyncMenuToStock } from "@/hooks/use-auto-sync-menu-to-stock";
+import { useMenuProductsForStock } from "@/hooks/use-menu-products-for-stock";
 import {
   type InventoryItem,
   STOCK_CATEGORIES,
