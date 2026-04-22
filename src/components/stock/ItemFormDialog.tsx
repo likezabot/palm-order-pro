@@ -27,6 +27,7 @@ import {
   mapMenuCategoryToStock,
   type InventoryItem,
 } from "@/lib/inventory";
+import { CATEGORY_LABELS } from "@/lib/types";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -285,7 +286,7 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {STOCK_CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
+                    <SelectItem key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
