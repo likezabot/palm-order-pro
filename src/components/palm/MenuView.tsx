@@ -138,6 +138,26 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     .filter((i) => i.product.id.startsWith("porco-variant::"))
     .reduce((sum, i) => sum + i.quantity, 0);
 
+  // Contagem de itens por categoria + favoritos para o badge "+N" nas abas.
+  const { categoryQty, favoritesQty } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let favs = 0;
+    const favSet = new Set(favoriteIds);
+    const productById = new Map(products.map((p) => [p.id, p]));
+    for (const item of cart) {
+      const id = item.product.id;
+      let cat: string | undefined;
+      if (id.startsWith("porco-variant::")) {
+        cat = "espetos";
+      } else {
+        cat = productById.get(id)?.category;
+      }
+      if (cat) counts[cat] = (counts[cat] || 0) + item.quantity;
+      if (favSet.has(id)) favs += item.quantity;
+    }
+    return { categoryQty: counts, favoritesQty: favs };
+  }, [cart, products, favoriteIds]);
+
   const addPorcoVariant = (variant: string) => {
     if (!porcoBase) return;
     const finalName = variant === "Porco" ? "Porco" : `Porco - ${variant}`;
