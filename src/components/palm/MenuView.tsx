@@ -6,11 +6,6 @@ import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
 import MoveTableDialog from "./MoveTableDialog";
-import {
-  SUBGROUPS,
-  matchesSubgroup,
-  type Subgroup,
-} from "./menu-subgroups";
 import { RenameTableDialog } from "./RenameTableDialog";
 import { GroupVariantDialog } from "./GroupVariantDialog";
 import {
@@ -19,7 +14,6 @@ import {
   resolveGroupMembers,
   type ProductGroup,
 } from "@/lib/product-groups";
-import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
 import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
 import { useProductStockMap, isProductEsgotado } from "@/hooks/use-product-stock-map";
@@ -41,7 +35,6 @@ interface Props {
 
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
-  const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [openGroup, setOpenGroup] = useState<ProductGroup | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -135,8 +128,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     ? filteredRaw
     : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
 
-  const subgroups = !isSearching ? SUBGROUPS[activeCategory] : undefined;
-
   // Contador por categoria (soma quantidades).
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -165,22 +156,22 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       .filter((x) => !!x.triggerProduct);
   }, [productGroups, activeCategory, products, isSearching]);
 
-  const triggerProductIds = useMemo(
-    () => new Set(activeGroups.map((g) => g.triggerProduct!.id)),
-    [activeGroups],
-  );
+  const groupByTriggerId = useMemo(() => {
+    const map = new Map<string, { group: ProductGroup; triggerProduct: Product; variantCount: number }>();
+    for (const g of activeGroups) {
+      if (g.triggerProduct) {
+        map.set(g.triggerProduct.id, {
+          group: g.group,
+          triggerProduct: g.triggerProduct,
+          variantCount: g.variantCount,
+        });
+      }
+    }
+    return map;
+  }, [activeGroups]);
 
   const getQty = (id: string) =>
     cart.filter((i) => i.product.id === id).reduce((sum, i) => sum + i.quantity, 0);
-
-  const subgroupQty = (sub: Subgroup) =>
-    filtered
-      .filter((p) => matchesSubgroup(p, sub))
-      .reduce((sum, p) => sum + getQty(p.id), 0);
-
-  const subgroupProducts = openSubgroup
-    ? filtered.filter((p) => matchesSubgroup(p, openSubgroup))
-    : [];
 
   const getGroupQty = (g: ProductGroup) => {
     const memberIds = new Set(
@@ -335,7 +326,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           </p>
         )}
 
-        {!isLoading && !error && products.length > 0 && filtered.length === 0 && !subgroups && (
+        {!isLoading && !error && products.length > 0 && filtered.length === 0 && (
           <p className="p-8 text-center text-sm text-muted-foreground">
             {isSearching
               ? `Nenhum item encontrado para "${search}".`
@@ -343,25 +334,76 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           </p>
         )}
 
-        {!isLoading && !error && products.length > 0 && (subgroups ? (
+        {!isLoading && !error && products.length > 0 && filtered.length > 0 && (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
-            {subgroups.map((sub) => {
-              const qty = subgroupQty(sub);
+            {filtered.map((product) => {
+              const groupEntry = groupByTriggerId.get(product.id);
+              if (groupEntry) {
+                const { group, triggerProduct, variantCount } = groupEntry;
+                const groupQty = getGroupQty(group);
+                return (
+                  <button
+                    key={`__group__${group.id}`}
+                    onClick={() => {
+                      playFeedback("click");
+                      setOpenGroup(group);
+                    }}
+                    className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
+                  >
+                    <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
+                      {group.icon} Grupo
+                    </span>
+                    <span className="font-semibold text-base text-foreground leading-tight mt-4">
+                      {group.name}
+                    </span>
+                    <span className="mt-1 text-sm font-black brand-gradient-text">
+                      R$ {triggerProduct.price.toFixed(2)}
+                    </span>
+                    <span className="mt-0.5 text-[10px] text-muted-foreground">
+                      {variantCount} variante{variantCount === 1 ? "" : "s"}
+                    </span>
+                    <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
+                      Toque para escolher
+                    </span>
+                    {groupQty > 0 && (
+                      <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
+                        {groupQty}
+                      </span>
+                    )}
+                  </button>
+                );
+              }
+              const qty = getQty(product.id);
+              const esgotado = isEsgotado(product.id);
               return (
                 <button
-                  key={sub.label}
-                  onClick={() => {
-                    playFeedback("click");
-                    setOpenSubgroup(sub);
-                  }}
-                  className="relative flex aspect-square flex-col items-center justify-center rounded-lg bg-card border border-border p-3 text-center transition-all duration-150 active:scale-[0.96]"
+                  key={product.id}
+                  onClick={() => handleAdd(product)}
+                  className={`relative flex flex-col rounded-2xl border p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card ${
+                    esgotado
+                      ? "bg-card/60 border-destructive/40 hover:border-destructive/60"
+                      : "bg-card border-border active:bg-primary/10 hover:border-primary/40"
+                  }`}
                 >
-                  <span className="text-base font-bold text-foreground leading-tight">
-                    {sub.label}
+                  <span className={`font-semibold text-base leading-tight ${esgotado ? "text-muted-foreground" : "text-foreground"}`}>
+                    {product.name}
                   </span>
-                  <span className="mt-2 text-xs text-muted-foreground">Toque para ver</span>
+                  <span className={`mt-1 text-sm font-black ${esgotado ? "text-muted-foreground" : "brand-gradient-text"}`}>
+                    R$ {product.price.toFixed(2)}
+                  </span>
+                  {esgotado && (
+                    <span className="mt-1 inline-flex w-fit items-center rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-destructive border border-destructive/40">
+                      Esgotado
+                    </span>
+                  )}
+                  <span className={`mt-auto pt-2 inline-flex items-center gap-1 text-base font-black ${esgotado ? "text-destructive" : "text-primary"}`}>
+                    {esgotado ? "+ Adicionar" : "+ ADD"}
+                  </span>
                   {qty > 0 && (
-                    <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    <span
+                      key={qty}
+                      className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
+                    >
                       {qty}
                     </span>
                   )}
@@ -369,85 +411,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
               );
             })}
           </div>
-        ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
-            {/* Cards de grupos (popups) */}
-            {activeGroups.map(({ group, triggerProduct, variantCount }) => {
-              const groupQty = getGroupQty(group);
-              return (
-                <button
-                  key={`__group__${group.id}`}
-                  onClick={() => {
-                    playFeedback("click");
-                    setOpenGroup(group);
-                  }}
-                  className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
-                >
-                  <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
-                    {group.icon} Grupo
-                  </span>
-                  <span className="font-semibold text-base text-foreground leading-tight mt-4">
-                    {triggerProduct!.name}
-                  </span>
-                  <span className="mt-1 text-sm font-black brand-gradient-text">
-                    R$ {triggerProduct!.price.toFixed(2)}
-                  </span>
-                  <span className="mt-0.5 text-[10px] text-muted-foreground">
-                    {variantCount} variante{variantCount === 1 ? "" : "s"}
-                  </span>
-                  <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
-                    Toque para escolher
-                  </span>
-                  {groupQty > 0 && (
-                    <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
-                      {groupQty}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-            {filtered
-              .filter((p) => !triggerProductIds.has(p.id))
-              .map((product) => {
-                const qty = getQty(product.id);
-                const esgotado = isEsgotado(product.id);
-                return (
-                  <button
-                    key={product.id}
-                    onClick={() => handleAdd(product)}
-                    className={`relative flex flex-col rounded-2xl border p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card ${
-                      esgotado
-                        ? "bg-card/60 border-destructive/40 hover:border-destructive/60"
-                        : "bg-card border-border active:bg-primary/10 hover:border-primary/40"
-                    }`}
-                  >
-                    <span className={`font-semibold text-base leading-tight ${esgotado ? "text-muted-foreground" : "text-foreground"}`}>
-                      {product.name}
-                    </span>
-                    <span className={`mt-1 text-sm font-black ${esgotado ? "text-muted-foreground" : "brand-gradient-text"}`}>
-                      R$ {product.price.toFixed(2)}
-                    </span>
-                    {esgotado && (
-                      <span className="mt-1 inline-flex w-fit items-center rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-destructive border border-destructive/40">
-                        Esgotado
-                      </span>
-                    )}
-                    <span className={`mt-auto pt-2 inline-flex items-center gap-1 text-base font-black ${esgotado ? "text-destructive" : "text-primary"}`}>
-                      {esgotado ? "+ Adicionar" : "+ ADD"}
-                    </span>
-                    {qty > 0 && (
-                      <span
-                        key={qty}
-                        className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
-                      >
-                        {qty}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-          </div>
-        ))}
+        )}
       </div>
 
       <GroupVariantDialog
@@ -491,14 +455,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         onRename={(v) => onRenameTable?.(v)}
       />
 
-      <SubgroupDialog
-        subgroup={openSubgroup}
-        products={subgroupProducts}
-        onClose={() => setOpenSubgroup(null)}
-        onAdd={handleAdd}
-        getQty={getQty}
-        isEsgotado={isEsgotado}
-      />
 
       <EsgotadoConfirmDialog
         open={!!esgotadoPending}
