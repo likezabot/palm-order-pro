@@ -366,6 +366,7 @@ type Command =
   | { kind: "STOCK_CRITICAL" }
   | { kind: "STOCK_MOVEMENT"; type: "in" | "out" | "adjustment"; qty: number; itemText: string; unit?: string }
   | { kind: "STOCK_QUERY"; itemText: string }
+  | { kind: "STOCK_LIST" }
   | { kind: "NOTIFY_TOGGLE"; on: boolean }
   | { kind: "TABLE_STATUS"; table: string }
   | { kind: "HELP" }
@@ -375,6 +376,50 @@ type Command =
 const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
 const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
 const ALL_OPS = [...ADD_OPS, ...REM_OPS];
+
+// ─────────────────────────── multi-command splitter ───────────────────────────
+// Aceita múltiplos comandos numa linha via separadores: \n, ;, " // ", " | ".
+// Também faz split conservador quando aparece outro "mesa N" no meio da linha,
+// somente se cada lado contém um operador/ação reconhecível (evita quebrar
+// produtos com "mesa" no nome).
+function splitCommands(raw: string): string[] {
+  if (!raw) return [];
+  // Normaliza separadores explícitos para \n
+  const text = raw.replace(/\s*\/\/\s*/g, "\n").replace(/\s+\|\s+/g, "\n").replace(/\s*;\s*/g, "\n");
+
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  const wordOps = ALL_OPS.filter((o) => /^[a-z]/.test(o)).join("|");
+  const hasActionRE = new RegExp(
+    `(?:\\b(?:${wordOps})\\b|[+\\-]\\s*\\d|\\b(?:ver|pedido|consumo|status|situacao|situação|o\\s+que\\s+tem)\\b)`,
+    "i",
+  );
+  const tableRE = /\bmesa\s+\d+\b/gi;
+
+  for (const line of lines) {
+    const matches = [...line.matchAll(tableRE)];
+    if (matches.length < 2) {
+      result.push(line);
+      continue;
+    }
+    const parts: string[] = [];
+    let lastEnd = 0;
+    for (let i = 1; i < matches.length; i++) {
+      const start = matches[i].index!;
+      parts.push(line.slice(lastEnd, start).trim());
+      lastEnd = start;
+    }
+    parts.push(line.slice(lastEnd).trim());
+    const allHaveAction = parts.every((p) => p.length > 0 && hasActionRE.test(p));
+    if (allHaveAction) {
+      for (const p of parts) result.push(p);
+    } else {
+      result.push(line);
+    }
+  }
+  return result;
+}
 const VIEW_TOKENS = [
   "ver", "ve", "consulta", "consultar", "consulte",
   "total", "totais", "pedido", "pedidos",
@@ -424,22 +469,26 @@ function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
 
-  if (/^(?:\/start|\/help|ajuda|help|comandos|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite)$/.test(text)) {
+  if (/^(?:\/start|\/help|ajuda|help|comandos?|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite|\?+|o\s+que\s+(?:faz|voce\s+faz)|como\s+usar|me\s+ajuda|socorro)$/.test(text)) {
     return { kind: "HELP" };
   }
 
-  // UNDO: aceita "undo", "desfazer", "desfaz", "volta", "voltar", "anula", "anular", "cancela ultima"
-  // opcionalmente seguido de "tudo|todos|todas|all|geral"
-  const undoMatch = text.match(/^(?:undo|desfa(?:zer|z|ca)|volta(?:r)?|anula(?:r)?|cancela(?:r)?\s+ultima?)(?:\s+(tudo|todos|todas|all|geral))?$/);
+  // UNDO: aceita "undo", "desfazer", "errei", "oops", "voltar atras", etc.
+  const undoMatch = text.match(/^(?:undo|desfa(?:zer|z|ca)|volta(?:r)?(?:\s+atras|\s+atrás)?|anula(?:r)?|cancela(?:r)?\s+ultima?|reverter|errei|oops|apaga(?:r)?\s+ultim[oa]|tira(?:r)?\s+ultim[oa])(?:\s+(tudo|todos|todas|all|geral))?$/);
   if (undoMatch) return { kind: "UNDO", all: !!undoMatch[1] };
 
   // RELATÓRIO: muitas formas de pedir o resumo do dia
-  if (/^(?:relatorio|relatório|ranking|fechamento|resumo(?:\s+(?:do\s+)?dia)?|fecha(?:r)?\s+dia|balanco|balanço|me\s+(?:da|de)\s+o?\s*relatorio|gera(?:r)?\s+relatorio)$/.test(text)) {
+  if (/^(?:relatorio|relatório|ranking|fechamento|resumo(?:\s+(?:do\s+)?dia)?|fecha(?:r)?\s+dia|balanco|balanço|me\s+(?:da|de)\s+o?\s*relatorio|gera(?:r)?\s+relatorio|report|dia|como\s+foi\s+o\s+dia|vendas\s+hoje|total\s+do\s+dia|caixa)$/.test(text)) {
     return { kind: "REPORT" };
   }
 
+  // ESTOQUE: LISTAR todos (antes de CRÍTICO porque "lista estoque" / "inventario" é mais específico)
+  if (/^(?:lista\s+estoque|listar\s+estoque|estoque\s+(?:completo|todo|tudo|geral)|inventario|inventário|tudo\s+do\s+estoque|todos\s+(?:os\s+)?itens|itens\s+(?:do\s+)?estoque)$/.test(text)) {
+    return { kind: "STOCK_LIST" };
+  }
+
   // ESTOQUE CRÍTICO
-  if (/^(?:estoque(?:\s+(?:critico|crítico|baixo|zerado|acabando|em\s+falta))?|criticos|críticos|o\s+que\s+(?:ta|esta)\s+acabando|falta(?:ndo)?\s+(?:o\s+)?que)$/.test(text)) {
+  if (/^(?:estoque(?:\s+(?:critico|crítico|baixo|zerado|acabando|em\s+falta))?|criticos|críticos|alertas?(?:\s+(?:de\s+)?estoque)?|o\s+que\s+(?:ta|esta)\s+acabando|o\s+que\s+falta|falta(?:ndo)?\s+(?:o\s+)?que|precisa\s+repor|lista\s+critica)$/.test(text)) {
     return { kind: "STOCK_CRITICAL" };
   }
 
@@ -464,24 +513,23 @@ function parseCommand(raw: string): Command {
     return null;
   };
 
-  // ENTRADA: "entrada 10 coca", "entrou 5kg picanha", "+ 10 coca", "chegou 20 cerva"
-  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei)\s+(.+)$/) ||
+  // ENTRADA: "entrada 10 coca", "entrou 5kg picanha", "+ 10 coca", "chegou 20 cerva", "repor 10 coca", "abasteci 5 coca"
+  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)\s+(.+)$/) ||
                    text.match(/^\+\s+(\d.+)$/);
   if (stockIn) {
     const parsed = parseStockTail(stockIn[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "in", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
   }
 
-  // SAÍDA: "saida 2 coca", "usei 1kg picanha", "gastei 3 carvao"
-  // Só gatilhos explícitos (sem `-N` para evitar conflito com REMOVE_NOMESA).
-  const stockOut = text.match(/^(?:saida|saiu|usei|gastei|tirei|consumi|baixa)\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
+  // SAÍDA: "saida 2 coca", "usei 1kg picanha", "vendi 3 coca", "acabou 2 coca", "quebrou 1 prato"
+  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
   if (stockOut) {
     const parsed = parseStockTail(stockOut[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "out", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
   }
 
-  // AJUSTE forma 1: "ajuste coca 50", "setar coca para 50", "atualiza coca = 30"
-  const stockAdj1 = text.match(new RegExp(`^(?:ajuste|ajustar|setar|set|fica(?:r)?\\s+com|atualiza(?:r)?|corrige|corrigir)\\s+(.+?)\\s+(?:para\\s+|=\\s*|com\\s+|em\\s+)?(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?$`));
+  // AJUSTE forma 1: "ajuste coca 50", "setar coca para 50", "atualiza coca = 30", "contei coca 50", "marca coca 50"
+  const stockAdj1 = text.match(new RegExp(`^(?:ajuste|ajustar|setar|set|fica(?:r)?\\s+com|atualiza(?:r)?|corrige|corrigir|contei|contar|marca(?:r)?|inventario|inventário)\\s+(.+?)\\s+(?:para\\s+|=\\s*|com\\s+|em\\s+)?(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?$`));
   if (stockAdj1) {
     const qty = parseFloat(stockAdj1[2].replace(",", "."));
     if (Number.isFinite(qty) && qty >= 0) {
@@ -497,30 +545,43 @@ function parseCommand(raw: string): Command {
     }
   }
 
-  // CONSULTA: "estoque coca", "saldo picanha", "quanto tem de coca"
-  const stockQry = text.match(/^(?:estoque|saldo|quanto\s+tem(?:\s+de)?)\s+(.+)$/);
+  // CONSULTA: "estoque coca", "saldo picanha", "quanto tem de coca", "quanta coca tem", "tem coca?", "qtd coca", "ver estoque coca"
+  const stockQry = text.match(/^(?:estoque|saldo|quanto\s+tem(?:\s+de)?|quanta?\s+(.+?)\s+tem\??$|qtd|quantidade(?:\s+de)?|ver\s+estoque|consulta(?:r)?\s+estoque)\s+(.+?)\??$/);
   if (stockQry) {
-    return { kind: "STOCK_QUERY", itemText: stockQry[1].trim() };
+    // Suporta "quanta X tem?" — captura no grupo 1; "estoque X" no grupo 2
+    const itemText = (stockQry[1] || stockQry[2] || "").trim();
+    if (itemText) return { kind: "STOCK_QUERY", itemText };
+  }
+  // "tem coca?" sozinho (só com ponto de interrogação)
+  const stockQry2 = text.match(/^tem\s+(.+?)\?$/);
+  if (stockQry2) {
+    return { kind: "STOCK_QUERY", itemText: stockQry2[1].trim() };
   }
 
 
-  // NOTIFICAÇÕES on/off
+  // NOTIFICAÇÕES on/off + atalhos diretos (silencia/muta/volta avisos)
   const notifM = text.match(/^(?:notificacoes|notificações|notif|alertas|avisos)\s+(on|off|ligar?|desligar?|ativa(?:r)?|desativa(?:r)?|sim|nao|não)$/);
   if (notifM) {
     const v = notifM[1];
     const on = ["on", "ligar", "liga", "ativar", "ativa", "sim"].includes(v);
     return { kind: "NOTIFY_TOGGLE", on };
   }
+  if (/^(?:silencia(?:r)?|muta(?:r)?|silenciar\s+alertas|parar\s+avisos|para\s+avisos)$/.test(text)) {
+    return { kind: "NOTIFY_TOGGLE", on: false };
+  }
+  if (/^(?:desmuta(?:r)?|volta(?:r)?\s+avisos|ativa(?:r)?\s+avisos|liga(?:r)?\s+avisos)$/.test(text)) {
+    return { kind: "NOTIFY_TOGGLE", on: true };
+  }
 
   // STATUS de mesa — bem permissivo:
   //   "mesa 5 status", "status mesa 5", "status 5", "status da mesa cinco",
   //   "situacao mesa 3", "como ta a mesa 4 status", "info mesa 2"
   // Aceita dígitos OU número por extenso (até 30, incluindo "vinte e um").
-  const STATUS_WORDS = "(?:status|situacao|situação|info|informacao|informação|estado)";
+  const STATUS_WORDS = "(?:status|situacao|situação|info|informacao|informação|estado|andamento|tudo\\s+certo|como\\s+(?:ta|esta))";
   const NUM_WORD_RE = "(?:\\d+|vinte\\s+e\\s+(?:um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove)|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta)";
   const stPatterns = [
     new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+${STATUS_WORDS}$`),
-    new RegExp(`^${STATUS_WORDS}\\s+(?:da\\s+|do\\s+|na\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`),
+    new RegExp(`^${STATUS_WORDS}\\s+(?:da\\s+|do\\s+|na\\s+|no\\s+|a\\s+)?mesa\\s+(${NUM_WORD_RE})$`),
     new RegExp(`^${STATUS_WORDS}\\s+(${NUM_WORD_RE})$`),
   ];
   for (const re of stPatterns) {
@@ -531,20 +592,21 @@ function parseCommand(raw: string): Command {
     }
   }
 
-  // SET_TABLE: "mesa N" sozinho — aceita extenso também.
-  const setT = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})$`));
+  // SET_TABLE: "mesa N" sozinho, "vou pra mesa N", "na mesa N", "pegando mesa N", "mesa N agora"
+  const setT = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})(?:\\s+agora)?$`)) ||
+               text.match(new RegExp(`^(?:vou\\s+pra|vou\\s+para|na|no|pegando|peguei|assumindo|assumi)\\s+mesa\\s+(${NUM_WORD_RE})$`));
   if (setT) {
     const t = parseTableNumber(setT[1]);
     if (t) return { kind: "SET_TABLE", table: t };
   }
 
-  // VIEW: "mesa N ver pedido" / "mesa N ver" / "mesa N pedido" / "ver [pedido] [da/na] mesa N"
-  const viewA = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?)$`));
+  // VIEW: "mesa N ver pedido" / "mesa N o que tem" / "mesa N consumo" / "ver [pedido] [da/na] mesa N"
+  const viewA = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?|consumo|o\\s+que\\s+tem)$`));
   if (viewA) {
     const t = parseTableNumber(viewA[1]);
     if (t) return { kind: "VIEW", table: t };
   }
-  const viewB = text.match(new RegExp(`^(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?)\\s+(?:da\\s+|na\\s+|do\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`));
+  const viewB = text.match(new RegExp(`^(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?|consumo|o\\s+que\\s+tem)\\s+(?:da\\s+|na\\s+|do\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`));
   if (viewB) {
     const t = parseTableNumber(viewB[1]);
     if (t) return { kind: "VIEW", table: t };
@@ -1676,32 +1738,36 @@ async function executeStockQuery(item: StockItem): Promise<string> {
 }
 
 const HELP_TEXT =
-  `🤖 Como usar:\n\n` +
-  `📌 Adicionar:\n` +
+  `🤖 *Como usar*\n\n` +
+  `📌 *PEDIDOS*\n` +
   `  • mesa 3 + 2 coca 350\n` +
-  `  • mesa 1 mais um bovino\n` +
-  `  • adiciona 2 cocas 350 na mesa 3\n\n` +
-  `📌 Remover:\n` +
+  `  • adiciona 2 cocas na mesa 3\n` +
   `  • mesa 1 - 1 agua\n` +
   `  • tira duas aguas da mesa 1\n\n` +
-  `📌 Consultar:\n` +
-  `  • mesa 4 ver pedido\n\n` +
-  `📦 Estoque:\n` +
-  `  • entrada 10 coca → soma ao saldo\n` +
-  `  • saida 2 picanha → subtrai\n` +
-  `  • ajuste coca 50 → define valor exato\n` +
-  `  • estoque coca → mostra saldo\n` +
-  `  • estoque (sozinho) → lista críticos\n\n` +
-  `💨 Atalhos (até 15 min após usar uma mesa):\n` +
-  `  • mais um boi\n` +
-  `  • + 1 coca 350\n` +
-  `  • tira uma agua\n` +
-  `  • ver pedido / total / consultar\n\n` +
-  `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
-  `Em caso de dúvida no produto, o bot pede para especificar.\n\n` +
-  `🔍 Modo preview:\n` +
-  `Comece a mensagem com "preview" para ver como cada linha seria interpretada SEM executar.\n` +
-  `Ex:\n  preview\n  mesa 1 + 2 coca 350\n  tira 1 agua da mesa 1`;
+  `🔍 *CONSULTA*\n` +
+  `  • mesa 4 ver pedido\n` +
+  `  • mesa 4 o que tem / consumo\n` +
+  `  • status mesa 4 / mesa 4 como ta\n\n` +
+  `📦 *ESTOQUE*\n` +
+  `  • entrada 10 coca / repor 10 coca\n` +
+  `  • saida 2 picanha / vendi 3 coca / acabou 1 prato\n` +
+  `  • ajuste coca 50 / contei 50 coca\n` +
+  `  • estoque coca / quanto tem de coca\n` +
+  `  • lista estoque / inventario → todos os itens\n` +
+  `  • estoque (sozinho) / alertas → críticos\n\n` +
+  `🛠 *OUTROS*\n` +
+  `  • errei / desfazer / oops → desfaz último\n` +
+  `  • relatorio / caixa / vendas hoje → resumo do dia\n` +
+  `  • silencia / volta avisos → notificações\n` +
+  `  • mesa 5 / vou pra mesa 5 → fixa mesa do contexto\n\n` +
+  `🧩 *Vários comandos numa mensagem*\n` +
+  `Separe com quebra de linha, \`;\`, \` | \` ou \` // \`. Ex:\n` +
+  `  mesa 1 +1 coca; mesa 1 +2 cerva\n` +
+  `  mesa 1 +1 coca | mesa 2 +1 cerva\n\n` +
+  `💨 *Atalhos* (até 15 min após usar uma mesa):\n` +
+  `  • mais um boi / + 1 coca 350 / tira uma agua / ver pedido\n\n` +
+  `💡 Aceita números por extenso (um, dois… dez) e plural simples.\n` +
+  `🔍 Comece com "preview" para simular sem executar.`;
 
 
 const NEEDS_TABLE_TEXT =
@@ -1719,6 +1785,7 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
     return `📦 (preview) ${verb} ${cmd.qty}${cmd.unit ? " " + cmd.unit : ""} em "${cmd.itemText}".`;
   }
   if (cmd.kind === "STOCK_QUERY") return `📦 (preview) Mostraria saldo de "${cmd.itemText}".`;
+  if (cmd.kind === "STOCK_LIST") return `📦 (preview) Listaria todos os itens do estoque (até 30).`;
   if (cmd.kind === "NOTIFY_TOGGLE") return `🔔 (preview) ${cmd.on ? "Ativaria" : "Desativaria"} as notificações.`;
   if (cmd.kind === "TABLE_STATUS") return `📋 (preview) Mostraria o resumo rápido da mesa ${cmd.table}.`;
   if (cmd.kind === "PARSE_ERROR") {
@@ -1855,6 +1922,25 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       return `${icon} ${i.name}: ${i.current_stock} ${i.unit || ""} (mín ${i.min_stock})`;
     });
     return { text: `📦 *Estoque crítico (${crit.length})*\n\n` + lines.join("\n") };
+  }
+  if (cmd.kind === "STOCK_LIST") {
+    const { data } = await sb.from("inventory_items")
+      .select("name,current_stock,min_stock,unit")
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+      .limit(30);
+    const items = data ?? [];
+    if (items.length === 0) return { text: "📦 Nenhum item ativo no estoque." };
+    const lines = items.map((i: any) => {
+      const cur = Number(i.current_stock);
+      const min = Number(i.min_stock);
+      let icon = "•";
+      if (cur <= 0) icon = "🚨";
+      else if (min > 0 && cur <= min) icon = "⚠️";
+      return `${icon} ${i.name}: ${cur} ${i.unit || ""}`.trim();
+    });
+    const more = items.length === 30 ? `\n\n_(mostrando 30 itens. Use \`estoque <nome>\` para ver um específico.)_` : "";
+    return { text: `📦 *Estoque (${items.length})*\n\n` + lines.join("\n") + more };
   }
   if (cmd.kind === "STOCK_QUERY") {
     const res = await resolveStockItem(cmd.itemText);
@@ -2528,7 +2614,7 @@ Deno.serve(async (req) => {
     // Detecta modo preview
     let workingText = text;
     let isPreview = false;
-    const rawLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const rawLines = splitCommands(text);
     if (rawLines.length > 0 && /^preview\b/i.test(rawLines[0])) {
       isPreview = true;
       const firstRest = rawLines[0].replace(/^preview\b[:\s-]*/i, "").trim();
@@ -2536,7 +2622,7 @@ Deno.serve(async (req) => {
       workingText = remaining.join("\n");
     }
 
-    const lines = workingText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const lines = splitCommands(workingText);
 
     if (isPreview && lines.length === 0) {
       await sendTelegram(
