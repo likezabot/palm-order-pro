@@ -28,6 +28,12 @@ export default function Stock() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { data: items = [], isLoading } = useInventoryItems();
+  const { data: menuProducts = [] } = useMenuProductsForStock();
+  useAutoSyncMenuToStock();
+  const pendingMenu = useMemo(
+    () => menuProducts.filter((p) => !p.linked && p.active).length,
+    [menuProducts]
+  );
 
   const filterParam = searchParams.get("filter");
   const initialTab =
