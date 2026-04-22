@@ -1,7 +1,7 @@
 // Telegram webhook: edição de pedidos por texto.
 // Comandos: "mesa N + qty produto", "mesa N - qty produto", "mesa N ver pedido", "ajuda".
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
