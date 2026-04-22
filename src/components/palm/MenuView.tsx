@@ -126,9 +126,19 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
     });
   }, [products, activeCategory, isSearching, search, hiddenProductNames, allHiddenNames]);
 
-  const filtered = isSearching
+  const filteredOrdered = isSearching
     ? filteredRaw
     : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
+
+  // Disponíveis primeiro, esgotados ao final (estável).
+  const filtered = useMemo(() => {
+    const withIdx = filteredOrdered.map((p, idx) => ({ p, idx, esgotado: isProductEsgotado(stockMap, p.id, recipes) }));
+    withIdx.sort((a, b) => {
+      if (a.esgotado !== b.esgotado) return a.esgotado ? 1 : -1;
+      return a.idx - b.idx;
+    });
+    return withIdx.map((x) => x.p);
+  }, [filteredOrdered, stockMap, recipes]);
 
   // Contador por categoria (soma quantidades).
   const categoryCounts = useMemo(() => {
@@ -274,8 +284,8 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                   }}
                   className={`relative inline-flex min-w-[88px] items-center justify-center whitespace-nowrap px-4 py-3 pr-5 text-sm transition-colors ${
                     isActive
-                      ? "text-foreground font-bold bg-foreground/[0.03]"
-                      : "text-muted-foreground font-semibold hover:text-foreground"
+                      ? "text-foreground font-bold bg-primary/5"
+                      : "text-muted-foreground/70 font-semibold hover:text-foreground"
                   }`}
                 >
                   <span>{CATEGORY_LABELS[cat]}</span>
@@ -290,7 +300,7 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                     </span>
                   )}
                   {isActive && (
-                    <span className="absolute left-2 right-2 bottom-0 h-[3px] rounded-full bg-brand-gradient" />
+                    <span className="absolute left-2 right-2 bottom-0 h-[4px] rounded-full bg-brand-gradient" />
                   )}
                 </button>
               );
@@ -337,79 +347,83 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         )}
 
         {!isLoading && !error && products.length > 0 && filtered.length > 0 && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-1.5 p-2">
             {filtered.map((product) => {
               const groupEntry = groupByTriggerId.get(product.id);
               if (groupEntry) {
                 const { group, triggerProduct, variantCount } = groupEntry;
                 const groupQty = getGroupQty(group);
                 return (
-                  <button
+                  <div
                     key={`__group__${group.id}`}
-                    onClick={() => {
-                      playFeedback("click");
-                      setOpenGroup(group);
-                    }}
-                    className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
+                    className="relative flex flex-col rounded-2xl border border-border bg-card p-2.5 shadow-soft hover:shadow-card hover:border-primary/40 transition-all"
                   >
-                    <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
-                      Grupo
-                    </span>
-                    <span className="font-semibold text-base text-foreground leading-tight mt-4">
+                    <span className="font-bold text-base text-foreground leading-tight">
                       {group.name}
                     </span>
-                    <span className="mt-1 text-sm font-black brand-gradient-text">
+                    <span className="mt-0.5 text-[11px] text-muted-foreground">
+                      Ver opções · {variantCount} {variantCount === 1 ? "opção" : "opções"}
+                    </span>
+                    <span className="mt-1 text-base font-extrabold text-primary">
                       R$ {triggerProduct.price.toFixed(2)}
                     </span>
-                    <span className="mt-0.5 text-[10px] text-muted-foreground">
-                      {variantCount} variante{variantCount === 1 ? "" : "s"}
-                    </span>
-                    <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
-                      Toque para escolher
-                    </span>
+                    <button
+                      onClick={() => {
+                        playFeedback("click");
+                        setOpenGroup(group);
+                      }}
+                      className="mt-2 w-full rounded-lg bg-primary px-2 py-2 text-sm font-bold text-primary-foreground active:scale-95 transition-transform"
+                    >
+                      Ver opções
+                    </button>
                     {groupQty > 0 && (
                       <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
                         {groupQty}
                       </span>
                     )}
-                  </button>
+                  </div>
                 );
               }
               const qty = getQty(product.id);
               const esgotado = isEsgotado(product.id);
               return (
-                <div key={product.id} className="relative">
+                <div
+                  key={product.id}
+                  className={`relative flex flex-col rounded-2xl border p-2.5 shadow-soft transition-all ${
+                    esgotado
+                      ? "bg-muted/30 border-border opacity-60"
+                      : "bg-card border-border hover:border-primary/40 hover:shadow-card"
+                  }`}
+                >
+                  <span className={`font-bold text-base leading-tight text-foreground ${qty > 0 ? "pl-9" : ""}`}>
+                    {product.name}
+                  </span>
+                  {esgotado && (
+                    <span className="mt-0.5 text-[11px] italic text-muted-foreground">
+                      Indisponível
+                    </span>
+                  )}
+                  <span className={`mt-1 text-base font-extrabold ${esgotado ? "text-muted-foreground" : "text-primary"}`}>
+                    R$ {product.price.toFixed(2)}
+                  </span>
                   <button
                     onClick={() => handleAdd(product)}
-                    className={`relative w-full flex flex-col rounded-2xl border p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card ${
+                    className={`mt-2 w-full rounded-lg px-2 py-2 text-sm font-bold transition-transform active:scale-95 ${
                       esgotado
-                        ? "bg-card/60 border-destructive/40 hover:border-destructive/60"
-                        : "bg-card border-border active:bg-primary/10 hover:border-primary/40"
+                        ? "bg-muted text-muted-foreground cursor-not-allowed"
+                        : "bg-primary text-primary-foreground"
                     }`}
                   >
-                    <span className={`font-semibold text-base leading-tight ${esgotado ? "text-muted-foreground" : "text-foreground"} ${qty > 0 ? "pl-9" : ""}`}>
-                      {product.name}
-                    </span>
-                    <span className={`mt-1 text-sm font-black ${esgotado ? "text-muted-foreground" : "brand-gradient-text"}`}>
-                      R$ {product.price.toFixed(2)}
-                    </span>
-                    {esgotado && (
-                      <span className="mt-1 inline-flex w-fit items-center rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-destructive border border-destructive/40">
-                        Esgotado
-                      </span>
-                    )}
-                    <span className={`mt-auto pt-2 inline-flex items-center gap-1 text-base font-black ${esgotado ? "text-destructive" : "text-primary"}`}>
-                      {esgotado ? "+ Adicionar" : "+ ADD"}
-                    </span>
-                    {qty > 0 && (
-                      <span
-                        key={qty}
-                        className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
-                      >
-                        {qty}
-                      </span>
-                    )}
+                    {esgotado ? "Indisponível" : "Adicionar"}
                   </button>
+                  {qty > 0 && (
+                    <span
+                      key={qty}
+                      className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
+                    >
+                      {qty}
+                    </span>
+                  )}
                   {qty > 0 && (
                     <button
                       onClick={(e) => {
