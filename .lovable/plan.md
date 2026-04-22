@@ -1,77 +1,102 @@
 
 
-## Parser Telegram: variações naturais para VIEW
+## Modo Turbo: contexto da última mesa por chat
 
 ### Mudança (arquivo único: `supabase/functions/telegram-webhook/index.ts`)
 
-Hoje o parser só reconhece VIEW via regex `mesa N ver pedido`. Vou ampliar o reconhecimento para frases naturais sem afetar ADD/REMOVE.
+Adicionar memória curta da última mesa usada com sucesso por `chat_id` e permitir comandos sem `mesa N` quando houver contexto válido. Sem mudanças em banco, RLS, executeAdd/Remove/View, auto-pick, botões inline ou multi-comando.
 
-### Como detectar VIEW
+### 1. Memória in-memory por chat
 
-Adicionar uma etapa **antes** de tentar ADD/REMOVE no `parseCommand`:
+`Map<chatId, { table: string; ts: number }>` no escopo do módulo, TTL 15min. Helpers:
 
-1. Extrair número de mesa da frase (regex tolerante: `/mesa\s+(\d+)/i` ou `/\bm\s*(\d+)\b/i`).
-2. Se há mesa **e** a frase contém algum **verbo/substantivo de consulta**, retorna `{ kind: "VIEW", table: N }`.
-3. Caso contrário, segue o fluxo atual (ADD/REMOVE/HELP/PARSE_ERROR).
+- `getLastTable(chatId)` — retorna mesa se `Date.now() - ts < 15*60_000`, senão `null` (e remove entrada).
+- `setLastTable(chatId, table)` — chamado **só após sucesso** de ADD/REMOVE/VIEW (inclusive via callback de botão inline).
+- Limpeza preguiçosa no acesso (igual `seenUpdates`).
 
-### Dicionário de gatilhos VIEW
+Dado que edge functions podem ter múltiplas instâncias e cold starts, o contexto é "best-effort" — se expirar entre invocações, cai na regra de segurança (pede mesa explícita). Sem persistência em DB nesta etapa.
 
-Lista de tokens (normalizados, sem acento, lowercase) — basta **um** deles aparecer junto com a mesa:
+### 2. Parser: nova etapa de fallback "sem mesa"
 
-- `ver`, `vê`
-- `consulta`, `consultar`, `consulte`
-- `total`, `totais`
-- `pedido`, `pedidos`
-- `mostra`, `mostrar`, `mostre`
-- `lista`, `listar`, `liste`
-- `resumo`
-- `como esta`, `como ta`, `como anda` (frases compostas — checagem por `includes`)
-- `quanto`, `quanto deu`, `quanto ficou`
-- `extrato`, `conta`
+Atualmente `parseCommand(raw)` retorna `PARSE_ERROR` se nenhuma forma casa. Vou:
 
-### Anti-conflito com ADD/REMOVE
+a) Adicionar um novo tipo de retorno **transitório** `{ kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty; productText }` e `{ kind: "VIEW_NOMESA" }`. Esses só são produzidos pelo parser quando a linha tem operador/qty+produto OU gatilho VIEW, mas **nenhum `mesa N`**.
 
-VIEW só dispara se a linha **NÃO contiver**:
+b) Heurísticas (rodam **depois** das formas atuais f1/f2/f3 e antes de `PARSE_ERROR`):
 
-- Operador explícito ADD/REMOVE (`+`, `-`, `add`, `adiciona`, `coloca`, `tira`, `remove`, `mais`, `menos`, etc. — reaproveitar `ADD_OPS`/`REM_OPS`).
-- Quantidade numérica fora do número de mesa (ex: `mesa 1 + 2 coca` nunca cai em VIEW).
+- **VIEW_NOMESA**: mesma lista `VIEW_TOKENS`/`VIEW_PHRASES`, sem `mesa N`, sem operador, sem `<qty> <produto>`. Cobre `ver pedido`, `consultar`, `total`, `resumo`, `ver`, `pedido`, `como esta`.
+- **ADD_NOMESA / REMOVE_NOMESA**: linha começa com operador OU operador aparece como token, seguido de `[qty] <produto>`. Sem `mesa N`. Ex: `+ 1 coca 350`, `mais um boi`, `acrescenta uma coca 350`, `tira uma agua`, `- 1 agua`.
+  - Reaproveita `ADD_OPS`/`REM_OPS`, `parseQty`, `extractQtyProduct`.
+  - Regex tipo `^(<op>)\s+(.+)$` aplicado ao texto normalizado (que já não contém `mesa N`).
 
-Heurística: detectar VIEW só quando **não há operador** E **não há `<qty> <produto>`** após a mesa. Se tiver dúvida, segue o caminho atual (ADD/REMOVE) — preserva regra "sem chute".
+c) Comandos completos atuais permanecem intocados — são testados primeiro.
 
-### Exemplos cobertos
+### 3. Resolução de contexto no Deno.serve
 
-| Entrada | Resultado |
-|---|---|
-| `mesa 1 ver pedido` | VIEW mesa 1 (já funciona) |
-| `mesa 1 consulta` / `mesa 1 consultar` | VIEW mesa 1 |
-| `consultar mesa 1` / `ver mesa 1` | VIEW mesa 1 |
-| `total mesa 1` / `total da mesa 1` | VIEW mesa 1 |
-| `como está a mesa 1` / `como ta a mesa 1` | VIEW mesa 1 |
-| `quanto deu a mesa 3` | VIEW mesa 3 |
-| `mesa 1 + 1 bovino` | ADD (inalterado) |
-| `mesa 1 mais um bovino` | ADD (inalterado, "mais" é ADD_OP) |
-| `mesa 1` (sozinho) | PARSE_ERROR (sem gatilho) |
+No loop por linha (single e multi), antes de chamar `handleCommand`/`previewCommand`:
 
-### Multi-comando, preview e botões
+```ts
+const cmd = parseCommand(line);
+const resolved = resolveWithContext(cmd, chatId);
+```
 
-- Funciona dentro de cada linha do split (regra atual).
-- `previewCommand` para VIEW já existe — sem mudanças.
-- VIEW nunca emite inline keyboard.
+`resolveWithContext`:
+- Se `cmd.kind` for um `*_NOMESA`: busca `getLastTable(chatId)`. Se existir, devolve cmd convertido com a mesa preenchida (vira `ADD`/`REMOVE`/`VIEW` normal). Se não existir, devolve `{ kind: "NEEDS_TABLE", originalKind }` para a camada externa transformar em mensagem amigável.
+- Caso contrário: passa adiante sem mexer.
+
+Mensagem para `NEEDS_TABLE`:
+> ⚠️ Não sei qual mesa usar. Envie no formato completo, ex: `mesa 1 + 1 coca 350` (ou use uma mesa nos últimos 15 min).
+
+### 4. Atualização do contexto após sucesso
+
+`handleCommand` retorna `HandlerReply`. Para saber se foi sucesso (e qual mesa), expando `HandlerReply` com campo opcional `successTable?: string` preenchido em:
+- Sucesso de `executeAdd` / `executeRemove` (no fim de `executeAndReply`).
+- Sucesso de VIEW.
+- **Não** atualiza em: ambíguo (espera o clique), erros, esgotado, parse_error, version_conflict.
+
+No callback de botão (`handleCallbackQuery`), após sucesso de `executeAdd`/`executeRemove`, chamar `setLastTable(chatId, table)` diretamente.
+
+No `Deno.serve`, depois de cada `reply` bem-sucedido com `successTable`, chamar `setLastTable(chatId, successTable)`.
+
+### 5. Resposta com indicação clara de contexto
+
+Quando o comando foi resolvido via contexto (não veio com `mesa N` explícito), prefixar a resposta com tag visível:
+
+- `📍 (mesa 1, contexto) ✅ Mesa 1 → +1 Bovino`
+- `📍 (mesa 1, contexto) 📋 Mesa 1: ...`
+
+Implementação: `resolveWithContext` marca `cmd.fromContext = true`. `handleCommand` propaga até o texto de resposta acrescentando o prefixo `📍 (mesa N, contexto) `. Comandos com mesa explícita não recebem prefixo (comportamento atual preservado).
+
+### 6. Preview
+
+`previewCommand` também respeita contexto: se receber `*_NOMESA` e houver mesa em contexto, mostra `🔍 (preview, mesa 1 do contexto) Adicionaria ...`. Sem contexto: `⚠️ Nenhuma mesa em contexto. Envie mesa explícita.` Preview **nunca** atualiza `lastTable`.
+
+### 7. Multi-comando
+
+- Cada linha é resolvida sequencialmente. Se a linha 1 (`mesa 3 + 1 coca`) for sucesso, atualiza `lastTable=3` antes de processar linha 2 — então `mais um boi` na linha 2 já enxerga mesa 3.
+- Linhas com `NEEDS_TABLE` viram entradas no resumo consolidado com o aviso, sem bloquear as outras.
+
+### 8. Help
+
+Adicionar seção curta no `HELP_TEXT`:
+> 💨 Atalhos (15 min após usar uma mesa):
+> • `mais um boi`, `+ 1 coca 350`, `tira uma agua`, `ver pedido`, `total`
 
 ### Garantias
 
-- **Compatibilidade total**: regex atual `mesa N ver pedido` continua funcionando (cai no novo gatilho).
-- **Sem ambiguidade silenciosa**: gatilhos VIEW só disparam quando claramente não há ADD/REMOVE.
-- **Sem mudança em banco, executeView, RLS, fluxo de execução**.
-- **Conflito com `mais`**: a palavra `mais` continua sendo ADD_OP — frases como "mesa 1 mais 1 coca" não viram VIEW por causa da checagem de operador/qty.
+- Comandos completos (`mesa N + qty produto`, etc.) **inalterados**.
+- Auto-pick, botões inline, callbacks, dedupe de update_id e callback_id, whitelist, multi-comando, preview, plurais, parser VIEW natural — **inalterados**.
+- Banco, RLS, RPCs, executeAdd/Remove/View — **inalterados**.
+- Sem chute: sem contexto válido, bot pede mesa explícita.
 
 ### Atualização da memória
 
-`mem://features/telegram-bot.md` ganha lista de gatilhos VIEW + nota sobre anti-conflito com ADD/REMOVE.
+`mem://features/telegram-bot.md` ganha seção **Modo turbo (contexto de última mesa)**: TTL 15min, in-memory por chat, atualizado só em sucesso (incluindo botões), prefixo `📍 (mesa N, contexto)`, fallback `NEEDS_TABLE`, multi-comando atualiza contexto entre linhas, preview usa mas não grava.
 
 ### Fora de escopo
 
-- Frases sem mesa explícita (ex: "ver tudo", "todas as mesas").
-- Filtros parciais (ex: "mesa 1 só bebidas").
-- Plurais de gatilhos além dos listados.
+- Persistência do contexto em DB (sobrevive a cold start).
+- Contexto por usuário dentro de um grupo (hoje é por `chat_id`).
+- Comando explícito `usar mesa N` para fixar contexto sem operação.
+- TTL configurável via `settings`.
 
