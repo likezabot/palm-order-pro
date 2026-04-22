@@ -17,12 +17,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { X, Link2, Unlink } from "lucide-react";
 import { useUpsertInventoryItem, useDeactivateItem } from "@/hooks/use-inventory";
+import { useMenuProductsForStock } from "@/hooks/use-menu-products-for-stock";
 import {
   STOCK_CATEGORIES,
   STOCK_UNITS,
   slugify,
+  mapMenuCategoryToStock,
   type InventoryItem,
 } from "@/lib/inventory";
 import { toast } from "@/hooks/use-toast";
@@ -33,6 +35,8 @@ type Props = {
   item: InventoryItem | null;
 };
 
+const NONE_VALUE = "__none__";
+
 export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
   const isEdit = !!item;
   const [name, setName] = useState("");
@@ -42,11 +46,23 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
   const [minStock, setMinStock] = useState("0");
   const [aliases, setAliases] = useState<string[]>([]);
   const [aliasInput, setAliasInput] = useState("");
+  const [productId, setProductId] = useState<string | null>(null);
 
   const upsert = useUpsertInventoryItem();
   const deactivate = useDeactivateItem();
+  const { data: menuProducts = [] } = useMenuProductsForStock();
 
   const slug = useMemo(() => slugify(name), [name]);
+
+  // Products available to link: not yet linked OR currently linked to this item
+  const linkableProducts = useMemo(() => {
+    return menuProducts.filter((p) => !p.linked || p.id === item?.product_id);
+  }, [menuProducts, item?.product_id]);
+
+  const linkedProduct = useMemo(
+    () => menuProducts.find((p) => p.id === productId) ?? null,
+    [menuProducts, productId]
+  );
 
   useEffect(() => {
     if (open) {
@@ -57,8 +73,22 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
       setMinStock(String(item?.min_stock ?? 0));
       setAliases(item?.aliases ?? []);
       setAliasInput("");
+      setProductId(item?.product_id ?? null);
     }
   }, [open, item]);
+
+  const handleSelectProduct = (val: string) => {
+    if (val === NONE_VALUE) {
+      setProductId(null);
+      return;
+    }
+    const p = menuProducts.find((x) => x.id === val);
+    if (!p) return;
+    setProductId(p.id);
+    // Pre-fill name/category from menu product
+    if (!isEdit || !name.trim()) setName(p.name);
+    setCategory(mapMenuCategoryToStock(p.category));
+  };
 
   const addAlias = () => {
     const v = slugify(aliasInput);
@@ -69,20 +99,22 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
   const removeAlias = (a: string) => setAliases(aliases.filter((x) => x !== a));
 
   const handleSave = async () => {
-    if (!name.trim() || !slug) {
+    const finalName = linkedProduct ? linkedProduct.name : name.trim();
+    if (!finalName || !slugify(finalName)) {
       toast({ title: "Nome obrigatório", variant: "destructive" });
       return;
     }
     try {
       await upsert.mutateAsync({
         id: item?.id,
-        name: name.trim(),
-        slug,
+        name: finalName,
+        slug: slugify(finalName),
         category,
         unit,
         aliases,
         min_stock: parseFloat(minStock.replace(",", ".")) || 0,
         current_stock: parseFloat(initialStock.replace(",", ".")) || 0,
+        product_id: productId,
       });
       toast({ title: isEdit ? "Item atualizado" : "Item criado" });
       onOpenChange(false);
@@ -108,8 +140,52 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
 
         <div className="flex flex-col gap-3">
           <div>
+            <Label className="flex items-center gap-1">
+              <Link2 className="h-3.5 w-3.5" /> Vincular a produto do cardápio (opcional)
+            </Label>
+            <div className="flex gap-2 mt-1">
+              <Select value={productId ?? NONE_VALUE} onValueChange={handleSelectProduct}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Nenhum" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Nenhum (insumo solto)</SelectItem>
+                  {linkableProducts.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}{" "}
+                      <span className="text-muted-foreground">({p.category})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {productId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setProductId(null)}
+                  title="Desvincular"
+                >
+                  <Unlink className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            {linkedProduct && (
+              <p className="text-[11px] text-primary mt-1">
+                Vinculado a {linkedProduct.name}
+              </p>
+            )}
+          </div>
+
+          <div>
             <Label htmlFor="name">Nome</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <Input
+              id="name"
+              value={linkedProduct ? linkedProduct.name : name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+              disabled={!!linkedProduct}
+            />
             {slug && (
               <p className="text-[11px] text-muted-foreground mt-1">slug: {slug}</p>
             )}
