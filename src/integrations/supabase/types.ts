@@ -180,6 +180,42 @@ export type Database = {
         }
         Relationships: []
       }
+      data_retention_log: {
+        Row: {
+          days_kept: number
+          duration_ms: number | null
+          error_message: string | null
+          executed_at: string
+          id: number
+          idempotency_key: string
+          result: Json
+          status: string
+          trigger_source: string
+        }
+        Insert: {
+          days_kept: number
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_at?: string
+          id?: number
+          idempotency_key: string
+          result?: Json
+          status?: string
+          trigger_source?: string
+        }
+        Update: {
+          days_kept?: number
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_at?: string
+          id?: number
+          idempotency_key?: string
+          result?: Json
+          status?: string
+          trigger_source?: string
+        }
+        Relationships: []
+      }
       inventory_items: {
         Row: {
           aliases: string[]
@@ -650,10 +686,9 @@ export type Database = {
         }
         Returns: Json
       }
-      archive_and_purge_old_data: {
-        Args: { p_days_keep?: number }
-        Returns: Json
-      }
+      archive_and_purge_old_data:
+        | { Args: { p_days_keep?: number }; Returns: Json }
+        | { Args: { p_days_keep?: number; p_source?: string }; Returns: Json }
       claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
       complete_order_print: { Args: { p_order_id: string }; Returns: undefined }
       create_order: {
