@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { queryPersister, shouldPersistQuery } from "@/lib/query-persister";
+import { getAppVersionAsync } from "@/lib/version-check";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -52,18 +54,32 @@ const AnimatedRoutes = () => {
   );
 };
 
-// Buster do cache persistente: muda a cada deploy (via __APP_VERSION__).
+// Buster do cache persistente: muda a cada deploy.
+// Usa o BUILD_STAMP lido direto de /sw.js (rede, sem cache HTTP). Isso
+// garante que o IndexedDB do React Query invalide mesmo quando o bundle JS
+// antigo ainda está sendo servido por um SW desatualizado no PWA instalado.
 declare const __APP_VERSION__: string;
-const CACHE_BUSTER =
+const FALLBACK_BUSTER =
   typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
-const App = () => (
+const App = () => {
+  const [buster, setBuster] = useState<string>(FALLBACK_BUSTER);
+
+  useEffect(() => {
+    let alive = true;
+    getAppVersionAsync()
+      .then((v) => { if (alive) setBuster(v); })
+      .catch(() => { /* mantém fallback */ });
+    return () => { alive = false; };
+  }, []);
+
+  return (
   <PersistQueryClientProvider
     client={queryClient}
     persistOptions={{
       persister: queryPersister,
       maxAge: 24 * 60 * 60 * 1000, // 24h
-      buster: CACHE_BUSTER,
+      buster,
       dehydrateOptions: {
         shouldDehydrateQuery: (query) => shouldPersistQuery(query as any),
       },
@@ -79,6 +95,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </PersistQueryClientProvider>
-);
+  );
+};
 
 export default App;
