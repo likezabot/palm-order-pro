@@ -1738,32 +1738,36 @@ async function executeStockQuery(item: StockItem): Promise<string> {
 }
 
 const HELP_TEXT =
-  `🤖 Como usar:\n\n` +
-  `📌 Adicionar:\n` +
+  `🤖 *Como usar*\n\n` +
+  `📌 *PEDIDOS*\n` +
   `  • mesa 3 + 2 coca 350\n` +
-  `  • mesa 1 mais um bovino\n` +
-  `  • adiciona 2 cocas 350 na mesa 3\n\n` +
-  `📌 Remover:\n` +
+  `  • adiciona 2 cocas na mesa 3\n` +
   `  • mesa 1 - 1 agua\n` +
   `  • tira duas aguas da mesa 1\n\n` +
-  `📌 Consultar:\n` +
-  `  • mesa 4 ver pedido\n\n` +
-  `📦 Estoque:\n` +
-  `  • entrada 10 coca → soma ao saldo\n` +
-  `  • saida 2 picanha → subtrai\n` +
-  `  • ajuste coca 50 → define valor exato\n` +
-  `  • estoque coca → mostra saldo\n` +
-  `  • estoque (sozinho) → lista críticos\n\n` +
-  `💨 Atalhos (até 15 min após usar uma mesa):\n` +
-  `  • mais um boi\n` +
-  `  • + 1 coca 350\n` +
-  `  • tira uma agua\n` +
-  `  • ver pedido / total / consultar\n\n` +
-  `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
-  `Em caso de dúvida no produto, o bot pede para especificar.\n\n` +
-  `🔍 Modo preview:\n` +
-  `Comece a mensagem com "preview" para ver como cada linha seria interpretada SEM executar.\n` +
-  `Ex:\n  preview\n  mesa 1 + 2 coca 350\n  tira 1 agua da mesa 1`;
+  `🔍 *CONSULTA*\n` +
+  `  • mesa 4 ver pedido\n` +
+  `  • mesa 4 o que tem / consumo\n` +
+  `  • status mesa 4 / mesa 4 como ta\n\n` +
+  `📦 *ESTOQUE*\n` +
+  `  • entrada 10 coca / repor 10 coca\n` +
+  `  • saida 2 picanha / vendi 3 coca / acabou 1 prato\n` +
+  `  • ajuste coca 50 / contei 50 coca\n` +
+  `  • estoque coca / quanto tem de coca\n` +
+  `  • lista estoque / inventario → todos os itens\n` +
+  `  • estoque (sozinho) / alertas → críticos\n\n` +
+  `🛠 *OUTROS*\n` +
+  `  • errei / desfazer / oops → desfaz último\n` +
+  `  • relatorio / caixa / vendas hoje → resumo do dia\n` +
+  `  • silencia / volta avisos → notificações\n` +
+  `  • mesa 5 / vou pra mesa 5 → fixa mesa do contexto\n\n` +
+  `🧩 *Vários comandos numa mensagem*\n` +
+  `Separe com quebra de linha, \`;\`, \` | \` ou \` // \`. Ex:\n` +
+  `  mesa 1 +1 coca; mesa 1 +2 cerva\n` +
+  `  mesa 1 +1 coca | mesa 2 +1 cerva\n\n` +
+  `💨 *Atalhos* (até 15 min após usar uma mesa):\n` +
+  `  • mais um boi / + 1 coca 350 / tira uma agua / ver pedido\n\n` +
+  `💡 Aceita números por extenso (um, dois… dez) e plural simples.\n` +
+  `🔍 Comece com "preview" para simular sem executar.`;
 
 
 const NEEDS_TABLE_TEXT =
