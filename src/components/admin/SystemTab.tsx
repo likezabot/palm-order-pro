@@ -1,15 +1,43 @@
-import { useState } from "react";
-import { RefreshCw, Archive } from "lucide-react";
+import { useEffect, useState } from "react";
+import { RefreshCw, Archive, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useToast } from "@/hooks/use-toast";
 import { getAppVersion } from "@/lib/version-check";
 import { supabase } from "@/integrations/supabase/client";
 
+type RetentionLog = {
+  id: number;
+  executed_at: string;
+  days_kept: number;
+  trigger_source: string;
+  status: string;
+  result: Record<string, number | string>;
+  error_message: string | null;
+  duration_ms: number | null;
+};
+
 export const SystemTab = () => {
   const { playFeedback } = useFeedback();
   const { toast } = useToast();
   const [archiving, setArchiving] = useState(false);
+  const [logs, setLogs] = useState<RetentionLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  const loadLogs = async () => {
+    setLoadingLogs(true);
+    const { data, error } = await supabase
+      .from("data_retention_log" as never)
+      .select("*")
+      .order("executed_at", { ascending: false })
+      .limit(20);
+    if (!error && data) setLogs(data as unknown as RetentionLog[]);
+    setLoadingLogs(false);
+  };
+
+  useEffect(() => {
+    loadLogs();
+  }, []);
 
   const handleForceUpdate = async () => {
     if (!confirm("Forçar atualização? A página será recarregada.")) return;
