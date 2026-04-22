@@ -593,14 +593,20 @@ async function sendTelegram(chatId: number, text: string) {
 }
 
 const HELP_TEXT =
-  `🤖 Comandos disponíveis:\n` +
-  `• mesa <N> + <qtd> <produto>\n` +
-  `• mesa <N> - <qtd> <produto>\n` +
-  `• mesa <N> ver pedido\n\n` +
-  `Exemplos:\n` +
-  `  mesa 3 + 2 coca\n` +
-  `  mesa 1 - 1 agua\n` +
-  `  mesa 4 ver pedido`;
+  `🤖 Como usar:\n\n` +
+  `📌 Adicionar:\n` +
+  `  • mesa 3 + 2 coca 350\n` +
+  `  • mesa 1 mais um bovino\n` +
+  `  • adiciona 2 cocas 350 na mesa 3\n` +
+  `  • acrescenta tres bovinos na mesa 2\n\n` +
+  `📌 Remover:\n` +
+  `  • mesa 1 - 1 agua\n` +
+  `  • tira duas aguas da mesa 1\n` +
+  `  • remove 1 tulipa mesa 3\n\n` +
+  `📌 Consultar:\n` +
+  `  • mesa 4 ver pedido\n\n` +
+  `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
+  `Em caso de dúvida no produto, o bot pede para especificar.`;
 
 // ─────────────────────────── handler ───────────────────────────
 
