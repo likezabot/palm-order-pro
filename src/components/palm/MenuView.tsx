@@ -12,12 +12,13 @@ import {
   type Subgroup,
 } from "./menu-subgroups";
 import { RenameTableDialog } from "./RenameTableDialog";
-import { PorcoVariantDialog } from "./PorcoVariantDialog";
+import { GroupVariantDialog } from "./GroupVariantDialog";
 import {
-  getPorcoGroupProducts,
-  getHiddenEspetoNames,
-  useExtraPorcoNames,
-} from "@/lib/porco-group";
+  useProductGroups,
+  getHiddenProductNames,
+  resolveGroupMembers,
+  type ProductGroup,
+} from "@/lib/product-groups";
 import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
 import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
