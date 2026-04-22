@@ -48,9 +48,9 @@ const PrintStation = () => {
   }, []);
 
   const handleManualPrint = useCallback(async (order: Order) => {
-    const success = await manualPrintOrder(order);
-    if (!success) {
-      toast({ title: "Sem itens para imprimir", variant: "destructive" });
+    const result = await manualPrintOrder(order);
+    if (!result.ok) {
+      toast({ title: "Falha ao reimprimir", description: result.reason, variant: "destructive" });
     } else {
       toast({ title: `Reimprimindo Mesa ${order.table_name}...` });
     }
