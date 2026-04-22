@@ -56,32 +56,62 @@ function parseCommand(raw: string): Command {
     return { kind: "HELP" };
   }
 
-  // mesa N ver pedido / ver / pedido
-  const viewMatch = text.match(/^mesa\s+(\d+)\s+(?:ver(?:\s+pedido)?|pedido)$/);
-  if (viewMatch) return { kind: "VIEW", table: viewMatch[1] };
+  // VIEW: "mesa N ver pedido" / "mesa N ver" / "mesa N pedido" / "ver [pedido] [da/na] mesa N"
+  const viewA = text.match(/^mesa\s+(\d+)\s+(?:ver(?:\s+pedido)?|pedido)$/);
+  if (viewA) return { kind: "VIEW", table: viewA[1] };
+  const viewB = text.match(/^(?:ver(?:\s+pedido)?|pedido)\s+(?:da\s+|na\s+|do\s+|no\s+)?mesa\s+(\d+)$/);
+  if (viewB) return { kind: "VIEW", table: viewB[1] };
 
-  // mesa N <op> [qty] <produto>
-  // op: + add adiciona adicionar  |  - remove remover tira
-  const opPattern = /^mesa\s+(\d+)\s+(\+|add|adiciona|adicionar|-|remove|remover|tira)\s+(.+)$/;
-  const m = text.match(opPattern);
-  if (m) {
-    const table = m[1];
-    const opRaw = m[2];
-    const rest = m[3].trim();
+  // Operadores
+  const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar"];
+  const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar"];
+  const ALL_OPS = [...ADD_OPS, ...REM_OPS];
+  const opAlt = ALL_OPS.map((o) => o.replace(/[+\-]/g, "\\$&")).join("|");
 
-    const isAdd = opRaw === "+" || opRaw === "add" || opRaw === "adiciona" || opRaw === "adicionar";
-    const kind = isAdd ? "ADD" : "REMOVE";
+  const classify = (op: string): "ADD" | "REMOVE" =>
+    ADD_OPS.includes(op) ? "ADD" : "REMOVE";
 
-    // qty opcional no início
-    const qtyMatch = rest.match(/^(\d+)\s+(.+)$/);
-    let qty = 1;
-    let productText = rest;
-    if (qtyMatch) {
-      qty = parseInt(qtyMatch[1], 10);
-      productText = qtyMatch[2].trim();
+  // Extrai qty + produto de uma string ("2 coca" ou "coca")
+  const extractQtyProduct = (s: string): { qty: number; productText: string } | null => {
+    const t = s.trim();
+    if (!t) return null;
+    const m = t.match(/^(\d+)\s+(.+)$/);
+    if (m) {
+      const qty = parseInt(m[1], 10);
+      if (qty < 1) return null;
+      return { qty, productText: m[2].trim() };
     }
-    if (qty < 1 || !productText) return { kind: "PARSE_ERROR", raw };
-    return { kind, table, qty, productText };
+    return { qty: 1, productText: t };
+  };
+
+  // Forma 1 (canônica): "mesa N <op> [qty] <produto>"
+  const f1 = text.match(new RegExp(`^mesa\\s+(\\d+)\\s+(${opAlt})\\s+(.+)$`));
+  if (f1) {
+    const table = f1[1];
+    const kind = classify(f1[2]);
+    const parsed = extractQtyProduct(f1[3]);
+    if (!parsed) return { kind: "PARSE_ERROR", raw };
+    return { kind, table, ...parsed };
+  }
+
+  // Forma 2: "<op> [qty] <produto> {na|no|da|do|pra|para} mesa N"
+  const f2 = text.match(new RegExp(`^(${opAlt})\\s+(.+?)\\s+(?:na|no|da|do|pra|para)\\s+mesa\\s+(\\d+)$`));
+  if (f2) {
+    const kind = classify(f2[1]);
+    const table = f2[3];
+    const parsed = extractQtyProduct(f2[2]);
+    if (!parsed) return { kind: "PARSE_ERROR", raw };
+    return { kind, table, ...parsed };
+  }
+
+  // Forma 3: "<op> [qty] <produto> mesa N" (sem preposição)
+  const f3 = text.match(new RegExp(`^(${opAlt})\\s+(.+?)\\s+mesa\\s+(\\d+)$`));
+  if (f3) {
+    const kind = classify(f3[1]);
+    const table = f3[3];
+    const parsed = extractQtyProduct(f3[2]);
+    if (!parsed) return { kind: "PARSE_ERROR", raw };
+    return { kind, table, ...parsed };
   }
 
   return { kind: "PARSE_ERROR", raw };
