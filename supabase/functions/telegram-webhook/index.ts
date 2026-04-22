@@ -1839,7 +1839,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       await answerCallback(cbId, "Já desfeito");
       return;
     }
-    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `Telegram (@${username}) [undo]` : "Telegram [undo]");
     await answerCallback(cbId);
     try {
       const result = await executeUndoOps(table, [{ op: originalOp as "a" | "r", productId, productName: "", qty }], waiter);
@@ -1861,7 +1862,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       await editTelegramMessage(chatId, messageId, "⏱ Desfazer expirado.");
       return;
     }
-    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `Telegram (@${username}) [undo]` : "Telegram [undo]");
     await answerCallback(cbId);
     try {
       const result = await executeUndoOps(entry.table, entry.ops, waiter);
@@ -1904,7 +1906,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
-  const waiter = username ? `Telegram (@${username}) [botão]` : "Telegram [botão]";
+  const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+  const waiter = bound ?? (username ? `Telegram (@${username}) [botão]` : "Telegram [botão]");
   await answerCallback(cbId);
 
   let resultText: string;
