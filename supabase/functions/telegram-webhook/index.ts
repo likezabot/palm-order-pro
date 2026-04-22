@@ -375,7 +375,13 @@ function parseCommand(raw: string): Command {
     }
   }
 
-  return { kind: "PARSE_ERROR", raw };
+  // Hint para mensagem de erro mais útil.
+  const hasOpAny = text.split(/\s+/).some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
+  const hasTable = /\bmesa\s+\d+\b/.test(text);
+  let hint: "no_op" | "no_product" | "no_qty" | "generic" = "generic";
+  if (hasTable && !hasOpAny) hint = "no_op";
+  else if (hasOpAny && !hasTable) hint = "no_product";
+  return { kind: "PARSE_ERROR", raw, hint };
 }
 
 // ─────────────────────────── modo turbo: resolver contexto ───────────────────────────
