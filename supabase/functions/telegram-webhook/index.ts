@@ -947,7 +947,7 @@ async function executeBatchForTable(
   table: string,
   ops: BatchOp[],
   waiter: string,
-  shouldPrint: boolean,
+  printEnabled: boolean,
 ): Promise<BatchOutcome> {
   return await withVersionRetry(async () => {
     const order = await resolveTable(table);
@@ -987,7 +987,7 @@ async function executeBatchForTable(
             note: i.note,
             subtotal: i.subtotal,
           })),
-          p_should_print: shouldPrint,
+          p_should_print: printEnabled,
         });
       } catch (e: any) {
         const msg = String(e?.message ?? e);
@@ -1051,10 +1051,10 @@ async function executeBatchForTable(
         subtotal: i.subtotal,
         waiter_name: waiter,
       })),
-      p_delta_items: shouldPrint && delta.length > 0 ? delta : null,
-      p_print_type: shouldPrint && delta.length > 0 ? "extra" : null,
+      p_delta_items: printEnabled && delta.length > 0 ? delta : null,
+      p_print_type: printEnabled && delta.length > 0 ? "extra" : null,
       p_expected_version: order.version,
-      p_should_print: shouldPrint && delta.length > 0,
+      p_should_print: printEnabled && delta.length > 0,
     });
 
     return {
@@ -1084,7 +1084,7 @@ async function executeUndoOps(table: string, ops: UndoOp[], waiter: string): Pro
     });
   }
   if (inverseOps.length === 0) return "↩️ Nada para desfazer.";
-  const result = await executeBatchForTable(table, inverseOps, waiter, /*shouldPrint*/ false);
+  const result = await executeBatchForTable(table, inverseOps, waiter, /*printEnabled*/ false);
   if (!result.ok) return `↩️ Falha ao desfazer: ${result.text}`;
   return `↩️ Operação desfeita (mesa ${table}). Total atual: ${fmtBRL(result.total)}.`;
 }
