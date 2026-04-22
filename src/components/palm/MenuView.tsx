@@ -138,6 +138,26 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     .filter((i) => i.product.id.startsWith("porco-variant::"))
     .reduce((sum, i) => sum + i.quantity, 0);
 
+  // Contagem de itens por categoria + favoritos para o badge "+N" nas abas.
+  const { categoryQty, favoritesQty } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let favs = 0;
+    const favSet = new Set(favoriteIds);
+    const productById = new Map(products.map((p) => [p.id, p]));
+    for (const item of cart) {
+      const id = item.product.id;
+      let cat: string | undefined;
+      if (id.startsWith("porco-variant::")) {
+        cat = "espetos";
+      } else {
+        cat = productById.get(id)?.category;
+      }
+      if (cat) counts[cat] = (counts[cat] || 0) + item.quantity;
+      if (favSet.has(id)) favs += item.quantity;
+    }
+    return { categoryQty: counts, favoritesQty: favs };
+  }, [cart, products, favoriteIds]);
+
   const addPorcoVariant = (variant: string) => {
     if (!porcoBase) return;
     const finalName = variant === "Porco" ? "Porco" : `Porco - ${variant}`;
@@ -229,30 +249,50 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                 playFeedback("click");
                 setActiveCategory("favoritos");
               }}
-              className={`flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
+              className={`relative flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
                 activeCategory === "favoritos"
                   ? "bg-brand-gradient text-primary-foreground shadow-soft"
                   : "bg-card text-muted-foreground border border-border hover:border-primary/40"
               }`}
             >
               <Star size={16} className="fill-current" aria-label="Favoritos" />
+              {favoritesQty > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary text-[10px] font-black text-primary-foreground border-2 border-background px-1 leading-none">
+                  +{favoritesQty}
+                </span>
+              )}
             </button>
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => {
-                  playFeedback("click");
-                  setActiveCategory(cat);
-                }}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
-                  activeCategory === cat
-                    ? "bg-brand-gradient text-primary-foreground shadow-soft"
-                    : "bg-card text-muted-foreground border border-border hover:border-primary/40"
-                }`}
-              >
-                {CATEGORY_LABELS[cat]}
-              </button>
-            ))}
+            {CATEGORIES.map((cat) => {
+              const qty = categoryQty[cat] || 0;
+              const isActive = activeCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    playFeedback("click");
+                    setActiveCategory(cat);
+                  }}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
+                    isActive
+                      ? "bg-brand-gradient text-primary-foreground shadow-soft"
+                      : "bg-card text-muted-foreground border border-border hover:border-primary/40"
+                  }`}
+                >
+                  {CATEGORY_LABELS[cat]}
+                  {qty > 0 && (
+                    <span
+                      className={`ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none ${
+                        isActive
+                          ? "bg-primary-foreground/20 text-primary-foreground"
+                          : "bg-primary/15 text-primary"
+                      }`}
+                    >
+                      +{qty}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
