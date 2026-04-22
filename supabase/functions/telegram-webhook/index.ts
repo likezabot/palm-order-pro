@@ -2664,7 +2664,7 @@ async function wzExecute(chatId: number, action: WzAction, scope: WzScope, qty: 
 // Detecta gatilhos do wizard
 function wzIsTrigger(text: string): boolean {
   const t = normalize(text);
-  return /^(?:gerenciar\s+estoque|menu\s+estoque|estoque\s+menu|wizard\s+estoque|estoque\s+(?:guiad[oa]|interativo)|abrir\s+estoque|controle\s+(?:de\s+)?estoque)$/.test(t);
+  return /^(?:gerenciar\s+estoque|menu\s+estoque|estoque\s+menu|wizard\s+estoque|estoque\s+(?:guiad[oa]|interativo)|abrir\s+estoque|controle\s+(?:de\s+)?estoque|me\s+ajuda\s+(?:com\s+)?(?:o\s+)?estoque|gerenciar)$/.test(t);
 }
 
 async function wzStartMenu(chatId: number, messageId?: number) {
