@@ -1712,9 +1712,18 @@ Deno.serve(async (req) => {
       setTestContext(cbChatId);
       try {
         await handleCallbackQuery(update.callback_query);
-      } finally {
-        clearTestContext();
+      } catch (e) {
+        console.error("callback erro:", e);
       }
+      if (currentChatIsTest) {
+        const captured = drainTestBuffer();
+        clearTestContext();
+        return new Response(JSON.stringify({ ok: true, captured }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      clearTestContext();
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
