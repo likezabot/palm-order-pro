@@ -24,14 +24,21 @@ function isDuplicate(updateId: number): boolean {
 
 // Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
 const LAST_TABLE_TTL_MS = 15 * 60_000;
-function lastTableSettingsKey(chatId: number): string {
+type ChatType = "private" | "group" | "supergroup" | "channel" | undefined;
+function isGroupChat(chatType: ChatType): boolean {
+  return chatType === "group" || chatType === "supergroup";
+}
+function lastTableSettingsKey(chatId: number, userId?: number, chatType?: ChatType): string {
+  if (isGroupChat(chatType) && typeof userId === "number") {
+    return `telegram_last_table:${chatId}:${userId}`;
+  }
   return `telegram_last_table:${chatId}`;
 }
-async function getLastTable(chatId: number): Promise<string | null> {
+async function getLastTable(chatId: number, userId?: number, chatType?: ChatType): Promise<string | null> {
   const { data, error } = await sb
     .from("settings")
     .select("id, value, updated_at")
-    .eq("key", lastTableSettingsKey(chatId))
+    .eq("key", lastTableSettingsKey(chatId, userId, chatType))
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
