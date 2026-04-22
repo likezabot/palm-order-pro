@@ -1501,6 +1501,8 @@ async function runExecute(
     if (success) {
       const op = cmd.kind === "ADD" ? "a" : "r";
       keyboard = buildUndoSingleKeyboard(cmd.table, product.id, cmd.qty, op);
+      // Também registra no stack textual de undo do chat (para `undo` por mensagem).
+      registerBatchUndo(_undoChatId(), cmd.table, [{ op, productId: product.id, productName: product.name, qty: cmd.qty }]);
     }
     return {
       text: prefix + text + extras,
@@ -1516,6 +1518,11 @@ async function runExecute(
     return { text: prefix + `❌ Erro ao processar: ${msg}` };
   }
 }
+
+// Contexto de chatId para registrar undo no stack textual a partir de funções que não recebem chatId.
+let _undoCurrentChatId = 0;
+function _undoChatId(): number { return _undoCurrentChatId; }
+function setUndoChatContext(chatId: number) { _undoCurrentChatId = chatId; }
 
 // Lê print_status atual da mesa para feedback "🖨️ enviado / ⚠️ aguardando".
 async function formatPrintStatus(table: string): Promise<string> {
