@@ -1,93 +1,99 @@
 
 
-# Corrigir parser do Telegram ("3 bois" → Costela) e impressão travada
+# Cardápio premium — visual clean estilo app de luxo
 
-## Diagnóstico (causa raiz)
+## Objetivo
 
-### Erro 1 — "3 bois" virou "Costela de boi (borboleta)"
-O parser roda `singularize()` antes de buscar produto. A regra de plural português:
-```js
-if (/ois$/.test(tok)) return tok.replace(/ois$/, "ol"); // lencois → lencol
-```
-transformou **"bois" → "bol"**. Com isso:
-- O alias exato `"boi"` do item Bovino **não casou** (procurou "bol").
-- O fallback fuzzy (Levenshtein ≤ 2) achou que "bol" ≈ "boi" e casou no token "boi" do nome **"Costela de boi (borboleta)"**.
-- Resultado: 3× Costela R$ 45 em vez de 3× Bovino R$ 30.
+Transformar o cardápio do PALM (`MenuView.tsx`) e o popup de variantes (`GroupVariantDialog.tsx`) em uma interface minimalista, elegante, sem ruído visual.
 
-A regra `/ois$/→ol` é correta para "lençóis/anzóis", mas destrói **"bois"** (plural de boi).
+## O que muda
 
-### Erro 2 — Mesa 2 não imprimiu
-Pedido `0e6b08e7…` ficou com `print_status='pending'`, `print_claimed_at=NULL`, `printed_at=NULL`. A bridge `.exe` não pegou o job (provavelmente offline naquele instante ou perdeu o evento realtime). Existem **2 pedidos pendentes** sem watchdog ativo (o agendamento que estava planejado nunca foi executado / não existe na DB).
+### 1. Cards do cardápio (grade principal)
 
-## O que vou corrigir
+**Removido:**
+- Botão laranja "Adicionar" (pollui visualmente).
+- Botão laranja "Ver opções" nos grupos.
+- Subtítulo redundante "Ver opções · 2 opções".
 
-### 1) Parser — proteger "boi/bois" e palavras curtas críticas
-Em `supabase/functions/telegram-webhook/index.ts`, função `singularizeToken`:
-- **Whitelist de exceções** que pulam toda a singularização (palavras de 3-4 letras que viram outra coisa): `bois`, `pois`, `dois`, `sois`, `vois`.
-- Para "bois" especificamente, retornar **"boi"** (regra correta de plural) ao invés de "bol".
-- Generalização: se a palavra tem ≤ 4 letras e termina em `ois`, tirar só o `s` (boi, dói, sói…) em vez de aplicar `ois→ol` (que só vale para palavras maiores como "lençóis", "anzóis", "caracóis").
+**Mantido / refeito:**
+- O **card inteiro vira o gesto de adicionar** (tap em qualquer área = adiciona). Para grupos, tap = abre popup.
+- Layout vertical clean: nome do produto (forte), preço (discreto, abaixo).
+- Badge de quantidade `1`, `2`, `3…` continua no canto superior direito, agora mais refinado (sem gradiente forte, círculo sólido pequeno com ring sutil).
+- Botão `(−)` no canto superior esquerdo, **só aparece quando qty > 0**, em estilo fantasma/glass — discreto, não vermelho gritante.
+- Indicador de grupo: pequeno chevron `›` ou pill `+N` no canto, sinalizando que abre opções (sem texto verboso).
 
-Resultado:
-- "bois" → "boi" → casa alias `boi` do Bovino ✅
-- "lencois" (6 letras) → "lencol" (continua funcionando) ✅
+**Estética:**
+- Cards com `bg-card`, borda quase invisível, `rounded-2xl`, shadow muito suave.
+- Tap state com leve scale `0.98` + glow sutil.
+- Tipografia: nome em `font-semibold` (não `extrabold`), preço em `text-sm tabular-nums text-muted-foreground` — preço deixa de gritar.
+- Espaçamento mais generoso (`p-3.5`, `gap-2`).
+- Estado "indisponível": opacidade reduzida + tap desabilitado, sem badge "Indisponível" extra (só dimming + label inline pequeno).
 
-### 2) Reforçar autoPick para evitar fuzzy enganoso
-Na função `autoPickFromCandidates` / no fluxo batch (linha ~3937):
-- Quando o resultado vier por **fuzzy match**, exigir que o token original do usuário (não-singularizado) **apareça como palavra inteira** no nome OU em algum alias do candidato. Se nenhum candidato tiver match exato de palavra inteira, **devolver ambíguo** (mostrar botões) em vez de auto-escolher.
-- Isso impede que "boi" cole em "Costela de **boi** (borboleta)" quando existe "Bovino" com alias exato "boi".
+### 2. Popup de grupos (`GroupVariantDialog`)
 
-### 3) Priorizar match por alias exato sobre fuzzy
-No `resolveProduct`, se `find_inventory_item_by_text` retornar nada com a forma singularizada, **tentar também com a forma original** (sem singularizar) antes de cair no fuzzy. Garante que aliases curtos como `boi` sejam encontrados mesmo que o singularize tenha mutilado a palavra.
+- Confirmar que **continua sendo popup/Dialog** (já é, conforme pedido).
+- Aplicar o mesmo redesign clean: remover botão "Adicionar"/"Indisponível" — tap no card da variante adiciona direto e fecha.
+- Nome + preço discreto + badge de qty no canto. Botão `(−)` só quando há quantidade.
+- Header do dialog mais leve: título fino, sem peso excessivo.
+- Cards das variantes em lista vertical compacta com divisores sutis (estilo iOS).
 
-### 4) Reimprimir as 2 mesas travadas
-Resetar via UPDATE direto no banco:
-- `0e6b08e7…` (Mesa 2, José)
-- `40e13d8a…` (Mesa 1, José)
+### 3. Header da tela
 
-Ação: `UPDATE orders SET print_status='pending', print_claimed_at=NULL` (já estão nesse estado, então basta tocar `updated_at` para o realtime/worker tentar de novo) **ou** acionar o botão "Reimprimir" do PDV. Prefiro um pequeno SQL idempotente que limpa `print_claimed_at` órfão e bumpa `updated_at` para forçar o worker a republicar.
+- Reduzir peso visual: "Voltar" mais discreto, "Mesa: 9" alinhado à direita com tipografia clean.
+- Campo de busca: borda mais leve, fundo levemente diferenciado, ícone em cinza neutro.
+- Tabs de categoria: remover o fundo `bg-primary/5` no ativo, manter só o sublinhado em gradiente brasa (mais fino, 2px) + texto mais escuro. Badge de contagem por categoria mais discreto (mesmo estilo do badge dos cards).
 
-### 5) Watchdog de impressão (que estava planejado mas não foi materializado)
-Como confirmado pelo `read_query`, **não existe nenhum job/função de watchdog** na DB — o plano anterior listou mas nunca foi executado. Vou criar:
-- Função `requeue_stuck_print_jobs()`: pega `orders` com `print_status='claimed'` e `print_claimed_at < now() - 90s` e devolve para `pending` (limpa `print_claimed_at`, incrementa contador `print_attempts` se necessário).
-- Cron `pg_cron` a cada 1 minuto.
-- Continua **sem tocar na bridge `.exe`**.
+### 4. Refino de tokens (sem mudar marca)
 
-### 6) Corrigir o estoque negativo da Costela
-A Costela de boi (borboleta) ficou com **current_stock = -3** por causa do erro de parsing. Vou criar um movimento de ajuste `+3` com nota "Reversão de erro de parsing Telegram (Mesa 4 Wilson)" usando `apply_inventory_movement` — sem apagar o pedido (mantém o histórico do erro).
+- Continuar com a paleta atual (laranja brasa `#E25822` como acento).
+- Reduzir uso do `bg-brand-gradient` nos micro-elementos (badges) — reservar gradiente para o FAB do carrinho que já é o ponto focal.
+- Sombras: trocar `shadow-soft` ruidoso por shadow quase imperceptível nos cards (`shadow-[0_1px_2px_rgba(0,0,0,0.04)]`).
 
 ## Arquivos modificados
 
-- `supabase/functions/telegram-webhook/index.ts`
-  - `singularizeToken`: whitelist + regra `ois` só para palavras > 4 letras.
-  - `resolveProduct`: tentar alias exato com texto original antes do fuzzy.
-  - `autoPickFromCandidates`: exigir match por palavra inteira para fuzzy; senão devolver ambíguo.
-- **nova migration** `supabase/migrations/<ts>_print_watchdog.sql`
-  - Função `requeue_stuck_print_jobs(int default 90)` SECURITY DEFINER.
-  - Agendamento `pg_cron` minuto a minuto.
-  - Index em `orders(print_status, print_claimed_at)` para acelerar.
-- **operação SQL pontual** (não migration): bump em `updated_at` dos 2 pedidos travados + ajuste +3 da Costela via RPC.
+- `src/components/palm/MenuView.tsx`
+  - Reescrever a renderização do card de produto e do card de grupo (linhas ~349-444).
+  - Tornar todo o card clicável (substituir `<button Adicionar>` por handler no container).
+  - Refinar header, busca, tabs (linhas ~203-309).
+- `src/components/palm/GroupVariantDialog.tsx`
+  - Mesma linguagem: tap no card = adicionar, sem botão.
+  - Lista vertical clean.
 
 ## Não alterado
 
-- `bridge/lp-bridge.js`, `.exe`, ESC/POS, endpoints `/health` e `/print`.
-- `print-queue-worker.ts` no cliente.
-- Layout de impressão.
+- Lógica de carrinho, estoque, esgotado, grupos, ordenação persistida — tudo intacto.
+- `CartFab`, `EsgotadoConfirmDialog`, `MoveTableDialog`, `RenameTableDialog`.
+- Bridge `.exe`, impressão, Telegram, banco.
+- Outras telas (Kitchen, PDV, Admin, Cashier, Stock).
+
+## Detalhes técnicos
+
+**Acessibilidade do tap-no-card-todo:**
+- Card vira `<button>` semântico (`type="button"`), não `<div onClick>`, para manter foco/teclado/aria.
+- `aria-label="Adicionar {nome} — R$ X,XX"`.
+- O botão `(−)` interno usa `e.stopPropagation()` (já faz hoje) para não disparar o add.
+
+**Estados visuais:**
+- Default: card branco/escuro neutro, borda 1px `border-border/60`.
+- Hover (desktop): `border-primary/30` muito leve.
+- Active/tap: `scale-[0.98]` + brilho rápido.
+- Com qty > 0: borda `border-primary/40` + leve `bg-primary/[0.03]` para indicar que está no carrinho, sem gritar.
+- Esgotado: `opacity-50`, cursor-not-allowed, sem hover.
+
+**Tokens novos no Tailwind (se necessário):**
+- Nada novo obrigatório — usar utilidades já existentes (`bg-card`, `text-muted-foreground`, `border-border`, `rounded-2xl`, `tabular-nums`).
 
 ## Como vou validar
 
-1. Deploy da edge atualizada → enviar "Mesa 9 mais 3 bois" → conferir que casa **Bovino** (R$ 30).
-2. Enviar "Mesa 9 mais 1 boi" → idem.
-3. Enviar "Mesa 9 mais 1 lençóis" (palavra longa) → continua singularizando para "lencol" (não quebra a regra original).
-4. Verificar que as Mesas 1 e 2 imprimiram após o bump.
-5. Forçar um pedido com bridge offline 2 min, religar bridge → watchdog deve devolver para `pending` e a bridge imprime.
-6. Conferir Costela em estoque positivo de novo.
-7. Rodar `vitest` (deve continuar 80/80).
+1. Abrir o PALM no preview, navegar pelas 4 categorias (Refeições, Espetos, Bebidas, Cervejas).
+2. Tocar em produto simples → adiciona, badge `1` aparece, botão `(−)` surge no canto superior esquerdo.
+3. Tocar de novo → vai para `2`, `3`. Tocar no `(−)` → decrementa.
+4. Tocar em produto-gatilho de grupo → abre popup. Tocar em variante → adiciona e fecha.
+5. Conferir visual em mobile (441×754, viewport atual) — sem quebra de grid, sem overflow.
+6. Conferir busca, troca de categoria, indisponível.
+7. Rodar `vitest` (testes existentes não devem ser afetados — só visual).
 
 ## Resultado esperado
 
-- "boi/bois" sempre resolvem para Bovino.
-- Pedidos travados na fila são reimpressos automaticamente em até 1 min.
-- Mesa 2 imprime imediatamente.
-- Estoque da Costela volta ao real.
-- Bridge `.exe` permanece intocada.
+Cardápio com cara de app premium: muito espaço em branco, tipografia limpa, interação por tap-no-card-inteiro, badges minimalistas, zero botões "Adicionar"/"Ver opções" poluindo. Popups iguais em estilo. Nada na lógica de negócio, impressão ou bridge é tocado.
 
