@@ -1,96 +1,93 @@
 
 
-## Importar do cardápio: scroll arrumado, prévia e sincronização automática
+## Estoque com layout idêntico ao PALM
 
-### Problemas a resolver
-1. **Não consegue rolar a lista** no celular: `ScrollArea` aninhado dentro do `DialogContent` com `max-h-[55vh]` está limitando o conteúdo numa altura que não rola corretamente em mobile. Botões "Importar/Cancelar" também ficam empilhando e ocupando espaço.
-2. Sem **pré-visualização** de quem vai entrar / quem será ignorado por já ter vínculo.
-3. Sem **sincronização automática**: se está no cardápio, deveria já aparecer no estoque sem precisar abrir dialog manual.
+### Problema
+A aba Estoque hoje agrupa por **categorias de estoque** (`bebidas`, `carnes`, `descartáveis`, `gás/carvão`, `limpeza`, `outros`) — então só aparecem 2 tabs porque quase tudo importado do cardápio cai em "bebidas" ou "carnes". Visual também difere do PALM (tabs do shadcn vs. tabs estilizadas do garçom).
+
+### Solução
+Replicar visualmente e estruturalmente o `MenuView` do PALM na tela de Estoque: mesmas 4 categorias do cardápio (**Refeições · Espetos · Bebidas · Cervejas**), mesmo estilo de tabs, mesmo grid de cards.
 
 ### Mudanças
 
-**1. `ImportFromMenuDialog.tsx` — scroll + prévia**
+**1. Categorias por cardápio, não por estoque**
 
-Layout reescrito para garantir scroll no mobile e modo de pré-visualização antes de confirmar:
+Para itens **vinculados a produto** (`product_id != null`), usa a categoria do `products` (refeicoes/espetos/bebidas/cervejas). Para itens **soltos** (insumos sem vínculo, ex: carvão), agrupa numa categoria extra **"Insumos"**.
 
-```text
-┌──────────────────────────────────────────┐
-│ Importar do cardápio              [×]    │
-│ 22 disponíveis · 30 já vinculados        │
-├──────────────────────────────────────────┤
-│ [Selecionar todos] [Limpar] [✓ ocultar inativos] │
-├── lista rolável (flex-1 min-h-0) ────────┤
-│ BEBIDAS (22) — marcar todos              │
-│ ☐ Água com gás                           │
-│ ☐ Coca-Cola 2L                           │
-│ ...                                      │
-├──────────────────────────────────────────┤
-│ [Cancelar]   [Pré-visualizar (5) →]      │
-└──────────────────────────────────────────┘
+Resultado: tabs ficam exatamente as do PALM + "Insumos" no final (só aparece se houver item solto) + "Críticos" no começo.
+
+**2. Tabs com visual do PALM**
+
+Substituir `<Tabs>` do shadcn por barra de tabs igual à do `MenuView.tsx` (linhas 246-281):
+- `flex overflow-x-auto no-scrollbar border-b border-border`
+- Botão ativo: `text-foreground font-bold` + barra inferior `bg-brand-gradient`
+- Inativo: `text-muted-foreground font-semibold`
+- Badge de contagem por categoria (qtd de itens críticos na cor destrutiva, ou total na cor neutra)
+
+**3. Cards no estilo PALM**
+
+`StockCard.tsx` reescrito com o mesmo grid e estética do PALM:
+- Grid: `grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2`
+- Card: `rounded-2xl border bg-card p-3 shadow-soft`, borda colorida indicando status (vermelho negativo/zero, amarelo baixo)
+- Layout interno do card:
+  - Nome do item (top, bold)
+  - Estoque atual em destaque (`brand-gradient-text` quando ok; vermelho quando crítico) + "mín X"
+  - Badge de status no canto superior direito (NEGATIVO / ZERADO / BAIXO / FORA DO CARDÁPIO)
+  - Footer com 4 ícones-botão compactos: − Saída · + Entrada · ≡ Ajuste · ✎ Editar
+- Tap longo / botão `History` discreto (ícone pequeno) movido pra dentro do menu Editar pra simplificar.
+
+**4. Header alinhado ao PALM**
+
+`Stock.tsx`:
+- Mesmo padrão do MenuView: `glass-card`, busca com ícone à esquerda + botão limpar à direita, tabs logo abaixo.
+- Botões "Re-importar" e "Novo" no topo (já existem) — manter.
+- Resumo (`32 itens · 3 zerados...`) fica logo abaixo das tabs como faixa fina.
+
+**5. Lógica de categorização (helper novo em `inventory.ts`)**
+
+```ts
+export function getDisplayCategory(
+  item: InventoryItem,
+  productCategoryById: Map<string, string>
+): string {
+  if (item.product_id) {
+    const cat = productCategoryById.get(item.product_id);
+    if (cat) return cat; // refeicoes / espetos / bebidas / cervejas
+  }
+  return "insumos";
+}
 ```
 
-Ao clicar em **Pré-visualizar**, mesma janela troca de tela mostrando:
-
-```text
-┌──────────────────────────────────────────┐
-│ ← Confirmar importação                   │
-├──────────────────────────────────────────┤
-│ Serão criados (5)                        │
-│  • Coca-Cola 2L → categoria "bebidas"    │
-│  • Água com gás → "bebidas"              │
-│  ...                                     │
-│                                          │
-│ Ignorados — já vinculados (2)            │
-│  • Linguiça (já existe no estoque)       │
-│                                          │
-│ Sem categoria mapeada (0)                │
-├──────────────────────────────────────────┤
-│ [← Voltar]   [Importar 5 itens]          │
-└──────────────────────────────────────────┘
-```
-
-Correções técnicas do scroll:
-- Trocar `ScrollArea` por `div` com `flex-1 min-h-0 overflow-y-auto` dentro de um `DialogContent` `flex flex-col h-[85vh]` — `min-h-0` é o que permite o filho rolar dentro de um pai flex em mobile.
-- Footer fica `sticky bottom-0` com fundo sólido pra não sobrepor itens.
-- Header também `shrink-0`.
-
-**2. Sincronização automática — `useAutoSyncMenuToStock` (novo hook)**
-
-Cria um hook que roda uma vez por sessão na `Stock.tsx` (e opcionalmente na home): detecta produtos do cardápio `active=true` que ainda não têm `inventory_items` vinculado e cria os registros silenciosamente em background, com `current_stock=0`, `min_stock=0`, `product_id` setado.
-
-Comportamento:
-- Roda apenas uma vez por carregamento da página (guard com `useRef`).
-- Nada de toast — silencioso.
-- Log discreto no console: `[stock-sync] importados N novos itens do cardápio`.
-- Reaproveita `useBulkImportFromMenu`.
-- Se `inventory_items` já tem 0 itens não-vinculados pendentes, não faz nada.
-
-Resultado: usuário abre Estoque pela primeira vez e tudo do cardápio já aparece. O dialog "Importar do cardápio" continua existindo só pra casos manuais (re-importar produto que foi deletado do estoque, etc.).
-
-**3. `Stock.tsx` — chamar o auto-sync**
-
-Adiciona `useAutoSyncMenuToStock()` no topo do componente. Sem mudança visual.
-
-**4. Botão "Cardápio" no header do `Stock.tsx`**
-
-Mantém o botão, mas renomeia label/tooltip pra **"Re-importar"** e adiciona contador discreto: `Re-importar (3 novos)` quando houver produtos pendentes. Quando 0 pendentes, botão fica desabilitado com tooltip "Tudo sincronizado".
+`Stock.tsx` busca os produtos do cardápio (já tem `useMenuProductsForStock`) pra montar o map `product_id → category` e calcular `displayCategory` por item.
 
 ### Arquivos
 
 **Editados**
-- `src/components/stock/ImportFromMenuDialog.tsx` — scroll arrumado + modo prévia (2 telas dentro do mesmo dialog via `useState<"select"|"preview">`).
-- `src/pages/Stock.tsx` — chama `useAutoSyncMenuToStock()`; ajusta label do botão de import.
+- `src/pages/Stock.tsx` — tabs no estilo PALM, ordem fixa (Críticos, Refeições, Espetos, Bebidas, Cervejas, Insumos), header refeito.
+- `src/components/stock/StockCard.tsx` — visual `rounded-2xl`, grid 150px, layout PALM-like, ícones compactos.
+- `src/components/stock/StockList.tsx` — grid `auto-fill,minmax(150px,1fr)` em vez de `md:grid-cols-2 lg:grid-cols-3`.
+- `src/lib/inventory.ts` — helper `getDisplayCategory` + constante `DISPLAY_CATEGORIES = ["refeicoes","espetos","bebidas","cervejas","insumos"]`.
 
-**Novos**
-- `src/hooks/use-auto-sync-menu-to-stock.ts` — hook que importa silenciosamente produtos do cardápio sem vínculo, uma vez por sessão.
+### Como vai ficar
 
-### Detalhes técnicos
-- O `min-h-0` no container flex é essencial — sem ele, o filho com `overflow-y-auto` não calcula altura corretamente no mobile e o scroll trava (causa do bug no print).
-- `DialogContent h-[85vh]` (altura fixa em vez de `max-h`) garante que o dialog ocupa altura previsível no mobile, dando espaço pra lista rolar.
-- Auto-sync usa `useRef` como guard pra não disparar duas vezes em re-renders; também checa se `useMenuProductsForStock` já carregou antes de tentar.
-- Prévia é puramente client-side — calcula `toCreate` (selecionados disponíveis) e `toIgnore` (selecionados que de alguma forma já apareceram como linkados, defensivo) a partir dos dados já carregados. Não faz request extra.
+```text
+┌──────────────────────────────────────┐
+│ ← Estoque   [Re-importar] [+ Novo]   │
+│ [🔍 Buscar...]                        │
+│ [🚨 Críticos·5][Refeições·8][Espetos·12][Bebidas·22][Cervejas·6][Insumos·3] │
+├──────────────────────────────────────┤
+│ 51 itens · 2 negativos · 3 zerados   │
+├──────────────────────────────────────┤
+│ ┌────────┐ ┌────────┐ ┌────────┐    │
+│ │Coca 2L │ │Linguiça│ │Carvão  │    │
+│ │ 3 un   │ │ 0 kg   │ │ 8 kg   │    │
+│ │mín 10  │ │ ZERADO │ │mín 5   │    │
+│ │−+≡✎    │ │−+≡✎    │ │−+≡✎    │    │
+│ └────────┘ └────────┘ └────────┘    │
+└──────────────────────────────────────┘
+```
 
 ### O que NÃO muda
-- Schema do banco, RPCs, lógica de movimentação, cardápio do garçom, PDV, impressão.
-- Comportamento do `OutOfStockConfirmDialog`, modo crítico da Stock, badges.
+- Schema, RPCs, lógica de movimentação, sincronização com cardápio, badge ESGOTADO no PALM, `OutOfStockConfirmDialog`, tab Críticos, importação automática.
+- `STOCK_CATEGORIES` continua existindo (usado no `ItemFormDialog` como categoria interna do insumo); só a **visualização** da grade muda pra usar a categoria do cardápio.
 
