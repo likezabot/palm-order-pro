@@ -345,11 +345,11 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         )}
 
         {!isLoading && !error && products.length > 0 && filtered.length > 0 && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5">
             {filtered.map((product) => {
               const groupEntry = groupByTriggerId.get(product.id);
               if (groupEntry) {
-                const { group, triggerProduct, variantCount } = groupEntry;
+                const { group, triggerProduct } = groupEntry;
                 const groupQty = getGroupQty(group);
                 return (
                   <button
@@ -360,26 +360,28 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                       setOpenGroup(group);
                     }}
                     aria-label={`Abrir opções de ${group.name}`}
-                    className={`group/card relative flex flex-col items-start text-left rounded-2xl border p-3.5 min-h-[96px] transition-all active:scale-[0.98] shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] hover:shadow-[0_4px_12px_hsl(var(--foreground)/0.06)] ${
+                    className={`relative flex flex-col items-start text-left rounded-2xl border bg-card p-4 min-h-[112px] transition-all active:scale-[0.99] overflow-hidden ${
                       groupQty > 0
-                        ? "bg-primary/[0.04] border-primary/30"
-                        : "bg-card border-border/50 hover:border-primary/25"
+                        ? "border-foreground/20"
+                        : "border-border/40"
                     }`}
                   >
-                    <span className={`font-semibold text-[15px] leading-snug text-foreground ${groupQty > 0 ? "pl-7" : ""}`}>
+                    {groupQty > 0 && (
+                      <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/60" />
+                    )}
+                    <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground pr-7">
                       {group.name}
                     </span>
-                    <span className="mt-auto pt-2 flex items-baseline gap-1.5 tabular-nums text-muted-foreground">
-                      <span className="text-[11px] uppercase tracking-wider opacity-60">a partir</span>
-                      <span className="text-sm font-medium text-foreground/80">R$ {triggerProduct.price.toFixed(2)}</span>
+                    <span className="mt-auto pt-2 text-[13px] font-normal text-muted-foreground/80 tabular-nums">
+                      R$ {triggerProduct.price.toFixed(2)}
                     </span>
-                    <span className="absolute bottom-2 right-2.5 text-[10px] font-medium text-muted-foreground/60 tracking-wide">
-                      +{variantCount}
+                    <span className="absolute bottom-2.5 right-3 text-muted-foreground/30 text-sm leading-none">
+                      ›
                     </span>
                     {groupQty > 0 && (
                       <span
                         key={groupQty}
-                        className="absolute -top-1.5 -right-1.5 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground ring-2 ring-background px-1.5 animate-badge-pop tabular-nums"
+                        className="absolute top-2 right-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background px-1.5 animate-badge-pop tabular-nums"
                       >
                         {groupQty}
                       </span>
@@ -395,29 +397,27 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                   key={product.id}
                   onClick={() => handleAdd(product)}
                   aria-label={`Adicionar ${product.name} — R$ ${product.price.toFixed(2)}`}
-                  className={`group/card relative flex flex-col items-start text-left rounded-2xl border p-3.5 min-h-[96px] transition-all active:scale-[0.98] shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] ${
+                  className={`relative flex flex-col items-start text-left rounded-2xl border bg-card p-4 min-h-[112px] transition-all active:scale-[0.99] overflow-hidden ${
                     esgotado
-                      ? "bg-muted/20 border-border/40 opacity-50 cursor-not-allowed"
+                      ? "border-border/30 opacity-50 cursor-not-allowed"
                       : qty > 0
-                        ? "bg-primary/[0.04] border-primary/30 hover:shadow-[0_4px_12px_hsl(var(--foreground)/0.06)]"
-                        : "bg-card border-border/50 hover:border-primary/25 hover:shadow-[0_4px_12px_hsl(var(--foreground)/0.06)]"
+                        ? "border-foreground/20"
+                        : "border-border/40"
                   }`}
                 >
-                  <span className={`font-semibold text-[15px] leading-snug text-foreground ${qty > 0 ? "pl-7" : ""}`}>
+                  {qty > 0 && !esgotado && (
+                    <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/60" />
+                  )}
+                  <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground pr-7">
                     {product.name}
                   </span>
-                  <span className="mt-auto pt-2 text-sm font-medium text-foreground/80 tabular-nums">
+                  <span className="mt-auto pt-2 text-[13px] font-normal text-muted-foreground/80 tabular-nums">
                     R$ {product.price.toFixed(2)}
                   </span>
-                  {esgotado && (
-                    <span className="absolute bottom-2 right-2.5 text-[10px] italic text-muted-foreground/70">
-                      indisponível
-                    </span>
-                  )}
                   {qty > 0 && (
                     <span
                       key={qty}
-                      className="absolute -top-1.5 -right-1.5 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground ring-2 ring-background px-1.5 animate-badge-pop tabular-nums"
+                      className="absolute top-2 right-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background px-1.5 animate-badge-pop tabular-nums"
                     >
                       {qty}
                     </span>
@@ -440,9 +440,9 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                         }
                       }}
                       aria-label={`Diminuir ${product.name}`}
-                      className="absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-background/70 backdrop-blur-sm text-muted-foreground border border-border/60 active:scale-90 hover:text-foreground hover:border-border transition-all"
+                      className="absolute top-2 left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm text-muted-foreground active:scale-90 hover:text-foreground transition-all"
                     >
-                      <Minus size={14} strokeWidth={2.5} />
+                      <Minus size={12} strokeWidth={2.5} />
                     </span>
                   )}
                 </button>
