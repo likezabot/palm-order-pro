@@ -1,93 +1,130 @@
 
 
-## Estoque com layout idêntico ao PALM
+## Porco unificado: popup com estoque/preço no PALM + agrupamento visual no Admin e Estoque
 
 ### Problema
-A aba Estoque hoje agrupa por **categorias de estoque** (`bebidas`, `carnes`, `descartáveis`, `gás/carvão`, `limpeza`, `outros`) — então só aparecem 2 tabs porque quase tudo importado do cardápio cai em "bebidas" ou "carnes". Visual também difere do PALM (tabs do shadcn vs. tabs estilizadas do garçom).
+1. **Popup do Porco no PALM** mostra só o nome das 3 variantes — sem preço, sem badge ESGOTADO, sem confirmação se faltar estoque.
+2. **Admin Cardápio**: "Porco", "Panceta suína" e "Costela suína" aparecem soltos, sem nenhuma indicação visual de que formam um grupo. Usuário não entende que controla o popup do garçom através desses 3 itens.
+3. **Estoque**: mesmos 3 itens aparecem soltos, sem agrupamento — fica confuso saber qual representa o quê no popup.
 
 ### Solução
-Replicar visualmente e estruturalmente o `MenuView` do PALM na tela de Estoque: mesmas 4 categorias do cardápio (**Refeições · Espetos · Bebidas · Cervejas**), mesmo estilo de tabs, mesmo grid de cards.
+Manter os 3 produtos como entidades reais no banco (são editáveis, têm preço próprio, estoque próprio), mas:
+- **PALM**: popup do Porco passa a renderizar **cards reais** com preço, badge ESGOTADO e respeita o fluxo de confirmação.
+- **Admin** e **Estoque**: agrupar visualmente os 3 itens sob um banner/seção "🐷 Grupo Porco — popup do garçom" deixando claro que pertencem juntos.
 
 ### Mudanças
 
-**1. Categorias por cardápio, não por estoque**
+**1. `PorcoVariantDialog.tsx` — cards completos com preço + ESGOTADO**
 
-Para itens **vinculados a produto** (`product_id != null`), usa a categoria do `products` (refeicoes/espetos/bebidas/cervejas). Para itens **soltos** (insumos sem vínculo, ex: carvão), agrupa numa categoria extra **"Insumos"**.
+Reescrever o dialog para receber a lista de produtos reais (Porco, Panceta, Costela) em vez de só strings, e usar o mesmo visual dos cards do PALM:
 
-Resultado: tabs ficam exatamente as do PALM + "Insumos" no final (só aparece se houver item solto) + "Críticos" no começo.
+```text
+┌─ Escolha o tipo de Porco ─────────┐
+│ ┌─────────────────────────────┐   │
+│ │ Porco                       │   │
+│ │ R$ 12,00              + ADD │   │
+│ └─────────────────────────────┘   │
+│ ┌─────────────────────────────┐   │
+│ │ Panceta suína   [ESGOTADO]  │   │
+│ │ R$ 14,00         + Adicionar│   │
+│ └─────────────────────────────┘   │
+│ ┌─────────────────────────────┐   │
+│ │ Costela suína               │   │
+│ │ R$ 15,00              + ADD │   │
+│ └─────────────────────────────┘   │
+└────────────────────────────────────┘
+```
 
-**2. Tabs com visual do PALM**
-
-Substituir `<Tabs>` do shadcn por barra de tabs igual à do `MenuView.tsx` (linhas 246-281):
-- `flex overflow-x-auto no-scrollbar border-b border-border`
-- Botão ativo: `text-foreground font-bold` + barra inferior `bg-brand-gradient`
-- Inativo: `text-muted-foreground font-semibold`
-- Badge de contagem por categoria (qtd de itens críticos na cor destrutiva, ou total na cor neutra)
-
-**3. Cards no estilo PALM**
-
-`StockCard.tsx` reescrito com o mesmo grid e estética do PALM:
-- Grid: `grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2`
-- Card: `rounded-2xl border bg-card p-3 shadow-soft`, borda colorida indicando status (vermelho negativo/zero, amarelo baixo)
-- Layout interno do card:
-  - Nome do item (top, bold)
-  - Estoque atual em destaque (`brand-gradient-text` quando ok; vermelho quando crítico) + "mín X"
-  - Badge de status no canto superior direito (NEGATIVO / ZERADO / BAIXO / FORA DO CARDÁPIO)
-  - Footer com 4 ícones-botão compactos: − Saída · + Entrada · ≡ Ajuste · ✎ Editar
-- Tap longo / botão `History` discreto (ícone pequeno) movido pra dentro do menu Editar pra simplificar.
-
-**4. Header alinhado ao PALM**
-
-`Stock.tsx`:
-- Mesmo padrão do MenuView: `glass-card`, busca com ícone à esquerda + botão limpar à direita, tabs logo abaixo.
-- Botões "Re-importar" e "Novo" no topo (já existem) — manter.
-- Resumo (`32 itens · 3 zerados...`) fica logo abaixo das tabs como faixa fina.
-
-**5. Lógica de categorização (helper novo em `inventory.ts`)**
-
+Nova interface:
 ```ts
-export function getDisplayCategory(
-  item: InventoryItem,
-  productCategoryById: Map<string, string>
-): string {
-  if (item.product_id) {
-    const cat = productCategoryById.get(item.product_id);
-    if (cat) return cat; // refeicoes / espetos / bebidas / cervejas
-  }
-  return "insumos";
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  variants: Array<{ name: string; product: Product | null }>; // product=null se não cadastrado
+  onPick: (variantName: string, product: Product) => void;
+  isEsgotado: (productId: string) => boolean;
+  getQty: (productId: string) => number;
 }
 ```
 
-`Stock.tsx` busca os produtos do cardápio (já tem `useMenuProductsForStock`) pra montar o map `product_id → category` e calcular `displayCategory` por item.
+- Variante sem produto cadastrado fica desabilitada com hint "Não cadastrado no admin".
+- Variante esgotada renderiza badge ESGOTADO + texto "+ Adicionar" (em vez de "+ ADD") indicando que vai abrir confirmação.
+- Badge de quantidade no canto superior direito quando já houver no carrinho.
+
+**2. `MenuView.tsx` — passar produtos reais e roteamento de esgotado**
+
+Substitui a chamada atual (que usa `porcoBase` único) por:
+- Resolve os 3 produtos reais por nome (`PORCO_VARIANTS`) buscando em `products`.
+- Passa array `variants` ao `PorcoVariantDialog`.
+- `onPick(variantName, product)` chama o **mesmo `handleAdd(product)`** que já existe — assim a confirmação de esgotado dispara automaticamente para variantes vinculadas a estoque zerado, e o item entra no carrinho com o `id` real do produto (não mais id sintético `porco-variant::*`).
+- Simplificação: como agora cada variante é um produto real, `categoryCounts` deixa de precisar do tratamento especial `porco-variant::*`. Mantemos só o badge `porcoQty` no card-pai somando as 3 variantes pelo `id` real.
+
+**3. `menu-subgroups.ts` — manter constantes**
+
+Sem mudança estrutural. `PORCO_VARIANTS` e `HIDDEN_ESPETO_NAMES` continuam guiando o que aparece escondido na grade do PALM e o que entra no popup.
+
+**4. Admin Cardápio — banner de grupo Porco em `ProductsManager.tsx`**
+
+Quando `activeCategory === "espetos"` e sem busca/filtro ativo, renderizar acima da grade um **callout/banner** discreto:
+
+```text
+🐷 Grupo Porco (popup do garçom)
+Estes 3 itens aparecem juntos no popup ao tocar em "Porco" no PALM.
+Edite preço/visibilidade individualmente — eles continuam controláveis aqui.
+[Porco · ativo]  [Panceta suína · ativo]  [Costela suína · oculto]
+```
+
+- Renderiza como `<aside>` com `border-l-4 border-primary bg-primary/5 rounded-lg p-3`.
+- Cada chip é clicável e rola/destaca o card correspondente na grade abaixo (scroll-into-view + ring temporário).
+- Status (ativo/oculto) lido do `product.active`.
+- Não duplica os cards na grade — eles continuam aparecendo normalmente abaixo.
+
+**5. Estoque — banner de grupo Porco em `Stock.tsx`**
+
+Quando a tab ativa for **Espetos**, renderizar o mesmo padrão de banner acima do grid:
+
+```text
+🐷 Grupo Porco (popup do garçom)
+3 itens controlam o popup de variantes no PALM.
+[Porco · 4 un]  [Panceta · 0 un · ZERADO]  [Costela · 8 un]
+```
+
+- Cada chip mostra estoque atual + status (negativo/zerado/baixo) com cor.
+- Toque no chip rola até o `StockCard` correspondente e dispara um highlight (ring) por 1.5s.
+- Identificação dos 3: filtra `inventoryItems` cujo produto vinculado tenha `name` em `PORCO_VARIANTS` (case-insensitive). Se algum não tiver item de estoque criado, chip aparece como "Porco · sem estoque" com botão "+ criar" que pré-abre o `ItemFormDialog` já vinculando o produto.
+
+**6. Helper compartilhado novo: `src/lib/porco-group.ts`**
+
+Centraliza a lógica de detecção/agrupamento do trio:
+```ts
+export const PORCO_GROUP_NAMES = ["porco", "panceta suína", "costela suína"] as const;
+
+export function isPorcoVariant(productName: string): boolean { ... }
+export function getPorcoGroupProducts(products: Product[]): Product[] { ... }
+export function getPorcoGroupInventory(items: InventoryItem[], products: Product[]): InventoryItem[] { ... }
+```
+
+Usado por `MenuView`, `ProductsManager`, `Stock` e `PorcoVariantDialog`.
 
 ### Arquivos
 
 **Editados**
-- `src/pages/Stock.tsx` — tabs no estilo PALM, ordem fixa (Críticos, Refeições, Espetos, Bebidas, Cervejas, Insumos), header refeito.
-- `src/components/stock/StockCard.tsx` — visual `rounded-2xl`, grid 150px, layout PALM-like, ícones compactos.
-- `src/components/stock/StockList.tsx` — grid `auto-fill,minmax(150px,1fr)` em vez de `md:grid-cols-2 lg:grid-cols-3`.
-- `src/lib/inventory.ts` — helper `getDisplayCategory` + constante `DISPLAY_CATEGORIES = ["refeicoes","espetos","bebidas","cervejas","insumos"]`.
+- `src/components/palm/PorcoVariantDialog.tsx` — cards reais com preço, ESGOTADO, qty badge.
+- `src/components/palm/MenuView.tsx` — passa produtos reais ao dialog; roteia `onPick` pelo mesmo `handleAdd` (ganha confirmação de esgotado de graça).
+- `src/components/admin/ProductsManager.tsx` — banner "Grupo Porco" no topo da categoria Espetos.
+- `src/pages/Stock.tsx` — banner "Grupo Porco" no topo da tab Espetos.
 
-### Como vai ficar
+**Novos**
+- `src/lib/porco-group.ts` — helpers de detecção/agrupamento.
 
-```text
-┌──────────────────────────────────────┐
-│ ← Estoque   [Re-importar] [+ Novo]   │
-│ [🔍 Buscar...]                        │
-│ [🚨 Críticos·5][Refeições·8][Espetos·12][Bebidas·22][Cervejas·6][Insumos·3] │
-├──────────────────────────────────────┤
-│ 51 itens · 2 negativos · 3 zerados   │
-├──────────────────────────────────────┤
-│ ┌────────┐ ┌────────┐ ┌────────┐    │
-│ │Coca 2L │ │Linguiça│ │Carvão  │    │
-│ │ 3 un   │ │ 0 kg   │ │ 8 kg   │    │
-│ │mín 10  │ │ ZERADO │ │mín 5   │    │
-│ │−+≡✎    │ │−+≡✎    │ │−+≡✎    │    │
-│ └────────┘ └────────┘ └────────┘    │
-└──────────────────────────────────────┘
-```
+### Como cada requisito é atendido
+
+- **Popup do Porco mostra estoque/ESGOTADO + confirma**: cards reais no `PorcoVariantDialog` reaproveitam `isEsgotado` do `useProductStockMap`. Ao tocar uma variante esgotada, `onPick` chama `handleAdd` → abre `EsgotadoConfirmDialog` (mesmo fluxo dos outros itens).
+- **Admin não fica "morto"**: os 3 cards continuam editáveis normalmente. Banner explica que eles alimentam o popup, então o admin sabe que mexer ali muda o garçom.
+- **Estoque organizado**: banner agrupa os 3 visualmente, mostra estoque atual de cada um e dá atalho pra encontrar o card.
+- **Sem id sintético**: variantes passam a entrar no carrinho com `product_id` real, então a venda vincula corretamente ao produto/estoque (preparando terreno pra futura baixa automática se quiser).
 
 ### O que NÃO muda
-- Schema, RPCs, lógica de movimentação, sincronização com cardápio, badge ESGOTADO no PALM, `OutOfStockConfirmDialog`, tab Críticos, importação automática.
-- `STOCK_CATEGORIES` continua existindo (usado no `ItemFormDialog` como categoria interna do insumo); só a **visualização** da grade muda pra usar a categoria do cardápio.
+- Schema, RPCs, fluxo de movimentação, sincronização auto cardápio↔estoque, badge ESGOTADO nos cards normais do PALM, layout do `StockCard`, lógica de confirmação `OutOfStockConfirmDialog`.
+- `HIDDEN_ESPETO_NAMES` continua escondendo Panceta/Costela da grade principal de Espetos no PALM (eles só aparecem via popup).
 
