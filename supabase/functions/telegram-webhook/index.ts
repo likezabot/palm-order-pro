@@ -2237,6 +2237,74 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
+  // ─── STOCK UNDO: us|<token> ───
+  if (data.startsWith("us|")) {
+    cleanupStockUndos();
+    const token = data.slice(3);
+    const entry = pendingStockUndos.get(token);
+    if (!entry) {
+      await answerCallback(cbId, "Expirado");
+      await editTelegramMessage(chatId, messageId, "⏱ Desfazer expirado.");
+      return;
+    }
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `@${username}` : "Telegram");
+    await answerCallback(cbId);
+    try {
+      const result = await executeStockUndo(entry, waiter);
+      pendingStockUndos.delete(token);
+      await editTelegramMessage(chatId, messageId, `↩️ Operação revertida.\n${result}`);
+    } catch (e: any) {
+      await editTelegramMessage(chatId, messageId, `❌ Erro ao desfazer: ${String(e?.message ?? e)}`);
+    }
+    return;
+  }
+
+  // ─── STOCK CHOICE: s|<type>|<itemId>|<qty> ───
+  if (data.startsWith("s|")) {
+    const sParts = data.split("|");
+    if (sParts.length !== 4) {
+      await answerCallback(cbId, "Inválido");
+      return;
+    }
+    const [, typeCode, itemId, qtyStr] = sParts;
+    const type: "in" | "out" | "adjustment" | null =
+      typeCode === "in" ? "in" : typeCode === "out" ? "out" : typeCode === "adj" ? "adjustment" : null;
+    const qty = parseFloat(qtyStr);
+    if (!type || !UUID_RE.test(itemId) || !Number.isFinite(qty) || qty < 0) {
+      await answerCallback(cbId, "Dados inválidos");
+      return;
+    }
+    const { data: itemData } = await sb
+      .from("inventory_items")
+      .select("id,name,slug,unit,current_stock,min_stock,product_id")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (!itemData) {
+      await answerCallback(cbId, "Item não encontrado");
+      await editTelegramMessage(chatId, messageId, "❌ Item de estoque não encontrado.");
+      return;
+    }
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `@${username} [botão]` : "Telegram [botão]");
+    await answerCallback(cbId);
+    try {
+      const out = await executeStockMovement(itemData as StockItem, type, qty, waiter);
+      const token = registerStockUndo({
+        itemId: itemData.id,
+        itemName: itemData.name,
+        unit: itemData.unit,
+        type, qty,
+        previousStock: out.previousStock,
+      });
+      await editTelegramMessage(chatId, messageId, out.text);
+      await sendTelegram(chatId, `↩️ Quer desfazer essa ação?`, buildStockUndoKeyboard(token));
+    } catch (e: any) {
+      await editTelegramMessage(chatId, messageId, `❌ Erro no estoque: ${String(e?.message ?? e)}`);
+    }
+    return;
+  }
+
   // ─── ADD/REMOVE escolha: a|... ou r|... ───
   const parts = data.split("|");
   if (parts.length !== 4 || (parts[0] !== "a" && parts[0] !== "r")) {
