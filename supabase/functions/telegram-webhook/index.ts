@@ -2698,31 +2698,65 @@ function wzItemButtonLabel(it: any): string {
 
 // ─── Tela 2: Escolha de item ───
 
-async function wzShowItemPicker(chatId: number, messageId: number | undefined, action: WzAction, currentStep: WzStep, currentData: WzData, extraText?: string) {
-  const top = await wzTopMovedItems(action, 5);
+const WZ_ITEMS_PAGE_SIZE = 12;
+
+async function wzListAllActiveItems(): Promise<any[]> {
+  const { data } = await sb
+    .from("inventory_items")
+    .select("id, name, unit, current_stock, min_stock, category")
+    .eq("is_active", true)
+    .order("name")
+    .limit(500);
+  return (data ?? []) as any[];
+}
+
+async function wzShowItemPicker(chatId: number, messageId: number | undefined, action: WzAction, currentStep: WzStep, currentData: WzData, extraText?: string, page = 0) {
+  const [top, all] = await Promise.all([wzTopMovedItems(action, 5), wzListAllActiveItems()]);
+  const topIds = new Set(top.map((it) => it.id));
+  const rest = all.filter((it) => !topIds.has(it.id));
+
+  const totalPages = Math.max(1, Math.ceil(rest.length / WZ_ITEMS_PAGE_SIZE));
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const pageItems = rest.slice(safePage * WZ_ITEMS_PAGE_SIZE, (safePage + 1) * WZ_ITEMS_PAGE_SIZE);
+
   const lines: string[] = [`${wzActionLabel(action)} · escolha o item`];
-  if (top.length > 0) {
-    lines.push(``);
-    lines.push(`*Mais usados (últimos 30 dias):*`);
-  } else {
-    lines.push(``);
-    lines.push(`💡 Digite parte do nome ou clique em "Buscar".`);
-  }
+  lines.push(``);
+  lines.push(`💡 Toque em um item abaixo ou digite parte do nome para buscar.`);
   if (extraText) lines.push(`\n${extraText}`);
 
   const rows: InlineButton[][] = [];
-  for (const it of top) {
-    rows.push([{ text: wzItemButtonLabel(it), callback_data: `wz|item|${it.id}` }]);
+
+  if (top.length > 0) {
+    rows.push([{ text: `⭐ Mais usados (30d)`, callback_data: "wz|noop" }]);
+    for (const it of top) {
+      rows.push([{ text: wzItemButtonLabel(it), callback_data: `wz|item|${it.id}` }]);
+    }
   }
+
+  if (pageItems.length > 0) {
+    rows.push([{ text: `📋 Todos os itens (${rest.length})`, callback_data: "wz|noop" }]);
+    for (const it of pageItems) {
+      rows.push([{ text: wzItemButtonLabel(it), callback_data: `wz|item|${it.id}` }]);
+    }
+  }
+
+  if (totalPages > 1) {
+    const navRow: InlineButton[] = [];
+    if (safePage > 0) navRow.push({ text: "◀️ Anterior", callback_data: `wz|page|${safePage - 1}` });
+    navRow.push({ text: `${safePage + 1}/${totalPages}`, callback_data: "wz|noop" });
+    if (safePage < totalPages - 1) navRow.push({ text: "Próxima ▶️", callback_data: `wz|page|${safePage + 1}` });
+    rows.push(navRow);
+  }
+
   rows.push([
     { text: "🔍 Buscar (digitar)", callback_data: "wz|search" },
     { text: "📂 Por categoria", callback_data: "wz|cats" },
   ]);
-  rows.push([{ text: "🌐 Todos os itens", callback_data: "wz|scope|all" }]);
+  rows.push([{ text: "🌐 Aplicar em TODOS", callback_data: "wz|scope|all" }]);
   rows.push(wzNavRow({ back: true, home: true, cancel: true }));
 
   const history = wzPushHistory(currentStep, currentData);
-  await wzSet(chatId, "awaiting_item", { ...currentData, action, history });
+  await wzSet(chatId, "awaiting_item", { ...currentData, action, page: safePage, history });
 
   const text = lines.join("\n");
   if (messageId !== undefined) await editTelegramMessage(chatId, messageId, text, rows);
@@ -3323,6 +3357,27 @@ async function wzHandleCallback(cb: any, waiter: string): Promise<boolean> {
     const rows: InlineButton[][] = arr.slice(0, 8).map((it) => [{ text: wzItemButtonLabel(it), callback_data: `wz|item|${it.id}` }]);
     rows.push(wzNavRow({ back: true, home: true, cancel: true }));
     await editTelegramMessage(chatId, messageId, lines.join("\n"), rows);
+    return true;
+  }
+
+  // ── No-op (rótulos visuais) ──
+  if (op === "noop") {
+    await answerCallback(cbId);
+    return true;
+  }
+
+  // ── Paginação da lista de itens ──
+  if (op === "page") {
+    await answerCallback(cbId);
+    const page = parseInt(parts[2] || "0", 10) || 0;
+    const state = await wzGet(chatId);
+    const action = state?.data.action;
+    if (!action) {
+      await wzMainMenuV2(chatId, messageId);
+      return true;
+    }
+    const prevHistory = state?.data.history ?? [];
+    await wzShowItemPicker(chatId, messageId, action as WzAction, "awaiting_item", { ...(state?.data ?? {}), history: prevHistory.slice(0, -1) }, undefined, page);
     return true;
   }
 
