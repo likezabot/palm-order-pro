@@ -1,152 +1,125 @@
 
 
-## Módulo de Estoque (web, pronto pra Telegram depois)
+## Estoque com vínculo ao cardápio + alertas operacionais
 
-### Escopo
-Aba **Estoque** independente do cardápio (`products`). Produtos de estoque são insumos/itens (ex: carvão, refrigerante lata, espeto de coração) que podem ou não bater com itens do cardápio. Estrutura nova, sem mexer em pedidos, PDV, impressão ou realtime.
+### Resumo do comportamento novo
+1. Estoque **pode ficar negativo** — saída/ajuste nunca bloqueia, só avisa em vermelho.
+2. Quando item bate ≤ 0, **NUNCA esconde sozinho** do cardápio do garçom. Aparece um modal "Realmente acabou X?" com 2 ações: **Manter no cardápio** ou **Marcar como esgotado** (`active=false` no `products`).
+3. Aba Estoque ganha tabs por categoria + seção dedicada **"Últimos 5 / Crítico"**.
+4. Itens do cardápio (`products`) podem ser linkados a um item de estoque (`inventory_items`) para gestão unificada.
 
-### 1. Banco — duas tabelas novas
+### 1. Schema — vínculo cardápio ↔ estoque
 
-**`inventory_items`**
-- `id` uuid pk
-- `name` text not null
-- `slug` text not null unique (gerado a partir do nome, normalizado sem acento/minúsculo — usado pelo bot pra matching rápido)
-- `aliases` text[] default `'{}'` (apelidos: "coca", "coquinha", "coca lata")
-- `category` text not null (ex: bebidas, carnes, descartáveis, gás/carvão, outros)
-- `unit` text not null default `'unidade'` (unidade, kg, g, l, ml, caixa, pacote)
-- `current_stock` numeric not null default 0 (numeric pra suportar 1.5kg)
-- `min_stock` numeric not null default 0
-- `is_active` bool not null default true
-- `created_at`, `updated_at` timestamptz default now()
+**Migração nova:**
+- `inventory_items.product_id uuid NULL` — ID opcional pro produto do cardápio que esse item de estoque controla.
+- Índice único parcial: um produto não pode ser controlado por dois itens de estoque.
+- `apply_inventory_movement` retorna agora também `linked_product_id` e `linked_product_active` no JSON, para a UI saber se precisa abrir o modal de confirmação.
 
-Índices: `slug` único, `is_active`, GIN em `aliases` pra lookup do bot (`WHERE 'coca' = ANY(aliases)`).
+Nada destrutivo. Itens existentes ficam com `product_id = NULL` e continuam funcionando como insumo solto.
 
-**`inventory_movements`**
-- `id` uuid pk
-- `item_id` uuid not null (sem FK rígida pra não bloquear delete; índice normal)
-- `movement_type` text not null check in (`'in'`, `'out'`, `'adjustment'`)
-- `quantity` numeric not null (sempre positivo; o tipo define o sinal)
-- `note` text
-- `source` text not null default `'manual'` check in (`'manual'`, `'telegram'`, `'pdv'`, `'system'`)
-- `created_at` timestamptz default now()
+### 2. Hook novo `use-menu-products-for-stock.ts`
+Lista os produtos do cardápio (`products`) que **ainda não têm** item de estoque vinculado. Usado no `ItemFormDialog` num select novo "Vincular a produto do cardápio (opcional)".
 
-Índice: `(item_id, created_at desc)` pra histórico rápido.
+### 3. `ItemFormDialog` — vincular ao cardápio
+- Novo campo: select "Produto do cardápio" (com busca) — opcional.
+- Quando seleciona, pré-preenche `name`, `category` (mapeada de cardápio → categoria de estoque) e bloqueia o nome (read-only com nota "vinculado a [Produto]").
+- Botão "Desvincular" se já tiver vínculo.
 
-**RLS**: `public` ALL=true (sistema POS sem auth, igual `orders`/`products`).
+### 4. Importação rápida do cardápio
+Botão **"Importar do cardápio"** no header da `Stock.tsx`. Abre um dialog `ImportFromMenuDialog`:
+- Lista produtos do cardápio sem vínculo, agrupados por categoria, com checkboxes.
+- Bulk-cria itens de estoque a partir dos selecionados (slug auto, `current_stock=0`, `min_stock=0`, vinculados).
+- Resolve "evitar cadastro duplicado manual".
 
-**Função SQL `apply_inventory_movement(p_item_id, p_type, p_quantity, p_note, p_source)`** (SECURITY DEFINER):
-- Trava a linha do item (`FOR UPDATE`).
-- Calcula novo `current_stock`:
-  - `in` → soma
-  - `out` → subtrai (não bloqueia negativo, só registra; aviso vem na UI)
-  - `adjustment` → seta `current_stock = quantity` (quantidade vira o valor absoluto novo)
-- Atualiza `updated_at`.
-- Insere registro em `inventory_movements`.
-- Retorna `{ new_stock }`.
+### 5. Modal "Realmente acabou?" — `OutOfStockConfirmDialog`
 
-Toda mudança de estoque (UI ou Telegram futuro) passa por essa função → consistência garantida.
-
-**Função auxiliar `find_inventory_item_by_text(p_text text)`** (já preparada pro bot):
-- Normaliza input (lower, sem acento) e procura match exato em `slug` ou em `aliases`.
-- Retorna primeira linha de `inventory_items` ou nulo.
-- Não usada pela UI agora; fica pronta pro webhook.
-
-### 2. Navegação
-
-**`src/pages/Index.tsx`** — adiciona card **ESTOQUE** (ícone `Package`) no array `modes`, rota `/estoque`. Mantém ordem: Atendimento, PDV, Cozinha, **Estoque**, Admin.
-
-**`src/App.tsx`** — registra `<Route path="/estoque" element={<Stock />} />`.
-
-### 3. Tela de Estoque — `src/pages/Stock.tsx`
-
-Layout single-page, mobile-first, sem tabs externas:
+Disparado automaticamente após uma movimentação que deixa `current_stock <= 0` **e** o item tem `product_id` vinculado **e** o produto ainda está `active=true`.
 
 ```text
-┌─ Header ───────────────────────────────────────┐
-│ ← Estoque              [+ Novo item]           │
-│ [🔍 buscar...]  [Categoria ▾]  [☐ só baixos]   │
-├─ Resumo ───────────────────────────────────────┤
-│ 32 itens · 5 baixos · 2 zerados                │
-├─ Lista (cards mobile / linhas no desktop) ─────┤
-│ ┌──────────────────────────────────────────┐  │
-│ │ Coca-cola lata          [BAIXO]          │  │
-│ │ Bebidas · unidade                         │  │
-│ │ 3 / mín 10                                │  │
-│ │ [− Saída] [+ Entrada] [≡ Ajustar] [✎]    │  │
-│ └──────────────────────────────────────────┘  │
-└────────────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│ ⚠ Realmente acabou Linguiça?        │
+│                                     │
+│ O estoque chegou a 0. Quer remover  │
+│ do cardápio do garçom?              │
+│                                     │
+│ [Manter no cardápio] [Marcar esgotado]│
+└─────────────────────────────────────┘
 ```
 
-Status visual via cor de borda esquerda + badge:
-- `current_stock === 0` → badge destrutivo "ZERADO", borda vermelha
-- `current_stock <= min_stock` (e > 0) → badge warning "BAIXO", borda amarela
-- senão → sem badge, borda neutra
+- "Manter no cardápio" → fecha, nada muda em `products`.
+- "Marcar esgotado" → `UPDATE products SET active=false`. Item some do `MenuView` (que já filtra `active=true`). Toast: "Linguiça removida do cardápio".
 
-Busca: filtra por `name`, `slug` ou `aliases` (client-side, lista é pequena).
+Lógica fica em `MovementDialog.handleConfirm` — após o `apply.mutateAsync`, lê o retorno e dispara o modal se necessário.
 
-### 4. Componentes
+### 6. Saída/ajuste sem bloqueio
+- `MovementDialog`: o aviso "⚠ ficará negativo" continua, mas botão Confirmar **não é mais desabilitado**. Só pinta vermelho. Nenhuma mudança no SQL — `apply_inventory_movement` já permite negativo (não tem `CHECK >= 0`).
 
-- **`src/components/stock/StockList.tsx`** — grid responsivo (1 coluna mobile, 2 no md, 3 no lg). Recebe lista filtrada.
-- **`src/components/stock/StockCard.tsx`** — card individual com nome, categoria, unidade, estoque atual/mínimo, badge de status, 4 botões (Entrada / Saída / Ajustar / Editar).
-- **`src/components/stock/MovementDialog.tsx`** — dialog único reutilizado pelos 3 botões (Entrada/Saída/Ajuste). Campos: quantidade (input numérico grande, teclado decimal no mobile), nota opcional, botão confirmar grande. Mostra estoque antes/depois em preview.
-- **`src/components/stock/ItemFormDialog.tsx`** — criar/editar item. Campos: nome, categoria (select), unidade (select), estoque inicial (só na criação), estoque mínimo, aliases (input com chips, separa por vírgula/Enter). Slug auto-gerado a partir do nome (mostrado read-only).
-- **`src/components/stock/HistoryDialog.tsx`** — abre da Editar/menu, lista últimas 50 movimentações do item (tipo, qtd, nota, source, timestamp relativo).
+### 7. Reativar item no cardápio
+No `StockCard`, se o item tem `product_id` vinculado e o produto está `active=false`, mostra badge **"FORA DO CARDÁPIO"** e botão pequeno **"Reativar no cardápio"** (faz `UPDATE products SET active=true`).
 
-### 5. Hooks e dados
+### 8. Tela de estoque reorganizada — `Stock.tsx`
 
-- **`src/hooks/use-inventory.ts`**:
-  - `useInventoryItems()` → React Query `["inventory-items"]`, `staleTime: 30s`, ordenado por nome.
-  - `useInventoryMovements(itemId)` → query lazy quando o histórico abre.
-  - `useApplyMovement()` → mutation que chama RPC `apply_inventory_movement` e invalida `["inventory-items"]` + histórico.
-  - `useUpsertItem()` / `useDeactivateItem()` → mutations diretas em `inventory_items`.
-
-- **Realtime opcional, leve**: subscribe em `inventory_items` (UPDATE) pra refletir movimentações feitas pelo bot/outro dispositivo. Mesmo padrão do `use-pdv-realtime`.
-
-### 6. Resumo na Home
-
-Em **`src/pages/Index.tsx`**, abaixo do bloco de instalação (e só se houver itens cadastrados), um mini-card discreto:
+Layout novo:
 
 ```text
-📦 Estoque: 5 baixos · 2 zerados   →
+┌─ Header ─────────────────────────────────┐
+│ ← Estoque   [Importar cardápio] [+ Novo] │
+│ [🔍 buscar...]                            │
+├─ Tabs categoria ────────────────────────┤
+│ [🚨 Críticos·7] [Todas] [Bebidas·12] ... │
+├─ Resumo (sticky) ────────────────────────┤
+│ 32 itens · 2 negativos · 3 zerados · 5 baixos │
+├─ Grid por categoria ────────────────────┤
+│  ... cards ...                           │
+└──────────────────────────────────────────┘
 ```
-Clique leva pra `/estoque?filter=low`. Se não houver alertas, não renderiza (mantém home limpa).
 
-Implementado como `src/components/home/StockSummaryCard.tsx`, query rápida agregada (count de baixos/zerados).
+- Tab **🚨 Críticos** (default quando vier `?filter=low`): junta negativos + zerados + os **5 itens com menor `current_stock - min_stock`** (margem mais apertada). Ordenação: negativos → zerados → baixos por gap. Badge no tab mostra a contagem.
+- Tabs por categoria de estoque, igual ao `MenuView`.
+- Filtro "só baixos" vira redundante, removido.
 
-### 7. Estrutura pronta pro Telegram (sem implementar agora)
+### 9. Status visual ampliado — `inventory.ts`
 
-Já fica pronto sem trabalho extra futuro:
-- `aliases[]` + `slug` + função `find_inventory_item_by_text` → bot resolve "coca" / "coquinha" / "coca lata" no mesmo item.
-- `apply_inventory_movement` aceita `p_source = 'telegram'` → quando o webhook for plugado, basta resolver o item e chamar essa função; nenhum cálculo de estoque no edge function.
-- Movimentações ficam separáveis por `source` em relatórios futuros.
+Novo status `"negative"`:
+- `current_stock < 0` → "negative" (badge vermelho-escuro "NEGATIVO", borda vermelha pulsante).
+- `current_stock === 0` → "zero" (igual hoje).
+- `current_stock <= min_stock` → "low".
 
-Quando for plugar no bot: `supabase/functions/telegram-webhook/index.ts` interpreta texto tipo "saiu 2 coca", chama `find_inventory_item_by_text('coca')`, depois `apply_inventory_movement(item_id, 'out', 2, null, 'telegram')`. Nenhuma mudança de schema necessária.
+`StockCard` ganha o badge "NEGATIVO" e exibe valor com sinal (`-3 unidades`).
 
-### 8. Arquivos
+### 10. `StockSummaryCard` (Home) — incluir negativos
+Adiciona contador de negativos no card resumo: `2 negativos · 3 zerados · 5 baixos`. Cor destrutiva quando há negativos.
+
+### 11. Componente novo `CriticalStockSection`
+Renderizado no topo da tab "Críticos" e também opcionalmente embed em outra tela futura. Lista até 5 itens mais críticos com botão direto "Repor" (atalho pra `MovementDialog` tipo "in").
+
+### Arquivos
 
 **Novos**
-- `supabase/migrations/<ts>_inventory.sql` — tabelas, índices, RLS, funções.
-- `src/pages/Stock.tsx`
-- `src/components/stock/StockList.tsx`
-- `src/components/stock/StockCard.tsx`
-- `src/components/stock/MovementDialog.tsx`
-- `src/components/stock/ItemFormDialog.tsx`
-- `src/components/stock/HistoryDialog.tsx`
-- `src/components/home/StockSummaryCard.tsx`
-- `src/hooks/use-inventory.ts`
-- `src/lib/inventory.ts` — helpers (slugify, status calc, label de unidade/source).
+- `supabase/migrations/<ts>_inventory_link_products.sql` — coluna `product_id`, índice, retorno extendido da função.
+- `src/components/stock/OutOfStockConfirmDialog.tsx`
+- `src/components/stock/ImportFromMenuDialog.tsx`
+- `src/components/stock/CriticalStockSection.tsx`
+- `src/hooks/use-menu-products-for-stock.ts`
 
 **Editados**
-- `src/App.tsx` — rota `/estoque`.
-- `src/pages/Index.tsx` — botão "ESTOQUE" + `StockSummaryCard`.
+- `src/lib/inventory.ts` — status `"negative"`, helper de margem crítica, mapping categoria cardápio → estoque.
+- `src/hooks/use-inventory.ts` — mutation `useToggleProductActive(productId, active)` pro confirm/reativar.
+- `src/components/stock/StockCard.tsx` — badge negativo, badge "fora do cardápio", botão reativar.
+- `src/components/stock/MovementDialog.tsx` — sem bloqueio quando negativo; após confirmar, dispara `OutOfStockConfirmDialog` se aplicável.
+- `src/components/stock/ItemFormDialog.tsx` — campo de vínculo com produto do cardápio.
+- `src/components/home/StockSummaryCard.tsx` — contador de negativos.
+- `src/pages/Stock.tsx` — tabs por categoria + tab "Críticos" + botão Importar.
+
+### Como cada requisito é atendido
+
+- **Vínculo cardápio↔estoque**: `inventory_items.product_id` + `ItemFormDialog` + Importação em massa. Um produto pode ter no máximo um item de estoque.
+- **Confirmação antes de remover**: `OutOfStockConfirmDialog` aparece automático quando estoque cruza zero pra baixo, só pra itens vinculados, e nunca remove sem clique explícito.
+- **Alerta zerado/negativo**: novo status `"negative"` com cor destrutiva, badge no card, contagem no resumo da Home e na tab Críticos.
+- **Últimos 5/baixos**: tab "🚨 Críticos" mostra negativos + zerados + 5 itens com menor margem (`current_stock - min_stock`), tudo numa tela só.
+- **Operar sem estoque**: nada bloqueia saída/ajuste. Cardápio só some se o usuário confirmar no modal — caso contrário, garçom continua podendo lançar o item normalmente mesmo com estoque zero/negativo.
 
 ### O que NÃO muda
-Pedidos, `products` do cardápio, PDV/caixa, impressão, kitchen, realtime de orders, pagamento, RLS existente. Estoque é um módulo isolado — mesmo se for desligado, nada quebra.
-
-### Detalhes técnicos
-- `current_stock` e `min_stock` como `numeric` (não integer) → suporta kg/litro fracionário sem refactor.
-- `slug` único garante que o bot nunca fica em dúvida entre dois itens com mesmo nome.
-- Função SQL centralizada → impossível ter divergência entre UI e bot na hora de aplicar movimentação.
-- Sem FK forte em `inventory_movements.item_id` → permite manter histórico mesmo se item for excluído (bom pra auditoria); a UI filtra movimentações órfãs.
-- `staleTime: 30s` + Realtime: app instalado (PWA) reflete mudanças do bot rapidamente sem polling agressivo.
+- Lógica de pedidos/PDV/caixa/impressão/realtime de `orders`. Nada subtrai do estoque automaticamente — venda no PDV não mexe em `inventory_items` (o usuário pediu confirmação manual). Reorder/baixa por venda fica fora deste escopo.
+- Bot do Telegram (estrutura segue pronta, sem mudanças).
 
