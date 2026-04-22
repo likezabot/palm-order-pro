@@ -1749,6 +1749,7 @@ const HELP_TEXT =
   `  • mesa 4 o que tem / consumo\n` +
   `  • status mesa 4 / mesa 4 como ta\n\n` +
   `📦 *ESTOQUE*\n` +
+  `  • *gerenciar estoque* / menu estoque → modo guiado com botões\n` +
   `  • entrada 10 coca / repor 10 coca\n` +
   `  • saida 2 picanha / vendi 3 coca / acabou 1 prato\n` +
   `  • ajuste coca 50 / contei 50 coca\n` +
