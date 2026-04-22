@@ -22,6 +22,26 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
+// Modo turbo: contexto da última mesa por chat (TTL 15min, in-memory, best-effort).
+const LAST_TABLE_TTL_MS = 15 * 60_000;
+const lastTableByChat = new Map<number, { table: string; ts: number }>();
+function getLastTable(chatId: number): string | null {
+  const now = Date.now();
+  for (const [k, v] of lastTableByChat) {
+    if (now - v.ts > LAST_TABLE_TTL_MS) lastTableByChat.delete(k);
+  }
+  const entry = lastTableByChat.get(chatId);
+  if (!entry) return null;
+  if (now - entry.ts > LAST_TABLE_TTL_MS) {
+    lastTableByChat.delete(chatId);
+    return null;
+  }
+  return entry.table;
+}
+function setLastTable(chatId: number, table: string): void {
+  lastTableByChat.set(chatId, { table, ts: Date.now() });
+}
+
 // ─────────────────────────── helpers ───────────────────────────
 
 function normalize(s: string): string {
@@ -71,10 +91,46 @@ function sleep(ms: number) {
 // ─────────────────────────── parser ───────────────────────────
 
 type Command =
-  | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string }
-  | { kind: "VIEW"; table: string }
+  | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string; fromContext?: boolean }
+  | { kind: "VIEW"; table: string; fromContext?: boolean }
+  | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
+  | { kind: "VIEW_NOMESA" }
+  | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string };
+
+// Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
+const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
+const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
+const ALL_OPS = [...ADD_OPS, ...REM_OPS];
+const VIEW_TOKENS = [
+  "ver", "ve", "consulta", "consultar", "consulte",
+  "total", "totais", "pedido", "pedidos",
+  "mostra", "mostrar", "mostre", "lista", "listar", "liste",
+  "resumo", "extrato", "conta", "quanto",
+];
+const VIEW_PHRASES = ["como esta", "como ta", "como anda"];
+const NUM_WORDS_GLOBAL: Record<string, number> = {
+  um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
+  seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+};
+function parseQtyToken(token: string): number | null {
+  if (/^\d+$/.test(token)) {
+    const n = parseInt(token, 10);
+    return n >= 1 ? n : null;
+  }
+  return NUM_WORDS_GLOBAL[token] ?? null;
+}
+function extractQtyProductFromTail(s: string): { qty: number; productText: string } | null {
+  const t = s.trim();
+  if (!t) return null;
+  const m = t.match(/^(\S+)\s+(.+)$/);
+  if (m) {
+    const qty = parseQtyToken(m[1]);
+    if (qty !== null) return { qty, productText: m[2].trim() };
+  }
+  return { qty: 1, productText: t };
+}
 
 function parseCommand(raw: string): Command {
   const text = normalize(raw);
@@ -90,23 +146,11 @@ function parseCommand(raw: string): Command {
   const viewB = text.match(/^(?:ver(?:\s+pedido)?|pedido)\s+(?:da\s+|na\s+|do\s+|no\s+)?mesa\s+(\d+)$/);
   if (viewB) return { kind: "VIEW", table: viewB[1] };
 
-  // Operadores
-  const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
-  const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
-  const ALL_OPS = [...ADD_OPS, ...REM_OPS];
-
   // VIEW natural: "mesa N <gatilho>", "<gatilho> mesa N", "como esta a mesa N", "quanto deu a mesa N" etc.
   // Só dispara se NÃO houver operador ADD/REMOVE nem padrão "<qty> <produto>".
   {
     const tableMatch = text.match(/\bmesa\s+(\d+)\b/);
     if (tableMatch) {
-      const VIEW_TOKENS = [
-        "ver", "ve", "consulta", "consultar", "consulte",
-        "total", "totais", "pedido", "pedidos",
-        "mostra", "mostrar", "mostre", "lista", "listar", "liste",
-        "resumo", "extrato", "conta", "quanto",
-      ];
-      const VIEW_PHRASES = ["como esta", "como ta", "como anda"];
       const tokens = text.split(/\s+/);
       const hasViewToken = tokens.some((t) => VIEW_TOKENS.includes(t));
       const hasViewPhrase = VIEW_PHRASES.some((p) => text.includes(p));
@@ -181,7 +225,50 @@ function parseCommand(raw: string): Command {
     return { kind, table, ...parsed };
   }
 
+  // ─── Fallback NOMESA (modo turbo): linha sem "mesa N", mas com operador ou gatilho VIEW ───
+  const hasTableHere = /\bmesa\s+\d+\b/.test(text);
+  if (!hasTableHere) {
+    const tokensHere = text.split(/\s+/);
+
+    // VIEW_NOMESA: gatilho de consulta sem operador e sem qty+produto
+    const hasViewToken = tokensHere.some((t) => VIEW_TOKENS.includes(t));
+    const hasViewPhrase = VIEW_PHRASES.some((p) => text.includes(p));
+    const hasOpHere = tokensHere.some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
+    const qtyProductRe = /\b(\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\s+[a-z]/;
+    const hasQtyProduct = qtyProductRe.test(text);
+
+    if ((hasViewToken || hasViewPhrase) && !hasOpHere && !hasQtyProduct) {
+      return { kind: "VIEW_NOMESA" };
+    }
+
+    // ADD_NOMESA / REMOVE_NOMESA: começa com operador, seguido de [qty] <produto>
+    const fNo = text.match(new RegExp(`^(${opAlt})\\s+(.+)$`));
+    if (fNo) {
+      const op = fNo[1];
+      const kind = ADD_OPS.includes(op) ? "ADD_NOMESA" : "REMOVE_NOMESA";
+      const parsed = extractQtyProduct(fNo[2]);
+      if (parsed) return { kind, qty: parsed.qty, productText: parsed.productText };
+    }
+  }
+
   return { kind: "PARSE_ERROR", raw };
+}
+
+// ─────────────────────────── modo turbo: resolver contexto ───────────────────────────
+
+function resolveWithContext(cmd: Command, chatId: number): Command {
+  if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA") {
+    const table = getLastTable(chatId);
+    const originalKind = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
+    if (!table) return { kind: "NEEDS_TABLE", originalKind };
+    return { kind: originalKind, table, qty: cmd.qty, productText: cmd.productText, fromContext: true };
+  }
+  if (cmd.kind === "VIEW_NOMESA") {
+    const table = getLastTable(chatId);
+    if (!table) return { kind: "NEEDS_TABLE", originalKind: "VIEW" };
+    return { kind: "VIEW", table, fromContext: true };
+  }
+  return cmd;
 }
 
 // ─────────────────────────── domain ───────────────────────────
@@ -760,54 +847,90 @@ const HELP_TEXT =
   `  • remove 1 tulipa mesa 3\n\n` +
   `📌 Consultar:\n` +
   `  • mesa 4 ver pedido\n\n` +
+  `💨 Atalhos (até 15 min após usar uma mesa):\n` +
+  `  • mais um boi\n` +
+  `  • + 1 coca 350\n` +
+  `  • tira uma agua\n` +
+  `  • ver pedido / total / consultar\n\n` +
   `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
   `Em caso de dúvida no produto, o bot pede para especificar.\n\n` +
   `🔍 Modo preview:\n` +
   `Comece a mensagem com "preview" para ver como cada linha seria interpretada SEM executar.\n` +
   `Ex:\n  preview\n  mesa 1 + 2 coca 350\n  tira 1 agua da mesa 1`;
 
+const NEEDS_TABLE_TEXT =
+  `⚠️ Não sei qual mesa usar. Envie no formato completo, ex: \`mesa 1 + 1 coca 350\` ` +
+  `(ou use uma mesa nos últimos 15 min).`;
+
 // ─────────────────────────── preview (dry-run) ───────────────────────────
 
-async function previewCommand(cmd: Command): Promise<string> {
+async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   if (cmd.kind === "HELP") return `ℹ️ (preview) Mostraria a ajuda.`;
   if (cmd.kind === "PARSE_ERROR") {
     return `❓ (preview) Não interpretaria: "${cmd.raw}" — faltou mesa, ação ou produto.`;
   }
-  if (cmd.kind === "VIEW") {
-    return `📋 (preview) Mostraria o pedido da mesa ${cmd.table}.`;
+
+  // Resolver contexto para *_NOMESA antes de exibir.
+  let ctxNote = "";
+  let working: Command = cmd;
+  if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
+    const ctxTable = getLastTable(chatId);
+    if (!ctxTable) {
+      return `⚠️ (preview) Nenhuma mesa em contexto. Envie a mesa explícita.`;
+    }
+    ctxNote = ` (mesa ${ctxTable} do contexto)`;
+    if (cmd.kind === "VIEW_NOMESA") {
+      working = { kind: "VIEW", table: ctxTable, fromContext: true };
+    } else {
+      const k = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
+      working = { kind: k, table: ctxTable, qty: cmd.qty, productText: cmd.productText, fromContext: true };
+    }
+  }
+  if (working.kind === "NEEDS_TABLE") {
+    return `⚠️ (preview) Nenhuma mesa em contexto. Envie a mesa explícita.`;
+  }
+  if (working.kind === "VIEW") {
+    return `📋 (preview${ctxNote}) Mostraria o pedido da mesa ${working.table}.`;
+  }
+  if (working.kind !== "ADD" && working.kind !== "REMOVE") {
+    return `❓ (preview) Comando não suportado.`;
   }
 
   // ADD/REMOVE — resolve produto sem executar mutação
-  const resolution = await resolveProduct(cmd.productText);
-  const op = cmd.kind === "ADD" ? "+" : "-";
-  const verbo = cmd.kind === "ADD" ? "Adicionaria" : "Removeria";
+  const resolution = await resolveProduct(working.productText);
+  const op = working.kind === "ADD" ? "+" : "-";
+  const verbo = working.kind === "ADD" ? "Adicionaria" : "Removeria";
 
   switch (resolution.kind) {
     case "not_found": {
-      const sugg = await suggestProducts(cmd.productText);
+      const sugg = await suggestProducts(working.productText);
       const tail = sugg.length > 0 ? ` Sugestões: ${sugg.join(", ")}.` : "";
-      return `❓ (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → produto não encontrado.${tail}`;
+      return `❓ (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → produto não encontrado.${tail}`;
     }
     case "ambiguous": {
       const list = resolution.candidates.map((p) => p.name).join(" | ");
-      return `🤔 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → ambíguo: ${list}.`;
+      return `🤔 (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → ambíguo: ${list}.`;
     }
     case "is_group_trigger": {
       const variants = resolution.variants.join(" | ");
-      return `📦 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → grupo "${resolution.group.name}" com variantes: ${variants}.`;
+      return `📦 (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → grupo "${resolution.group.name}" com variantes: ${variants}.`;
     }
     case "out_of_stock":
-      return `❌ (preview) Mesa ${cmd.table} ${op}${cmd.qty} ${resolution.product.name} → esgotado.`;
+      return `❌ (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} ${resolution.product.name} → esgotado.`;
     case "no_linked_product":
-      return `⚠️ (preview) "${resolution.itemName}" sem produto vinculado.`;
+      return `⚠️ (preview${ctxNote}) "${resolution.itemName}" sem produto vinculado.`;
     case "found":
-      return `✅ (preview) ${verbo} na Mesa ${cmd.table}: ${op}${cmd.qty} ${resolution.product.name} (${fmtBRL(resolution.product.price)}).`;
+      return `✅ (preview${ctxNote}) ${verbo} na Mesa ${working.table}: ${op}${working.qty} ${resolution.product.name} (${fmtBRL(resolution.product.price)}).`;
   }
 }
 
 // ─────────────────────────── handler ───────────────────────────
 
-type HandlerReply = { text: string; keyboard?: InlineButton[][] };
+type HandlerReply = { text: string; keyboard?: InlineButton[][]; successTable?: string };
+
+function ctxPrefix(cmd: { fromContext?: boolean; table?: string }): string {
+  return cmd.fromContext && cmd.table ? `📍 (mesa ${cmd.table}, contexto)\n` : "";
+}
 
 async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
   if (cmd.kind === "HELP") return { text: HELP_TEXT };
@@ -821,9 +944,20 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
         `Envie "ajuda" para ver todos os formatos.`,
     };
   }
-  if (cmd.kind === "VIEW") return { text: await executeView(cmd.table) };
+  if (cmd.kind === "NEEDS_TABLE") {
+    return { text: NEEDS_TABLE_TEXT };
+  }
+  if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
+    // Não deveria chegar aqui (resolveWithContext converte antes), defensivo:
+    return { text: NEEDS_TABLE_TEXT };
+  }
+  if (cmd.kind === "VIEW") {
+    const text = await executeView(cmd.table);
+    return { text: ctxPrefix(cmd) + text, successTable: cmd.table };
+  }
 
   // ADD/REMOVE
+  const prefix = ctxPrefix(cmd);
   const resolution = await resolveProduct(cmd.productText);
   switch (resolution.kind) {
     case "not_found": {
@@ -831,10 +965,9 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       const tail = sugg.length > 0
         ? `Talvez quis dizer: ${sugg.join(", ")}?\nRepita com o nome exato.`
         : `Verifique o nome no cardápio e tente de novo.`;
-      return { text: `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}` };
+      return { text: prefix + `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}` };
     }
     case "ambiguous": {
-      // Tenta auto-pick determinístico antes de mostrar botões
       const picked = autoPickFromCandidates(cmd.productText, resolution.candidates);
       if (picked) {
         return await runExecute(cmd, picked, waiter);
@@ -842,13 +975,12 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, resolution.candidates);
       const op = cmd.kind === "ADD" ? "+" : "-";
       return {
-        text: `🤔 Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" — escolha a opção:`,
+        text: prefix + `🤔 Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" — escolha a opção:`,
         keyboard,
       };
     }
     case "is_group_trigger": {
       const variantProducts = await fetchProductsByNames(resolution.variants);
-      // Auto-pick determinístico
       const picked = autoPickFromCandidates(cmd.productText, variantProducts);
       if (picked) {
         return await runExecute(cmd, picked, waiter);
@@ -856,7 +988,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       if (variantProducts.length === 0) {
         const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
         return {
-          text:
+          text: prefix +
             `📦 "${resolution.group.name}" tem variantes:\n${variants}\n\n` +
             `Reenvie escolhendo uma das opções acima.`,
         };
@@ -864,17 +996,17 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, variantProducts);
       const op = cmd.kind === "ADD" ? "+" : "-";
       return {
-        text: `📦 Mesa ${cmd.table} ${op}${cmd.qty} "${resolution.group.name}" — escolha a variante:`,
+        text: prefix + `📦 Mesa ${cmd.table} ${op}${cmd.qty} "${resolution.group.name}" — escolha a variante:`,
         keyboard,
       };
     }
     case "out_of_stock":
       return {
-        text: `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`,
+        text: prefix + `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`,
       };
     case "no_linked_product":
       return {
-        text: `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
+        text: prefix + `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
       };
     case "found":
       return await runExecute(cmd, resolution.product, waiter);
@@ -886,18 +1018,19 @@ async function runExecute(
   product: Product,
   waiter: string,
 ): Promise<HandlerReply> {
+  const prefix = ctxPrefix(cmd);
   try {
     const text = cmd.kind === "ADD"
       ? await executeAdd(cmd.table, product, cmd.qty, waiter)
       : await executeRemove(cmd.table, product, cmd.qty, waiter);
-    return { text };
+    return { text: prefix + text, successTable: cmd.table };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes("version_conflict")) {
-      return { text: `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.` };
+      return { text: prefix + `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.` };
     }
     console.error("execute error:", e);
-    return { text: `❌ Erro ao processar: ${msg}` };
+    return { text: prefix + `❌ Erro ao processar: ${msg}` };
   }
 }
 
@@ -974,16 +1107,19 @@ async function handleCallbackQuery(cb: any): Promise<void> {
   await answerCallback(cbId);
 
   let resultText: string;
+  let success = false;
   try {
     resultText = op === "a"
       ? await executeAdd(table, prod as Product, qty, waiter)
       : await executeRemove(table, prod as Product, qty, waiter);
+    success = true;
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     resultText = msg.includes("version_conflict")
       ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
       : `❌ Erro ao processar: ${msg}`;
   }
+  if (success) setLastTable(chatId, table);
   await editTelegramMessage(chatId, messageId, resultText);
 }
 
@@ -1061,12 +1197,12 @@ Deno.serve(async (req) => {
     }
 
     if (isPreview) {
-      // Preview nunca emite botões — texto consolidado
+      // Preview nunca emite botões — texto consolidado. Usa contexto mas NÃO grava.
       const results: string[] = [];
       for (const line of lines) {
         try {
           const cmd = parseCommand(line);
-          results.push(await previewCommand(cmd));
+          results.push(await previewCommand(cmd, chatId));
         } catch (e) {
           console.error("preview line error:", line, e);
           results.push(`❌ "${line}": erro inesperado`);
@@ -1081,16 +1217,19 @@ Deno.serve(async (req) => {
     }
 
     if (lines.length <= 1) {
-      const cmd = parseCommand(lines[0] ?? text);
+      const parsed = parseCommand(lines[0] ?? text);
+      const cmd = resolveWithContext(parsed, chatId);
       const reply = await handleCommand(cmd, waiter);
       await sendTelegram(chatId, reply.text, reply.keyboard);
+      if (reply.successTable) setLastTable(chatId, reply.successTable);
     } else {
       // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
       const textResults: string[] = [];
       const pendingChoices: HandlerReply[] = [];
       for (const line of lines) {
         try {
-          const cmd = parseCommand(line);
+          const parsed = parseCommand(line);
+          const cmd = resolveWithContext(parsed, chatId);
           const reply = await handleCommand(cmd, waiter);
           if (reply.keyboard && reply.keyboard.length > 0) {
             pendingChoices.push(reply);
@@ -1098,6 +1237,8 @@ Deno.serve(async (req) => {
           } else {
             textResults.push(reply.text);
           }
+          // Atualiza contexto entre linhas para que a próxima linha possa usar mesa implícita
+          if (reply.successTable) setLastTable(chatId, reply.successTable);
         } catch (e) {
           console.error("line error:", line, e);
           textResults.push(`❌ "${line}": erro inesperado`);
