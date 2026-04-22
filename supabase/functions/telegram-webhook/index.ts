@@ -957,6 +957,15 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
 
 type HandlerReply = { text: string; keyboard?: InlineButton[][]; successTable?: string };
 
+function isViewSuccess(text: string): boolean {
+  return !text.startsWith("⚠️ Mesa ") || !text.includes("não tem pedido aberto");
+}
+
+function isMutationSuccess(kind: "ADD" | "REMOVE", text: string): boolean {
+  if (kind === "ADD") return text.startsWith("✅ Mesa ");
+  return text.startsWith("➖ Mesa ") || text.startsWith("⚠️ Removidos ");
+}
+
 function ctxPrefix(cmd: { fromContext?: boolean; table?: string }): string {
   return cmd.fromContext && cmd.table ? `📍 (mesa ${cmd.table}, contexto)\n` : "";
 }
@@ -982,7 +991,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   }
   if (cmd.kind === "VIEW") {
     const text = await executeView(cmd.table);
-    return { text: ctxPrefix(cmd) + text, successTable: cmd.table };
+    return { text: ctxPrefix(cmd) + text, successTable: isViewSuccess(text) ? cmd.table : undefined };
   }
 
   // ADD/REMOVE
@@ -1052,7 +1061,7 @@ async function runExecute(
     const text = cmd.kind === "ADD"
       ? await executeAdd(cmd.table, product, cmd.qty, waiter)
       : await executeRemove(cmd.table, product, cmd.qty, waiter);
-    return { text: prefix + text, successTable: cmd.table };
+    return { text: prefix + text, successTable: isMutationSuccess(cmd.kind, text) ? cmd.table : undefined };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes("version_conflict")) {
@@ -1141,7 +1150,9 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     resultText = op === "a"
       ? await executeAdd(table, prod as Product, qty, waiter)
       : await executeRemove(table, prod as Product, qty, waiter);
-    success = true;
+    success = op === "a"
+      ? isMutationSuccess("ADD", resultText)
+      : isMutationSuccess("REMOVE", resultText);
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     resultText = msg.includes("version_conflict")
