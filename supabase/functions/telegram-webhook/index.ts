@@ -475,7 +475,7 @@ const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
 const TEST_MODE = (Deno.env.get("TEST_MODE") ?? "").toLowerCase() === "true";
 const TEST_CHAT_ID_RAW = Deno.env.get("TEST_CHAT_ID");
 const TEST_CHAT_ID = TEST_CHAT_ID_RAW ? Number(TEST_CHAT_ID_RAW) : null;
-const TEST_TABLE_PREFIX = "T-";
+const TEST_TABLE_PREFIX = "999"; // mesas 9990-9999 reservadas para testes
 
 type CapturedMessage = { chatId: number; text: string; keyboard?: InlineButton[][]; kind: "send" | "edit" | "answer"; messageId?: number };
 let testCaptureBuffer: CapturedMessage[] = [];
@@ -509,7 +509,7 @@ async function cleanupTestData(): Promise<{ orders_deleted: number; items_delete
   const { data: testOrders } = await sb
     .from("orders")
     .select("id")
-    .or(`table_name.ilike.${TEST_TABLE_PREFIX}%,original_table_name.ilike.${TEST_TABLE_PREFIX}%`);
+    .or(`table_name.like.${TEST_TABLE_PREFIX}_,original_table_name.like.${TEST_TABLE_PREFIX}_`);
   const ids = (testOrders ?? []).map((o: any) => o.id);
   let itemsDeleted = 0;
   if (ids.length > 0) {
@@ -1672,6 +1672,19 @@ async function handleCallbackQuery(cb: any): Promise<void> {
   }
 }
 
+function testOrPlain(): Response {
+  if (currentChatIsTest) {
+    const captured = drainTestBuffer();
+    clearTestContext();
+    return new Response(JSON.stringify({ ok: true, captured }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  clearTestContext();
+  return testOrPlain();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -1699,7 +1712,7 @@ Deno.serve(async (req) => {
 
   if (!TOKEN) {
     console.error("TELEGRAM_BOT_TOKEN not configured");
-    return new Response("ok", { status: 200, headers: corsHeaders });
+    return testOrPlain();
   }
 
   try {
@@ -1712,10 +1725,19 @@ Deno.serve(async (req) => {
       setTestContext(cbChatId);
       try {
         await handleCallbackQuery(update.callback_query);
-      } finally {
-        clearTestContext();
+      } catch (e) {
+        console.error("callback erro:", e);
       }
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      if (currentChatIsTest) {
+        const captured = drainTestBuffer();
+        clearTestContext();
+        return new Response(JSON.stringify({ ok: true, captured }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      clearTestContext();
+      return testOrPlain();
     }
 
     const message = update?.message ?? update?.edited_message;
@@ -1728,12 +1750,11 @@ Deno.serve(async (req) => {
     const updateId: number | undefined = update?.update_id;
 
     if (fromBot || !chatId || !text) {
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      return testOrPlain();
     }
     setTestContext(chatId);
     if (typeof updateId === "number" && isDuplicate(updateId)) {
-      clearTestContext();
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      return testOrPlain();
     }
 
     // Whitelist
@@ -1744,7 +1765,7 @@ Deno.serve(async (req) => {
         chatId,
         `🚫 Chat não autorizado.\nID deste chat: ${chatId}\n\nPeça ao admin para liberar em settings.telegram_allowed_chats.`,
       );
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      return testOrPlain();
     }
 
     // Rate limit (best-effort, in-memory). Não bloqueia callbacks.
@@ -1752,7 +1773,7 @@ Deno.serve(async (req) => {
       if (shouldSendRateWarning(chatId)) {
         await sendTelegram(chatId, `⚠️ Muitas ações seguidas. Aguarde alguns segundos.`);
       }
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      return testOrPlain();
     }
 
     const waiter = username ? `Telegram (@${username})` : "Telegram";
@@ -1775,7 +1796,7 @@ Deno.serve(async (req) => {
         chatId,
         `🔍 Modo preview ativo, mas nenhum comando informado.\nEnvie:\n  preview\n  mesa 1 + 1 coca 350`,
       );
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      return testOrPlain();
     }
 
     if (lines.length > 10) {
@@ -1783,7 +1804,7 @@ Deno.serve(async (req) => {
         chatId,
         `⚠️ Máx. 10 comandos por mensagem. Você enviou ${lines.length}. Divida em mensagens menores.`,
       );
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      return testOrPlain();
     }
 
     if (isPreview) {
@@ -1803,7 +1824,7 @@ Deno.serve(async (req) => {
           ? `🔍 Preview (nada foi executado):\n`
           : `🔍 Preview de ${lines.length} comandos (nada foi executado):\n`;
       await sendTelegram(chatId, header + "\n" + results.join("\n\n"));
-      return new Response("ok", { status: 200, headers: corsHeaders });
+      return testOrPlain();
     }
 
     if (lines.length <= 1) {
@@ -1958,9 +1979,7 @@ Deno.serve(async (req) => {
     }
   } catch (err) {
     console.error("Erro processando update:", err);
-  } finally {
-    clearTestContext();
   }
 
-  return new Response("ok", { status: 200, headers: corsHeaders });
+  return testOrPlain();
 });
