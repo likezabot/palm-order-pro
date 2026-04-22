@@ -249,14 +249,14 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
 
         {/* Search field */}
         <div className="relative mb-1.5 group">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 group-focus-within:text-primary transition-colors" />
           <input
             type="text"
             inputMode="search"
             placeholder="Buscar item no cardápio..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-card pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground shadow-soft focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all"
+            className="w-full rounded-2xl border border-border/50 bg-card/60 pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
           />
           {search && (
             <button
