@@ -225,7 +225,50 @@ function parseCommand(raw: string): Command {
     return { kind, table, ...parsed };
   }
 
+  // ─── Fallback NOMESA (modo turbo): linha sem "mesa N", mas com operador ou gatilho VIEW ───
+  const hasTableHere = /\bmesa\s+\d+\b/.test(text);
+  if (!hasTableHere) {
+    const tokensHere = text.split(/\s+/);
+
+    // VIEW_NOMESA: gatilho de consulta sem operador e sem qty+produto
+    const hasViewToken = tokensHere.some((t) => VIEW_TOKENS.includes(t));
+    const hasViewPhrase = VIEW_PHRASES.some((p) => text.includes(p));
+    const hasOpHere = tokensHere.some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
+    const qtyProductRe = /\b(\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\s+[a-z]/;
+    const hasQtyProduct = qtyProductRe.test(text);
+
+    if ((hasViewToken || hasViewPhrase) && !hasOpHere && !hasQtyProduct) {
+      return { kind: "VIEW_NOMESA" };
+    }
+
+    // ADD_NOMESA / REMOVE_NOMESA: começa com operador, seguido de [qty] <produto>
+    const fNo = text.match(new RegExp(`^(${opAlt})\\s+(.+)$`));
+    if (fNo) {
+      const op = fNo[1];
+      const kind = ADD_OPS.includes(op) ? "ADD_NOMESA" : "REMOVE_NOMESA";
+      const parsed = extractQtyProduct(fNo[2]);
+      if (parsed) return { kind, qty: parsed.qty, productText: parsed.productText };
+    }
+  }
+
   return { kind: "PARSE_ERROR", raw };
+}
+
+// ─────────────────────────── modo turbo: resolver contexto ───────────────────────────
+
+function resolveWithContext(cmd: Command, chatId: number): Command {
+  if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA") {
+    const table = getLastTable(chatId);
+    const originalKind = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
+    if (!table) return { kind: "NEEDS_TABLE", originalKind };
+    return { kind: originalKind, table, qty: cmd.qty, productText: cmd.productText, fromContext: true };
+  }
+  if (cmd.kind === "VIEW_NOMESA") {
+    const table = getLastTable(chatId);
+    if (!table) return { kind: "NEEDS_TABLE", originalKind: "VIEW" };
+    return { kind: "VIEW", table, fromContext: true };
+  }
+  return cmd;
 }
 
 // ─────────────────────────── domain ───────────────────────────
