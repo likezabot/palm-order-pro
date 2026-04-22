@@ -1730,7 +1730,9 @@ Deno.serve(async (req) => {
     if (fromBot || !chatId || !text) {
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
+    setTestContext(chatId);
     if (typeof updateId === "number" && isDuplicate(updateId)) {
+      clearTestContext();
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
