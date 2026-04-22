@@ -283,6 +283,16 @@ function parseCommand(raw: string): Command {
   const undoMatch = text.match(/^(?:undo|desfazer)(?:\s+(tudo|todos|todas|all))?$/);
   if (undoMatch) return { kind: "UNDO", all: !!undoMatch[1] };
 
+  // RELATÓRIO: "relatorio", "relatório", "ranking", "fechamento"
+  if (/^(?:relatorio|relatório|ranking|fechamento)$/.test(text)) return { kind: "REPORT" };
+
+  // ESTOQUE CRÍTICO
+  if (/^(?:estoque\s+critico|estoque\s+crítico|estoque\s+baixo|criticos|críticos)$/.test(text)) return { kind: "STOCK_CRITICAL" };
+
+  // NOTIFICAÇÕES on/off
+  const notifM = text.match(/^(?:notificacoes|notificações|notif)\s+(on|off|ligar|desligar)$/);
+  if (notifM) return { kind: "NOTIFY_TOGGLE", on: notifM[1] === "on" || notifM[1] === "ligar" };
+
   // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
   const setT = text.match(/^mesa\s+(\d+)$/);
   if (setT) return { kind: "SET_TABLE", table: setT[1] };
