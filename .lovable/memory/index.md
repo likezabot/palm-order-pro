@@ -15,3 +15,4 @@ Bot do Telegram edita pedidos por texto, não mexe em estoque, exige whitelist e
 - [Menu data](mem://features/menu) — Full cardápio: Refeições, Espetos, Bebidas, Cervejas with prices
 - [System modules](mem://features/modules) — 5 modules: Home, Palm (waiter), Kitchen (kanban), Cashier, Admin
 - [Telegram bot](mem://features/telegram-bot) — Edge function telegram-webhook: comandos de texto, whitelist, sem estoque
+- [Telegram notifications](mem://features/telegram-notifications) — Feed operacional no grupo: pedidos/pagamentos/estoque crítico + relatório diário 00:00 BRT
