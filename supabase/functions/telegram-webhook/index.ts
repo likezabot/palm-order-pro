@@ -221,6 +221,7 @@ type Command =
   | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
   | { kind: "VIEW_NOMESA" }
   | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
+  | { kind: "UNDO"; all: boolean }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
