@@ -579,17 +579,146 @@ async function executeView(table: string): Promise<string> {
 
 // ─────────────────────────── telegram ───────────────────────────
 
-async function sendTelegram(chatId: number, text: string) {
+type InlineButton = { text: string; callback_data: string };
+
+async function sendTelegram(chatId: number, text: string, keyboard?: InlineButton[][]) {
   try {
+    const body: any = { chat_id: chatId, text };
+    if (keyboard && keyboard.length > 0) {
+      body.reply_markup = { inline_keyboard: keyboard };
+    }
     const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) console.error("sendMessage falhou:", res.status, await res.text());
   } catch (e) {
     console.error("sendTelegram erro:", e);
   }
+}
+
+async function answerCallback(callbackId: string, text?: string) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackId, text: text ?? "" }),
+    });
+  } catch (e) {
+    console.error("answerCallback erro:", e);
+  }
+}
+
+async function editTelegramMessage(chatId: number, messageId: number, text: string) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        reply_markup: { inline_keyboard: [] },
+      }),
+    });
+  } catch (e) {
+    console.error("editTelegramMessage erro:", e);
+  }
+}
+
+// ─────────────────────────── auto-pick determinístico ───────────────────────────
+
+const SIZE_TOKENS = ["350", "473", "269", "600", "1l", "2l", "1.5l", "473ml", "600ml", "350ml"];
+const MOD_TOKENS = ["zero", "diet", "light", "lata", "long", "longneck", "gelada"];
+
+function tokensFromText(text: string): string[] {
+  const norm = singularize(normalize(text));
+  return norm.split(/\s+/).filter(Boolean);
+}
+
+function scoreCandidate(userTokens: string[], candidateName: string): number {
+  const cand = normalize(candidateName);
+  const candTokens = cand.split(/\s+/);
+  let score = 0;
+
+  // Tamanho mencionado pelo usuário precisa estar no candidato
+  const userSizes = userTokens.filter((t) => SIZE_TOKENS.includes(t));
+  for (const sz of userSizes) {
+    if (cand.includes(sz)) score += 10;
+    else score -= 10;
+  }
+
+  // Modificadores
+  const userMods = userTokens.filter((t) => MOD_TOKENS.includes(t));
+  const candHasZero = /\bzero\b/.test(cand);
+  const candHasDiet = /\bdiet\b/.test(cand);
+  const candHasLight = /\blight\b/.test(cand);
+
+  for (const m of userMods) {
+    if (candTokens.includes(m)) score += 5;
+    else score -= 5;
+  }
+  if (!userMods.includes("zero") && candHasZero) score -= 5;
+  if (!userMods.includes("diet") && candHasDiet) score -= 5;
+  if (!userMods.includes("light") && candHasLight) score -= 5;
+
+  // Bônus por tokens livres ≥3 letras que casam
+  const free = userTokens.filter(
+    (t) => t.length >= 3 && !SIZE_TOKENS.includes(t) && !MOD_TOKENS.includes(t),
+  );
+  for (const t of free) {
+    if (cand.includes(t)) score += 1;
+  }
+
+  return score;
+}
+
+function autoPickFromCandidates<T extends { name: string }>(
+  productText: string,
+  candidates: T[],
+): T | null {
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  const tokens = tokensFromText(productText);
+  if (tokens.length === 0) return null;
+
+  const scored = candidates
+    .map((c) => ({ cand: c, score: scoreCandidate(tokens, c.name) }))
+    .sort((a, b) => b.score - a.score);
+
+  if (scored[0].score <= 0) return null;
+  if (scored[0].score - scored[1].score < 5) return null;
+  return scored[0].cand;
+}
+
+async function fetchProductsByNames(names: string[]): Promise<Product[]> {
+  if (names.length === 0) return [];
+  const { data } = await sb
+    .from("products")
+    .select("id, name, price, active, category")
+    .eq("active", true);
+  const all = (data ?? []) as Product[];
+  const set = new Set(names.map((n) => normalize(n)));
+  return all.filter((p) => set.has(normalize(p.name)));
+}
+
+// callback_data: "a|<table>|<product_id>|<qty>" | "r|..." | "x"
+function buildChoiceKeyboard(
+  kind: "ADD" | "REMOVE",
+  table: string,
+  qty: number,
+  candidates: Product[],
+): InlineButton[][] {
+  const op = kind === "ADD" ? "a" : "r";
+  const rows: InlineButton[][] = candidates.slice(0, 8).map((p) => [
+    {
+      text: `${qty}× ${p.name} — ${fmtBRL(p.price * qty)}`,
+      callback_data: `${op}|${table}|${p.id}|${qty}`,
+    },
+  ]);
+  rows.push([{ text: "❌ Cancelar", callback_data: "x" }]);
+  return rows;
 }
 
 const HELP_TEXT =
@@ -652,18 +781,21 @@ async function previewCommand(cmd: Command): Promise<string> {
 
 // ─────────────────────────── handler ───────────────────────────
 
-async function handleCommand(cmd: Command, waiter: string): Promise<string> {
-  if (cmd.kind === "HELP") return HELP_TEXT;
+type HandlerReply = { text: string; keyboard?: InlineButton[][] };
+
+async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
+  if (cmd.kind === "HELP") return { text: HELP_TEXT };
   if (cmd.kind === "PARSE_ERROR") {
-    return (
-      `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
-      `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
-      `  • mesa 3 + 2 coca 350\n` +
-      `  • tira 1 agua da mesa 1\n\n` +
-      `Envie "ajuda" para ver todos os formatos.`
-    );
+    return {
+      text:
+        `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
+        `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
+        `  • mesa 3 + 2 coca 350\n` +
+        `  • tira 1 agua da mesa 1\n\n` +
+        `Envie "ajuda" para ver todos os formatos.`,
+    };
   }
-  if (cmd.kind === "VIEW") return await executeView(cmd.table);
+  if (cmd.kind === "VIEW") return { text: await executeView(cmd.table) };
 
   // ADD/REMOVE
   const resolution = await resolveProduct(cmd.productText);
@@ -673,45 +805,160 @@ async function handleCommand(cmd: Command, waiter: string): Promise<string> {
       const tail = sugg.length > 0
         ? `Talvez quis dizer: ${sugg.join(", ")}?\nRepita com o nome exato.`
         : `Verifique o nome no cardápio e tente de novo.`;
-      return `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}`;
+      return { text: `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}` };
     }
     case "ambiguous": {
-      const list = resolution.candidates
-        .map((p, i) => `  ${i + 1}) ${p.name}`)
-        .join("\n");
-      return (
-        `🤔 Encontrei várias opções para "${cmd.productText}":\n${list}\n\n` +
-        `Especifique o tamanho/variante e reenvie.`
-      );
+      // Tenta auto-pick determinístico antes de mostrar botões
+      const picked = autoPickFromCandidates(cmd.productText, resolution.candidates);
+      if (picked) {
+        return await runExecute(cmd, picked, waiter);
+      }
+      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, resolution.candidates);
+      const op = cmd.kind === "ADD" ? "+" : "-";
+      return {
+        text: `🤔 Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" — escolha a opção:`,
+        keyboard,
+      };
     }
     case "is_group_trigger": {
-      const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
-      return (
-        `📦 "${resolution.group.name}" tem variantes:\n${variants}\n\n` +
-        `Reenvie escolhendo uma das opções acima.`
-      );
+      const variantProducts = await fetchProductsByNames(resolution.variants);
+      // Auto-pick determinístico
+      const picked = autoPickFromCandidates(cmd.productText, variantProducts);
+      if (picked) {
+        return await runExecute(cmd, picked, waiter);
+      }
+      if (variantProducts.length === 0) {
+        const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
+        return {
+          text:
+            `📦 "${resolution.group.name}" tem variantes:\n${variants}\n\n` +
+            `Reenvie escolhendo uma das opções acima.`,
+        };
+      }
+      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, variantProducts);
+      const op = cmd.kind === "ADD" ? "+" : "-";
+      return {
+        text: `📦 Mesa ${cmd.table} ${op}${cmd.qty} "${resolution.group.name}" — escolha a variante:`,
+        keyboard,
+      };
     }
     case "out_of_stock":
-      return `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`;
+      return {
+        text: `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`,
+      };
     case "no_linked_product":
-      return `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`;
-    case "found": {
-      try {
-        if (cmd.kind === "ADD") {
-          return await executeAdd(cmd.table, resolution.product, cmd.qty, waiter);
-        } else {
-          return await executeRemove(cmd.table, resolution.product, cmd.qty, waiter);
-        }
-      } catch (e: any) {
-        const msg = String(e?.message ?? e);
-        if (msg.includes("version_conflict")) {
-          return `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.`;
-        }
-        console.error("execute error:", e);
-        return `❌ Erro ao processar: ${msg}`;
-      }
-    }
+      return {
+        text: `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
+      };
+    case "found":
+      return await runExecute(cmd, resolution.product, waiter);
   }
+}
+
+async function runExecute(
+  cmd: Extract<Command, { kind: "ADD" | "REMOVE" }>,
+  product: Product,
+  waiter: string,
+): Promise<HandlerReply> {
+  try {
+    const text = cmd.kind === "ADD"
+      ? await executeAdd(cmd.table, product, cmd.qty, waiter)
+      : await executeRemove(cmd.table, product, cmd.qty, waiter);
+    return { text };
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    if (msg.includes("version_conflict")) {
+      return { text: `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.` };
+    }
+    console.error("execute error:", e);
+    return { text: `❌ Erro ao processar: ${msg}` };
+  }
+}
+
+// Dedupe de callbacks pra evitar duplo-clique
+const seenCallbacks = new Map<string, number>();
+function isCallbackDuplicate(id: string): boolean {
+  const now = Date.now();
+  for (const [k, t] of seenCallbacks) if (now - t > 5 * 60_000) seenCallbacks.delete(k);
+  if (seenCallbacks.has(id)) return true;
+  seenCallbacks.set(id, now);
+  return false;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function handleCallbackQuery(cb: any): Promise<void> {
+  const cbId: string = cb.id;
+  const chatId: number | undefined = cb.message?.chat?.id;
+  const messageId: number | undefined = cb.message?.message_id;
+  const data: string | undefined = cb.data;
+  const username: string | undefined = cb.from?.username;
+  if (!chatId || !messageId || !data) {
+    await answerCallback(cbId);
+    return;
+  }
+  if (isCallbackDuplicate(cbId)) {
+    await answerCallback(cbId);
+    return;
+  }
+
+  // Whitelist
+  const allowed = await getAllowedChats();
+  if (!allowed || !allowed.has(chatId)) {
+    await answerCallback(cbId, "Chat não autorizado");
+    return;
+  }
+
+  if (data === "x") {
+    await answerCallback(cbId, "Cancelado");
+    await editTelegramMessage(chatId, messageId, "❌ Cancelado.");
+    return;
+  }
+
+  const parts = data.split("|");
+  if (parts.length !== 4 || (parts[0] !== "a" && parts[0] !== "r")) {
+    await answerCallback(cbId, "Comando inválido");
+    return;
+  }
+  const [op, table, productId, qtyStr] = parts;
+  const qty = parseInt(qtyStr, 10);
+  if (!UUID_RE.test(productId) || !Number.isFinite(qty) || qty < 1 || qty > 99 || !table) {
+    await answerCallback(cbId, "Dados inválidos");
+    return;
+  }
+
+  // Busca produto pelo id
+  const { data: prod } = await sb
+    .from("products")
+    .select("id, name, price, active, category")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!prod) {
+    await answerCallback(cbId, "Produto não encontrado");
+    await editTelegramMessage(chatId, messageId, "❌ Produto não encontrado.");
+    return;
+  }
+  if (!prod.active) {
+    await answerCallback(cbId, "Esgotado");
+    await editTelegramMessage(chatId, messageId, `❌ ${prod.name} está esgotado.`);
+    return;
+  }
+
+  const waiter = username ? `Telegram (@${username}) [botão]` : "Telegram [botão]";
+  await answerCallback(cbId);
+
+  let resultText: string;
+  try {
+    resultText = op === "a"
+      ? await executeAdd(table, prod as Product, qty, waiter)
+      : await executeRemove(table, prod as Product, qty, waiter);
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    resultText = msg.includes("version_conflict")
+      ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
+      : `❌ Erro ao processar: ${msg}`;
+  }
+  await editTelegramMessage(chatId, messageId, resultText);
 }
 
 Deno.serve(async (req) => {
@@ -724,6 +971,12 @@ Deno.serve(async (req) => {
   try {
     const update = await req.json();
     console.log("Update:", JSON.stringify(update));
+
+    // Callback de botão inline
+    if (update?.callback_query) {
+      await handleCallbackQuery(update.callback_query);
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
 
     const message = update?.message ?? update?.edited_message;
     const chatId: number | undefined = message?.chat?.id;
@@ -752,13 +1005,12 @@ Deno.serve(async (req) => {
 
     const waiter = username ? `Telegram (@${username})` : "Telegram";
 
-    // Detecta modo preview: primeira linha (ou primeira palavra) = "preview"
+    // Detecta modo preview
     let workingText = text;
     let isPreview = false;
     const rawLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (rawLines.length > 0 && /^preview\b/i.test(rawLines[0])) {
       isPreview = true;
-      // Remove o token "preview" da primeira linha; se sobrar vazio, descarta a linha
       const firstRest = rawLines[0].replace(/^preview\b[:\s-]*/i, "").trim();
       const remaining = firstRest ? [firstRest, ...rawLines.slice(1)] : rawLines.slice(1);
       workingText = remaining.join("\n");
@@ -774,35 +1026,63 @@ Deno.serve(async (req) => {
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
-    const runner = isPreview
-      ? (cmd: Command, _w: string) => previewCommand(cmd)
-      : handleCommand;
-
-    if (lines.length <= 1) {
-      const cmd = parseCommand(lines[0] ?? text);
-      const reply = await runner(cmd, waiter);
-      await sendTelegram(chatId, isPreview ? `🔍 Preview (nada foi executado):\n\n${reply}` : reply);
-    } else if (lines.length > 10) {
+    if (lines.length > 10) {
       await sendTelegram(
         chatId,
         `⚠️ Máx. 10 comandos por mensagem. Você enviou ${lines.length}. Divida em mensagens menores.`,
       );
-    } else {
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+
+    if (isPreview) {
+      // Preview nunca emite botões — texto consolidado
       const results: string[] = [];
       for (const line of lines) {
         try {
           const cmd = parseCommand(line);
-          const res = await runner(cmd, waiter);
-          results.push(res);
-        } catch (e: any) {
-          console.error("line error:", line, e);
+          results.push(await previewCommand(cmd));
+        } catch (e) {
+          console.error("preview line error:", line, e);
           results.push(`❌ "${line}": erro inesperado`);
         }
       }
-      const header = isPreview
-        ? `🔍 Preview de ${lines.length} comandos (nada foi executado):\n`
-        : `📊 ${lines.length} comandos processados:\n`;
+      const header =
+        lines.length === 1
+          ? `🔍 Preview (nada foi executado):\n`
+          : `🔍 Preview de ${lines.length} comandos (nada foi executado):\n`;
       await sendTelegram(chatId, header + "\n" + results.join("\n\n"));
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+
+    if (lines.length <= 1) {
+      const cmd = parseCommand(lines[0] ?? text);
+      const reply = await handleCommand(cmd, waiter);
+      await sendTelegram(chatId, reply.text, reply.keyboard);
+    } else {
+      // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
+      const textResults: string[] = [];
+      const pendingChoices: HandlerReply[] = [];
+      for (const line of lines) {
+        try {
+          const cmd = parseCommand(line);
+          const reply = await handleCommand(cmd, waiter);
+          if (reply.keyboard && reply.keyboard.length > 0) {
+            pendingChoices.push(reply);
+            textResults.push(`🤔 "${line}" → escolha abaixo.`);
+          } else {
+            textResults.push(reply.text);
+          }
+        } catch (e) {
+          console.error("line error:", line, e);
+          textResults.push(`❌ "${line}": erro inesperado`);
+        }
+      }
+      const header = `📊 ${lines.length} comandos processados:\n`;
+      await sendTelegram(chatId, header + "\n" + textResults.join("\n\n"));
+      // Mensagens separadas com botões
+      for (const choice of pendingChoices) {
+        await sendTelegram(chatId, choice.text, choice.keyboard);
+      }
     }
   } catch (err) {
     console.error("Erro processando update:", err);
