@@ -3008,6 +3008,16 @@ Deno.serve(async (req) => {
       waiter = username ? `Telegram (@${username})` : "Telegram";
     }
 
+    // ─── WIZARD: gatilho explícito (estoque, gerenciar estoque, etc) ───
+    if (wzIsTrigger(trimmed)) {
+      await wzStartMenu(chatId);
+      return testOrPlain();
+    }
+    // ─── WIZARD: input livre (qty digitada, nome de item, etc) ───
+    if (await wzHandleTextInput(chatId, trimmed, waiter)) {
+      return testOrPlain();
+    }
+
     // Detecta modo preview
     let workingText = text;
     let isPreview = false;
