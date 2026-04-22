@@ -1807,6 +1807,7 @@ Deno.serve(async (req) => {
       return testOrPlain();
     }
     setTestContext(chatId);
+    setUndoChatContext(chatId);
     if (typeof updateId === "number" && isDuplicate(updateId)) {
       return testOrPlain();
     }
@@ -1822,13 +1823,9 @@ Deno.serve(async (req) => {
       return testOrPlain();
     }
 
-    // Rate limit (best-effort, in-memory). Não bloqueia callbacks.
-    if (!checkRateLimit(chatId)) {
-      if (shouldSendRateWarning(chatId)) {
-        await sendTelegram(chatId, `⚠️ Muitas ações seguidas. Aguarde alguns segundos.`);
-      }
-      return testOrPlain();
-    }
+    // NOTE: Rate limiting removido. O backend não tem primitivos confiáveis de
+    // rate limit (Edge Functions multi-isolate invalidam contadores in-memory).
+    // Não há proteção real contra flood — a ser tratado em infra dedicada.
 
     const waiter = username ? `Telegram (@${username})` : "Telegram";
 
