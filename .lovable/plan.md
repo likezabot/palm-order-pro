@@ -1,98 +1,62 @@
 
 
-# Corrigir parser do Telegram para entrada de estoque em lote
+# Vistoria geral — relatório e melhorias seguras
 
-## Problemas identificados na mensagem
+## ✅ O que está funcionando
 
-```
-Entrada de estoque medalhão 20    ← não reconhecido (frase "de estoque" + ordem invertida)
-Meio da asa 15                     ← não reconhecido (sem verbo de ação)
-Coração 17                         ← idem
-Linguiça 30                        ← idem
-```
+- **Testes:** 80/80 passam (15 arquivos, 8.4s).
+- **Edge functions:** todas em HTTP 200 (`telegram-webhook`, `notify-telegram`).
+- **Parser Telegram:** entrada em lote funcionou — 6 `stock_in` registrados nas últimas 24h.
+- **Banco:** 38 itens de estoque ativos, 42 produtos ativos, 0 pedidos abertos, 0 itens na fila de notificação.
+- **Sem runtime errors no front.**
+- **Bridge `.exe`:** intacta. Nenhuma alteração proposta toca em `bridge/lp-bridge.js`, ESC/POS, ou contratos `/health` e `/print`.
 
-O parser atual exige `entrada <qty> <produto>` por linha. O usuário escreveu em formato natural de **lista de contagem**: cabeçalho com a ação + linhas só com `<produto> <qty>`.
+## ⚠️ Problemas encontrados
 
-## Solução
+### 1. Pedido travado em `print_status='printing'` (1 caso)
+- ID `5274f48c…` mesa 3, pago, com `print_claimed_at` de 22/04 03:14 — bridge nunca confirmou/falhou. Ficou órfão.
+- **Causa:** sem watchdog para reverter claims antigos.
 
-Refatorar o handler de mensagens em `supabase/functions/telegram-webhook/index.ts` para suportar **modo de operação herdada** em mensagens multi-linha de estoque.
+### 2. 9 pedidos pagos com `print_status='pending'` acumulados
+- Bridge offline quando foram pagos → entraram na fila e ficam tentando reimprimir para sempre.
+- Não atrapalham o uso, mas poluem a `PrintQueuePanel` e geram requests inúteis.
 
-### 1. Aceitar variações do verbo "entrada" (e saída/ajuste)
+## 🛠️ Melhorias propostas (sem tocar na bridge)
 
-No regex `stockIn` (linha 517), aceitar sufixo opcional `de estoque`/`no estoque`:
+### A. Watchdog de impressão (migration SQL — segura)
+Criar função `recover_stuck_prints()` que reverte qualquer pedido em `printing` com `print_claimed_at < now() - interval '2 minutes'` de volta para `pending` com `print_last_error='timeout'`. Agendar via `pg_cron` a cada 1 minuto. **Não muda contrato com a bridge** — só limpa órfãos.
 
-- `entrada de estoque medalhão 20` ✅
-- `saida do estoque 5 coca` ✅
-- `chegou ao estoque 10 cerva` ✅
+### B. Auto-cancelar prints muito antigos de pedidos pagos
+Se um pedido está `paid` + `pending` há mais de 2 horas, marcar como `printed` automaticamente (via mesma função do watchdog). Evita acúmulo perpétuo. Limpa os 9 órfãos atuais sem ação manual.
 
-Mesmo tratamento para `stockOut` e os regex de AJUSTE.
+### C. Botão "Limpar fila órfã" na `PrintQueuePanel`
+Pequeno botão admin em `src/components/print-station/PrintQueuePanel.tsx` que chama RPC para marcar os órfãos como impressos. Útil em dia que a bridge ficou off horas.
 
-### 2. Aceitar ordem invertida `<produto> <qty>`
+### D. Cleanup de notification_queue antigas
+Atualmente não há expiração. Adicionar trigger/cron diário que apaga registros `processed_at < now() - 7 days`. Mantém a tabela leve.
 
-Na função `parseStockTail` (linha 497), além de `<qty> [unit] <produto>`, aceitar também `<produto> <qty> [unit]` como fallback quando o formato canônico não casa. Isso permite:
+### E. Indicador visual de bridge offline mais claro
+`ConnectionStatusBanner` já mostra status, mas sugiro: quando offline + há pedidos pending, exibir contagem (`"Bridge offline · 9 cupons aguardando"`). Pequeno ajuste em `src/components/print-station/ConnectionStatusBanner.tsx` lendo `usePrintQueue`.
 
-- `entrada de estoque medalhão 20` → qty=20, item="medalhão"
-- `entrada coca 10` → qty=10, item="coca"
-- `entrada 10 coca` → continua funcionando (canônico)
+### F. Index sugerido
+`CREATE INDEX IF NOT EXISTS idx_orders_print_status ON orders(print_status) WHERE print_status IN ('pending','printing');` — acelera as queries do worker e do watchdog.
 
-### 3. Modo de operação herdada (CRÍTICO)
+## 🚫 O que **não** vou mexer (preserva a bridge `.exe`)
 
-Quando uma mensagem tem múltiplas linhas e a **primeira linha** é um `STOCK_MOVEMENT` válido (in/out/adjustment), as linhas seguintes que **não** começam com verbo conhecido devem ser interpretadas como **continuação** com o mesmo tipo de operação.
+- `bridge/lp-bridge.js`, `bridge/package.json`, `start-bridge.bat`.
+- `src/lib/thermal-printer.ts` (formato ESC/POS, payload base64, endpoints `/health` e `/print`).
+- `src/lib/print-receipt.ts`, `src/lib/print-queue-worker.ts` (lógica de envio).
 
-Implementação no loop de processamento de comandos (perto da linha 3836, onde `for (const line of lines)` itera):
+## Arquivos que serão modificados
 
-```ts
-let inheritedStockType: "in" | "out" | "adjustment" | null = null;
+- `supabase/migrations/<timestamp>_print_watchdog.sql` — nova função + cron + index.
+- `src/components/print-station/PrintQueuePanel.tsx` — botão "Limpar órfãos".
+- `src/components/print-station/ConnectionStatusBanner.tsx` — texto com contagem.
 
-for (const line of lines) {
-  let cmd = parseCommand(line);
-  
-  // Se linha falhou no parse E temos tipo herdado E a linha parece "<produto> <qty>" ou "<qty> <produto>"
-  if (cmd.kind === "PARSE_ERROR" && inheritedStockType) {
-    const parsed = parseStockTail(line, true); // tenta os dois formatos
-    if (parsed) {
-      cmd = { kind: "STOCK_MOVEMENT", type: inheritedStockType, qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
-    }
-  }
-  
-  // Atualiza o tipo herdado quando a linha foi um STOCK_MOVEMENT bem parseado
-  if (cmd.kind === "STOCK_MOVEMENT") {
-    inheritedStockType = cmd.type;
-  }
-  
-  // ... processa cmd como hoje
-}
-```
+## Ordem de execução
 
-### 4. Resultado esperado
-
-Mensagem do usuário:
-```
-Entrada de estoque medalhão 20
-Meio da asa 15
-Coração 17
-Linguiça 30
-```
-
-Vira 4 comandos `STOCK_MOVEMENT type=in`:
-- +20 medalhão
-- +15 meio da asa
-- +17 coração
-- +30 linguiça
-
-Resposta do bot agrupa as 4 confirmações com saldos antes/depois.
-
-## Arquivos modificados
-
-- `supabase/functions/telegram-webhook/index.ts`
-  - `parseStockTail`: aceitar ordem `<produto> <qty>` como fallback.
-  - Regex de `entrada`/`saida`/`ajuste`: aceitar sufixo opcional "de/do/no estoque".
-  - Loop de processamento de linhas: adicionar variável `inheritedStockType` e fallback quando linha não parseia mas há tipo herdado.
-
-## Não alterado
-
-- Comportamento de pedidos (`mesa N + qty produto`).
-- Wizard de estoque (botões).
-- Dedupe, whitelist, identificação de waiter.
-- Comandos diretos existentes continuam funcionando exatamente igual.
+1. Migration do watchdog + index + cleanup de queue.
+2. UI: botão de limpeza + banner com contagem.
+3. Rodar `vitest` para confirmar 80/80 ainda passa.
+4. Verificar que os 10 pedidos órfãos foram resolvidos pelo watchdog.
 
