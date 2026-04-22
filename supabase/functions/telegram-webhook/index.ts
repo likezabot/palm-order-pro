@@ -232,6 +232,9 @@ type Command =
   | { kind: "VIEW_NOMESA" }
   | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
   | { kind: "UNDO"; all: boolean }
+  | { kind: "REPORT" }
+  | { kind: "STOCK_CRITICAL" }
+  | { kind: "NOTIFY_TOGGLE"; on: boolean }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
