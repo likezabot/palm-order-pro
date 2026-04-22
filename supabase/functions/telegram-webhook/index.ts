@@ -851,6 +851,176 @@ async function executeView(table: string): Promise<string> {
   );
 }
 
+// ─────────────────────────── batch / undo helpers ───────────────────────────
+
+type BatchOp = { kind: "ADD" | "REMOVE"; product: Product; qty: number; rawQty: number };
+type BatchOutcome = {
+  ok: boolean;
+  text: string;
+  ops: UndoOp[];          // operações realmente aplicadas (para undo)
+  total: number;
+  itemCount: number;
+  conflict?: boolean;
+  errMsg?: string;
+};
+
+// Executa N operações ADD/REMOVE para a mesma mesa, em UMA transação update_order_items.
+// Imprime delta consolidado uma única vez (apenas itens com diff>0).
+async function executeBatchForTable(
+  table: string,
+  ops: BatchOp[],
+  waiter: string,
+  shouldPrint: boolean,
+): Promise<BatchOutcome> {
+  return await withVersionRetry(async () => {
+    const order = await resolveTable(table);
+    const undoOps: UndoOp[] = [];
+
+    if (!order) {
+      // Sem pedido — só ADDs criam mesa. REMOVEs viram aviso.
+      const adds = ops.filter((o) => o.kind === "ADD");
+      const removes = ops.filter((o) => o.kind === "REMOVE");
+      if (adds.length === 0) {
+        return {
+          ok: false,
+          text: `⚠️ Mesa ${table} não tem pedido aberto (nenhum ADD para criar).`,
+          ops: [],
+          total: 0,
+          itemCount: 0,
+        };
+      }
+      // Agrega ADDs no mesmo product_id
+      let acc: OrderItem[] = [];
+      for (const o of adds) {
+        acc = applyAdd(acc, o.product, o.qty);
+        undoOps.push({ op: "a", productId: o.product.id, productName: o.product.name, qty: o.qty });
+      }
+      const total = acc.reduce((s, i) => s + Number(i.subtotal), 0);
+      try {
+        await sb.rpc("create_order", {
+          p_table_name: table,
+          p_original_table_name: table,
+          p_waiter_name: waiter,
+          p_total: total,
+          p_items: acc.map((i) => ({
+            product_id: i.product_id,
+            product_name: i.product_name,
+            product_price: i.product_price,
+            quantity: i.quantity,
+            note: i.note,
+            subtotal: i.subtotal,
+          })),
+          p_should_print: shouldPrint,
+        });
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        if (msg.includes("table_already_in_use")) throw new Error("version_conflict: race on create");
+        throw e;
+      }
+      const lines = adds.map((o) => `   +${o.qty} ${o.product.name}`);
+      const removedNote = removes.length > 0
+        ? `\n   ⚠️ Ignorados ${removes.length} REMOVE (mesa não existia).`
+        : "";
+      return {
+        ok: true,
+        text: `✅ Mesa ${table} criada:\n${lines.join("\n")}${removedNote}`,
+        ops: undoOps,
+        total,
+        itemCount: acc.reduce((s, i) => s + i.quantity, 0),
+      };
+    }
+
+    // Pedido existe — aplica todas as ops em memória
+    const { data: items } = await sb.from("order_items").select("*").eq("order_id", order.id);
+    const before: OrderItem[] = (items ?? []) as OrderItem[];
+    let working = before.map((i) => ({ ...i }));
+    const summaryLines: string[] = [];
+
+    for (const o of ops) {
+      if (o.kind === "ADD") {
+        working = applyAdd(working, o.product, o.qty);
+        summaryLines.push(`   +${o.qty} ${o.product.name}`);
+        undoOps.push({ op: "a", productId: o.product.id, productName: o.product.name, qty: o.qty });
+      } else {
+        const r = applyRemove(working, o.product, o.qty);
+        if (r.kind === "not_in_order") {
+          summaryLines.push(`   ⚠️ ${o.product.name} não estava no pedido`);
+        } else {
+          working = r.items;
+          summaryLines.push(
+            r.kind === "partial"
+              ? `   -${r.removedQty} ${o.product.name} (pediu ${o.qty})`
+              : `   -${r.removedQty} ${o.product.name}`,
+          );
+          undoOps.push({ op: "r", productId: o.product.id, productName: o.product.name, qty: r.removedQty });
+        }
+      }
+    }
+
+    const after = working;
+    const delta = computeDelta(before, after);
+    const total = after.reduce((s, i) => s + Number(i.subtotal), 0);
+    const itemCount = after.reduce((s, i) => s + i.quantity, 0);
+
+    await sb.rpc("update_order_items", {
+      p_order_id: order.id,
+      p_total: total,
+      p_items: after.map((i) => ({
+        product_id: i.product_id,
+        product_name: i.product_name,
+        product_price: i.product_price,
+        quantity: i.quantity,
+        note: i.note,
+        subtotal: i.subtotal,
+        waiter_name: waiter,
+      })),
+      p_delta_items: shouldPrint && delta.length > 0 ? delta : null,
+      p_print_type: shouldPrint && delta.length > 0 ? "extra" : null,
+      p_expected_version: order.version,
+      p_should_print: shouldPrint && delta.length > 0,
+    });
+
+    return {
+      ok: true,
+      text: `✅ Mesa ${table} (${ops.length} ações):\n${summaryLines.join("\n")}\n   Total: ${fmtBRL(total)} (${itemCount} itens)`,
+      ops: undoOps,
+      total,
+      itemCount,
+    };
+  });
+}
+
+// Inverte ops e aplica como uma única transação SEM imprimir.
+async function executeUndoOps(table: string, ops: UndoOp[], waiter: string): Promise<string> {
+  // Mapeia ops originais para inversas: 'a' (foi ADD) → REMOVE, 'r' (foi REMOVE) → ADD
+  const products = await fetchProductsByIds(ops.map((o) => o.productId));
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const inverseOps: BatchOp[] = [];
+  for (const o of ops) {
+    const p = byId.get(o.productId);
+    if (!p) continue;
+    inverseOps.push({
+      kind: o.op === "a" ? "REMOVE" : "ADD",
+      product: p,
+      qty: o.qty,
+      rawQty: o.qty,
+    });
+  }
+  if (inverseOps.length === 0) return "↩️ Nada para desfazer.";
+  const result = await executeBatchForTable(table, inverseOps, waiter, /*shouldPrint*/ false);
+  if (!result.ok) return `↩️ Falha ao desfazer: ${result.text}`;
+  return `↩️ Operação desfeita (mesa ${table}). Total atual: ${fmtBRL(result.total)}.`;
+}
+
+async function fetchProductsByIds(ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const { data } = await sb
+    .from("products")
+    .select("id, name, price, active, category")
+    .in("id", ids);
+  return (data ?? []) as Product[];
+}
+
 // ─────────────────────────── telegram ───────────────────────────
 
 async function sendTelegram(chatId: number, text: string, keyboard?: InlineButton[][]) {
