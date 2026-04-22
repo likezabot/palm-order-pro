@@ -282,12 +282,22 @@ export default function Stock() {
             />
           </div>
         ) : (
-          <StockList
-            items={visibleItems}
-            onMovement={openMovement}
-            onEdit={openEdit}
-            onHistory={openHistory}
-          />
+          <>
+            {tab === "espetos" && !search && (
+              <PorcoGroupBanner
+                items={active}
+                onCreateForProduct={(p) =>
+                  createInventoryForProduct({ id: p.id, name: p.name, category: p.category })
+                }
+              />
+            )}
+            <StockList
+              items={visibleItems}
+              onMovement={openMovement}
+              onEdit={openEdit}
+              onHistory={openHistory}
+            />
+          </>
         )}
       </main>
 
