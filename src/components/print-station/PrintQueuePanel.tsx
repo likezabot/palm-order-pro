@@ -47,6 +47,20 @@ export default function PrintQueuePanel() {
     await retryNow();
   };
 
+  const handleClearOrphans = async () => {
+    const { data, error } = await supabase.rpc("force_clear_orphan_prints");
+    if (error) {
+      toast({ variant: "destructive", title: "Erro ao limpar órfãos", description: error.message });
+      return;
+    }
+    const cleared = (data as { cleared?: number } | null)?.cleared ?? 0;
+    toast({
+      title: cleared > 0 ? `${cleared} órfão(s) marcado(s) como impressos` : "Nenhum órfão encontrado",
+      description: "Pedidos pagos com impressão pendente foram resolvidos no banco.",
+    });
+    await refresh();
+  };
+
   return (
     <div className="border-b border-slate-100 bg-white">
       <div className="flex items-center justify-between gap-3 p-4">
