@@ -1,60 +1,66 @@
 
 
-## Refinar barra de categorias: badge no canto + animação ao mudar
+## Corrigir inconsistência entre web e PWA instalado
 
-### Problema atual
-- Badge inline (ao lado do texto) cria larguras variáveis por categoria → tabs "dançam" quando o número aparece/some.
-- Sem animação: mudança no contador passa despercebida em fluxo intenso.
-- Categoria ativa só tem underline fino; pouco destaque no mobile.
+### Causa raiz
+O Service Worker (`public/sw.js`) faz **stale-while-revalidate em todas as chamadas REST do Supabase** (`/rest/v1/*`). No PWA instalado, isso significa que cada request de pedidos/produtos/settings devolve **primeiro a resposta cacheada da última visita** e só depois atualiza em background. Combinado com a persistência do React Query no IndexedDB (`query-persister.ts`, com `staleTime: 60s` e `maxAge: 24h`), o app instalado fica preso em **dois níveis de cache antigo**:
 
-### Mudanças em `src/components/palm/MenuView.tsx`
+1. SW devolve JSON velho do Supabase.
+2. React Query reidrata estado antigo do IndexedDB e ainda confia nele por 60s.
 
-**1. Badge no canto superior direito (absolute)**
-- Tab vira container `relative` com `padding` consistente: `px-4 py-2.5 pr-5` (deixa respiro à direita pro badge).
-- Badge `absolute top-1 right-1`, formato bolinha compacta:
-  - `min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none`
-  - Sólido sempre que `count > 0`: `bg-primary text-primary-foreground`
-  - Borda fina `ring-2 ring-background` para "destacar" do fundo da tab/underline
-  - Categoria ativa: badge ganha `shadow-glow` e `scale-110` sutil (destaque maior)
-  - `count === 0` → não renderiza (some completamente)
+Resultado: totais errados, categorias embaralhadas, mesa fechada continua aparecendo, alterações do admin não refletem. O PDV funciona porque está aberto via navegador (sem SW instalado de forma persistente como acontece no PWA Android).
 
-**2. Animação ao mudar contador**
-- Hook local `usePrevious(count)` por categoria (ou `useRef<Record<string, number>>`).
-- Quando `count !== prev && count > 0`, aplicar classe `animate-badge-pop` por ~350ms via `key={count}` no `<span>` do badge (remonta → animação roda).
-- Adicionar keyframe em `tailwind.config.ts`:
-  ```ts
-  "badge-pop": {
-    "0%":   { transform: "scale(1)" },
-    "40%":  { transform: "scale(1.35)" },
-    "100%": { transform: "scale(1)" },
-  }
-  ```
-  e `animation: { "badge-pop": "badge-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)" }`.
-- Bônus: aplicar mesma animação no badge `+ qty` dos cards de produto quando a quantidade muda — mesma técnica `key={qty}`.
+Bonus: `vite.config.ts` injeta `__APP_VERSION__ = new Date().toISOString()` no bundle, mas como o próprio JS antigo continua sendo servido pelo SW velho, o `buster` do persister nunca dispara → cache nunca invalida sozinho no celular.
 
-**3. Layout/espaçamento da barra**
-- Container: manter `flex gap-1 overflow-x-auto no-scrollbar border-b border-border`, mas trocar gap → `gap-0` para tabs encostadas (visual de tab bar real).
-- Cada tab tem padding generoso: `px-4 py-3` (mais alto, melhor toque mobile).
-- Texto sempre centralizado com `min-w-[88px]` → tabs com larguras estáveis (não mais "dança" quando badge aparece).
-- Categoria ativa:
-  - `text-foreground` + `font-bold` (era `font-semibold`)
-  - underline gradiente mais grosso: `h-[3px]` (era `h-0.5`), cantos arredondados, ancorado em `bottom-0`
-  - leve `bg-foreground/[0.03]` no fundo da tab ativa (sutil, melhora leitura)
-- Inativa: `text-muted-foreground font-semibold`, hover/active: `text-foreground`.
+### Correção estrutural
 
-**4. Responsividade**
-- Tudo continua em `flex` com `overflow-x-auto no-scrollbar` → mobile mantém scroll horizontal.
-- Larguras fixas mínimas garantem que mobile e desktop tenham mesmo ritmo visual.
-- `pr-5` + badge `right-1` funciona igual nos dois.
+**1. `public/sw.js` — parar de cachear API do Supabase**
+- Remover completamente o branch `staleWhileRevalidate` para `*.supabase.co/rest/v1/*`.
+- Remover `API_CACHE_NAME` e a função `staleWhileRevalidate`.
+- Toda chamada REST passa direto pra rede. Offline parcial continua coberto pelo persister do React Query (IndexedDB) que já tem `networkMode: "offlineFirst"`.
+- Manter cache só de assets estáticos (`/manifest.json`, ícones) com cache-first.
+- Manter HTML como network-first com `no-store` (já está correto).
+- Adicionar limpeza ativa no `activate` que apaga **qualquer cache `plano-b-api-*`** legado, garantindo que celulares com versão antiga limpem na próxima atualização.
 
-### Arquivos
-- **Editado** `src/components/palm/MenuView.tsx` — badge absolute no canto, animação via `key={count}`, layout refinado da barra.
-- **Editado** `tailwind.config.ts` — keyframe + animação `badge-pop`.
+**2. `public/sw.js` — forçar atualização agressiva do próprio SW**
+- Já tem `BUILD_STAMP` injetado no build via `vite.config.ts`. Manter.
+- Servir o `sw.js` com `Cache-Control: no-cache` no fetch handler quando navegador pedir o próprio script (browsers já fazem isso por padrão desde 2022, mas garantimos ignorando o cache HTTP em `register("/sw.js", { updateViaCache: "none" })` em `src/main.tsx`).
 
-### Resultado
-- Badges sempre no mesmo lugar (canto superior direito), tamanho compacto (~18px), sólidos quando >0, invisíveis quando 0.
-- Tabs com largura estável → barra não "treme" ao adicionar item.
-- Categoria ativa muito mais clara: negrito + underline grosso gradiente + leve fundo.
-- Cada item somado dispara um pop sutil (~350ms) no badge da categoria — feedback imediato sem distrair.
-- Mesma experiência em mobile (441px) e desktop.
+**3. `src/main.tsx` — `updateViaCache: "none"` no register**
+- Trocar `register("/sw.js")` por `register("/sw.js", { updateViaCache: "none" })`. Garante que toda checagem de update busca o SW direto da rede, ignorando HTTP cache. Sem isso, alguns Androids cacheiam o `sw.js` por 24h e o app fica preso na versão antiga mesmo após deploy.
+
+**4. `src/lib/version-check.ts` — buster baseado no build stamp do SW**
+- Hoje o version-check usa `__APP_VERSION__` que vem do bundle JS. Se o SW serve JS antigo, esse valor nunca muda no celular.
+- Trocar a fonte: ler o `BUILD_STAMP` direto do `/sw.js` via `fetch("/sw.js?cache=no", { cache: "no-store" })` na inicialização e extrair o stamp por regex. Como o SW é sempre buscado da rede agora (passo 3), esse stamp é o mais novo possível. Se diferir do armazenado em `localStorage`, dispara o cleanup + reload (lógica atual já faz isso, só trocamos a fonte da versão).
+
+**5. `src/App.tsx` — buster do persister também usa o stamp do SW**
+- Mesmo princípio: importar `getAppVersion()` atualizado para devolver o stamp lido em (4), fazendo o React Query persister invalidar o IndexedDB sempre que houver deploy novo.
+
+**6. Reduzir `staleTime` da query de pedidos ativos no PWA**
+- Em `src/hooks/use-pdv-realtime.ts` e onde estiver `["active-orders"]`, deixar `staleTime: 0` (já temos Realtime cobrindo; persister mantém `placeholderData` pra UX). Isso garante que a primeira request após reidratação valida com a rede em vez de confiar no cache 60s.
+
+### Sobre cálculo de totais
+Revisei `use-palm-cart.ts` e `payment.ts`. A fórmula é única:
+
+```ts
+total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0)
+```
+
+Não há divergência de lógica entre web e PWA. **Os "valores errados" relatados são consequência do cache stale** — o app exibe a soma de um cart/order antigo. Ao corrigir o cache (passos 1-6), o cálculo passa a refletir o estado real automaticamente. **Nenhuma mudança na lógica de cálculo é necessária.**
+
+### Arquivos alterados
+- `public/sw.js` — remove cache de API Supabase, limpa caches legados no activate.
+- `src/main.tsx` — `register` com `updateViaCache: "none"`.
+- `src/lib/version-check.ts` — lê stamp do `/sw.js` em vez de `__APP_VERSION__` do bundle.
+- `src/App.tsx` — buster do persister usa o stamp lido (await leve, sem bloquear render).
+- `src/hooks/use-pdv-realtime.ts` (e similares) — `staleTime: 0` para `active-orders` (Realtime + persister cobrem UX).
+
+### Como o celular instalado vai atualizar
+- **Imediato (dispositivos já travados)**: na próxima abertura, o SW antigo ainda serve cache velho 1 vez. O novo `version-check` vai detectar (via fetch direto do `/sw.js`) que o stamp mudou, limpar todos os caches + IndexedDB do React Query, desregistrar SW antigo e recarregar. A partir daí, o novo SW (sem cache de API) assume.
+- **Permanente**: nenhuma chamada REST passa mais pelo cache do SW. Toda resposta vem do Supabase em tempo real. Combinado com Realtime + invalidação otimista (já existente), web e PWA mostram exatamente o mesmo estado.
+
+### O que NÃO muda
+- Lógica de carrinho, totais, pagamentos, impressão, RLS, edge functions.
+- Estratégia de Realtime, persister do React Query, otimismo no fechamento de mesa.
+- Comportamento no PDV (que já está correto).
 
