@@ -64,6 +64,9 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
   const upsert = useUpsertInventoryItem();
   const deactivate = useDeactivateItem();
   const { data: menuProducts = [] } = useMenuProductsForStock();
+  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
+  const queryClient = useQueryClient();
+  const [porcoGroup, setPorcoGroup] = useState(false);
 
   const slug = useMemo(() => slugify(name), [name]);
 
@@ -87,8 +90,14 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
       setAliases(item?.aliases ?? []);
       setAliasInput("");
       setProductId(item?.product_id ?? null);
+      const initialName = item?.name ?? "";
+      setPorcoGroup(
+        !!initialName &&
+          (isCanonicalPorcoName(initialName) ||
+            extraPorcoNames.some((n) => normName(n) === normName(initialName))),
+      );
     }
-  }, [open, item]);
+  }, [open, item, extraPorcoNames]);
 
   const handleSelectProduct = (val: string) => {
     if (val === NONE_VALUE) {
