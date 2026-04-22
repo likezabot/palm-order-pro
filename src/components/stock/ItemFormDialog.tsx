@@ -215,6 +215,43 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
             )}
           </div>
 
+          {linkedProduct?.category === "espetos" && (
+            <div className="rounded-md border border-border bg-card/40 p-3">
+              <Label className="flex items-center gap-1 mb-2">
+                🐷 Grupo / Popup (opcional)
+              </Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPorcoGroup(false)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                    !porcoGroup
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-background text-foreground"
+                  }`}
+                >
+                  Nenhum
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPorcoGroup(true)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                    porcoGroup
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-background text-foreground"
+                  }`}
+                >
+                  Grupo Porco
+                </button>
+              </div>
+              {porcoGroup && !isCanonicalPorcoName(linkedProduct.name) && (
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  "{linkedProduct.name}" será adicionado como variante extra do popup do Porco.
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <Label htmlFor="name">Nome</Label>
             <Input
