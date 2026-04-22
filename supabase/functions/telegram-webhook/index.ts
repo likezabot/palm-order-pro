@@ -781,18 +781,21 @@ async function previewCommand(cmd: Command): Promise<string> {
 
 // ─────────────────────────── handler ───────────────────────────
 
-async function handleCommand(cmd: Command, waiter: string): Promise<string> {
-  if (cmd.kind === "HELP") return HELP_TEXT;
+type HandlerReply = { text: string; keyboard?: InlineButton[][] };
+
+async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
+  if (cmd.kind === "HELP") return { text: HELP_TEXT };
   if (cmd.kind === "PARSE_ERROR") {
-    return (
-      `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
-      `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
-      `  • mesa 3 + 2 coca 350\n` +
-      `  • tira 1 agua da mesa 1\n\n` +
-      `Envie "ajuda" para ver todos os formatos.`
-    );
+    return {
+      text:
+        `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
+        `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
+        `  • mesa 3 + 2 coca 350\n` +
+        `  • tira 1 agua da mesa 1\n\n` +
+        `Envie "ajuda" para ver todos os formatos.`,
+    };
   }
-  if (cmd.kind === "VIEW") return await executeView(cmd.table);
+  if (cmd.kind === "VIEW") return { text: await executeView(cmd.table) };
 
   // ADD/REMOVE
   const resolution = await resolveProduct(cmd.productText);
@@ -802,44 +805,73 @@ async function handleCommand(cmd: Command, waiter: string): Promise<string> {
       const tail = sugg.length > 0
         ? `Talvez quis dizer: ${sugg.join(", ")}?\nRepita com o nome exato.`
         : `Verifique o nome no cardápio e tente de novo.`;
-      return `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}`;
+      return { text: `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}` };
     }
     case "ambiguous": {
-      const list = resolution.candidates
-        .map((p, i) => `  ${i + 1}) ${p.name}`)
-        .join("\n");
-      return (
-        `🤔 Encontrei várias opções para "${cmd.productText}":\n${list}\n\n` +
-        `Especifique o tamanho/variante e reenvie.`
-      );
+      // Tenta auto-pick determinístico antes de mostrar botões
+      const picked = autoPickFromCandidates(cmd.productText, resolution.candidates);
+      if (picked) {
+        return await runExecute(cmd, picked, waiter);
+      }
+      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, resolution.candidates);
+      const op = cmd.kind === "ADD" ? "+" : "-";
+      return {
+        text: `🤔 Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" — escolha a opção:`,
+        keyboard,
+      };
     }
     case "is_group_trigger": {
-      const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
-      return (
-        `📦 "${resolution.group.name}" tem variantes:\n${variants}\n\n` +
-        `Reenvie escolhendo uma das opções acima.`
-      );
+      const variantProducts = await fetchProductsByNames(resolution.variants);
+      // Auto-pick determinístico
+      const picked = autoPickFromCandidates(cmd.productText, variantProducts);
+      if (picked) {
+        return await runExecute(cmd, picked, waiter);
+      }
+      if (variantProducts.length === 0) {
+        const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
+        return {
+          text:
+            `📦 "${resolution.group.name}" tem variantes:\n${variants}\n\n` +
+            `Reenvie escolhendo uma das opções acima.`,
+        };
+      }
+      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, variantProducts);
+      const op = cmd.kind === "ADD" ? "+" : "-";
+      return {
+        text: `📦 Mesa ${cmd.table} ${op}${cmd.qty} "${resolution.group.name}" — escolha a variante:`,
+        keyboard,
+      };
     }
     case "out_of_stock":
-      return `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`;
+      return {
+        text: `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`,
+      };
     case "no_linked_product":
-      return `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`;
-    case "found": {
-      try {
-        if (cmd.kind === "ADD") {
-          return await executeAdd(cmd.table, resolution.product, cmd.qty, waiter);
-        } else {
-          return await executeRemove(cmd.table, resolution.product, cmd.qty, waiter);
-        }
-      } catch (e: any) {
-        const msg = String(e?.message ?? e);
-        if (msg.includes("version_conflict")) {
-          return `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.`;
-        }
-        console.error("execute error:", e);
-        return `❌ Erro ao processar: ${msg}`;
-      }
+      return {
+        text: `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
+      };
+    case "found":
+      return await runExecute(cmd, resolution.product, waiter);
+  }
+}
+
+async function runExecute(
+  cmd: Extract<Command, { kind: "ADD" | "REMOVE" }>,
+  product: Product,
+  waiter: string,
+): Promise<HandlerReply> {
+  try {
+    const text = cmd.kind === "ADD"
+      ? await executeAdd(cmd.table, product, cmd.qty, waiter)
+      : await executeRemove(cmd.table, product, cmd.qty, waiter);
+    return { text };
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    if (msg.includes("version_conflict")) {
+      return { text: `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.` };
     }
+    console.error("execute error:", e);
+    return { text: `❌ Erro ao processar: ${msg}` };
   }
 }
 
