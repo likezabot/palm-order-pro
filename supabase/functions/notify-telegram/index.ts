@@ -135,6 +135,25 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
     } else if (evt.event_type === "print_failure" && cfg.print_failure !== false) {
       const tipo = p.print_type === "bill" ? "conta" : p.print_type === "delta" ? "acréscimo" : "pedido";
       text = `🖨️ <b>Falha de impressão</b>\nMesa ${p.table_name} (${tipo})\n<i>${p.error}</i>`;
+    } else if (evt.event_type === "cash_closed" && cfg.cash_closed !== false) {
+      const sangrias = Number(p.sangrias || 0);
+      const suprimentos = Number(p.suprimentos || 0);
+      const diff = Number(p.diferenca || 0);
+      const diffSign = diff > 0 ? "+" : "";
+      const diffWarn = Math.abs(diff) >= 0.01 ? " ⚠️" : "";
+      text = `💰 <b>Caixa fechado</b>\n` +
+             `Vendas: ${fmtBRL(p.total_sales)}\n` +
+             (sangrias > 0 ? `Sangrias: ${fmtBRL(sangrias)}\n` : "") +
+             (suprimentos > 0 ? `Suprimentos: ${fmtBRL(suprimentos)}\n` : "") +
+             `Esperado: ${fmtBRL(p.esperado)} · Conferido: ${fmtBRL(p.final_amount)}\n` +
+             `Diferença: ${diffSign}${fmtBRL(Math.abs(diff))}${diffWarn}`;
+    } else if (evt.event_type === "table_stale" && cfg.stale_tables !== false) {
+      const fmtDur = (m: number) => m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}` : `${m}min`;
+      const statusLabel = p.status === "done" ? "aguardando pagar" : "sem item novo";
+      text = `⏰ <b>Mesa parada</b>\n` +
+             `Mesa ${p.table_name}` + (p.waiter_name ? ` · Garçom ${p.waiter_name}` : "") + `\n` +
+             `Aberta há ${fmtDur(Number(p.opened_min || 0))} · ${statusLabel} há ${fmtDur(Number(p.idle_min || 0))}\n` +
+             `Total atual: <b>${fmtBRL(p.total)}</b>`;
     } else {
       continue;
     }
