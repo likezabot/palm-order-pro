@@ -296,9 +296,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           <p className="p-8 text-center text-sm text-muted-foreground">
             {isSearching
               ? `Nenhum item encontrado para "${search}".`
-              : activeCategory === "favoritos"
-                ? "Ainda não há favoritos. Eles aparecem após os primeiros pedidos."
-                : "Nenhum item nesta categoria."}
+              : "Nenhum item nesta categoria."}
           </p>
         )}
 
