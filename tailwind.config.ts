@@ -131,6 +131,11 @@ export default {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        "badge-pop": {
+          "0%": { transform: "scale(1)" },
+          "40%": { transform: "scale(1.35)" },
+          "100%": { transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -142,6 +147,7 @@ export default {
         "fade-in-up": "fade-in-up 0.4s ease-out both",
         "scale-in": "scale-in 0.25s ease-out both",
         shimmer: "shimmer 1.6s linear infinite",
+        "badge-pop": "badge-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
       },
     },
   },

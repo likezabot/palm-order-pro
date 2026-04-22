@@ -226,7 +226,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
 
         {/* Category tabs */}
         {!isSearching && (
-          <div className="flex gap-1 overflow-x-auto no-scrollbar border-b border-border -mx-2.5 px-2.5">
+          <div className="flex gap-0 overflow-x-auto no-scrollbar border-b border-border -mx-2.5 px-2.5">
             {CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat;
               const count = categoryCounts[cat] ?? 0;
@@ -237,24 +237,25 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                     playFeedback("click");
                     setActiveCategory(cat);
                   }}
-                  className={`relative inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2.5 text-sm font-semibold transition-colors ${
-                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  className={`relative inline-flex min-w-[88px] items-center justify-center whitespace-nowrap px-4 py-3 pr-5 text-sm transition-colors ${
+                    isActive
+                      ? "text-foreground font-bold bg-foreground/[0.03]"
+                      : "text-muted-foreground font-semibold hover:text-foreground"
                   }`}
                 >
                   <span>{CATEGORY_LABELS[cat]}</span>
                   {count > 0 && (
                     <span
-                      className={`min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-primary/15 text-primary"
+                      key={count}
+                      className={`absolute top-1 right-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none bg-primary text-primary-foreground ring-2 ring-background animate-badge-pop ${
+                        isActive ? "scale-110 shadow-glow" : ""
                       }`}
                     >
                       {count}
                     </span>
                   )}
                   {isActive && (
-                    <span className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full bg-brand-gradient" />
+                    <span className="absolute left-2 right-2 bottom-0 h-[3px] rounded-full bg-brand-gradient" />
                   )}
                 </button>
               );
@@ -372,7 +373,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                       + ADD
                     </span>
                     {qty > 0 && (
-                      <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow">
+                      <span
+                        key={qty}
+                        className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
+                      >
                         {qty}
                       </span>
                     )}
