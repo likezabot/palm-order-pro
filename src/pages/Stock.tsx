@@ -12,6 +12,8 @@ import HistoryDialog from "@/components/stock/HistoryDialog";
 import ImportFromMenuDialog from "@/components/stock/ImportFromMenuDialog";
 import CriticalStockSection, { getCriticalItems } from "@/components/stock/CriticalStockSection";
 import { useInventoryItems } from "@/hooks/use-inventory";
+import { useAutoSyncMenuToStock } from "@/hooks/use-auto-sync-menu-to-stock";
+import { useMenuProductsForStock } from "@/hooks/use-menu-products-for-stock";
 import {
   type InventoryItem,
   STOCK_CATEGORIES,
@@ -26,6 +28,12 @@ export default function Stock() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { data: items = [], isLoading } = useInventoryItems();
+  const { data: menuProducts = [] } = useMenuProductsForStock();
+  useAutoSyncMenuToStock();
+  const pendingMenu = useMemo(
+    () => menuProducts.filter((p) => !p.linked && p.active).length,
+    [menuProducts]
+  );
 
   const filterParam = searchParams.get("filter");
   const initialTab =
@@ -114,8 +122,14 @@ export default function Stock() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold flex-1">Estoque</h1>
-          <Button onClick={() => setImportOpen(true)} size="sm" variant="outline">
-            <Download className="h-4 w-4 mr-1" /> Cardápio
+          <Button
+            onClick={() => setImportOpen(true)}
+            size="sm"
+            variant="outline"
+            title={pendingMenu === 0 ? "Tudo sincronizado" : `${pendingMenu} produtos novos no cardápio`}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Re-importar{pendingMenu > 0 ? ` (${pendingMenu})` : ""}
           </Button>
           <Button onClick={() => openEdit(null)} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Novo
