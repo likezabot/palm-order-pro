@@ -875,6 +875,92 @@ async function runExecute(
   }
 }
 
+// Dedupe de callbacks pra evitar duplo-clique
+const seenCallbacks = new Map<string, number>();
+function isCallbackDuplicate(id: string): boolean {
+  const now = Date.now();
+  for (const [k, t] of seenCallbacks) if (now - t > 5 * 60_000) seenCallbacks.delete(k);
+  if (seenCallbacks.has(id)) return true;
+  seenCallbacks.set(id, now);
+  return false;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function handleCallbackQuery(cb: any): Promise<void> {
+  const cbId: string = cb.id;
+  const chatId: number | undefined = cb.message?.chat?.id;
+  const messageId: number | undefined = cb.message?.message_id;
+  const data: string | undefined = cb.data;
+  const username: string | undefined = cb.from?.username;
+  if (!chatId || !messageId || !data) {
+    await answerCallback(cbId);
+    return;
+  }
+  if (isCallbackDuplicate(cbId)) {
+    await answerCallback(cbId);
+    return;
+  }
+
+  // Whitelist
+  const allowed = await getAllowedChats();
+  if (!allowed || !allowed.has(chatId)) {
+    await answerCallback(cbId, "Chat não autorizado");
+    return;
+  }
+
+  if (data === "x") {
+    await answerCallback(cbId, "Cancelado");
+    await editTelegramMessage(chatId, messageId, "❌ Cancelado.");
+    return;
+  }
+
+  const parts = data.split("|");
+  if (parts.length !== 4 || (parts[0] !== "a" && parts[0] !== "r")) {
+    await answerCallback(cbId, "Comando inválido");
+    return;
+  }
+  const [op, table, productId, qtyStr] = parts;
+  const qty = parseInt(qtyStr, 10);
+  if (!UUID_RE.test(productId) || !Number.isFinite(qty) || qty < 1 || qty > 99 || !table) {
+    await answerCallback(cbId, "Dados inválidos");
+    return;
+  }
+
+  // Busca produto pelo id
+  const { data: prod } = await sb
+    .from("products")
+    .select("id, name, price, active, category")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!prod) {
+    await answerCallback(cbId, "Produto não encontrado");
+    await editTelegramMessage(chatId, messageId, "❌ Produto não encontrado.");
+    return;
+  }
+  if (!prod.active) {
+    await answerCallback(cbId, "Esgotado");
+    await editTelegramMessage(chatId, messageId, `❌ ${prod.name} está esgotado.`);
+    return;
+  }
+
+  const waiter = username ? `Telegram (@${username}) [botão]` : "Telegram [botão]";
+  await answerCallback(cbId);
+
+  let resultText: string;
+  try {
+    resultText = op === "a"
+      ? await executeAdd(table, prod as Product, qty, waiter)
+      : await executeRemove(table, prod as Product, qty, waiter);
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    resultText = msg.includes("version_conflict")
+      ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
+      : `❌ Erro ao processar: ${msg}`;
+  }
+  await editTelegramMessage(chatId, messageId, resultText);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (!TOKEN) {
@@ -885,6 +971,12 @@ Deno.serve(async (req) => {
   try {
     const update = await req.json();
     console.log("Update:", JSON.stringify(update));
+
+    // Callback de botão inline
+    if (update?.callback_query) {
+      await handleCallbackQuery(update.callback_query);
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
 
     const message = update?.message ?? update?.edited_message;
     const chatId: number | undefined = message?.chat?.id;
@@ -913,13 +1005,12 @@ Deno.serve(async (req) => {
 
     const waiter = username ? `Telegram (@${username})` : "Telegram";
 
-    // Detecta modo preview: primeira linha (ou primeira palavra) = "preview"
+    // Detecta modo preview
     let workingText = text;
     let isPreview = false;
     const rawLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (rawLines.length > 0 && /^preview\b/i.test(rawLines[0])) {
       isPreview = true;
-      // Remove o token "preview" da primeira linha; se sobrar vazio, descarta a linha
       const firstRest = rawLines[0].replace(/^preview\b[:\s-]*/i, "").trim();
       const remaining = firstRest ? [firstRest, ...rawLines.slice(1)] : rawLines.slice(1);
       workingText = remaining.join("\n");
@@ -935,35 +1026,63 @@ Deno.serve(async (req) => {
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
-    const runner = isPreview
-      ? (cmd: Command, _w: string) => previewCommand(cmd)
-      : handleCommand;
-
-    if (lines.length <= 1) {
-      const cmd = parseCommand(lines[0] ?? text);
-      const reply = await runner(cmd, waiter);
-      await sendTelegram(chatId, isPreview ? `🔍 Preview (nada foi executado):\n\n${reply}` : reply);
-    } else if (lines.length > 10) {
+    if (lines.length > 10) {
       await sendTelegram(
         chatId,
         `⚠️ Máx. 10 comandos por mensagem. Você enviou ${lines.length}. Divida em mensagens menores.`,
       );
-    } else {
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+
+    if (isPreview) {
+      // Preview nunca emite botões — texto consolidado
       const results: string[] = [];
       for (const line of lines) {
         try {
           const cmd = parseCommand(line);
-          const res = await runner(cmd, waiter);
-          results.push(res);
-        } catch (e: any) {
-          console.error("line error:", line, e);
+          results.push(await previewCommand(cmd));
+        } catch (e) {
+          console.error("preview line error:", line, e);
           results.push(`❌ "${line}": erro inesperado`);
         }
       }
-      const header = isPreview
-        ? `🔍 Preview de ${lines.length} comandos (nada foi executado):\n`
-        : `📊 ${lines.length} comandos processados:\n`;
+      const header =
+        lines.length === 1
+          ? `🔍 Preview (nada foi executado):\n`
+          : `🔍 Preview de ${lines.length} comandos (nada foi executado):\n`;
       await sendTelegram(chatId, header + "\n" + results.join("\n\n"));
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+
+    if (lines.length <= 1) {
+      const cmd = parseCommand(lines[0] ?? text);
+      const reply = await handleCommand(cmd, waiter);
+      await sendTelegram(chatId, reply.text, reply.keyboard);
+    } else {
+      // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
+      const textResults: string[] = [];
+      const pendingChoices: HandlerReply[] = [];
+      for (const line of lines) {
+        try {
+          const cmd = parseCommand(line);
+          const reply = await handleCommand(cmd, waiter);
+          if (reply.keyboard && reply.keyboard.length > 0) {
+            pendingChoices.push(reply);
+            textResults.push(`🤔 "${line}" → escolha abaixo.`);
+          } else {
+            textResults.push(reply.text);
+          }
+        } catch (e) {
+          console.error("line error:", line, e);
+          textResults.push(`❌ "${line}": erro inesperado`);
+        }
+      }
+      const header = `📊 ${lines.length} comandos processados:\n`;
+      await sendTelegram(chatId, header + "\n" + textResults.join("\n\n"));
+      // Mensagens separadas com botões
+      for (const choice of pendingChoices) {
+        await sendTelegram(chatId, choice.text, choice.keyboard);
+      }
     }
   } catch (err) {
     console.error("Erro processando update:", err);
