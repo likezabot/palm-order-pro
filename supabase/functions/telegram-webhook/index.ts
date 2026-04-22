@@ -260,10 +260,12 @@ async function resolveTable(table: string): Promise<OrderRow | null> {
 }
 
 async function resolveProduct(text: string): Promise<ProductResolution> {
-  const norm = normalize(text);
+  // Aplica singularize antes de buscar (cocas->coca, bovinos->bovino, aguas->agua).
+  const singular = singularize(normalize(text));
+  const norm = singular;
 
   // 1. find_inventory_item_by_text (slug/aliases exato)
-  const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: text });
+  const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: singular });
   let inventoryItem: any = Array.isArray(invExact) && invExact.length > 0 ? invExact[0] : null;
 
   // 2. Fallback: busca direta em products por nome
