@@ -59,13 +59,15 @@ export const SystemTab = () => {
     try {
       const { data, error } = await supabase.rpc("archive_and_purge_old_data", {
         p_days_keep: 60,
-      });
+        p_source: "manual",
+      } as never);
       if (error) throw error;
-      const r = (data as Record<string, number>) || {};
+      const r = (data as Record<string, number | boolean>) || {};
       toast({
-        title: "Arquivamento concluído",
+        title: r.idempotent_skip ? "Já executado neste minuto" : "Arquivamento concluído",
         description: `${r.deleted_orders ?? 0} pedidos arquivados · ${r.archived_summary_days ?? 0} dias consolidados · ${r.deleted_inventory_movements ?? 0} mov. estoque limpos`,
       });
+      await loadLogs();
     } catch (e) {
       playFeedback("error");
       toast({
@@ -73,6 +75,7 @@ export const SystemTab = () => {
         title: "Falha no arquivamento",
         description: e instanceof Error ? e.message : String(e),
       });
+      await loadLogs();
     } finally {
       setArchiving(false);
     }
