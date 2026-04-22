@@ -1,12 +1,15 @@
-import { RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { RefreshCw, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useToast } from "@/hooks/use-toast";
 import { getAppVersion } from "@/lib/version-check";
+import { supabase } from "@/integrations/supabase/client";
 
 export const SystemTab = () => {
   const { playFeedback } = useFeedback();
   const { toast } = useToast();
+  const [archiving, setArchiving] = useState(false);
 
   const handleForceUpdate = async () => {
     if (!confirm("Forçar atualização? A página será recarregada.")) return;
@@ -14,6 +17,37 @@ export const SystemTab = () => {
     toast({ title: "Atualizando…", description: "Limpando cache e recarregando." });
     const { forceUpdate } = await import("@/lib/force-update");
     await forceUpdate();
+  };
+
+  const handleArchive = async () => {
+    if (
+      !confirm(
+        "Arquivar pedidos pagos com mais de 60 dias? Os dados serão consolidados em histórico diário e os registros detalhados serão apagados.",
+      )
+    )
+      return;
+    playFeedback("heavy");
+    setArchiving(true);
+    try {
+      const { data, error } = await supabase.rpc("archive_and_purge_old_data", {
+        p_days_keep: 60,
+      });
+      if (error) throw error;
+      const r = (data as Record<string, number>) || {};
+      toast({
+        title: "Arquivamento concluído",
+        description: `${r.deleted_orders ?? 0} pedidos arquivados · ${r.archived_summary_days ?? 0} dias consolidados · ${r.deleted_inventory_movements ?? 0} mov. estoque limpos`,
+      });
+    } catch (e) {
+      playFeedback("error");
+      toast({
+        variant: "destructive",
+        title: "Falha no arquivamento",
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setArchiving(false);
+    }
   };
 
   return (
@@ -41,6 +75,33 @@ export const SystemTab = () => {
         <p className="text-xs text-slate-500 text-center font-mono">
           Versão atual: {getAppVersion()}
         </p>
+      </div>
+
+      <div className="rounded-xl border-2 border-border p-5 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-primary/10 p-2.5">
+            <Archive className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-black text-lg text-slate-900">
+              Arquivar pedidos antigos
+            </h3>
+            <p className="text-sm text-slate-600 mt-1">
+              Consolida pedidos pagos com mais de 60 dias em histórico diário
+              (por garçom, produto e total) e apaga os registros detalhados.
+              Roda automaticamente todo dia às 04:00; use o botão para forçar
+              agora.
+            </p>
+          </div>
+        </div>
+        <Button
+          onClick={handleArchive}
+          disabled={archiving}
+          className="w-full h-14 font-black text-base gap-2"
+        >
+          <Archive className="w-5 h-5" />
+          {archiving ? "ARQUIVANDO…" : "ARQUIVAR AGORA"}
+        </Button>
       </div>
     </div>
   );
