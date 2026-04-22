@@ -398,6 +398,30 @@ export type Database = {
           },
         ]
       }
+      telegram_undo_stack: {
+        Row: {
+          chat_id: number
+          created_at: string
+          ops: Json
+          table_name: string
+          token: string
+        }
+        Insert: {
+          chat_id: number
+          created_at?: string
+          ops: Json
+          table_name: string
+          token: string
+        }
+        Update: {
+          chat_id?: number
+          created_at?: string
+          ops?: Json
+          table_name?: string
+          token?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
