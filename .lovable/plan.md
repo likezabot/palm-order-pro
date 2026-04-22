@@ -1,42 +1,98 @@
 
 
-# Alinhar `GroupVariantDialog` ao novo design do cardápio
+# Corrigir parser do Telegram para entrada de estoque em lote
 
-O dialog que abre ao tocar em "Ver opções" ainda usa o design antigo (badge vermelho "ESGOTADO", "+ ADD" agressivo, ícone de emoji no título, botão inteiro como ação). Refatorar para o mesmo padrão limpo do `MenuView`.
+## Problemas identificados na mensagem
 
-## Mudanças em `src/components/palm/GroupVariantDialog.tsx`
+```
+Entrada de estoque medalhão 20    ← não reconhecido (frase "de estoque" + ordem invertida)
+Meio da asa 15                     ← não reconhecido (sem verbo de ação)
+Coração 17                         ← idem
+Linguiça 30                        ← idem
+```
 
-### 1. Título sem emoji
-- Remover `{groupIcon}` do `DialogTitle`. Ficar apenas **"Escolha — {groupName}"**.
-- Remover a prop `groupIcon` (e atualizar o uso em `MenuView.tsx` para não passar mais).
+O parser atual exige `entrada <qty> <produto>` por linha. O usuário escreveu em formato natural de **lista de contagem**: cabeçalho com a ação + linhas só com `<produto> <qty>`.
 
-### 2. Item esgotado — visual neutro
-- Trocar `bg-card/60 border-destructive/40` por `bg-muted/30 border-border opacity-60`.
-- Remover badge vermelho "Esgotado". Substituir por texto pequeno `text-muted-foreground italic` → **"Indisponível"** ao lado do nome.
+## Solução
 
-### 3. Reordenação automática
-- `available` primeiro, `esgotado` no fim (sort estável). Variantes não cadastradas (`product == null`) vão para o fim também.
+Refatorar o handler de mensagens em `supabase/functions/telegram-webhook/index.ts` para suportar **modo de operação herdada** em mensagens multi-linha de estoque.
 
-### 4. Botão "Adicionar" forte (igual MenuView)
-- Cada variante vira um `div` (não mais `<button>` externo).
-- Rodapé com botão full-width:
-  - Disponível: `bg-primary text-primary-foreground font-bold rounded-lg py-2 active:scale-95` → **"Adicionar"**.
-  - Esgotado: `bg-muted text-muted-foreground cursor-not-allowed` → **"Indisponível"**. Mantém `onClick` para preservar o gate do `EsgotadoConfirmDialog` (igual MenuView).
-- Variante não cadastrada permanece como hoje (sem botão, texto "Não cadastrado no admin").
+### 1. Aceitar variações do verbo "entrada" (e saída/ajuste)
 
-### 5. Hierarquia visual
-- Nome: `font-bold text-base text-foreground`.
-- Preço: `text-base font-extrabold text-primary` (cor sólida, sem gradiente).
-- Espaçamento `gap-1.5`, padding `p-2.5`.
-- Badge de quantidade (`animate-badge-pop`) mantido no canto.
+No regex `stockIn` (linha 517), aceitar sufixo opcional `de estoque`/`no estoque`:
 
-### 6. Atualização em `MenuView.tsx`
-- Remover a prop `groupIcon={group.icon}` na chamada do `GroupVariantDialog` (ou deixar opcional/ignorada).
+- `entrada de estoque medalhão 20` ✅
+- `saida do estoque 5 coca` ✅
+- `chegou ao estoque 10 cerva` ✅
 
-## Não alterado
-- Lógica `onPick`, `isEsgotado`, `getQty`, fluxo de `EsgotadoConfirmDialog`, backend, hooks de estoque/receitas.
+Mesmo tratamento para `stockOut` e os regex de AJUSTE.
+
+### 2. Aceitar ordem invertida `<produto> <qty>`
+
+Na função `parseStockTail` (linha 497), além de `<qty> [unit] <produto>`, aceitar também `<produto> <qty> [unit]` como fallback quando o formato canônico não casa. Isso permite:
+
+- `entrada de estoque medalhão 20` → qty=20, item="medalhão"
+- `entrada coca 10` → qty=10, item="coca"
+- `entrada 10 coca` → continua funcionando (canônico)
+
+### 3. Modo de operação herdada (CRÍTICO)
+
+Quando uma mensagem tem múltiplas linhas e a **primeira linha** é um `STOCK_MOVEMENT` válido (in/out/adjustment), as linhas seguintes que **não** começam com verbo conhecido devem ser interpretadas como **continuação** com o mesmo tipo de operação.
+
+Implementação no loop de processamento de comandos (perto da linha 3836, onde `for (const line of lines)` itera):
+
+```ts
+let inheritedStockType: "in" | "out" | "adjustment" | null = null;
+
+for (const line of lines) {
+  let cmd = parseCommand(line);
+  
+  // Se linha falhou no parse E temos tipo herdado E a linha parece "<produto> <qty>" ou "<qty> <produto>"
+  if (cmd.kind === "PARSE_ERROR" && inheritedStockType) {
+    const parsed = parseStockTail(line, true); // tenta os dois formatos
+    if (parsed) {
+      cmd = { kind: "STOCK_MOVEMENT", type: inheritedStockType, qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
+    }
+  }
+  
+  // Atualiza o tipo herdado quando a linha foi um STOCK_MOVEMENT bem parseado
+  if (cmd.kind === "STOCK_MOVEMENT") {
+    inheritedStockType = cmd.type;
+  }
+  
+  // ... processa cmd como hoje
+}
+```
+
+### 4. Resultado esperado
+
+Mensagem do usuário:
+```
+Entrada de estoque medalhão 20
+Meio da asa 15
+Coração 17
+Linguiça 30
+```
+
+Vira 4 comandos `STOCK_MOVEMENT type=in`:
+- +20 medalhão
+- +15 meio da asa
+- +17 coração
+- +30 linguiça
+
+Resposta do bot agrupa as 4 confirmações com saldos antes/depois.
 
 ## Arquivos modificados
-- `src/components/palm/GroupVariantDialog.tsx` — refatoração completa do visual.
-- `src/components/palm/MenuView.tsx` — remover passagem de `groupIcon`.
+
+- `supabase/functions/telegram-webhook/index.ts`
+  - `parseStockTail`: aceitar ordem `<produto> <qty>` como fallback.
+  - Regex de `entrada`/`saida`/`ajuste`: aceitar sufixo opcional "de/do/no estoque".
+  - Loop de processamento de linhas: adicionar variável `inheritedStockType` e fallback quando linha não parseia mas há tipo herdado.
+
+## Não alterado
+
+- Comportamento de pedidos (`mesa N + qty produto`).
+- Wizard de estoque (botões).
+- Dedupe, whitelist, identificação de waiter.
+- Comandos diretos existentes continuam funcionando exatamente igual.
 
