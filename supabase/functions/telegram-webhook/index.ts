@@ -146,23 +146,11 @@ function parseCommand(raw: string): Command {
   const viewB = text.match(/^(?:ver(?:\s+pedido)?|pedido)\s+(?:da\s+|na\s+|do\s+|no\s+)?mesa\s+(\d+)$/);
   if (viewB) return { kind: "VIEW", table: viewB[1] };
 
-  // Operadores
-  const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
-  const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
-  const ALL_OPS = [...ADD_OPS, ...REM_OPS];
-
   // VIEW natural: "mesa N <gatilho>", "<gatilho> mesa N", "como esta a mesa N", "quanto deu a mesa N" etc.
   // Só dispara se NÃO houver operador ADD/REMOVE nem padrão "<qty> <produto>".
   {
     const tableMatch = text.match(/\bmesa\s+(\d+)\b/);
     if (tableMatch) {
-      const VIEW_TOKENS = [
-        "ver", "ve", "consulta", "consultar", "consulte",
-        "total", "totais", "pedido", "pedidos",
-        "mostra", "mostrar", "mostre", "lista", "listar", "liste",
-        "resumo", "extrato", "conta", "quanto",
-      ];
-      const VIEW_PHRASES = ["como esta", "como ta", "como anda"];
       const tokens = text.split(/\s+/);
       const hasViewToken = tokens.some((t) => VIEW_TOKENS.includes(t));
       const hasViewPhrase = VIEW_PHRASES.some((p) => text.includes(p));
