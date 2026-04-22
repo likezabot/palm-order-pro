@@ -114,11 +114,19 @@ type UndoOp = { op: "a" | "r"; productId: string; productName: string; qty: numb
 type UndoToken = { chatId: number; table: string; ops: UndoOp[]; ts: number };
 const pendingUndos = new Map<string, UndoToken>();
 const consumedUndos = new Map<string, number>();
+// Stack de tokens de undo por chat — mais recente primeiro. Usado pelo comando textual `undo`.
+const chatUndoStack = new Map<number, string[]>();
 
 function cleanupUndos() {
   const now = Date.now();
   for (const [k, v] of pendingUndos) if (now - v.ts > UNDO_TTL_MS) pendingUndos.delete(k);
   for (const [k, t] of consumedUndos) if (now - t > UNDO_TTL_MS) consumedUndos.delete(k);
+  // Compacta stack por chat removendo tokens já expirados/consumidos.
+  for (const [chat, arr] of chatUndoStack) {
+    const filtered = arr.filter((t) => pendingUndos.has(t));
+    if (filtered.length === 0) chatUndoStack.delete(chat);
+    else chatUndoStack.set(chat, filtered);
+  }
 }
 function genUndoToken(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -128,6 +136,9 @@ function registerBatchUndo(chatId: number, table: string, ops: UndoOp[]): string
   if (ops.length === 0) return "";
   const token = genUndoToken();
   pendingUndos.set(token, { chatId, table, ops, ts: Date.now() });
+  const stack = chatUndoStack.get(chatId) ?? [];
+  stack.push(token);
+  chatUndoStack.set(chatId, stack);
   return token;
 }
 function buildUndoSingleKeyboard(table: string, productId: string, qty: number, op: "a" | "r"): InlineButton[][] {
