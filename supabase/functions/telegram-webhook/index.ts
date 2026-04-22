@@ -1441,6 +1441,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
   const messageId: number | undefined = cb.message?.message_id;
   const data: string | undefined = cb.data;
   const username: string | undefined = cb.from?.username;
+  const userId: number | undefined = cb.from?.id;
+  const chatType: ChatType = cb.message?.chat?.type;
   if (!chatId || !messageId || !data) {
     await answerCallback(cbId);
     return;
@@ -1463,6 +1465,60 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
+  // ─── UNDO single: u|table|productId|qty|op ───
+  if (data.startsWith("u|")) {
+    cleanupUndos();
+    const parts = data.split("|");
+    if (parts.length !== 5) {
+      await answerCallback(cbId, "Inválido");
+      return;
+    }
+    const [, table, productId, qtyStr, originalOp] = parts;
+    const qty = parseInt(qtyStr, 10);
+    if (!UUID_RE.test(productId) || !Number.isFinite(qty) || qty < 1 || qty > 99 || !table || (originalOp !== "a" && originalOp !== "r")) {
+      await answerCallback(cbId, "Dados inválidos");
+      return;
+    }
+    if (consumedUndos.has(data)) {
+      await answerCallback(cbId, "Já desfeito");
+      return;
+    }
+    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    await answerCallback(cbId);
+    try {
+      const result = await executeUndoOps(table, [{ op: originalOp as "a" | "r", productId, productName: "", qty }], waiter);
+      consumedUndos.set(data, Date.now());
+      await editTelegramMessage(chatId, messageId, `↩️ Operação desfeita.\n${result}`);
+    } catch (e: any) {
+      await editTelegramMessage(chatId, messageId, `❌ Erro ao desfazer: ${String(e?.message ?? e)}`);
+    }
+    return;
+  }
+
+  // ─── UNDO batch: ub|token ───
+  if (data.startsWith("ub|")) {
+    cleanupUndos();
+    const token = data.slice(3);
+    const entry = pendingUndos.get(token);
+    if (!entry) {
+      await answerCallback(cbId, "Expirado");
+      await editTelegramMessage(chatId, messageId, "⏱ Desfazer expirado.");
+      return;
+    }
+    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    await answerCallback(cbId);
+    try {
+      const result = await executeUndoOps(entry.table, entry.ops, waiter);
+      pendingUndos.delete(token);
+      consumedUndos.set(token, Date.now());
+      await editTelegramMessage(chatId, messageId, `↩️ Operação desfeita.\n${result}`);
+    } catch (e: any) {
+      await editTelegramMessage(chatId, messageId, `❌ Erro ao desfazer: ${String(e?.message ?? e)}`);
+    }
+    return;
+  }
+
+  // ─── ADD/REMOVE escolha: a|... ou r|... ───
   const parts = data.split("|");
   if (parts.length !== 4 || (parts[0] !== "a" && parts[0] !== "r")) {
     await answerCallback(cbId, "Comando inválido");
@@ -1510,8 +1566,19 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
       : `❌ Erro ao processar: ${msg}`;
   }
-  if (success) await setLastTable(chatId, table);
+  if (success) {
+    await setLastTable(chatId, table, userId, chatType);
+    const status = await formatPrintStatus(table);
+    if (status) resultText += "\n" + status;
+  }
   await editTelegramMessage(chatId, messageId, resultText);
+
+  // Após escolha bem-sucedida via botão, oferece undo numa NOVA mensagem
+  // (não dá pra adicionar keyboard no editMessageText sem perder os botões antigos cleanly).
+  if (success) {
+    const undoKb = buildUndoSingleKeyboard(table, productId, qty, op as "a" | "r");
+    await sendTelegram(chatId, `↩️ Quer desfazer essa ação?`, undoKb);
+  }
 }
 
 Deno.serve(async (req) => {
