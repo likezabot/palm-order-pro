@@ -455,6 +455,30 @@ export type Database = {
           },
         ]
       }
+      telegram_chat_state: {
+        Row: {
+          chat_id: number
+          data: Json
+          expires_at: string
+          step: string
+          updated_at: string
+        }
+        Insert: {
+          chat_id: number
+          data?: Json
+          expires_at?: string
+          step: string
+          updated_at?: string
+        }
+        Update: {
+          chat_id?: number
+          data?: Json
+          expires_at?: string
+          step?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       telegram_undo_stack: {
         Row: {
           chat_id: number
