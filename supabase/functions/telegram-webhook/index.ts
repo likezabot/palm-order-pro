@@ -1674,6 +1674,29 @@ async function handleCallbackQuery(cb: any): Promise<void> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // ── TEST MODE endpoints (GET) ──
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const op = url.searchParams.get("test");
+    if (op) {
+      if (!TEST_MODE) {
+        return new Response(JSON.stringify({ error: "TEST_MODE disabled" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (op === "ping") {
+        return new Response(JSON.stringify({ test_mode: true, test_chat_id: TEST_CHAT_ID }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (op === "cleanup") {
+        const r = await cleanupTestData();
+        return new Response(JSON.stringify({ ok: true, ...r }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (op === "drain") {
+        return new Response(JSON.stringify({ buffer: drainTestBuffer() }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "unknown op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   if (!TOKEN) {
     console.error("TELEGRAM_BOT_TOKEN not configured");
     return new Response("ok", { status: 200, headers: corsHeaders });
@@ -1685,7 +1708,13 @@ Deno.serve(async (req) => {
 
     // Callback de botão inline
     if (update?.callback_query) {
-      await handleCallbackQuery(update.callback_query);
+      const cbChatId: number | undefined = update.callback_query?.message?.chat?.id;
+      setTestContext(cbChatId);
+      try {
+        await handleCallbackQuery(update.callback_query);
+      } finally {
+        clearTestContext();
+      }
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
