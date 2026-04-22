@@ -1,94 +1,87 @@
 
 
-## Fase 3 — Operações inteligentes (3 entregas)
+## Estoque pelo Telegram 📦
 
-Vou implementar na ordem aprovada: **fechamento de caixa → mesa parada → comando status**. Tudo via banco + edge functions, sem mexer no front.
+Hoje o bot **só consulta** estoque crítico (`estoque`, `críticos`). Não dá pra registrar entrada/saída/ajuste pelo Telegram. Vou adicionar isso reaproveitando a RPC `apply_inventory_movement` (mesma usada pelo PDV/Stock).
 
-### 1. Fechamento de caixa 💰
+### 1. Comandos novos
 
-**Trigger novo:** `queue_cash_closed` em `cash_register` (AFTER UPDATE quando `status` vira `closed`).
+| Comando | Ação | RPC |
+|---|---|---|
+| `entrada 10 coca` / `entrou 5kg picanha` / `+10 coca estoque` | Soma ao estoque | `apply_inventory_movement(type='in')` |
+| `saida 2 coca` / `saiu 1kg picanha` / `gastei 3 carvão` | Subtrai do estoque | `apply_inventory_movement(type='out')` |
+| `ajuste coca 50` / `setar coca 50` / `tem 12 coca` | Define valor absoluto | `apply_inventory_movement(type='adjustment')` |
+| `estoque coca` / `quanto tem de coca` | Mostra saldo atual de UM item | SELECT em `inventory_items` |
+| `estoque` / `críticos` (já existe) | Lista críticos | já implementado |
 
-Enfileira evento `cash_closed` com payload calculado em SQL:
-- `total_sales` do registro
-- soma de `cash_movements` por tipo (sangria/suprimento) durante a sessão
-- `final_amount` (conferido) vs `initial_amount + vendas - sangrias + suprimentos` (esperado)
-- diferença
+**Diferenciador-chave:** comandos de estoque exigem palavra-gatilho explícita (`entrada`, `saida`, `ajuste`, `estoque <nome>`) — nunca confundem com `mesa N + qty produto`. Sem `mesa`, sem ADD para pedido.
 
-Janela de consolidação: **5s** (fechamento é raro, não precisa muito).
+### 2. Parser
 
-**Mensagem:**
+Novo `Command` kind: `STOCK_MOVEMENT { type: 'in'|'out'|'adjustment', qty, itemText, unit? }` e `STOCK_QUERY { itemText }`.
+
+Regex no `parseCommand` ANTES do bloco ADD/REMOVE:
+- `^(?:entrada|entrou|recebi|chegou|comprei|\+(?=\d))\s+(?:(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|un)?\s+)?(.+)$` → IN
+- `^(?:saida|saída|saiu|usei|gastei|tirei|consumi|-(?=\d))\s+(?:(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|un)?\s+)?(.+)$` → OUT
+- `^(?:ajuste|ajustar|setar|set|tem|fica(?:r)?\s+com|atualiza(?:r)?)\s+(.+?)\s+(?:para\s+|=\s*|com\s+)?(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|un)?$` → ADJUSTMENT
+- `^(?:estoque|saldo|quanto\s+tem(?:\s+de)?)\s+(.+)$` → QUERY (se não bater no STOCK_CRITICAL existente)
+
+Suporta números por extenso via `parseQtyToken` (`um`, `dois`, …, `vinte`).
+
+### 3. Resolução do item de estoque
+
+Função nova `resolveStockItem(text)`:
+1. Tenta `find_inventory_item_by_text` (slug/aliases exato — RPC já existe).
+2. Fallback: `select` em `inventory_items where is_active=true` + `normalize+singularize` + match por inclusão de tokens.
+3. Aplica fuzzy Levenshtein ≤2 (mesma função já usada para produtos).
+4. 0 hits → `not_found_stock` (sugere `inventario` para listar). 1 hit → executa. 2+ hits → **inline buttons** com candidatos (callback `s|<type>|<item_id>|<qty>` para in/out/adj).
+
+### 4. Execução
+
+`executeStockMovement(itemId, type, qty, source='telegram', note='Telegram @username')`:
+- Chama `sb.rpc('apply_inventory_movement', { p_item_id, p_type, p_quantity, p_note, p_source: 'telegram' })`.
+- Retorno mostra: `✅ Entrada: 10 un de Coca 350ml. Saldo: 32 un.` Para OUT, se `new_stock <= min_stock`: anexa `⚠️ Atingiu o crítico (mín X)`. Se `new_stock <= 0`: `🚨 Item zerado`.
+- Trigger `queue_stock_alert` / `queue_stock_in` já dispara notificação no grupo automaticamente — sem mudança aí.
+
+### 5. Permissões e segurança
+
+- Mesma whitelist `telegram_allowed_chats`.
+- Exige garçom vinculado (mesma regra dos pedidos). Nome do garçom vai pra `note` do movimento (`Estoque via Telegram (Jacir)`).
+- **Rate limit:** já existe (10/60s por chat) — vale para esses comandos também.
+- **Undo:** botão `↩️ Desfazer (60s)` após cada movimento. Undo cria movimento inverso (IN↔OUT; ajuste guarda valor anterior em `pendingUndos` e aplica novo `adjustment` com valor antigo). Token `us|<token>` (stock undo).
+
+### 6. Help atualizado
+
+Adiciona seção no `/help`:
 ```
-💰 Caixa fechado
-Vendas: R$ 2.940,50
-Sangrias: R$ 200,00
-Suprimentos: R$ 50,00
-Esperado: R$ 2.890,50 · Conferido: R$ 2.880,00
-Diferença: -R$ 10,50 ⚠️
-```
-
-Sem diferença = sem ⚠️.
-
-### 2. Alerta de mesa parada ⏰
-
-**Edge function nova:** `check-stale-tables`
-- Cron a cada **15 min** (`*/15 * * * *`)
-- Busca pedidos:
-  - `status = 'done'` há mais de **30 min** (esperando pagar)
-  - `status IN ('new','preparing')` cujo `updated_at` é mais antigo que **60 min** (sem item novo)
-- Para cada uma, enfileira evento `table_stale` com `consolidate_key = 'table_stale:<order_id>:<bucket_15min>'` para não repetir o alerta da mesma mesa toda hora — só a cada 15min se persistir.
-- Idempotência adicional: só alerta se ainda não houve `notification_log` com mesma `dedupe_key` nas últimas 2h.
-
-**Mensagem:**
-```
-⏰ Mesa parada
-Mesa 5 · Garçom Alice
-Aberta há 1h20 · Sem item novo há 45min
-Total atual: R$ 180,00
-```
-
-Flag em `telegram_notify_config.stale_tables` (default ON).
-
-### 3. Comando `mesa X status` 📋
-
-**Update em `telegram-webhook`:** parser reconhece padrões:
-- `mesa 5 status`
-- `status mesa 5`
-- `status 5`
-
-Handler busca pedido ativo da mesa e responde no mesmo chat:
-```
-📋 Mesa 5
-Garçom: Alice
-Aberta há 35min · último item há 12min
-• 2× Picanha
-• 1× Coca 2L
-• 3× Cerveja Heineken
-Total: R$ 187,00
-Status: preparando
+📦 ESTOQUE
+• entrada 10 coca → soma ao saldo
+• saida 2 picanha → subtrai
+• ajuste coca 50 → define valor
+• estoque coca → mostra saldo
+• estoque (críticos) → lista alertas
 ```
 
-Se não houver pedido ativo: "Mesa 5 está livre." 
+### 7. Memória
 
-Não duplica com `ver pedido` (que mostra detalhe completo) — `status` é o resumo curto.
+Atualizar `mem://features/telegram-bot.md`:
+- Substituir "NÃO mexe em estoque" por "Mexe em estoque via comandos explícitos (`entrada`, `saida`, `ajuste`, `estoque <nome>`); pedidos continuam sem afetar saldo".
+- Documentar novos kinds, callbacks `s|*` e `us|*`.
 
-### 4. Resumo técnico
+### 8. Arquivos modificados
 
-| Arquivo | O que faz |
-|---|---|
-| `supabase/migrations/<ts>_phase3_notifications.sql` | Trigger `queue_cash_closed` + função SQL auxiliar de cálculo |
-| `supabase/functions/check-stale-tables/index.ts` | Cron 15min, varre mesas paradas e enfileira alertas |
-| `supabase/functions/notify-telegram/index.ts` | +3 formatadores: `cash_closed`, `table_stale` |
-| `supabase/functions/telegram-webhook/index.ts` | +1 comando: `mesa X status` |
-| `cron.schedule` (via insert SQL) | Job `check-stale-tables` rodando `*/15 * * * *` |
-| `settings.telegram_notify_config` | Adiciona flags `cash_closed` e `stale_tables` (default true) |
+- `supabase/functions/telegram-webhook/index.ts` — parser, resolver, executor, help, callbacks de undo de estoque.
+- `.lovable/memory/features/telegram-bot.md` — atualizar regras.
 
-### 5. Validação
+Sem migrations novas (RPC e triggers de notificação já existem).
 
-1. Abrir e fechar caixa no PDV → `💰 Caixa fechado` cai no grupo com totais
-2. Deixar mesa em `done` por 31min → `⏰ Mesa parada` aparece no próximo ciclo
-3. Mandar `mesa 1 status` no Telegram → bot responde resumo
-4. Cron `check-stale-tables` listado em `cron.job`
-5. Confirmar que mesma mesa parada não dispara alerta duplicado em <15min
+### Validação
 
-Pronto para Fase 4 quando os 5 passarem.
+1. `entrada 10 coca` → saldo +10, notificação `📦 Entrada de estoque` cai no grupo de notificações.
+2. `saida 5 coca` quando saldo fica ≤ min → alerta `⚠️ Estoque crítico` automático.
+3. `ajuste coca 100` → saldo vira 100 exato.
+4. `estoque coca` → responde saldo atual sem mover nada.
+5. `entrada 10 xyz` (item inexistente) → mensagem amigável + dica.
+6. Item ambíguo (`entrada 5 coca`) → botões com Coca 350/600/2L.
+7. Undo após `entrada 10 coca` → registra OUT 10, saldo volta.
 
