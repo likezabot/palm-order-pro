@@ -8,7 +8,7 @@ import {
 import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export type PorcoVariantEntry = {
+export type GroupVariantEntry = {
   name: string;
   product: Product | null;
 };
@@ -16,15 +16,19 @@ export type PorcoVariantEntry = {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  variants: PorcoVariantEntry[];
+  groupName: string;
+  groupIcon?: string;
+  variants: GroupVariantEntry[];
   onPick: (variantName: string, product: Product) => void;
   isEsgotado: (productId: string) => boolean;
   getQty: (productId: string) => number;
 }
 
-export const PorcoVariantDialog = ({
+export const GroupVariantDialog = ({
   open,
   onOpenChange,
+  groupName,
+  groupIcon = "📦",
   variants,
   onPick,
   isEsgotado,
@@ -33,7 +37,9 @@ export const PorcoVariantDialog = ({
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-sm">
       <DialogHeader>
-        <DialogTitle>Escolha o tipo de Porco</DialogTitle>
+        <DialogTitle>
+          <span className="mr-1">{groupIcon}</span> Escolha — {groupName}
+        </DialogTitle>
       </DialogHeader>
       <TooltipProvider delayDuration={200}>
         <div className="grid grid-cols-1 gap-2">
@@ -52,8 +58,7 @@ export const PorcoVariantDialog = ({
                   <TooltipContent side="top" className="max-w-[240px]">
                     <p className="text-[11px] font-semibold">Produto não encontrado</p>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Peça ao admin para criar "{name}" em Cardápio → Espetos para liberar
-                      esta variante no popup.
+                      Peça ao admin para criar "{name}" para liberar esta variante no popup.
                     </p>
                   </TooltipContent>
                 </Tooltip>

@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 import type { Product } from "@/lib/types";
-import { getPorcoGroupProducts, useExtraPorcoNames } from "@/lib/porco-group";
+import { resolveGroupMembers, type ProductGroup } from "@/lib/product-groups";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -10,18 +10,12 @@ import {
 } from "@/components/ui/tooltip";
 
 interface Props {
+  group: ProductGroup;
   products: Product[];
 }
 
-const DISPLAY_NAMES: Record<string, string> = {
-  porco: "Porco",
-  "panceta suína": "Panceta suína",
-  "costela suína": "Costela suína",
-};
-
-export const PorcoGroupBanner = ({ products }: Props) => {
-  const { data: extraNames = [] } = useExtraPorcoNames();
-  const variants = getPorcoGroupProducts(products, extraNames);
+export const ProductGroupBanner = ({ group, products }: Props) => {
+  const variants = resolveGroupMembers(group, products);
   const anyExists = variants.some((v) => v.product);
   if (!anyExists) return null;
 
@@ -41,29 +35,29 @@ export const PorcoGroupBanner = ({ products }: Props) => {
     <TooltipProvider delayDuration={200}>
       <aside className="border-l-4 border-primary bg-primary/5 rounded-lg p-3 mb-3">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-base">🐷</span>
-          <h3 className="text-sm font-black text-foreground">Grupo Porco (popup do garçom)</h3>
+          <span className="text-base">{group.icon}</span>
+          <h3 className="text-sm font-black text-foreground">
+            Grupo {group.name} (popup do garçom)
+          </h3>
         </div>
         <p className="text-[11px] text-muted-foreground mb-2 leading-snug">
-          Estes 3 itens aparecem juntos no popup ao tocar em "Porco" no PALM. Edite preço e
-          visibilidade individualmente abaixo — eles continuam controláveis aqui.
+          Estes itens aparecem juntos no popup ao tocar em "{group.trigger_product_name}" no
+          PALM. Edite preço e visibilidade individualmente abaixo.
         </p>
         <div className="flex flex-wrap gap-1.5">
           {variants.map(({ name, product }) => {
-            const label = DISPLAY_NAMES[name] ?? name;
             if (!product) {
               return (
                 <Tooltip key={name}>
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center gap-1 rounded-md border border-dashed border-border bg-card/50 px-2 py-1 text-[11px] text-muted-foreground cursor-help">
-                      {label} · não cadastrado
+                      {name} · não cadastrado
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-[240px]">
                     <p className="text-[11px] font-semibold">Produto não encontrado</p>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Nenhum produto chamado "{label}" na categoria Espetos. Crie em "+ Novo"
-                      para que apareça no popup do PALM.
+                      Nenhum produto chamado "{name}" nesta categoria. Crie em "+ Novo".
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -82,28 +76,24 @@ export const PorcoGroupBanner = ({ products }: Props) => {
                     )}
                   >
                     {product.active ? <Eye size={11} /> : <EyeOff size={11} />}
-                    {label} · {product.active ? "ativo" : "oculto"}
+                    {name} · {product.active ? "ativo" : "oculto"}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[260px]">
                   <p className="text-[11px] font-bold">{product.name}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    R$ {product.price.toFixed(2)} · Espetos
+                    R$ {product.price.toFixed(2)}
                   </p>
                   <p className="text-[11px] mt-1">
                     {product.active ? (
                       <span className="text-foreground">
-                        ✅ Visível no PALM — aparece no popup do Porco.
+                        ✅ Visível no PALM — aparece no popup.
                       </span>
                     ) : (
                       <span className="text-destructive">
-                        🚫 Oculto — não aparece no popup do PALM. Toque em "Oculto" no card abaixo
-                        para reativar.
+                        🚫 Oculto — não aparece no popup.
                       </span>
                     )}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-1 italic">
-                    Toque no chip para localizar o card.
                   </p>
                 </TooltipContent>
               </Tooltip>

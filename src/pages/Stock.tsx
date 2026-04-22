@@ -11,7 +11,8 @@ import CriticalStockSection, { getCriticalItems } from "@/components/stock/Criti
 import { useInventoryItems, useBulkImportFromMenu } from "@/hooks/use-inventory";
 import { useAutoSyncMenuToStock } from "@/hooks/use-auto-sync-menu-to-stock";
 import { useMenuProductsForStock } from "@/hooks/use-menu-products-for-stock";
-import { PorcoGroupBanner } from "@/components/stock/PorcoGroupBanner";
+import { ProductGroupBanner } from "@/components/stock/ProductGroupBanner";
+import { useProductGroups, getGroupsForCategory } from "@/lib/product-groups";
 import { toast } from "@/hooks/use-toast";
 import {
   type InventoryItem,
@@ -29,6 +30,7 @@ export default function Stock() {
   const [searchParams] = useSearchParams();
   const { data: items = [], isLoading } = useInventoryItems();
   const { data: menuProducts = [] } = useMenuProductsForStock();
+  const { data: productGroups = [] } = useProductGroups();
   const bulkImport = useBulkImportFromMenu();
   useAutoSyncMenuToStock();
 
@@ -283,14 +285,16 @@ export default function Stock() {
           </div>
         ) : (
           <>
-            {tab === "espetos" && !search && (
-              <PorcoGroupBanner
+            {!search && getGroupsForCategory(productGroups, tab).map((g) => (
+              <ProductGroupBanner
+                key={g.id}
+                group={g}
                 items={active}
                 onCreateForProduct={(p) =>
                   createInventoryForProduct({ id: p.id, name: p.name, category: p.category })
                 }
               />
-            )}
+            ))}
             <StockList
               items={visibleItems}
               onMovement={openMovement}

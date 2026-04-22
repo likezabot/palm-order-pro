@@ -12,12 +12,13 @@ import {
   type Subgroup,
 } from "./menu-subgroups";
 import { RenameTableDialog } from "./RenameTableDialog";
-import { PorcoVariantDialog } from "./PorcoVariantDialog";
+import { GroupVariantDialog } from "./GroupVariantDialog";
 import {
-  getPorcoGroupProducts,
-  getHiddenEspetoNames,
-  useExtraPorcoNames,
-} from "@/lib/porco-group";
+  useProductGroups,
+  getHiddenProductNames,
+  resolveGroupMembers,
+  type ProductGroup,
+} from "@/lib/product-groups";
 import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
 import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
@@ -41,7 +42,7 @@ interface Props {
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
-  const [porcoOpen, setPorcoOpen] = useState(false);
+  const [openGroup, setOpenGroup] = useState<ProductGroup | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [moveOpen, setMoveOpen] = useState(false);
@@ -49,10 +50,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   const [esgotadoPending, setEsgotadoPending] = useState<Product | null>(null);
   const { playFeedback } = useFeedback();
   const { data: stockMap } = useProductStockMap();
-  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
-  const hiddenEspetoNames = useMemo(
-    () => getHiddenEspetoNames(extraPorcoNames),
-    [extraPorcoNames],
+  const { data: productGroups = [] } = useProductGroups();
+  const hiddenProductNames = useMemo(
+    () => getHiddenProductNames(productGroups, activeCategory),
+    [productGroups, activeCategory],
   );
 
   const isEsgotado = (id: string) => isProductEsgotado(stockMap, id);
@@ -101,24 +102,34 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
 
   const isSearching = search.trim().length > 0;
 
+  // For search, hide all members of all groups (except triggers) across categories.
+  const allHiddenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of productGroups) {
+      const triggerNorm = g.trigger_product_name.toLowerCase().trim();
+      for (const m of g.member_names) {
+        if (m.toLowerCase().trim() !== triggerNorm) set.add(m.toLowerCase());
+      }
+    }
+    return set;
+  }, [productGroups]);
+
   // Filtragem: busca global tem prioridade; senão, por categoria.
   const filteredRaw = useMemo(() => {
     if (isSearching) {
       const q = search.trim().toLowerCase();
       return products.filter(
         (p) =>
-          !hiddenEspetoNames.includes(p.name.toLowerCase()) &&
+          !allHiddenNames.has(p.name.toLowerCase()) &&
           p.name.toLowerCase().includes(q)
       );
     }
     return products.filter((p) => {
       if (p.category !== activeCategory) return false;
-      if (activeCategory === "espetos" && hiddenEspetoNames.includes(p.name.toLowerCase())) {
-        return false;
-      }
+      if (hiddenProductNames.includes(p.name.toLowerCase())) return false;
       return true;
     });
-  }, [products, activeCategory, isSearching, search, hiddenEspetoNames]);
+  }, [products, activeCategory, isSearching, search, hiddenProductNames, allHiddenNames]);
 
   const filtered = isSearching
     ? filteredRaw
@@ -138,17 +149,26 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     return counts;
   }, [cart, products]);
 
-  // Variantes reais do grupo Porco (Porco, Panceta suína, Costela suína + extras dinâmicas).
-  const porcoVariants = useMemo(
-    () => getPorcoGroupProducts(products, extraPorcoNames),
-    [products, extraPorcoNames],
+  // Groups in current category with resolved trigger products.
+  const activeGroups = useMemo(() => {
+    if (isSearching) return [];
+    return productGroups
+      .filter((g) => g.category === activeCategory)
+      .map((g) => {
+        const variants = resolveGroupMembers(g, products);
+        const triggerNorm = g.trigger_product_name.toLowerCase().trim();
+        const triggerProduct =
+          variants.find((v) => v.product && v.name.toLowerCase().trim() === triggerNorm)?.product ??
+          variants.find((v) => v.product)?.product ?? null;
+        return { group: g, triggerProduct, variants, variantCount: variants.filter((v) => v.product).length };
+      })
+      .filter((x) => !!x.triggerProduct);
+  }, [productGroups, activeCategory, products, isSearching]);
+
+  const triggerProductIds = useMemo(
+    () => new Set(activeGroups.map((g) => g.triggerProduct!.id)),
+    [activeGroups],
   );
-  const porcoBase =
-    porcoVariants.find((v) => v.name === "porco")?.product ??
-    porcoVariants.find((v) => v.product)?.product ??
-    null;
-  const porcoVariantCount = porcoVariants.filter((v) => v.product).length;
-  const showPorcoCard = !isSearching && activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) =>
     cart.filter((i) => i.product.id === id).reduce((sum, i) => sum + i.quantity, 0);
@@ -162,13 +182,16 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     ? filtered.filter((p) => matchesSubgroup(p, openSubgroup))
     : [];
 
-  // Quantidade total no carrinho de qualquer variante de Porco (badge do card).
-  const porcoVariantIds = new Set(
-    porcoVariants.map((v) => v.product?.id).filter((id): id is string => !!id)
-  );
-  const porcoQty = cart
-    .filter((i) => porcoVariantIds.has(i.product.id))
-    .reduce((sum, i) => sum + i.quantity, 0);
+  const getGroupQty = (g: ProductGroup) => {
+    const memberIds = new Set(
+      resolveGroupMembers(g, products)
+        .map((v) => v.product?.id)
+        .filter((id): id is string => !!id)
+    );
+    return cart
+      .filter((i) => memberIds.has(i.product.id))
+      .reduce((sum, i) => sum + i.quantity, 0);
+  };
 
 
   return (
@@ -348,40 +371,43 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
-            {/* Card especial "Porco" — abre popup com 3 variantes */}
-            {showPorcoCard && (
-              <button
-                key="__porco_card__"
-                onClick={() => {
-                  playFeedback("click");
-                  setPorcoOpen(true);
-                }}
-                className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
-              >
-                <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
-                  🐷 Grupo
-                </span>
-                <span className="font-semibold text-base text-foreground leading-tight mt-4">
-                  Porco
-                </span>
-                <span className="mt-1 text-sm font-black brand-gradient-text">
-                  R$ {porcoBase!.price.toFixed(2)}
-                </span>
-                <span className="mt-0.5 text-[10px] text-muted-foreground">
-                  {porcoVariantCount} variante{porcoVariantCount === 1 ? "" : "s"}
-                </span>
-                <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
-                  Toque para escolher
-                </span>
-                {porcoQty > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
-                    {porcoQty}
+            {/* Cards de grupos (popups) */}
+            {activeGroups.map(({ group, triggerProduct, variantCount }) => {
+              const groupQty = getGroupQty(group);
+              return (
+                <button
+                  key={`__group__${group.id}`}
+                  onClick={() => {
+                    playFeedback("click");
+                    setOpenGroup(group);
+                  }}
+                  className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
+                >
+                  <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
+                    {group.icon} Grupo
                   </span>
-                )}
-              </button>
-            )}
+                  <span className="font-semibold text-base text-foreground leading-tight mt-4">
+                    {triggerProduct!.name}
+                  </span>
+                  <span className="mt-1 text-sm font-black brand-gradient-text">
+                    R$ {triggerProduct!.price.toFixed(2)}
+                  </span>
+                  <span className="mt-0.5 text-[10px] text-muted-foreground">
+                    {variantCount} variante{variantCount === 1 ? "" : "s"}
+                  </span>
+                  <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
+                    Toque para escolher
+                  </span>
+                  {groupQty > 0 && (
+                    <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
+                      {groupQty}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             {filtered
-              .filter((p) => !(showPorcoCard && porcoBase && p.id === porcoBase.id))
+              .filter((p) => !triggerProductIds.has(p.id))
               .map((product) => {
                 const qty = getQty(product.id);
                 const esgotado = isEsgotado(product.id);
@@ -424,24 +450,23 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         ))}
       </div>
 
-      <PorcoVariantDialog
-        open={porcoOpen}
-        onOpenChange={setPorcoOpen}
-        variants={porcoVariants.map((v) => {
-          const display =
-            v.name === "porco"
-              ? "Porco"
-              : v.name === "panceta suína"
-              ? "Panceta suína"
-              : v.name === "costela suína"
-              ? "Costela suína"
-              : v.product?.name ?? v.name;
-          return { name: display, product: v.product };
-        })}
+      <GroupVariantDialog
+        open={!!openGroup}
+        onOpenChange={(o) => { if (!o) setOpenGroup(null); }}
+        groupName={openGroup?.name ?? ""}
+        groupIcon={openGroup?.icon}
+        variants={
+          openGroup
+            ? resolveGroupMembers(openGroup, products).map((v) => ({
+                name: v.product?.name ?? v.name,
+                product: v.product,
+              }))
+            : []
+        }
         isEsgotado={isEsgotado}
         getQty={getQty}
         onPick={(_name, product) => {
-          setPorcoOpen(false);
+          setOpenGroup(null);
           handleAdd(product);
         }}
       />

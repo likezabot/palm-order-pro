@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Product } from "@/lib/types";
 import type { InventoryItem } from "@/lib/inventory";
 import { formatQty, getStockStatus } from "@/lib/inventory";
-import { getPorcoGroupInventory, useExtraPorcoNames } from "@/lib/porco-group";
+import { resolveGroupInventory, type ProductGroup } from "@/lib/product-groups";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -13,33 +13,27 @@ import {
 } from "@/components/ui/tooltip";
 
 interface Props {
+  group: ProductGroup;
   items: InventoryItem[];
   onCreateForProduct: (product: Product) => void;
 }
 
-const DISPLAY_NAMES: Record<string, string> = {
-  porco: "Porco",
-  "panceta suína": "Panceta suína",
-  "costela suína": "Costela suína",
-};
-
-export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
-  const { data: extraNames = [] } = useExtraPorcoNames();
+export const ProductGroupBanner = ({ group, items, onCreateForProduct }: Props) => {
   const { data: products = [] } = useQuery({
-    queryKey: ["porco-group-products"],
+    queryKey: ["group-products", group.category],
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("category", "espetos");
+        .eq("category", group.category);
       if (error) throw error;
       return data as Product[];
     },
   });
 
-  const group = getPorcoGroupInventory(items, products, extraNames);
-  const anyExists = group.some((g) => g.product);
+  const variants = resolveGroupInventory(group, items, products);
+  const anyExists = variants.some((g) => g.product);
   if (!anyExists) return null;
 
   const focusCard = (inventoryId: string) => {
@@ -58,28 +52,28 @@ export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
     <TooltipProvider delayDuration={200}>
       <aside className="border-l-4 border-primary bg-primary/5 rounded-lg p-3 mx-2 mt-2">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-base">🐷</span>
-          <h3 className="text-sm font-black text-foreground">Grupo Porco (popup do garçom)</h3>
+          <span className="text-base">{group.icon}</span>
+          <h3 className="text-sm font-black text-foreground">
+            Grupo {group.name} (popup do garçom)
+          </h3>
         </div>
         <p className="text-[11px] text-muted-foreground mb-2 leading-snug">
-          3 itens controlam o popup de variantes no PALM. Toque para localizar o card abaixo.
+          Itens que controlam o popup de "{group.trigger_product_name}" no PALM. Toque para localizar.
         </p>
         <div className="flex flex-wrap gap-1.5">
-          {group.map(({ name, product, inventory }) => {
-            const label = DISPLAY_NAMES[name] ?? name;
+          {variants.map(({ name, product, inventory }) => {
             if (!product) {
               return (
                 <Tooltip key={name}>
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center gap-1 rounded-md border border-dashed border-border bg-card/50 px-2 py-1 text-[11px] text-muted-foreground cursor-help">
-                      {label} · sem produto
+                      {name} · sem produto
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-[240px]">
                     <p className="text-[11px] font-semibold">Produto não cadastrado</p>
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Não há produto "{label}" no Admin. Crie no Admin → Cardápio → Espetos
-                      antes de criar o item de estoque.
+                      Crie no Admin → Cardápio antes de criar o item de estoque.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -93,19 +87,13 @@ export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
                       onClick={() => onCreateForProduct(product)}
                       className="inline-flex items-center gap-1 rounded-md border border-dashed border-warning/50 bg-warning/5 px-2 py-1 text-[11px] font-semibold text-warning hover:bg-warning/10 transition-colors"
                     >
-                      {label} · sem estoque · + criar
+                      {name} · sem estoque · + criar
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-[260px]">
                     <p className="text-[11px] font-bold">{product.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      R$ {product.price.toFixed(2)} · Espetos
-                    </p>
                     <p className="text-[11px] mt-1 text-warning">
-                      ⚠️ Produto existe no Admin mas ainda não tem item de estoque vinculado.
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-1 italic">
-                      Toque para criar o item de estoque já vinculado.
+                      ⚠️ Sem item de estoque vinculado. Toque para criar.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -113,21 +101,15 @@ export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
             }
             const status = getStockStatus(inventory);
             const statusLabel =
-              status === "negative"
-                ? "NEG"
-                : status === "zero"
-                ? "ZERADO"
-                : status === "low"
-                ? "BAIXO"
-                : null;
+              status === "negative" ? "NEG"
+              : status === "zero" ? "ZERADO"
+              : status === "low" ? "BAIXO"
+              : null;
             const statusReason =
-              status === "negative"
-                ? "Estoque negativo — algo foi vendido sem reposição."
-                : status === "zero"
-                ? "Estoque zerado — vai aparecer ESGOTADO no PALM."
-                : status === "low"
-                ? `Abaixo do mínimo (${formatQty(inventory.min_stock, inventory.unit)}).`
-                : "Estoque ok.";
+              status === "negative" ? "Estoque negativo."
+              : status === "zero" ? "Estoque zerado — vai aparecer ESGOTADO no PALM."
+              : status === "low" ? `Abaixo do mínimo (${formatQty(inventory.min_stock, inventory.unit)}).`
+              : "Estoque ok.";
             return (
               <Tooltip key={name}>
                 <TooltipTrigger asChild>
@@ -142,10 +124,8 @@ export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
                         : "border-primary/40 bg-card text-foreground"
                     )}
                   >
-                    {label} · {formatQty(inventory.current_stock, inventory.unit)}
-                    {statusLabel && (
-                      <span className="ml-0.5 font-black">· {statusLabel}</span>
-                    )}
+                    {name} · {formatQty(inventory.current_stock, inventory.unit)}
+                    {statusLabel && <span className="ml-0.5 font-black">· {statusLabel}</span>}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[260px]">
@@ -155,9 +135,6 @@ export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
                     {formatQty(inventory.min_stock, inventory.unit)}
                   </p>
                   <p className="text-[11px] mt-1">{statusReason}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1 italic">
-                    Toque no chip para localizar o card.
-                  </p>
                 </TooltipContent>
               </Tooltip>
             );
