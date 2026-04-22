@@ -80,6 +80,9 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   const { data: activeOrders, isLoading } = useQuery({
     queryKey: ["active-orders"],
     placeholderData: (prev) => prev,
+    // staleTime: 0 → sempre revalida ao montar/focar.
+    // Realtime + persister cobrem UX; isso evita exibir cache stale no PWA.
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase
           .from("orders")

@@ -56,7 +56,10 @@ if ("serviceWorker" in navigator) {
   } else {
     window.addEventListener("load", () => {
       navigator.serviceWorker
-        .register("/sw.js")
+        // updateViaCache: "none" garante que toda checagem do próprio sw.js
+        // ignore o HTTP cache do navegador. Sem isso, alguns Androids
+        // mantêm o sw.js cacheado por 24h e o PWA fica preso em build antigo.
+        .register("/sw.js", { updateViaCache: "none" })
         .then((reg) => {
           console.log("SW registered:", reg);
           let lastCheck = 0;
