@@ -533,11 +533,11 @@ function parseCommand(raw: string): Command {
   //   "mesa 5 status", "status mesa 5", "status 5", "status da mesa cinco",
   //   "situacao mesa 3", "como ta a mesa 4 status", "info mesa 2"
   // Aceita dígitos OU número por extenso (até 30, incluindo "vinte e um").
-  const STATUS_WORDS = "(?:status|situacao|situação|info|informacao|informação|estado)";
+  const STATUS_WORDS = "(?:status|situacao|situação|info|informacao|informação|estado|andamento|tudo\\s+certo|como\\s+(?:ta|esta))";
   const NUM_WORD_RE = "(?:\\d+|vinte\\s+e\\s+(?:um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove)|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta)";
   const stPatterns = [
     new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+${STATUS_WORDS}$`),
-    new RegExp(`^${STATUS_WORDS}\\s+(?:da\\s+|do\\s+|na\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`),
+    new RegExp(`^${STATUS_WORDS}\\s+(?:da\\s+|do\\s+|na\\s+|no\\s+|a\\s+)?mesa\\s+(${NUM_WORD_RE})$`),
     new RegExp(`^${STATUS_WORDS}\\s+(${NUM_WORD_RE})$`),
   ];
   for (const re of stPatterns) {
@@ -548,20 +548,21 @@ function parseCommand(raw: string): Command {
     }
   }
 
-  // SET_TABLE: "mesa N" sozinho — aceita extenso também.
-  const setT = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})$`));
+  // SET_TABLE: "mesa N" sozinho, "vou pra mesa N", "na mesa N", "pegando mesa N", "mesa N agora"
+  const setT = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})(?:\\s+agora)?$`)) ||
+               text.match(new RegExp(`^(?:vou\\s+pra|vou\\s+para|na|no|pegando|peguei|assumindo|assumi)\\s+mesa\\s+(${NUM_WORD_RE})$`));
   if (setT) {
     const t = parseTableNumber(setT[1]);
     if (t) return { kind: "SET_TABLE", table: t };
   }
 
-  // VIEW: "mesa N ver pedido" / "mesa N ver" / "mesa N pedido" / "ver [pedido] [da/na] mesa N"
-  const viewA = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?)$`));
+  // VIEW: "mesa N ver pedido" / "mesa N o que tem" / "mesa N consumo" / "ver [pedido] [da/na] mesa N"
+  const viewA = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?|consumo|o\\s+que\\s+tem)$`));
   if (viewA) {
     const t = parseTableNumber(viewA[1]);
     if (t) return { kind: "VIEW", table: t };
   }
-  const viewB = text.match(new RegExp(`^(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?)\\s+(?:da\\s+|na\\s+|do\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`));
+  const viewB = text.match(new RegExp(`^(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?|consumo|o\\s+que\\s+tem)\\s+(?:da\\s+|na\\s+|do\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`));
   if (viewB) {
     const t = parseTableNumber(viewB[1]);
     if (t) return { kind: "VIEW", table: t };
