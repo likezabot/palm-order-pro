@@ -325,6 +325,28 @@ async function checkGroupOrReturn(product: Product): Promise<ProductResolution> 
   return { kind: "found", product };
 }
 
+// Sugere até 3 produtos próximos (token-by-token, ranqueado por nº de matches).
+async function suggestProducts(text: string): Promise<string[]> {
+  const norm = singularize(normalize(text));
+  const tokens = norm.split(/\s+/).filter((t) => t.length >= 3 && !/^\d+$/.test(t));
+  if (tokens.length === 0) return [];
+  const { data: prods } = await sb
+    .from("products")
+    .select("name")
+    .eq("active", true);
+  const all = (prods ?? []) as { name: string }[];
+  return all
+    .map((p) => {
+      const n = normalize(p.name);
+      const hits = tokens.reduce((acc, t) => acc + (n.includes(t) ? 1 : 0), 0);
+      return { name: p.name, hits };
+    })
+    .filter((s) => s.hits > 0)
+    .sort((a, b) => b.hits - a.hits)
+    .slice(0, 3)
+    .map((s) => s.name);
+}
+
 // ─────────────────────────── merge logic ───────────────────────────
 
 function applyAdd(items: OrderItem[], product: Product, qty: number): OrderItem[] {
