@@ -73,12 +73,9 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     staleTime: 30_000,
   });
 
-  // Top vendidos nos últimos 30 dias para a categoria "Favoritos"
-  const { data: favoriteIds = [] } = useFavoriteProductIds(12, 30);
-
   const isSearching = search.trim().length > 0;
 
-  // Filtragem: busca global tem prioridade; senão, por categoria (Favoritos é virtual).
+  // Filtragem: busca global tem prioridade; senão, por categoria.
   const filteredRaw = useMemo(() => {
     if (isSearching) {
       const q = search.trim().toLowerCase();
@@ -88,12 +85,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           p.name.toLowerCase().includes(q)
       );
     }
-    if (activeCategory === "favoritos") {
-      const idx = new Map(favoriteIds.map((id, i) => [id, i]));
-      return products
-        .filter((p) => idx.has(p.id))
-        .sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
-    }
     return products.filter((p) => {
       if (p.category !== activeCategory) return false;
       if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
@@ -101,13 +92,27 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       }
       return true;
     });
-  }, [products, activeCategory, favoriteIds, isSearching, search]);
+  }, [products, activeCategory, isSearching, search]);
 
-  const filtered = isSearching || activeCategory === "favoritos"
+  const filtered = isSearching
     ? filteredRaw
     : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
 
-  const subgroups = !isSearching && activeCategory !== "favoritos" ? SUBGROUPS[activeCategory] : undefined;
+  const subgroups = !isSearching ? SUBGROUPS[activeCategory] : undefined;
+
+  // Contador por categoria (soma quantidades). Variantes sintéticas de Porco → "espetos".
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const productCatById = new Map(products.map((p) => [p.id, p.category]));
+    for (const item of cart) {
+      const cat = item.product.id.startsWith("porco-variant::")
+        ? "espetos"
+        : (productCatById.get(item.product.id) ?? item.product.category);
+      if (!cat) continue;
+      counts[cat] = (counts[cat] ?? 0) + item.quantity;
+    }
+    return counts;
+  }, [cart, products]);
 
   // Produto base "Porco". Preferimos um cadastrado; se não houver, usamos a
   // Panceta suína como base (mesmo id/preço) para o card sintético funcionar.
