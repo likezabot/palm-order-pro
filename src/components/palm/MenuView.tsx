@@ -128,8 +128,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     ? filteredRaw
     : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
 
-  const subgroups = !isSearching ? SUBGROUPS[activeCategory] : undefined;
-
   // Contador por categoria (soma quantidades).
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -158,22 +156,22 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       .filter((x) => !!x.triggerProduct);
   }, [productGroups, activeCategory, products, isSearching]);
 
-  const triggerProductIds = useMemo(
-    () => new Set(activeGroups.map((g) => g.triggerProduct!.id)),
-    [activeGroups],
-  );
+  const groupByTriggerId = useMemo(() => {
+    const map = new Map<string, { group: ProductGroup; triggerProduct: Product; variantCount: number }>();
+    for (const g of activeGroups) {
+      if (g.triggerProduct) {
+        map.set(g.triggerProduct.id, {
+          group: g.group,
+          triggerProduct: g.triggerProduct,
+          variantCount: g.variantCount,
+        });
+      }
+    }
+    return map;
+  }, [activeGroups]);
 
   const getQty = (id: string) =>
     cart.filter((i) => i.product.id === id).reduce((sum, i) => sum + i.quantity, 0);
-
-  const subgroupQty = (sub: Subgroup) =>
-    filtered
-      .filter((p) => matchesSubgroup(p, sub))
-      .reduce((sum, p) => sum + getQty(p.id), 0);
-
-  const subgroupProducts = openSubgroup
-    ? filtered.filter((p) => matchesSubgroup(p, openSubgroup))
-    : [];
 
   const getGroupQty = (g: ProductGroup) => {
     const memberIds = new Set(
