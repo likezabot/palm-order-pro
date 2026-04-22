@@ -386,15 +386,20 @@ function parseCommand(raw: string): Command {
 
 // ─────────────────────────── modo turbo: resolver contexto ───────────────────────────
 
-async function resolveWithContext(cmd: Command, chatId: number): Promise<Command> {
+async function resolveWithContext(
+  cmd: Command,
+  chatId: number,
+  userId?: number,
+  chatType?: ChatType,
+): Promise<Command> {
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA") {
-    const table = await getLastTable(chatId);
+    const table = await getLastTable(chatId, userId, chatType);
     const originalKind = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
     if (!table) return { kind: "NEEDS_TABLE", originalKind };
     return { kind: originalKind, table, qty: cmd.qty, productText: cmd.productText, fromContext: true };
   }
   if (cmd.kind === "VIEW_NOMESA") {
-    const table = await getLastTable(chatId);
+    const table = await getLastTable(chatId, userId, chatType);
     if (!table) return { kind: "NEEDS_TABLE", originalKind: "VIEW" };
     return { kind: "VIEW", table, fromContext: true };
   }
