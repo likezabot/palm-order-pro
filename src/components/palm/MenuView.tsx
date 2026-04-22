@@ -16,6 +16,8 @@ import { RenameTableDialog } from "./RenameTableDialog";
 import { PorcoVariantDialog } from "./PorcoVariantDialog";
 import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
+import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
+import { useProductStockMap, isProductEsgotado } from "@/hooks/use-product-stock-map";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -40,7 +42,22 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   const [renameValue, setRenameValue] = useState("");
   const [moveOpen, setMoveOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [esgotadoPending, setEsgotadoPending] = useState<Product | null>(null);
   const { playFeedback } = useFeedback();
+  const { data: stockMap } = useProductStockMap();
+
+  const isEsgotado = (id: string) => isProductEsgotado(stockMap, id);
+
+  // Intercepta o add: se o item estiver esgotado (estoque <= 0 e vinculado),
+  // abre confirm dialog. Se confirmar, chama onAdd normalmente.
+  const handleAdd = (product: Product) => {
+    if (isEsgotado(product.id)) {
+      playFeedback("click");
+      setEsgotadoPending(product);
+      return;
+    }
+    onAdd(product);
+  };
 
   const canRename = !!tableName && tableName !== "BALCÃO" && !!onRenameTable;
   const canMove = !!existingOrderId && !!originalTableName && originalTableName !== "BALCÃO" && !!onTableMoved;
