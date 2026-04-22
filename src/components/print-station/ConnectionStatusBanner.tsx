@@ -22,6 +22,8 @@ export default function ConnectionStatusBanner({ realtimeStatus, bridgeUrl }: Pr
   const [bridgeOnline, setBridgeOnline] = useState<boolean | null>(null); // null = ainda não checou
   const lastStatusRef = useRef<OverallStatus | null>(null);
   const { toast } = useToast();
+  const { jobs } = usePrintQueue();
+  const pendingCount = jobs.filter((j) => !j.dead).length;
 
   // Internet do navegador
   useEffect(() => {
