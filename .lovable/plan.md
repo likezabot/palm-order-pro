@@ -1,67 +1,51 @@
 
 
-## Porco no grupo + seletor de grupo/popup ao criar produto
+## Ativar o item "Porco" no cardápio e dar estoque às 3 variantes
 
-### O que muda
+### Diagnóstico
 
-**1. PALM — card "Porco" identificado como grupo**
+Consultei o banco:
 
-Hoje o card especial "Porco" aparece na grade de Espetos como um card normal qualquer, sem indicar que abre o popup com 3 variantes. Mudanças no `MenuView.tsx`:
+| Item | Cardápio (products) | Estoque (inventory_items) |
+|---|---|---|
+| **Porco** | ❌ não existe | ❌ não existe |
+| **Panceta suína** | ✅ ativo, R$ 10,00 | ✅ existe, mas `current_stock=0` |
+| **Costela suína** | ✅ ativo, R$ 10,00 | ✅ existe, mas `current_stock=0` |
 
-- Card do Porco ganha selo visual `🐷 GRUPO` no canto + linha "3 variantes" abaixo do preço.
-- Borda do card usa `border-primary/40` (em vez de `border-border`) e fundo sutil `bg-primary/5` para destacar como agrupador.
-- Texto "Escolher tipo" trocado por "Toque para escolher" deixando claro que abre seleção.
+Por isso o popup mostra:
+- **Porco** → "Não cadastrado no admin" (desabilitado)
+- **Panceta/Costela** → ESGOTADO (estoque zero)
 
-Resultado: o card Porco fica visualmente "do lado" das outras variantes na grade de Espetos, mas claramente identificado como o gatilho do grupo (já que Panceta/Costela continuam escondidas da grade — elas só vivem dentro do popup).
+### O que vou fazer (via migração SQL)
 
-**2. Admin Cardápio — seletor "Grupo / Popup" no formulário de produto**
-
-`ProductForm.tsx` ganha um novo campo abaixo do seletor de categoria:
-
+**1. Criar o produto "Porco" no cardápio**
+```sql
+INSERT INTO products (name, category, price, active)
+VALUES ('Porco', 'espetos', 10.00, true);
 ```
-Categoria: [Refeições] [Espetos] [Bebidas] [Cervejas]
-Grupo / Popup (opcional):
-  ( ) Nenhum (item normal no cardápio)
-  ( ) 🐷 Grupo Porco — aparece dentro do popup ao tocar em "Porco"
+
+**2. Criar o item de estoque vinculado ao Porco**
+```sql
+INSERT INTO inventory_items (product_id, name, unit, current_stock, min_stock)
+VALUES (<id-do-porco>, 'Porco', 'unidade', 10, 5);
 ```
 
-- Só aparece quando `category === "espetos"` (único grupo existente hoje). Se no futuro forem criados outros grupos, ficam disponíveis automaticamente.
-- Implementação **sem mudança de schema**: o "grupo" é determinado pelo nome do produto. Selecionar "Grupo Porco" preenche/sugere o nome com prefixo apropriado e adiciona o produto à lista `PORCO_GROUP_NAMES` em `src/lib/porco-group.ts` apenas se o nome bater com um dos 3 nomes canônicos (Porco, Panceta suína, Costela suína).
-- Para suportar **adicionar uma 4ª variante futura** (ex: "Linguiça suína" no popup do Porco), introduz uma tabela leve `product_groups` em settings: chave `porco_group_extra_names` armazenando array de nomes adicionais. `getPorcoGroupProducts` passa a ler essa lista + a constante base.
-- Quando o usuário escolhe "Grupo Porco" e o nome digitado não está no canônico, o sistema:
-  1. Salva o produto normalmente (`category=espetos`, `active=true`).
-  2. Adiciona o nome ao `settings.porco_group_extra_names` (upsert).
-  3. Atualiza `HIDDEN_ESPETO_NAMES` em runtime (vira reativo via `useQuery`) para esconder o item da grade principal — ele só aparece via popup.
+**3. Repor estoque inicial das outras 2 variantes** para sair do ESGOTADO:
+```sql
+UPDATE inventory_items SET current_stock = 10, min_stock = 5
+WHERE id IN ('f4fb50ef-...panceta', '308a27d3-...costela');
+```
 
-**3. Estoque — seletor "Grupo / Popup" ao criar item solto**
+### Resultado esperado
 
-`ItemFormDialog.tsx` ganha o mesmo seletor quando o item é vinculado a produto da categoria Espetos. Apenas reflete o vínculo com o produto — não duplica lógica.
+- Popup do Porco no PALM passa a mostrar **3 cards ativos** com preço R$ 10,00 cada, sem ESGOTADO.
+- Banner do "Grupo Porco" no Admin e Estoque mostra os 3 itens ativos com estoque normal.
+- Card "Porco" no PALM (com selo 🐷 GRUPO) abre o popup com as 3 variantes utilizáveis.
 
-### Esclarecimento técnico
+### Perguntas rápidas
 
-- **Hoje**: `PORCO_GROUP_NAMES` é uma constante hard-coded de 3 nomes. Banner em Admin/Estoque e popup em PALM dependem dessa lista.
-- **Depois**: a lista vira **constante base + lista dinâmica vinda de `settings`**. Permite ao usuário, no formulário de produto, jogar novos itens dentro do mesmo popup sem mexer em código.
-- Migração: nova linha em `settings` com `key='porco_group_extra_names'` e `value=[]` (array vazio). Sem alteração de tabelas existentes.
+1. **Estoque inicial das 3 variantes**: usar **10 unidades** com mínimo **5**? Ou prefere outros valores (ex: 0/0 e você lança entrada manualmente depois)?
+2. **Preço do "Porco"**: confirmar **R$ 10,00** (igual às outras variantes do grupo)?
 
-### Arquivos
-
-**Editados**
-- `src/components/palm/MenuView.tsx` — card Porco com selo/borda de grupo.
-- `src/components/admin/ProductForm.tsx` — adiciona seletor "Grupo / Popup" abaixo da categoria.
-- `src/components/stock/ItemFormDialog.tsx` — espelha o seletor quando item é vinculado a Espetos.
-- `src/lib/porco-group.ts` — `getPorcoGroupProducts` passa a aceitar lista extra; novo helper `useExtraPorcoNames` ou função `loadExtraPorcoNames()`.
-- `src/components/admin/PorcoGroupBanner.tsx` — exibe variantes extras adicionadas pelo usuário.
-- `src/components/stock/PorcoGroupBanner.tsx` — idem.
-
-**Novo**
-- Migração SQL: `INSERT INTO settings (key, value) VALUES ('porco_group_extra_names', '[]'::jsonb) ON CONFLICT DO NOTHING;`
-
-### O que NÃO muda
-- Schema das tabelas `products`, `inventory_items`, `orders`. Lógica de carrinho, esgotado, impressão, RLS, fluxo de admin (drag/drop, busca, filtros, bulk).
-- Categorias do cardápio continuam as mesmas 4 (Refeições, Espetos, Bebidas, Cervejas).
-- Os 3 nomes canônicos do Porco continuam sempre no grupo, independente de settings.
-
-### Pergunta antes de implementar
-
-Quer mesmo a **opção de adicionar novos itens ao popup do Porco no futuro** (requer a entrada em `settings`), ou prefere a versão mais simples — apenas o **selo visual no card do PALM** + o **seletor "Grupo Porco" no formulário** funcionando só para os 3 nomes já existentes (Porco, Panceta suína, Costela suína), sem suportar 4ª variante?
+Se confirmar (ou aceitar os defaults), eu rodo a migração na próxima mensagem.
 
