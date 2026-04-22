@@ -22,6 +22,26 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
+// Modo turbo: contexto da última mesa por chat (TTL 15min, in-memory, best-effort).
+const LAST_TABLE_TTL_MS = 15 * 60_000;
+const lastTableByChat = new Map<number, { table: string; ts: number }>();
+function getLastTable(chatId: number): string | null {
+  const now = Date.now();
+  for (const [k, v] of lastTableByChat) {
+    if (now - v.ts > LAST_TABLE_TTL_MS) lastTableByChat.delete(k);
+  }
+  const entry = lastTableByChat.get(chatId);
+  if (!entry) return null;
+  if (now - entry.ts > LAST_TABLE_TTL_MS) {
+    lastTableByChat.delete(chatId);
+    return null;
+  }
+  return entry.table;
+}
+function setLastTable(chatId: number, table: string): void {
+  lastTableByChat.set(chatId, { table, ts: Date.now() });
+}
+
 // ─────────────────────────── helpers ───────────────────────────
 
 function normalize(s: string): string {
