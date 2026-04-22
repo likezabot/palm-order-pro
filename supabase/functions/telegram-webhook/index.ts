@@ -294,6 +294,12 @@ function parseCommand(raw: string): Command {
   const notifM = text.match(/^(?:notificacoes|notificações|notif)\s+(on|off|ligar|desligar)$/);
   if (notifM) return { kind: "NOTIFY_TOGGLE", on: notifM[1] === "on" || notifM[1] === "ligar" };
 
+  // STATUS de mesa: "mesa N status", "status mesa N", "status N"
+  const stA = text.match(/^mesa\s+(\d+)\s+status$/);
+  if (stA) return { kind: "TABLE_STATUS", table: stA[1] };
+  const stB = text.match(/^status\s+(?:mesa\s+)?(\d+)$/);
+  if (stB) return { kind: "TABLE_STATUS", table: stB[1] };
+
   // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
   const setT = text.match(/^mesa\s+(\d+)$/);
   if (setT) return { kind: "SET_TABLE", table: setT[1] };
