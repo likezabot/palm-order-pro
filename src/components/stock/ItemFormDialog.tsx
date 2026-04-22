@@ -144,20 +144,15 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
         current_stock: parseFloat(initialStock.replace(",", ".")) || 0,
         product_id: productId,
       });
-      // Mirror Porco group flag into settings extras (if linked product is in Espetos
-      // and user opted in with a non-canonical name).
-      if (
-        porcoGroup &&
-        linkedProduct?.category === "espetos" &&
-        !isCanonicalPorcoName(finalName)
-      ) {
+      // If user opted in, register this product into the suggested group of its category.
+      if (joinGroup && linkedProduct && suggestedGroup && !linkedGroup) {
         try {
-          await addPorcoExtraName(finalName);
+          await addProductToGroup(suggestedGroup.id, finalName);
           await queryClient.invalidateQueries({
-            queryKey: ["settings", PORCO_EXTRA_NAMES_KEY],
+            queryKey: ["settings", PRODUCT_GROUPS_KEY],
           });
         } catch (e) {
-          console.error("Failed to register Porco group extra name", e);
+          console.error("Failed to add product to group", e);
         }
       }
       toast({ title: isEdit ? "Item atualizado" : "Item criado" });
@@ -221,17 +216,27 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
             )}
           </div>
 
-          {linkedProduct?.category === "espetos" && (
+          {linkedProduct && linkedGroup && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+              <p className="text-[11px] text-foreground">
+                <span className="mr-1">{linkedGroup.icon}</span>
+                Este produto faz parte do grupo{" "}
+                <strong>{linkedGroup.name}</strong> (popup com {linkedGroup.member_names.length} variantes).
+              </p>
+            </div>
+          )}
+
+          {linkedProduct && !linkedGroup && suggestedGroup && (
             <div className="rounded-md border border-border bg-card/40 p-3">
               <Label className="flex items-center gap-1 mb-2">
-                🐷 Grupo / Popup (opcional)
+                <span>{suggestedGroup.icon}</span> Adicionar ao grupo / popup (opcional)
               </Label>
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setPorcoGroup(false)}
+                  onClick={() => setJoinGroup(false)}
                   className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
-                    !porcoGroup
+                    !joinGroup
                       ? "border-primary bg-primary/15 text-primary"
                       : "border-border bg-background text-foreground"
                   }`}
@@ -240,19 +245,20 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPorcoGroup(true)}
+                  onClick={() => setJoinGroup(true)}
                   className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
-                    porcoGroup
+                    joinGroup
                       ? "border-primary bg-primary/15 text-primary"
                       : "border-border bg-background text-foreground"
                   }`}
                 >
-                  Grupo Porco
+                  Grupo {suggestedGroup.name}
                 </button>
               </div>
-              {porcoGroup && !isCanonicalPorcoName(linkedProduct.name) && (
+              {joinGroup && (
                 <p className="text-[11px] text-muted-foreground mt-2">
-                  "{linkedProduct.name}" será adicionado como variante extra do popup do Porco.
+                  "{linkedProduct.name}" será adicionado como variante do popup{" "}
+                  <strong>{suggestedGroup.name}</strong>.
                 </p>
               )}
             </div>
