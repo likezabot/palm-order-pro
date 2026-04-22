@@ -14,8 +14,8 @@ Edge function `telegram-webhook` permite editar pedidos via texto:
 - `entrada 10 coca` / `entrou 5kg picanha` / `chegou 20 cerva` / `+ 10 coca` → STOCK_MOVEMENT type=in (chama RPC `apply_inventory_movement`).
 - `saida 2 coca` / `usei 1kg picanha` / `gastei 3 carvao` / `tirei 2 coca do estoque` → STOCK_MOVEMENT type=out.
 - `ajuste coca 50` / `setar coca para 50` / `atualiza coca = 30` / `tem 12 coca` → STOCK_MOVEMENT type=adjustment.
-- `estoque coca` / `saldo coca` / `quanto tem de coca` → STOCK_QUERY (saldo de UM item).
-- `estoque` (sozinho) / `criticos` → STOCK_CRITICAL (lista — comportamento antigo).
+- `estoque` (sozinho) / `criticos` / `alertas` / `o que falta` / `precisa repor` → STOCK_CRITICAL.
+- `lista estoque` / `inventario` / `tudo do estoque` / `todos itens` → STOCK_LIST (NOVO; até 30 itens ativos com saldo).
 - Gatilhos são EXPLÍCITOS para nunca confundir com pedidos. Em particular: `-N produto` SEM mesa continua sendo REMOVE_NOMESA (pedido), não saída de estoque.
 - Resolver `resolveStockItem(text)`: 1) RPC `find_inventory_item_by_text` (slug/aliases exato); 2) match por inclusão de tokens em `inventory_items where is_active=true`; 3) fuzzy Levenshtein ≤2 nos tokens significativos. 0 hits → not_found. 1 → executa. 2–8 → ambíguo com botões.
 - Botões inline ambíguos: `callback_data` `s|<in|out|adj>|<itemId>|<qty>` (até 8 candidatos + Cancelar).
