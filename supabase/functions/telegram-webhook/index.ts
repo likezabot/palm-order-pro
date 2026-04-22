@@ -12,6 +12,8 @@ const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+type InlineButton = { text: string; callback_data: string };
+
 // Dedupe (TTL 5min) para retries do Telegram.
 const seenUpdates = new Map<number, number>();
 function isDuplicate(updateId: number): boolean {
@@ -24,14 +26,21 @@ function isDuplicate(updateId: number): boolean {
 
 // Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
 const LAST_TABLE_TTL_MS = 15 * 60_000;
-function lastTableSettingsKey(chatId: number): string {
+type ChatType = "private" | "group" | "supergroup" | "channel" | undefined;
+function isGroupChat(chatType: ChatType): boolean {
+  return chatType === "group" || chatType === "supergroup";
+}
+function lastTableSettingsKey(chatId: number, userId?: number, chatType?: ChatType): string {
+  if (isGroupChat(chatType) && typeof userId === "number") {
+    return `telegram_last_table:${chatId}:${userId}`;
+  }
   return `telegram_last_table:${chatId}`;
 }
-async function getLastTable(chatId: number): Promise<string | null> {
+async function getLastTable(chatId: number, userId?: number, chatType?: ChatType): Promise<string | null> {
   const { data, error } = await sb
     .from("settings")
     .select("id, value, updated_at")
-    .eq("key", lastTableSettingsKey(chatId))
+    .eq("key", lastTableSettingsKey(chatId, userId, chatType))
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -52,8 +61,8 @@ async function getLastTable(chatId: number): Promise<string | null> {
     return null;
   }
 }
-async function setLastTable(chatId: number, table: string): Promise<void> {
-  const key = lastTableSettingsKey(chatId);
+async function setLastTable(chatId: number, table: string, userId?: number, chatType?: ChatType): Promise<void> {
+  const key = lastTableSettingsKey(chatId, userId, chatType);
   const value = JSON.stringify({ table, ts: Date.now() });
   const { data: existing } = await sb
     .from("settings")
@@ -69,6 +78,65 @@ async function setLastTable(chatId: number, table: string): Promise<void> {
   }
 
   await sb.from("settings").insert({ key, value });
+}
+
+// ─────────────────────────── rate limit (best-effort, in-memory) ───────────────────────────
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 10;
+const rateBuckets = new Map<number, number[]>();
+const rateWarned = new Map<number, number>();
+function checkRateLimit(chatId: number): boolean {
+  const now = Date.now();
+  const arr = (rateBuckets.get(chatId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  arr.push(now);
+  rateBuckets.set(chatId, arr);
+  // Cleanup periódico
+  if (rateBuckets.size > 200) {
+    for (const [k, v] of rateBuckets) {
+      const cleaned = v.filter((t) => now - t < RATE_WINDOW_MS);
+      if (cleaned.length === 0) rateBuckets.delete(k);
+      else rateBuckets.set(k, cleaned);
+    }
+  }
+  return arr.length <= RATE_MAX;
+}
+function shouldSendRateWarning(chatId: number): boolean {
+  const now = Date.now();
+  const last = rateWarned.get(chatId) ?? 0;
+  if (now - last < 10_000) return false;
+  rateWarned.set(chatId, now);
+  return true;
+}
+
+// ─────────────────────────── undo (60s, in-memory) ───────────────────────────
+const UNDO_TTL_MS = 60_000;
+type UndoOp = { op: "a" | "r"; productId: string; productName: string; qty: number };
+type UndoToken = { chatId: number; table: string; ops: UndoOp[]; ts: number };
+const pendingUndos = new Map<string, UndoToken>();
+const consumedUndos = new Map<string, number>();
+
+function cleanupUndos() {
+  const now = Date.now();
+  for (const [k, v] of pendingUndos) if (now - v.ts > UNDO_TTL_MS) pendingUndos.delete(k);
+  for (const [k, t] of consumedUndos) if (now - t > UNDO_TTL_MS) consumedUndos.delete(k);
+}
+function genUndoToken(): string {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+function registerBatchUndo(chatId: number, table: string, ops: UndoOp[]): string {
+  cleanupUndos();
+  if (ops.length === 0) return "";
+  const token = genUndoToken();
+  pendingUndos.set(token, { chatId, table, ops, ts: Date.now() });
+  return token;
+}
+function buildUndoSingleKeyboard(table: string, productId: string, qty: number, op: "a" | "r"): InlineButton[][] {
+  // op = ação original ("a" → ADD foi feito → undo é REMOVE)
+  return [[{ text: "↩️ Desfazer (60s)", callback_data: `u|${table}|${productId}|${qty}|${op}` }]];
+}
+function buildUndoBatchKeyboard(token: string): InlineButton[][] {
+  if (!token) return [];
+  return [[{ text: "↩️ Desfazer (60s)", callback_data: `ub|${token}` }]];
 }
 
 // ─────────────────────────── helpers ───────────────────────────
@@ -113,6 +181,28 @@ function singularize(text: string): string {
   return text.split(/\s+/).map(singularizeToken).join(" ");
 }
 
+// Distância de Levenshtein (matriz O(n·m), strings curtas).
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const al = a.length, bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+  const dp: number[] = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) dp[j] = j;
+  for (let i = 1; i <= al; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= bl; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[bl];
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -122,11 +212,12 @@ function sleep(ms: number) {
 type Command =
   | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string; fromContext?: boolean }
   | { kind: "VIEW"; table: string; fromContext?: boolean }
+  | { kind: "SET_TABLE"; table: string }
   | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
   | { kind: "VIEW_NOMESA" }
   | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
   | { kind: "HELP" }
-  | { kind: "PARSE_ERROR"; raw: string };
+  | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_qty" | "generic" };
 
 // Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
 const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
@@ -168,6 +259,10 @@ function parseCommand(raw: string): Command {
   if (text === "/start" || text === "/help" || text === "ajuda" || text === "help") {
     return { kind: "HELP" };
   }
+
+  // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
+  const setT = text.match(/^mesa\s+(\d+)$/);
+  if (setT) return { kind: "SET_TABLE", table: setT[1] };
 
   // VIEW: "mesa N ver pedido" / "mesa N ver" / "mesa N pedido" / "ver [pedido] [da/na] mesa N"
   const viewA = text.match(/^mesa\s+(\d+)\s+(?:ver(?:\s+pedido)?|pedido)$/);
@@ -280,20 +375,31 @@ function parseCommand(raw: string): Command {
     }
   }
 
-  return { kind: "PARSE_ERROR", raw };
+  // Hint para mensagem de erro mais útil.
+  const hasOpAny = text.split(/\s+/).some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
+  const hasTable = /\bmesa\s+\d+\b/.test(text);
+  let hint: "no_op" | "no_product" | "no_qty" | "generic" = "generic";
+  if (hasTable && !hasOpAny) hint = "no_op";
+  else if (hasOpAny && !hasTable) hint = "no_product";
+  return { kind: "PARSE_ERROR", raw, hint };
 }
 
 // ─────────────────────────── modo turbo: resolver contexto ───────────────────────────
 
-async function resolveWithContext(cmd: Command, chatId: number): Promise<Command> {
+async function resolveWithContext(
+  cmd: Command,
+  chatId: number,
+  userId?: number,
+  chatType?: ChatType,
+): Promise<Command> {
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA") {
-    const table = await getLastTable(chatId);
+    const table = await getLastTable(chatId, userId, chatType);
     const originalKind = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
     if (!table) return { kind: "NEEDS_TABLE", originalKind };
     return { kind: originalKind, table, qty: cmd.qty, productText: cmd.productText, fromContext: true };
   }
   if (cmd.kind === "VIEW_NOMESA") {
-    const table = await getLastTable(chatId);
+    const table = await getLastTable(chatId, userId, chatType);
     if (!table) return { kind: "NEEDS_TABLE", originalKind: "VIEW" };
     return { kind: "VIEW", table, fromContext: true };
   }
@@ -341,7 +447,7 @@ type ProductGroup = {
 };
 
 type ProductResolution =
-  | { kind: "found"; product: Product }
+  | { kind: "found"; product: Product; fuzzyFrom?: string }
   | { kind: "ambiguous"; candidates: Product[] }
   | { kind: "not_found" }
   | { kind: "is_group_trigger"; group: ProductGroup; variants: string[] }
@@ -420,6 +526,32 @@ async function resolveProduct(text: string): Promise<ProductResolution> {
     const matches = all.filter((p) => normalize(p.name).includes(norm));
 
     if (matches.length === 0) {
+      // Fuzzy match (Levenshtein ≤2) sobre products antes de cair em inventory_items.
+      const userTokens = norm.split(/\s+/).filter((t) => t.length > 3 && !/\d/.test(t));
+      if (userTokens.length > 0) {
+        const fuzzyHits: Product[] = [];
+        for (const p of all) {
+          const candTokens = normalize(p.name).split(/\s+/).filter((t) => t.length > 2);
+          let hit = false;
+          for (const ut of userTokens) {
+            for (const ct of candTokens) {
+              if (Math.abs(ut.length - ct.length) > 2) continue;
+              if (levenshtein(ut, ct) <= 2) { hit = true; break; }
+            }
+            if (hit) break;
+          }
+          if (hit) fuzzyHits.push(p);
+        }
+        if (fuzzyHits.length === 1) {
+          const r = await checkGroupOrReturn(fuzzyHits[0]);
+          if (r.kind === "found") return { ...r, fuzzyFrom: text.trim() };
+          return r;
+        }
+        if (fuzzyHits.length >= 2 && fuzzyHits.length <= 5) {
+          return { kind: "ambiguous", candidates: fuzzyHits };
+        }
+      }
+
       // Tenta também inventory_items por nome
       const { data: invFuzzy } = await sb
         .from("inventory_items")
@@ -468,25 +600,25 @@ async function checkGroupOrReturn(product: Product): Promise<ProductResolution> 
 }
 
 // Sugere até 3 produtos próximos (token-by-token, ranqueado por nº de matches).
-async function suggestProducts(text: string): Promise<string[]> {
+async function suggestProducts(text: string): Promise<Product[]> {
   const norm = singularize(normalize(text));
   const tokens = norm.split(/\s+/).filter((t) => t.length >= 3 && !/^\d+$/.test(t));
   if (tokens.length === 0) return [];
   const { data: prods } = await sb
     .from("products")
-    .select("name")
+    .select("id, name, price, active, category")
     .eq("active", true);
-  const all = (prods ?? []) as { name: string }[];
+  const all = (prods ?? []) as Product[];
   return all
     .map((p) => {
       const n = normalize(p.name);
       const hits = tokens.reduce((acc, t) => acc + (n.includes(t) ? 1 : 0), 0);
-      return { name: p.name, hits };
+      return { p, hits };
     })
     .filter((s) => s.hits > 0)
     .sort((a, b) => b.hits - a.hits)
     .slice(0, 3)
-    .map((s) => s.name);
+    .map((s) => s.p);
 }
 
 // ─────────────────────────── merge logic ───────────────────────────
@@ -719,9 +851,177 @@ async function executeView(table: string): Promise<string> {
   );
 }
 
-// ─────────────────────────── telegram ───────────────────────────
+// ─────────────────────────── batch / undo helpers ───────────────────────────
 
-type InlineButton = { text: string; callback_data: string };
+type BatchOp = { kind: "ADD" | "REMOVE"; product: Product; qty: number; rawQty: number };
+type BatchOutcome = {
+  ok: boolean;
+  text: string;
+  ops: UndoOp[];          // operações realmente aplicadas (para undo)
+  total: number;
+  itemCount: number;
+  conflict?: boolean;
+  errMsg?: string;
+};
+
+// Executa N operações ADD/REMOVE para a mesma mesa, em UMA transação update_order_items.
+// Imprime delta consolidado uma única vez (apenas itens com diff>0).
+async function executeBatchForTable(
+  table: string,
+  ops: BatchOp[],
+  waiter: string,
+  shouldPrint: boolean,
+): Promise<BatchOutcome> {
+  return await withVersionRetry(async () => {
+    const order = await resolveTable(table);
+    const undoOps: UndoOp[] = [];
+
+    if (!order) {
+      // Sem pedido — só ADDs criam mesa. REMOVEs viram aviso.
+      const adds = ops.filter((o) => o.kind === "ADD");
+      const removes = ops.filter((o) => o.kind === "REMOVE");
+      if (adds.length === 0) {
+        return {
+          ok: false,
+          text: `⚠️ Mesa ${table} não tem pedido aberto (nenhum ADD para criar).`,
+          ops: [],
+          total: 0,
+          itemCount: 0,
+        };
+      }
+      // Agrega ADDs no mesmo product_id
+      let acc: OrderItem[] = [];
+      for (const o of adds) {
+        acc = applyAdd(acc, o.product, o.qty);
+        undoOps.push({ op: "a", productId: o.product.id, productName: o.product.name, qty: o.qty });
+      }
+      const total = acc.reduce((s, i) => s + Number(i.subtotal), 0);
+      try {
+        await sb.rpc("create_order", {
+          p_table_name: table,
+          p_original_table_name: table,
+          p_waiter_name: waiter,
+          p_total: total,
+          p_items: acc.map((i) => ({
+            product_id: i.product_id,
+            product_name: i.product_name,
+            product_price: i.product_price,
+            quantity: i.quantity,
+            note: i.note,
+            subtotal: i.subtotal,
+          })),
+          p_should_print: shouldPrint,
+        });
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        if (msg.includes("table_already_in_use")) throw new Error("version_conflict: race on create");
+        throw e;
+      }
+      const lines = adds.map((o) => `   +${o.qty} ${o.product.name}`);
+      const removedNote = removes.length > 0
+        ? `\n   ⚠️ Ignorados ${removes.length} REMOVE (mesa não existia).`
+        : "";
+      return {
+        ok: true,
+        text: `✅ Mesa ${table} criada:\n${lines.join("\n")}${removedNote}`,
+        ops: undoOps,
+        total,
+        itemCount: acc.reduce((s, i) => s + i.quantity, 0),
+      };
+    }
+
+    // Pedido existe — aplica todas as ops em memória
+    const { data: items } = await sb.from("order_items").select("*").eq("order_id", order.id);
+    const before: OrderItem[] = (items ?? []) as OrderItem[];
+    let working = before.map((i) => ({ ...i }));
+    const summaryLines: string[] = [];
+
+    for (const o of ops) {
+      if (o.kind === "ADD") {
+        working = applyAdd(working, o.product, o.qty);
+        summaryLines.push(`   +${o.qty} ${o.product.name}`);
+        undoOps.push({ op: "a", productId: o.product.id, productName: o.product.name, qty: o.qty });
+      } else {
+        const r = applyRemove(working, o.product, o.qty);
+        if (r.kind === "not_in_order") {
+          summaryLines.push(`   ⚠️ ${o.product.name} não estava no pedido`);
+        } else {
+          working = r.items;
+          summaryLines.push(
+            r.kind === "partial"
+              ? `   -${r.removedQty} ${o.product.name} (pediu ${o.qty})`
+              : `   -${r.removedQty} ${o.product.name}`,
+          );
+          undoOps.push({ op: "r", productId: o.product.id, productName: o.product.name, qty: r.removedQty });
+        }
+      }
+    }
+
+    const after = working;
+    const delta = computeDelta(before, after);
+    const total = after.reduce((s, i) => s + Number(i.subtotal), 0);
+    const itemCount = after.reduce((s, i) => s + i.quantity, 0);
+
+    await sb.rpc("update_order_items", {
+      p_order_id: order.id,
+      p_total: total,
+      p_items: after.map((i) => ({
+        product_id: i.product_id,
+        product_name: i.product_name,
+        product_price: i.product_price,
+        quantity: i.quantity,
+        note: i.note,
+        subtotal: i.subtotal,
+        waiter_name: waiter,
+      })),
+      p_delta_items: shouldPrint && delta.length > 0 ? delta : null,
+      p_print_type: shouldPrint && delta.length > 0 ? "extra" : null,
+      p_expected_version: order.version,
+      p_should_print: shouldPrint && delta.length > 0,
+    });
+
+    return {
+      ok: true,
+      text: `✅ Mesa ${table} (${ops.length} ações):\n${summaryLines.join("\n")}\n   Total: ${fmtBRL(total)} (${itemCount} itens)`,
+      ops: undoOps,
+      total,
+      itemCount,
+    };
+  });
+}
+
+// Inverte ops e aplica como uma única transação SEM imprimir.
+async function executeUndoOps(table: string, ops: UndoOp[], waiter: string): Promise<string> {
+  // Mapeia ops originais para inversas: 'a' (foi ADD) → REMOVE, 'r' (foi REMOVE) → ADD
+  const products = await fetchProductsByIds(ops.map((o) => o.productId));
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const inverseOps: BatchOp[] = [];
+  for (const o of ops) {
+    const p = byId.get(o.productId);
+    if (!p) continue;
+    inverseOps.push({
+      kind: o.op === "a" ? "REMOVE" : "ADD",
+      product: p,
+      qty: o.qty,
+      rawQty: o.qty,
+    });
+  }
+  if (inverseOps.length === 0) return "↩️ Nada para desfazer.";
+  const result = await executeBatchForTable(table, inverseOps, waiter, /*shouldPrint*/ false);
+  if (!result.ok) return `↩️ Falha ao desfazer: ${result.text}`;
+  return `↩️ Operação desfeita (mesa ${table}). Total atual: ${fmtBRL(result.total)}.`;
+}
+
+async function fetchProductsByIds(ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const { data } = await sb
+    .from("products")
+    .select("id, name, price, active, category")
+    .in("id", ids);
+  return (data ?? []) as Product[];
+}
+
+// ─────────────────────────── telegram ───────────────────────────
 
 async function sendTelegram(chatId: number, text: string, keyboard?: InlineButton[][]) {
   try {
@@ -933,7 +1233,7 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   switch (resolution.kind) {
     case "not_found": {
       const sugg = await suggestProducts(working.productText);
-      const tail = sugg.length > 0 ? ` Sugestões: ${sugg.join(", ")}.` : "";
+      const tail = sugg.length > 0 ? ` Sugestões: ${sugg.map((s) => s.name).join(", ")}.` : "";
       return `❓ (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → produto não encontrado.${tail}`;
     }
     case "ambiguous": {
@@ -973,17 +1273,30 @@ function ctxPrefix(cmd: { fromContext?: boolean; table?: string }): string {
 async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
   if (cmd.kind === "HELP") return { text: HELP_TEXT };
   if (cmd.kind === "PARSE_ERROR") {
+    let body = `Faltou identificar mesa, ação ou produto.`;
+    if (cmd.hint === "no_op") {
+      body = `Identifiquei a mesa, mas faltou a ação (+, -, mais, tira…).`;
+    } else if (cmd.hint === "no_product") {
+      body = `Identifiquei a ação, mas faltou dizer qual mesa.`;
+    }
     return {
       text:
         `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
-        `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
+        `${body} Exemplos:\n` +
         `  • mesa 3 + 2 coca 350\n` +
-        `  • tira 1 agua da mesa 1\n\n` +
+        `  • tira 1 agua da mesa 1\n` +
+        `  • mesa 4 ver pedido\n\n` +
         `Envie "ajuda" para ver todos os formatos.`,
     };
   }
   if (cmd.kind === "NEEDS_TABLE") {
     return { text: NEEDS_TABLE_TEXT };
+  }
+  if (cmd.kind === "SET_TABLE") {
+    return {
+      text: `📍 Mesa ${cmd.table} definida para os próximos comandos (15 min).`,
+      successTable: cmd.table,
+    };
   }
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
     // Não deveria chegar aqui (resolveWithContext converte antes), defensivo:
@@ -1000,10 +1313,16 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   switch (resolution.kind) {
     case "not_found": {
       const sugg = await suggestProducts(cmd.productText);
-      const tail = sugg.length > 0
-        ? `Talvez quis dizer: ${sugg.join(", ")}?\nRepita com o nome exato.`
-        : `Verifique o nome no cardápio e tente de novo.`;
-      return { text: prefix + `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}` };
+      if (sugg.length > 0) {
+        const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, sugg);
+        return {
+          text: prefix + `❓ Não achei "${cmd.productText}" no cardápio. Talvez:`,
+          keyboard,
+        };
+      }
+      return {
+        text: prefix + `❓ Não achei "${cmd.productText}" no cardápio.\nVerifique o nome e tente de novo.`,
+      };
     }
     case "ambiguous": {
       const picked = autoPickFromCandidates(cmd.productText, resolution.candidates);
@@ -1047,7 +1366,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
         text: prefix + `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
       };
     case "found":
-      return await runExecute(cmd, resolution.product, waiter);
+      return await runExecute(cmd, resolution.product, waiter, resolution.fuzzyFrom);
   }
 }
 
@@ -1055,13 +1374,27 @@ async function runExecute(
   cmd: Extract<Command, { kind: "ADD" | "REMOVE" }>,
   product: Product,
   waiter: string,
+  fuzzyFrom?: string,
 ): Promise<HandlerReply> {
   const prefix = ctxPrefix(cmd);
   try {
     const text = cmd.kind === "ADD"
       ? await executeAdd(cmd.table, product, cmd.qty, waiter)
       : await executeRemove(cmd.table, product, cmd.qty, waiter);
-    return { text: prefix + text, successTable: isMutationSuccess(cmd.kind, text) ? cmd.table : undefined };
+    const success = isMutationSuccess(cmd.kind, text);
+    let extras = "";
+    if (fuzzyFrom && success) extras += `\n   (interpretado de "${fuzzyFrom}")`;
+    if (success) extras += "\n" + (await formatPrintStatus(cmd.table));
+    let keyboard: InlineButton[][] | undefined;
+    if (success) {
+      const op = cmd.kind === "ADD" ? "a" : "r";
+      keyboard = buildUndoSingleKeyboard(cmd.table, product.id, cmd.qty, op);
+    }
+    return {
+      text: prefix + text + extras,
+      successTable: success ? cmd.table : undefined,
+      keyboard,
+    };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes("version_conflict")) {
@@ -1070,6 +1403,24 @@ async function runExecute(
     console.error("execute error:", e);
     return { text: prefix + `❌ Erro ao processar: ${msg}` };
   }
+}
+
+// Lê print_status atual da mesa para feedback "🖨️ enviado / ⚠️ aguardando".
+async function formatPrintStatus(table: string): Promise<string> {
+  const order = await resolveTable(table);
+  if (!order) return "";
+  const { data } = await sb
+    .from("orders")
+    .select("print_status, print_last_error")
+    .eq("id", order.id)
+    .maybeSingle();
+  const ps = (data as any)?.print_status as string | undefined;
+  const err = (data as any)?.print_last_error as string | undefined;
+  if (!ps) return "";
+  if (ps === "pending" || ps === "printing") return "   🖨️ enviado para impressão";
+  if (ps === "printed") return "   🖨️ impresso";
+  if (ps === "failed") return `   ❌ falha na impressão${err ? ` (${err})` : ""}`;
+  return `   ⚠️ status: ${ps}`;
 }
 
 // Dedupe de callbacks pra evitar duplo-clique
@@ -1090,6 +1441,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
   const messageId: number | undefined = cb.message?.message_id;
   const data: string | undefined = cb.data;
   const username: string | undefined = cb.from?.username;
+  const userId: number | undefined = cb.from?.id;
+  const chatType: ChatType = cb.message?.chat?.type;
   if (!chatId || !messageId || !data) {
     await answerCallback(cbId);
     return;
@@ -1112,6 +1465,60 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
+  // ─── UNDO single: u|table|productId|qty|op ───
+  if (data.startsWith("u|")) {
+    cleanupUndos();
+    const parts = data.split("|");
+    if (parts.length !== 5) {
+      await answerCallback(cbId, "Inválido");
+      return;
+    }
+    const [, table, productId, qtyStr, originalOp] = parts;
+    const qty = parseInt(qtyStr, 10);
+    if (!UUID_RE.test(productId) || !Number.isFinite(qty) || qty < 1 || qty > 99 || !table || (originalOp !== "a" && originalOp !== "r")) {
+      await answerCallback(cbId, "Dados inválidos");
+      return;
+    }
+    if (consumedUndos.has(data)) {
+      await answerCallback(cbId, "Já desfeito");
+      return;
+    }
+    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    await answerCallback(cbId);
+    try {
+      const result = await executeUndoOps(table, [{ op: originalOp as "a" | "r", productId, productName: "", qty }], waiter);
+      consumedUndos.set(data, Date.now());
+      await editTelegramMessage(chatId, messageId, `↩️ Operação desfeita.\n${result}`);
+    } catch (e: any) {
+      await editTelegramMessage(chatId, messageId, `❌ Erro ao desfazer: ${String(e?.message ?? e)}`);
+    }
+    return;
+  }
+
+  // ─── UNDO batch: ub|token ───
+  if (data.startsWith("ub|")) {
+    cleanupUndos();
+    const token = data.slice(3);
+    const entry = pendingUndos.get(token);
+    if (!entry) {
+      await answerCallback(cbId, "Expirado");
+      await editTelegramMessage(chatId, messageId, "⏱ Desfazer expirado.");
+      return;
+    }
+    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    await answerCallback(cbId);
+    try {
+      const result = await executeUndoOps(entry.table, entry.ops, waiter);
+      pendingUndos.delete(token);
+      consumedUndos.set(token, Date.now());
+      await editTelegramMessage(chatId, messageId, `↩️ Operação desfeita.\n${result}`);
+    } catch (e: any) {
+      await editTelegramMessage(chatId, messageId, `❌ Erro ao desfazer: ${String(e?.message ?? e)}`);
+    }
+    return;
+  }
+
+  // ─── ADD/REMOVE escolha: a|... ou r|... ───
   const parts = data.split("|");
   if (parts.length !== 4 || (parts[0] !== "a" && parts[0] !== "r")) {
     await answerCallback(cbId, "Comando inválido");
@@ -1159,8 +1566,19 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
       : `❌ Erro ao processar: ${msg}`;
   }
-  if (success) await setLastTable(chatId, table);
+  if (success) {
+    await setLastTable(chatId, table, userId, chatType);
+    const status = await formatPrintStatus(table);
+    if (status) resultText += "\n" + status;
+  }
   await editTelegramMessage(chatId, messageId, resultText);
+
+  // Após escolha bem-sucedida via botão, oferece undo numa NOVA mensagem
+  // (não dá pra adicionar keyboard no editMessageText sem perder os botões antigos cleanly).
+  if (success) {
+    const undoKb = buildUndoSingleKeyboard(table, productId, qty, op as "a" | "r");
+    await sendTelegram(chatId, `↩️ Quer desfazer essa ação?`, undoKb);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -1185,6 +1603,8 @@ Deno.serve(async (req) => {
     const text: string | undefined = message?.text;
     const fromBot: boolean = message?.from?.is_bot === true;
     const username: string | undefined = message?.from?.username;
+    const userId: number | undefined = message?.from?.id;
+    const chatType: ChatType = message?.chat?.type;
     const updateId: number | undefined = update?.update_id;
 
     if (fromBot || !chatId || !text) {
@@ -1202,6 +1622,14 @@ Deno.serve(async (req) => {
         chatId,
         `🚫 Chat não autorizado.\nID deste chat: ${chatId}\n\nPeça ao admin para liberar em settings.telegram_allowed_chats.`,
       );
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+
+    // Rate limit (best-effort, in-memory). Não bloqueia callbacks.
+    if (!checkRateLimit(chatId)) {
+      if (shouldSendRateWarning(chatId)) {
+        await sendTelegram(chatId, `⚠️ Muitas ações seguidas. Aguarde alguns segundos.`);
+      }
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
@@ -1258,35 +1686,150 @@ Deno.serve(async (req) => {
 
     if (lines.length <= 1) {
       const parsed = parseCommand(lines[0] ?? text);
-      const cmd = await resolveWithContext(parsed, chatId);
+      const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
       const reply = await handleCommand(cmd, waiter);
       await sendTelegram(chatId, reply.text, reply.keyboard);
-      if (reply.successTable) await setLastTable(chatId, reply.successTable);
+      if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
     } else {
-      // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
-      const textResults: string[] = [];
-      const pendingChoices: HandlerReply[] = [];
+      // Multi-comando: tenta consolidar ADD/REMOVE da mesma mesa em UMA impressão.
+      // 1ª passada: parse + resolveContext + resolveProduct (sem mutação) por linha.
+      type Slot =
+        | { kind: "batchable"; line: string; table: string; op: BatchOp; cmdKind: "ADD" | "REMOVE"; fuzzyFrom?: string }
+        | { kind: "standalone"; line: string; reply: HandlerReply };
+
+      const slots: Slot[] = [];
+
       for (const line of lines) {
         try {
           const parsed = parseCommand(line);
-          const cmd = await resolveWithContext(parsed, chatId);
-          const reply = await handleCommand(cmd, waiter);
-          if (reply.keyboard && reply.keyboard.length > 0) {
-            pendingChoices.push(reply);
-            textResults.push(`🤔 "${line}" → escolha abaixo.`);
+          const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+
+          if (cmd.kind === "ADD" || cmd.kind === "REMOVE") {
+            const resolution = await resolveProduct(cmd.productText);
+            let chosen: Product | null = null;
+            let fuzzyFrom: string | undefined;
+
+            if (resolution.kind === "found") {
+              chosen = resolution.product;
+              fuzzyFrom = resolution.fuzzyFrom;
+            } else if (resolution.kind === "ambiguous") {
+              chosen = autoPickFromCandidates(cmd.productText, resolution.candidates);
+            } else if (resolution.kind === "is_group_trigger") {
+              const variantProducts = await fetchProductsByNames(resolution.variants);
+              chosen = autoPickFromCandidates(cmd.productText, variantProducts);
+            }
+
+            if (chosen) {
+              slots.push({
+                kind: "batchable",
+                line,
+                table: cmd.table,
+                cmdKind: cmd.kind,
+                op: { kind: cmd.kind, product: chosen, qty: cmd.qty, rawQty: cmd.qty },
+                fuzzyFrom,
+              });
+              continue;
+            }
+
+            // Não conseguiu resolver sem ambiguidade — vai standalone com botões.
+            const reply = await handleCommand(cmd, waiter);
+            slots.push({ kind: "standalone", line, reply });
           } else {
-            textResults.push(reply.text);
+            const reply = await handleCommand(cmd, waiter);
+            slots.push({ kind: "standalone", line, reply });
+            if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
           }
-          // Atualiza contexto entre linhas para que a próxima linha possa usar mesa implícita
-          if (reply.successTable) await setLastTable(chatId, reply.successTable);
         } catch (e) {
-          console.error("line error:", line, e);
-          textResults.push(`❌ "${line}": erro inesperado`);
+          console.error("line parse error:", line, e);
+          slots.push({ kind: "standalone", line, reply: { text: `❌ "${line}": erro inesperado` } });
         }
       }
+
+      // Agrupa batchable por mesa.
+      const batchByTable = new Map<string, { ops: BatchOp[]; lines: string[]; fuzzyNotes: string[] }>();
+      const ordered: { type: "batch_ref"; table: string } | { type: "standalone"; reply: HandlerReply; line: string }[] = [];
+      // Construímos resultados na ordem original; cada mesa de batch entra UMA vez (na primeira ocorrência).
+      const tableFirstIdx = new Map<string, number>();
+      const renderedSlots: Array<{ type: "batch"; table: string } | { type: "standalone"; reply: HandlerReply; line: string }> = [];
+
+      for (const s of slots) {
+        if (s.kind === "batchable") {
+          if (!batchByTable.has(s.table)) {
+            batchByTable.set(s.table, { ops: [], lines: [], fuzzyNotes: [] });
+            tableFirstIdx.set(s.table, renderedSlots.length);
+            renderedSlots.push({ type: "batch", table: s.table });
+          }
+          const bucket = batchByTable.get(s.table)!;
+          bucket.ops.push(s.op);
+          bucket.lines.push(s.line);
+          if (s.fuzzyFrom) bucket.fuzzyNotes.push(`"${s.fuzzyFrom}"→${s.op.product.name}`);
+        } else {
+          renderedSlots.push({ type: "standalone", reply: s.reply, line: s.line });
+        }
+      }
+
+      // Executa cada batch.
+      const batchResults = new Map<string, { text: string; keyboard?: InlineButton[][] }>();
+      const pendingChoices: HandlerReply[] = [];
+
+      for (const [table, bucket] of batchByTable) {
+        try {
+          const result = await executeBatchForTable(table, bucket.ops, waiter, /*shouldPrint*/ true);
+          let line = result.text;
+          if (bucket.fuzzyNotes.length > 0) {
+            line += `\n   (interpretado: ${bucket.fuzzyNotes.join(", ")})`;
+          }
+          if (result.ok) {
+            line += "\n" + (await formatPrintStatus(table));
+            await setLastTable(chatId, table, userId, chatType);
+          }
+          let keyboard: InlineButton[][] | undefined;
+          if (result.ok && result.ops.length > 0) {
+            const token = registerBatchUndo(chatId, table, result.ops);
+            keyboard = buildUndoBatchKeyboard(token);
+          }
+          batchResults.set(table, { text: line, keyboard });
+        } catch (e: any) {
+          const msg = String(e?.message ?? e);
+          const errLine = msg.includes("version_conflict")
+            ? `⏳ Mesa ${table}: conflito de versão. Aguarde 5s e reenvie.`
+            : `❌ Mesa ${table}: ${msg}`;
+          batchResults.set(table, { text: errLine });
+        }
+      }
+
+      // Coleta standalone com botões para envio em mensagens separadas.
+      for (const r of renderedSlots) {
+        if (r.type === "standalone" && r.reply.keyboard && r.reply.keyboard.length > 0) {
+          pendingChoices.push(r.reply);
+        }
+      }
+
+      // Monta texto consolidado.
+      const textBlocks: string[] = [];
+      for (const r of renderedSlots) {
+        if (r.type === "batch") {
+          textBlocks.push(batchResults.get(r.table)?.text ?? `(mesa ${r.table})`);
+        } else {
+          if (r.reply.keyboard && r.reply.keyboard.length > 0) {
+            textBlocks.push(`🤔 "${r.line}" → escolha abaixo.`);
+          } else {
+            textBlocks.push(r.reply.text);
+          }
+        }
+      }
+
       const header = `📊 ${lines.length} comandos processados:\n`;
-      await sendTelegram(chatId, header + "\n" + textResults.join("\n\n"));
-      // Mensagens separadas com botões
+      await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
+
+      // Botões de undo (1 por mesa batched) em mensagens separadas.
+      for (const [, res] of batchResults) {
+        if (res.keyboard) {
+          await sendTelegram(chatId, `↩️ Desfazer mesa?`, res.keyboard);
+        }
+      }
+
+      // Mensagens separadas com botões de escolha.
       for (const choice of pendingChoices) {
         await sendTelegram(chatId, choice.text, choice.keyboard);
       }
