@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { CheckCircle2, WifiOff, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePrintQueue } from "@/hooks/use-print-queue";
 
 interface Props {
   realtimeStatus: "online" | "offline";
