@@ -373,7 +373,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                       + ADD
                     </span>
                     {qty > 0 && (
-                      <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow">
+                      <span
+                        key={qty}
+                        className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
+                      >
                         {qty}
                       </span>
                     )}
