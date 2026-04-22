@@ -90,6 +90,78 @@ export type Database = {
           },
         ]
       }
+      inventory_items: {
+        Row: {
+          aliases: string[]
+          category: string
+          created_at: string
+          current_stock: number
+          id: string
+          is_active: boolean
+          min_stock: number
+          name: string
+          slug: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          aliases?: string[]
+          category?: string
+          created_at?: string
+          current_stock?: number
+          id?: string
+          is_active?: boolean
+          min_stock?: number
+          name: string
+          slug: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          aliases?: string[]
+          category?: string
+          created_at?: string
+          current_stock?: number
+          id?: string
+          is_active?: boolean
+          min_stock?: number
+          name?: string
+          slug?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      inventory_movements: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          movement_type: string
+          note: string | null
+          quantity: number
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          movement_type: string
+          note?: string | null
+          quantity: number
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          movement_type?: string
+          note?: string | null
+          quantity?: number
+          source?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           id: string
@@ -328,6 +400,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_inventory_movement: {
+        Args: {
+          p_item_id: string
+          p_note?: string
+          p_quantity: number
+          p_source?: string
+          p_type: string
+        }
+        Returns: Json
+      }
       claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
       complete_order_print: { Args: { p_order_id: string }; Returns: undefined }
       create_order: {
@@ -344,6 +426,28 @@ export type Database = {
       fail_order_print: {
         Args: { p_error?: string; p_order_id: string }
         Returns: undefined
+      }
+      find_inventory_item_by_text: {
+        Args: { p_text: string }
+        Returns: {
+          aliases: string[]
+          category: string
+          created_at: string
+          current_stock: number
+          id: string
+          is_active: boolean
+          min_stock: number
+          name: string
+          slug: string
+          unit: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "inventory_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       merge_table_duplicates: { Args: { p_table_name: string }; Returns: Json }
       move_order_to_table: {

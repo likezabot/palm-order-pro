@@ -1,14 +1,16 @@
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Monitor, Settings, Download, ChefHat, ShoppingBag } from "lucide-react";
+import { Smartphone, Monitor, Settings, Download, ChefHat, ShoppingBag, Package } from "lucide-react";
 import { useFeedback } from "@/hooks/use-feedback";
 import { getAppVersion } from "@/lib/version-check";
 
 import ThemeToggle from "@/components/ThemeToggle";
+import StockSummaryCard from "@/components/home/StockSummaryCard";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", path: "/palm", Icon: Smartphone },
   { label: "PDV / CAIXA", path: "/pdv", Icon: ShoppingBag },
   { label: "PAINEL COZINHA", path: "/kitchen", Icon: ChefHat },
+  { label: "ESTOQUE", path: "/estoque", Icon: Package },
   { label: "ADMIN", path: "/admin", Icon: Settings },
 ];
 
@@ -93,6 +95,7 @@ const Index = () => {
         </div>
       </div>
 
+      <StockSummaryCard />
 
       <p className="mt-2 text-[10px] text-muted-foreground/50 select-none">
         v1.14.0 ({getAppVersion().slice(0, 10)})
