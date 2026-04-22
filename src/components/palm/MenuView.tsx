@@ -8,13 +8,16 @@ import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
 import MoveTableDialog from "./MoveTableDialog";
 import {
   SUBGROUPS,
-  HIDDEN_ESPETO_NAMES,
   matchesSubgroup,
   type Subgroup,
 } from "./menu-subgroups";
 import { RenameTableDialog } from "./RenameTableDialog";
 import { PorcoVariantDialog } from "./PorcoVariantDialog";
-import { getPorcoGroupProducts } from "@/lib/porco-group";
+import {
+  getPorcoGroupProducts,
+  getHiddenEspetoNames,
+  useExtraPorcoNames,
+} from "@/lib/porco-group";
 import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
 import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
