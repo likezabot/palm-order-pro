@@ -1103,17 +1103,30 @@ function ctxPrefix(cmd: { fromContext?: boolean; table?: string }): string {
 async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
   if (cmd.kind === "HELP") return { text: HELP_TEXT };
   if (cmd.kind === "PARSE_ERROR") {
+    let body = `Faltou identificar mesa, ação ou produto.`;
+    if (cmd.hint === "no_op") {
+      body = `Identifiquei a mesa, mas faltou a ação (+, -, mais, tira…).`;
+    } else if (cmd.hint === "no_product") {
+      body = `Identifiquei a ação, mas faltou dizer qual mesa.`;
+    }
     return {
       text:
         `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
-        `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
+        `${body} Exemplos:\n` +
         `  • mesa 3 + 2 coca 350\n` +
-        `  • tira 1 agua da mesa 1\n\n` +
+        `  • tira 1 agua da mesa 1\n` +
+        `  • mesa 4 ver pedido\n\n` +
         `Envie "ajuda" para ver todos os formatos.`,
     };
   }
   if (cmd.kind === "NEEDS_TABLE") {
     return { text: NEEDS_TABLE_TEXT };
+  }
+  if (cmd.kind === "SET_TABLE") {
+    return {
+      text: `📍 Mesa ${cmd.table} definida para os próximos comandos (15 min).`,
+      successTable: cmd.table,
+    };
   }
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
     // Não deveria chegar aqui (resolveWithContext converte antes), defensivo:
@@ -1130,10 +1143,16 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   switch (resolution.kind) {
     case "not_found": {
       const sugg = await suggestProducts(cmd.productText);
-      const tail = sugg.length > 0
-        ? `Talvez quis dizer: ${sugg.join(", ")}?\nRepita com o nome exato.`
-        : `Verifique o nome no cardápio e tente de novo.`;
-      return { text: prefix + `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}` };
+      if (sugg.length > 0) {
+        const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, sugg);
+        return {
+          text: prefix + `❓ Não achei "${cmd.productText}" no cardápio. Talvez:`,
+          keyboard,
+        };
+      }
+      return {
+        text: prefix + `❓ Não achei "${cmd.productText}" no cardápio.\nVerifique o nome e tente de novo.`,
+      };
     }
     case "ambiguous": {
       const picked = autoPickFromCandidates(cmd.productText, resolution.candidates);
@@ -1177,7 +1196,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
         text: prefix + `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
       };
     case "found":
-      return await runExecute(cmd, resolution.product, waiter);
+      return await runExecute(cmd, resolution.product, waiter, resolution.fuzzyFrom);
   }
 }
 
