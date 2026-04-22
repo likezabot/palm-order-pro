@@ -271,7 +271,7 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
 
         {/* Category tabs */}
         {!isSearching && (
-          <div className="flex gap-0 overflow-x-auto no-scrollbar border-b border-border -mx-2.5 px-2.5">
+          <div className="flex gap-0 overflow-x-auto no-scrollbar border-b border-border/60 -mx-2.5 px-2.5">
             {CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat;
               const count = categoryCounts[cat] ?? 0;
@@ -282,25 +282,23 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                     playFeedback("click");
                     setActiveCategory(cat);
                   }}
-                  className={`relative inline-flex min-w-[88px] items-center justify-center whitespace-nowrap px-4 py-3 pr-5 text-sm transition-colors ${
+                  className={`relative inline-flex min-w-[80px] items-center justify-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-sm tracking-wide transition-colors ${
                     isActive
-                      ? "text-foreground font-bold bg-primary/5"
-                      : "text-muted-foreground/70 font-semibold hover:text-foreground"
+                      ? "text-foreground font-semibold"
+                      : "text-muted-foreground/70 font-medium hover:text-foreground"
                   }`}
                 >
                   <span>{CATEGORY_LABELS[cat]}</span>
                   {count > 0 && (
                     <span
                       key={count}
-                      className={`absolute top-1 right-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none bg-primary text-primary-foreground ring-2 ring-background animate-badge-pop ${
-                        isActive ? "scale-110 shadow-glow" : ""
-                      }`}
+                      className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none bg-foreground/10 text-foreground/80 animate-badge-pop"
                     >
                       {count}
                     </span>
                   )}
                   {isActive && (
-                    <span className="absolute left-2 right-2 bottom-0 h-[4px] rounded-full bg-brand-gradient" />
+                    <span className="absolute left-3 right-3 bottom-0 h-[2px] rounded-full bg-brand-gradient" />
                   )}
                 </button>
               );
