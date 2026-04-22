@@ -376,6 +376,50 @@ type Command =
 const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
 const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
 const ALL_OPS = [...ADD_OPS, ...REM_OPS];
+
+// ─────────────────────────── multi-command splitter ───────────────────────────
+// Aceita múltiplos comandos numa linha via separadores: \n, ;, " // ", " | ".
+// Também faz split conservador quando aparece outro "mesa N" no meio da linha,
+// somente se cada lado contém um operador/ação reconhecível (evita quebrar
+// produtos com "mesa" no nome).
+function splitCommands(raw: string): string[] {
+  if (!raw) return [];
+  // Normaliza separadores explícitos para \n
+  const text = raw.replace(/\s*\/\/\s*/g, "\n").replace(/\s+\|\s+/g, "\n").replace(/\s*;\s*/g, "\n");
+
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  const wordOps = ALL_OPS.filter((o) => /^[a-z]/.test(o)).join("|");
+  const hasActionRE = new RegExp(
+    `(?:\\b(?:${wordOps})\\b|[+\\-]\\s*\\d|\\b(?:ver|pedido|consumo|status|situacao|situação|o\\s+que\\s+tem)\\b)`,
+    "i",
+  );
+  const tableRE = /\bmesa\s+\d+\b/gi;
+
+  for (const line of lines) {
+    const matches = [...line.matchAll(tableRE)];
+    if (matches.length < 2) {
+      result.push(line);
+      continue;
+    }
+    const parts: string[] = [];
+    let lastEnd = 0;
+    for (let i = 1; i < matches.length; i++) {
+      const start = matches[i].index!;
+      parts.push(line.slice(lastEnd, start).trim());
+      lastEnd = start;
+    }
+    parts.push(line.slice(lastEnd).trim());
+    const allHaveAction = parts.every((p) => p.length > 0 && hasActionRE.test(p));
+    if (allHaveAction) {
+      for (const p of parts) result.push(p);
+    } else {
+      result.push(line);
+    }
+  }
+  return result;
+}
 const VIEW_TOKENS = [
   "ver", "ve", "consulta", "consultar", "consulte",
   "total", "totais", "pedido", "pedidos",
