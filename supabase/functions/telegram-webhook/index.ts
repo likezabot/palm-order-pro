@@ -217,7 +217,7 @@ type Command =
   | { kind: "VIEW_NOMESA" }
   | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
   | { kind: "HELP" }
-  | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_qty" | "generic" };
+  | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
 // Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
 const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
@@ -376,11 +376,18 @@ function parseCommand(raw: string): Command {
   }
 
   // Hint para mensagem de erro mais útil.
-  const hasOpAny = text.split(/\s+/).some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
+  // Semântica:
+  //   no_op       = tem mesa, faltou ação (+/-/mais/tira…)
+  //   no_table    = tem ação, faltou mesa
+  //   no_product  = tem mesa e ação, faltou produto/qty reconhecível
+  //   generic     = não deu pra identificar nada
+  const tokensAll = text.split(/\s+/);
+  const hasOpAny = tokensAll.some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
   const hasTable = /\bmesa\s+\d+\b/.test(text);
-  let hint: "no_op" | "no_product" | "no_qty" | "generic" = "generic";
-  if (hasTable && !hasOpAny) hint = "no_op";
-  else if (hasOpAny && !hasTable) hint = "no_product";
+  let hint: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" = "generic";
+  if (hasTable && hasOpAny) hint = "no_product";
+  else if (hasTable && !hasOpAny) hint = "no_op";
+  else if (!hasTable && hasOpAny) hint = "no_table";
   return { kind: "PARSE_ERROR", raw, hint };
 }
 
@@ -1276,8 +1283,10 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     let body = `Faltou identificar mesa, ação ou produto.`;
     if (cmd.hint === "no_op") {
       body = `Identifiquei a mesa, mas faltou a ação (+, -, mais, tira…).`;
-    } else if (cmd.hint === "no_product") {
+    } else if (cmd.hint === "no_table") {
       body = `Identifiquei a ação, mas faltou dizer qual mesa.`;
+    } else if (cmd.hint === "no_product") {
+      body = `Identifiquei a mesa e a ação, mas faltou o produto (ou a quantidade).`;
     }
     return {
       text:
