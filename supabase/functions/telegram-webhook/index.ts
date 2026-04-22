@@ -94,6 +94,32 @@ function parseCommand(raw: string): Command {
   const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
   const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
   const ALL_OPS = [...ADD_OPS, ...REM_OPS];
+
+  // VIEW natural: "mesa N <gatilho>", "<gatilho> mesa N", "como esta a mesa N", "quanto deu a mesa N" etc.
+  // Só dispara se NÃO houver operador ADD/REMOVE nem padrão "<qty> <produto>".
+  {
+    const tableMatch = text.match(/\bmesa\s+(\d+)\b/);
+    if (tableMatch) {
+      const VIEW_TOKENS = [
+        "ver", "ve", "consulta", "consultar", "consulte",
+        "total", "totais", "pedido", "pedidos",
+        "mostra", "mostrar", "mostre", "lista", "listar", "liste",
+        "resumo", "extrato", "conta", "quanto",
+      ];
+      const VIEW_PHRASES = ["como esta", "como ta", "como anda"];
+      const tokens = text.split(/\s+/);
+      const hasViewToken = tokens.some((t) => VIEW_TOKENS.includes(t));
+      const hasViewPhrase = VIEW_PHRASES.some((p) => text.includes(p));
+      const hasOp = tokens.some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
+      // qty <produto>: número (ou número por extenso) seguido de palavra que não seja "mesa"
+      const qtyProductRe = /\b(\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\s+(?!mesa\b)[a-z]/;
+      const stripped = text.replace(/\bmesa\s+\d+\b/g, " ");
+      const hasQtyProduct = qtyProductRe.test(stripped);
+      if ((hasViewToken || hasViewPhrase) && !hasOp && !hasQtyProduct) {
+        return { kind: "VIEW", table: tableMatch[1] };
+      }
+    }
+  }
   const opAlt = ALL_OPS.map((o) => o.replace(/[+\-]/g, "\\$&")).join("|");
 
   const classify = (op: string): "ADD" | "REMOVE" =>
