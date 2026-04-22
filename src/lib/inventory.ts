@@ -115,12 +115,18 @@ export function getDisplayCategory(
   return "insumos";
 }
 
-// Maps a menu category (products.category) to a stock category
+// Maps a menu category (products.category) to a stock category.
+// Stock categories são alinhadas ao cardápio (refeicoes/espetos/bebidas/cervejas).
 export function mapMenuCategoryToStock(menuCategory: string): string {
-  const c = (menuCategory || "").toLowerCase();
-  if (c.includes("beb") || c.includes("cerve") || c.includes("refri")) return "bebidas";
-  if (c.includes("espeto") || c.includes("carne") || c.includes("refeic") || c.includes("refeição")) return "carnes";
-  return "outros";
+  const c = (menuCategory || "").toLowerCase().trim();
+  if (!c) return "espetos";
+  if (c.includes("cerve")) return "cervejas";
+  if (c.includes("beb") || c.includes("refri")) return "bebidas";
+  if (c.includes("refeic") || c.includes("refeição")) return "refeicoes";
+  if (c.includes("espeto") || c.includes("carne")) return "espetos";
+  // fallback: usa a string original se já for um slug canônico, senão "espetos"
+  if (["refeicoes", "espetos", "bebidas", "cervejas"].includes(c)) return c;
+  return "espetos";
 }
 
 // Critical margin: how close item is to running out (lower = worse).
