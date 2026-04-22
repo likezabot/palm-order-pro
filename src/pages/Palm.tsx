@@ -137,6 +137,7 @@ const Palm = () => {
       return (
         <MenuView
           onAdd={(product) => addToCart(product, waiterName)}
+          onDecrement={(product) => updateQuantity(product.id, -1)}
           cart={cart}
           total={total}
           itemCount={itemCount}

@@ -377,38 +377,52 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
               const qty = getQty(product.id);
               const esgotado = isEsgotado(product.id);
               return (
-                <button
-                  key={product.id}
-                  onClick={() => handleAdd(product)}
-                  className={`relative flex flex-col rounded-2xl border p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card ${
-                    esgotado
-                      ? "bg-card/60 border-destructive/40 hover:border-destructive/60"
-                      : "bg-card border-border active:bg-primary/10 hover:border-primary/40"
-                  }`}
-                >
-                  <span className={`font-semibold text-base leading-tight ${esgotado ? "text-muted-foreground" : "text-foreground"}`}>
-                    {product.name}
-                  </span>
-                  <span className={`mt-1 text-sm font-black ${esgotado ? "text-muted-foreground" : "brand-gradient-text"}`}>
-                    R$ {product.price.toFixed(2)}
-                  </span>
-                  {esgotado && (
-                    <span className="mt-1 inline-flex w-fit items-center rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-destructive border border-destructive/40">
-                      Esgotado
+                <div key={product.id} className="relative">
+                  <button
+                    onClick={() => handleAdd(product)}
+                    className={`relative w-full flex flex-col rounded-2xl border p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card ${
+                      esgotado
+                        ? "bg-card/60 border-destructive/40 hover:border-destructive/60"
+                        : "bg-card border-border active:bg-primary/10 hover:border-primary/40"
+                    }`}
+                  >
+                    <span className={`font-semibold text-base leading-tight ${esgotado ? "text-muted-foreground" : "text-foreground"} ${qty > 0 ? "pl-9" : ""}`}>
+                      {product.name}
                     </span>
-                  )}
-                  <span className={`mt-auto pt-2 inline-flex items-center gap-1 text-base font-black ${esgotado ? "text-destructive" : "text-primary"}`}>
-                    {esgotado ? "+ Adicionar" : "+ ADD"}
-                  </span>
+                    <span className={`mt-1 text-sm font-black ${esgotado ? "text-muted-foreground" : "brand-gradient-text"}`}>
+                      R$ {product.price.toFixed(2)}
+                    </span>
+                    {esgotado && (
+                      <span className="mt-1 inline-flex w-fit items-center rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-destructive border border-destructive/40">
+                        Esgotado
+                      </span>
+                    )}
+                    <span className={`mt-auto pt-2 inline-flex items-center gap-1 text-base font-black ${esgotado ? "text-destructive" : "text-primary"}`}>
+                      {esgotado ? "+ Adicionar" : "+ ADD"}
+                    </span>
+                    {qty > 0 && (
+                      <span
+                        key={qty}
+                        className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
+                      >
+                        {qty}
+                      </span>
+                    )}
+                  </button>
                   {qty > 0 && (
-                    <span
-                      key={qty}
-                      className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playFeedback("click");
+                        onDecrement(product);
+                      }}
+                      aria-label={`Diminuir ${product.name}`}
+                      className="absolute top-2 left-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/15 text-destructive border border-destructive/40 active:scale-90 hover:bg-destructive/25 transition-all shadow-soft"
                     >
-                      {qty}
-                    </span>
+                      <Minus size={16} strokeWidth={3} />
+                    </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
