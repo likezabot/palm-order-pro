@@ -15,6 +15,7 @@ import Kitchen from "./pages/Kitchen";
 import Admin from "./pages/Admin";
 import PrintStation from "./pages/PrintStation";
 import Pdv from "./pages/Pdv";
+import Stock from "./pages/Stock";
 import ForceUpdate from "./pages/ForceUpdate";
 import InstallPalm from "./pages/InstallPalm";
 import InstallKitchen from "./pages/InstallKitchen";
@@ -45,6 +46,7 @@ const AnimatedRoutes = () => {
         <Route path="/admin" element={<Admin />} />
         <Route path="/pdv" element={<Pdv />} />
         <Route path="/print-station" element={<PrintStation />} />
+        <Route path="/estoque" element={<Stock />} />
         <Route path="/atualizar" element={<ForceUpdate />} />
         <Route path="/instalar/palm" element={<InstallPalm />} />
         <Route path="/instalar/cozinha" element={<InstallKitchen />} />
