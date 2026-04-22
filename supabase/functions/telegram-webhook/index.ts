@@ -12,6 +12,8 @@ const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+type InlineButton = { text: string; callback_data: string };
+
 // Dedupe (TTL 5min) para retries do Telegram.
 const seenUpdates = new Map<number, number>();
 function isDuplicate(updateId: number): boolean {
