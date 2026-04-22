@@ -1749,6 +1749,7 @@ const HELP_TEXT =
   `  • mesa 4 o que tem / consumo\n` +
   `  • status mesa 4 / mesa 4 como ta\n\n` +
   `📦 *ESTOQUE*\n` +
+  `  • *gerenciar estoque* / menu estoque → modo guiado com botões\n` +
   `  • entrada 10 coca / repor 10 coca\n` +
   `  • saida 2 picanha / vendi 3 coca / acabou 1 prato\n` +
   `  • ajuste coca 50 / contei 50 coca\n` +
@@ -2216,6 +2217,14 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
+  // ─── WIZARD callbacks (wz|...) ───
+  if (data.startsWith("wz|")) {
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `Telegram (@${username})` : "Telegram");
+    const handled = await wzHandleCallback(cb, waiter);
+    if (handled) return;
+  }
+
   if (data === "x") {
     await answerCallback(cbId, "Cancelado");
     await editTelegramMessage(chatId, messageId, "❌ Cancelado.");
@@ -2468,6 +2477,395 @@ function testOrPlain(): Response {
   return new Response("ok", { status: 200, headers: corsHeaders });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// WIZARD DE ESTOQUE — conversa guiada com perguntas + botões
+// ═══════════════════════════════════════════════════════════════
+
+type WzAction = "in" | "out" | "adj";
+type WzScope = { kind: "single"; itemId: string; itemName: string; unit: string } | { kind: "all" } | { kind: "category"; category: string };
+type WzData = {
+  action?: WzAction;
+  scope?: WzScope;
+  qty?: number;
+  qtySuggestions?: number[];
+};
+type WzStep = "awaiting_action" | "awaiting_scope" | "awaiting_item_search" | "awaiting_qty" | "awaiting_confirm";
+
+async function wzGet(chatId: number): Promise<{ step: WzStep; data: WzData } | null> {
+  // Limpa expirados em paralelo (best-effort)
+  sb.from("telegram_chat_state").delete().lt("expires_at", new Date().toISOString()).then();
+  const { data, error } = await sb
+    .from("telegram_chat_state")
+    .select("step, data, expires_at")
+    .eq("chat_id", chatId)
+    .maybeSingle();
+  if (error || !data) return null;
+  if (new Date(data.expires_at as string).getTime() < Date.now()) {
+    await sb.from("telegram_chat_state").delete().eq("chat_id", chatId);
+    return null;
+  }
+  return { step: data.step as WzStep, data: (data.data ?? {}) as WzData };
+}
+
+async function wzSet(chatId: number, step: WzStep, data: WzData): Promise<void> {
+  const expires = new Date(Date.now() + 5 * 60_000).toISOString();
+  const { error } = await sb
+    .from("telegram_chat_state")
+    .upsert({ chat_id: chatId, step, data, expires_at: expires, updated_at: new Date().toISOString() }, { onConflict: "chat_id" });
+  if (error) console.error("wzSet:", error.message);
+}
+
+async function wzClear(chatId: number): Promise<void> {
+  await sb.from("telegram_chat_state").delete().eq("chat_id", chatId);
+}
+
+function wzActionLabel(a: WzAction): string {
+  return a === "in" ? "📥 Entrada" : a === "out" ? "📤 Saída" : "✏️ Ajuste";
+}
+function wzActionVerb(a: WzAction): "in" | "out" | "adjustment" {
+  return a === "in" ? "in" : a === "out" ? "out" : "adjustment";
+}
+
+function wzMainMenuKeyboard(): InlineButton[][] {
+  return [
+    [{ text: "📥 Entrada", callback_data: "wz|act|in" }, { text: "📤 Saída", callback_data: "wz|act|out" }],
+    [{ text: "✏️ Ajuste", callback_data: "wz|act|adj" }, { text: "📋 Listar", callback_data: "wz|act|list" }],
+    [{ text: "🚨 Críticos", callback_data: "wz|act|crit" }],
+    [{ text: "❌ Cancelar", callback_data: "wz|cancel" }],
+  ];
+}
+
+async function wzListCategories(): Promise<string[]> {
+  const { data } = await sb.from("inventory_items").select("category").eq("is_active", true);
+  const set = new Set<string>();
+  for (const r of (data ?? []) as any[]) if (r.category) set.add(String(r.category));
+  return Array.from(set).sort();
+}
+
+async function wzScopeKeyboard(): Promise<InlineButton[][]> {
+  const cats = await wzListCategories();
+  const rows: InlineButton[][] = [
+    [{ text: "🌐 Todos os itens", callback_data: "wz|scope|all" }],
+  ];
+  // 2 categorias por linha
+  for (let i = 0; i < cats.length; i += 2) {
+    const row: InlineButton[] = [];
+    for (let j = 0; j < 2 && i + j < cats.length; j++) {
+      const c = cats[i + j];
+      const enc = encodeURIComponent(c).slice(0, 30);
+      row.push({ text: `📂 ${c}`, callback_data: `wz|scope|cat|${enc}` });
+    }
+    rows.push(row);
+  }
+  rows.push([{ text: "🔍 Item específico (digitar)", callback_data: "wz|scope|search" }]);
+  rows.push([{ text: "❌ Cancelar", callback_data: "wz|cancel" }]);
+  return rows;
+}
+
+async function wzSmartQtySuggestions(action: WzAction, scope: WzScope): Promise<number[]> {
+  // Olha histórico recente. Se item específico, filtra por item_id; senão pega geral.
+  const movType = wzActionVerb(action);
+  let q = sb.from("inventory_movements").select("quantity").eq("movement_type", movType).order("created_at", { ascending: false }).limit(60);
+  if (scope.kind === "single") q = q.eq("item_id", scope.itemId);
+  const { data } = await q;
+  const counts = new Map<number, number>();
+  for (const r of (data ?? []) as any[]) {
+    const n = Number(r.quantity);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    // arredonda decimais para 2 casas pra agrupar
+    const k = Math.round(n * 100) / 100;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n]) => n);
+  // Garante alguns defaults se histórico vazio
+  const defaults = action === "adj" ? [10, 50, 100] : [1, 5, 10];
+  for (const d of defaults) if (top.length < 4 && !top.includes(d)) top.push(d);
+  return top.slice(0, 4);
+}
+
+function wzQtyKeyboard(suggestions: number[]): InlineButton[][] {
+  const row: InlineButton[] = suggestions.map((n) => ({
+    text: Number.isInteger(n) ? `${n}` : n.toString(),
+    callback_data: `wz|qty|${n}`,
+  }));
+  return [
+    row,
+    [{ text: "✏️ Outro valor (digitar)", callback_data: "wz|qty|other" }],
+    [{ text: "❌ Cancelar", callback_data: "wz|cancel" }],
+  ];
+}
+
+function wzConfirmKeyboard(): InlineButton[][] {
+  return [
+    [{ text: "✅ Confirmar", callback_data: "wz|confirm" }, { text: "❌ Cancelar", callback_data: "wz|cancel" }],
+  ];
+}
+
+function wzScopeDescribe(scope: WzScope): string {
+  if (scope.kind === "single") return `*${scope.itemName}*`;
+  if (scope.kind === "all") return "*TODOS os itens ativos*";
+  return `*categoria ${scope.category}*`;
+}
+
+async function wzAskQty(chatId: number, action: WzAction, scope: WzScope, messageId?: number) {
+  const sugg = await wzSmartQtySuggestions(action, scope);
+  await wzSet(chatId, "awaiting_qty", { action, scope, qtySuggestions: sugg });
+  const verb = action === "in" ? "adicionar" : action === "out" ? "tirar" : "ajustar para";
+  const text = `${wzActionLabel(action)} → ${wzScopeDescribe(scope)}\n\nQuantas unidades ${verb}?`;
+  if (messageId !== undefined) await editTelegramMessage(chatId, messageId, text, wzQtyKeyboard(sugg));
+  else await sendTelegram(chatId, text, wzQtyKeyboard(sugg));
+}
+
+async function wzExecute(chatId: number, action: WzAction, scope: WzScope, qty: number, waiter: string): Promise<string> {
+  const movType = wzActionVerb(action);
+  // Busca itens-alvo
+  let items: any[] = [];
+  if (scope.kind === "single") {
+    const { data } = await sb.from("inventory_items").select("id, name, current_stock, min_stock, unit").eq("id", scope.itemId).maybeSingle();
+    if (data) items = [data];
+  } else {
+    let q = sb.from("inventory_items").select("id, name, current_stock, min_stock, unit, category").eq("is_active", true).limit(100);
+    if (scope.kind === "category") q = q.eq("category", scope.category);
+    const { data } = await q;
+    items = (data ?? []) as any[];
+  }
+  if (items.length === 0) return "❌ Nenhum item encontrado para aplicar.";
+
+  let success = 0;
+  const failures: string[] = [];
+  const lines: string[] = [];
+  for (const it of items) {
+    try {
+      const { data, error } = await sb.rpc("apply_inventory_movement", {
+        p_item_id: it.id,
+        p_type: movType,
+        p_quantity: qty,
+        p_note: `Telegram wizard (${waiter})`,
+        p_source: "telegram",
+      });
+      if (error) throw new Error(error.message);
+      success++;
+      const newStock = Number((data as any)?.new_stock ?? 0);
+      if (lines.length < 15) {
+        lines.push(`• ${it.name}: ${fmtStockQty(newStock, it.unit || "")}`);
+      }
+    } catch (e: any) {
+      failures.push(`${it.name}: ${String(e?.message ?? e)}`);
+    }
+  }
+  const verb = action === "in" ? "Entrada" : action === "out" ? "Saída" : "Ajuste";
+  const icon = action === "in" ? "📥" : action === "out" ? "📤" : "🔧";
+  let header = `${icon} ${verb} de *${qty}* aplicada em *${success}/${items.length}* item(ns).`;
+  if (lines.length > 0) header += "\n\n" + lines.join("\n");
+  if (success > 15) header += `\n... e mais ${success - 15} item(ns).`;
+  if (failures.length > 0) header += `\n\n⚠️ Falhas (${failures.length}):\n` + failures.slice(0, 5).join("\n");
+  return header;
+}
+
+// Detecta gatilhos do wizard
+function wzIsTrigger(text: string): boolean {
+  const t = normalize(text);
+  return /^(?:gerenciar\s+estoque|menu\s+estoque|estoque\s+menu|wizard\s+estoque|estoque\s+(?:guiad[oa]|interativo)|abrir\s+estoque|controle\s+(?:de\s+)?estoque|me\s+ajuda\s+(?:com\s+)?(?:o\s+)?estoque|gerenciar)$/.test(t);
+}
+
+async function wzStartMenu(chatId: number, messageId?: number) {
+  await wzSet(chatId, "awaiting_action", {});
+  const text = "📦 *Gerenciar Estoque*\n\nO que deseja fazer?";
+  if (messageId !== undefined) await editTelegramMessage(chatId, messageId, text, wzMainMenuKeyboard());
+  else await sendTelegram(chatId, text, wzMainMenuKeyboard());
+}
+
+// Tenta processar o texto como input do wizard. Retorna true se consumiu.
+async function wzHandleTextInput(chatId: number, text: string, waiter: string): Promise<boolean> {
+  const state = await wzGet(chatId);
+  if (!state) return false;
+
+  if (state.step === "awaiting_item_search") {
+    // Busca por nome
+    const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: text.trim() });
+    let item: any = (invExact && invExact[0]) || null;
+    if (!item) {
+      // fallback ilike
+      const { data } = await sb
+        .from("inventory_items")
+        .select("id, name, current_stock, min_stock, unit")
+        .eq("is_active", true)
+        .ilike("name", `%${text.trim()}%`)
+        .limit(8);
+      const arr = (data ?? []) as any[];
+      if (arr.length === 1) {
+        item = arr[0];
+      } else if (arr.length > 1) {
+        const rows: InlineButton[][] = arr.map((it) => [{
+          text: `${it.name} (${fmtStockQty(Number(it.current_stock), it.unit || "")})`,
+          callback_data: `wz|pickitem|${it.id}`,
+        }]);
+        rows.push([{ text: "❌ Cancelar", callback_data: "wz|cancel" }]);
+        await sendTelegram(chatId, `🔍 Achei ${arr.length} itens. Escolha:`, rows);
+        return true;
+      }
+    }
+    if (!item) {
+      await sendTelegram(chatId, `❌ Não achei item com "${text.trim()}". Tente outro nome ou /cancelar.`);
+      return true;
+    }
+    const action = state.data.action!;
+    await wzAskQty(chatId, action, { kind: "single", itemId: item.id, itemName: item.name, unit: item.unit || "" });
+    return true;
+  }
+
+  if (state.step === "awaiting_qty") {
+    const n = parseFloat(text.replace(",", "."));
+    if (!Number.isFinite(n) || n < 0) {
+      await sendTelegram(chatId, `❌ Valor inválido. Digite um número (ex: 10 ou 2.5).`);
+      return true;
+    }
+    const action = state.data.action!;
+    const scope = state.data.scope!;
+    // Se scope é amplo, exige confirmação
+    if (scope.kind !== "single") {
+      await wzSet(chatId, "awaiting_confirm", { ...state.data, qty: n });
+      const verb = action === "in" ? "adicionar" : action === "out" ? "tirar" : "ajustar para";
+      await sendTelegram(chatId, `⚠️ Vai *${verb} ${n}* em ${wzScopeDescribe(scope)}.\nConfirmar?`, wzConfirmKeyboard());
+      return true;
+    }
+    // Single → executa direto
+    await wzClear(chatId);
+    const result = await wzExecute(chatId, action, scope, n, waiter);
+    await sendTelegram(chatId, result);
+    return true;
+  }
+
+  return false;
+}
+
+async function wzHandleCallback(cb: any, waiter: string): Promise<boolean> {
+  const data: string | undefined = cb.data;
+  const chatId: number | undefined = cb.message?.chat?.id;
+  const messageId: number | undefined = cb.message?.message_id;
+  const cbId: string = cb.id;
+  if (!data || !data.startsWith("wz|") || chatId === undefined || messageId === undefined) return false;
+
+  const parts = data.split("|");
+  const op = parts[1];
+
+  if (op === "cancel") {
+    await wzClear(chatId);
+    await answerCallback(cbId, "Cancelado");
+    await editTelegramMessage(chatId, messageId, "❌ Cancelado.");
+    return true;
+  }
+
+  if (op === "act") {
+    const a = parts[2];
+    await answerCallback(cbId);
+    if (a === "list") {
+      await wzClear(chatId);
+      const reply = await handleCommand({ kind: "STOCK_LIST" }, waiter);
+      await editTelegramMessage(chatId, messageId, reply.text, reply.keyboard);
+      return true;
+    }
+    if (a === "crit") {
+      await wzClear(chatId);
+      const reply = await handleCommand({ kind: "STOCK_CRITICAL" }, waiter);
+      await editTelegramMessage(chatId, messageId, reply.text, reply.keyboard);
+      return true;
+    }
+    if (a === "in" || a === "out" || a === "adj") {
+      await wzSet(chatId, "awaiting_scope", { action: a as WzAction });
+      const text = `${wzActionLabel(a as WzAction)}\n\nAplicar em qual escopo?`;
+      const kb = await wzScopeKeyboard();
+      await editTelegramMessage(chatId, messageId, text, kb);
+      return true;
+    }
+  }
+
+  if (op === "scope") {
+    const state = await wzGet(chatId);
+    if (!state || !state.data.action) {
+      await answerCallback(cbId, "Sessão expirada");
+      await editTelegramMessage(chatId, messageId, "⏱ Sessão expirada. Mande `gerenciar estoque` novamente.");
+      return true;
+    }
+    const sub = parts[2];
+    if (sub === "all") {
+      await answerCallback(cbId);
+      await wzAskQty(chatId, state.data.action, { kind: "all" }, messageId);
+      return true;
+    }
+    if (sub === "cat") {
+      const cat = decodeURIComponent(parts[3] || "");
+      await answerCallback(cbId);
+      await wzAskQty(chatId, state.data.action, { kind: "category", category: cat }, messageId);
+      return true;
+    }
+    if (sub === "search") {
+      await answerCallback(cbId);
+      await wzSet(chatId, "awaiting_item_search", { action: state.data.action });
+      await editTelegramMessage(chatId, messageId, `🔍 Digite o nome do item (ex: \`coca\`, \`picanha\`).`);
+      return true;
+    }
+  }
+
+  if (op === "pickitem") {
+    const itemId = parts[2];
+    const { data: item } = await sb.from("inventory_items").select("id, name, unit").eq("id", itemId).maybeSingle();
+    const state = await wzGet(chatId);
+    if (!item || !state?.data.action) {
+      await answerCallback(cbId, "Item não encontrado");
+      return true;
+    }
+    await answerCallback(cbId);
+    await wzAskQty(chatId, state.data.action, { kind: "single", itemId: item.id, itemName: item.name, unit: (item as any).unit || "" }, messageId);
+    return true;
+  }
+
+  if (op === "qty") {
+    const state = await wzGet(chatId);
+    if (!state || !state.data.action || !state.data.scope) {
+      await answerCallback(cbId, "Sessão expirada");
+      return true;
+    }
+    if (parts[2] === "other") {
+      await answerCallback(cbId);
+      await editTelegramMessage(chatId, messageId, `✏️ Digite a quantidade (ex: \`12\` ou \`2.5\`).`);
+      return true;
+    }
+    const n = parseFloat(parts[2]);
+    if (!Number.isFinite(n) || n < 0) {
+      await answerCallback(cbId, "Valor inválido");
+      return true;
+    }
+    if (state.data.scope.kind !== "single") {
+      await wzSet(chatId, "awaiting_confirm", { ...state.data, qty: n });
+      await answerCallback(cbId);
+      const verb = state.data.action === "in" ? "adicionar" : state.data.action === "out" ? "tirar" : "ajustar para";
+      await editTelegramMessage(chatId, messageId, `⚠️ Vai *${verb} ${n}* em ${wzScopeDescribe(state.data.scope)}.\nConfirmar?`, wzConfirmKeyboard());
+      return true;
+    }
+    await answerCallback(cbId);
+    await wzClear(chatId);
+    const result = await wzExecute(chatId, state.data.action, state.data.scope, n, waiter);
+    await editTelegramMessage(chatId, messageId, result);
+    return true;
+  }
+
+  if (op === "confirm") {
+    const state = await wzGet(chatId);
+    if (!state || !state.data.action || !state.data.scope || state.data.qty === undefined) {
+      await answerCallback(cbId, "Sessão expirada");
+      return true;
+    }
+    await answerCallback(cbId, "Aplicando...");
+    await wzClear(chatId);
+    const result = await wzExecute(chatId, state.data.action, state.data.scope, state.data.qty, waiter);
+    await editTelegramMessage(chatId, messageId, result);
+    return true;
+  }
+
+  return false;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -2609,6 +3007,16 @@ Deno.serve(async (req) => {
       waiter = bound;
     } else {
       waiter = username ? `Telegram (@${username})` : "Telegram";
+    }
+
+    // ─── WIZARD: gatilho explícito (estoque, gerenciar estoque, etc) ───
+    if (wzIsTrigger(trimmed)) {
+      await wzStartMenu(chatId);
+      return testOrPlain();
+    }
+    // ─── WIZARD: input livre (qty digitada, nome de item, etc) ───
+    if (await wzHandleTextInput(chatId, trimmed, waiter)) {
+      return testOrPlain();
     }
 
     // Detecta modo preview
