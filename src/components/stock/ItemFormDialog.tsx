@@ -59,9 +59,9 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
   const upsert = useUpsertInventoryItem();
   const deactivate = useDeactivateItem();
   const { data: menuProducts = [] } = useMenuProductsForStock();
-  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
+  const { data: productGroups = [] } = useProductGroups();
   const queryClient = useQueryClient();
-  const [porcoGroup, setPorcoGroup] = useState(false);
+  const [joinGroup, setJoinGroup] = useState(false);
 
   const slug = useMemo(() => slugify(name), [name]);
 
@@ -75,6 +75,19 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
     [menuProducts, productId]
   );
 
+  // Detect which group (if any) the linked product belongs to.
+  const linkedGroup = useMemo(
+    () => (linkedProduct ? findGroupForProduct(linkedProduct.name, productGroups) : null),
+    [linkedProduct, productGroups],
+  );
+
+  // Group of the same category as the linked product, if any (default suggestion when not yet a member).
+  const suggestedGroup = useMemo(() => {
+    if (!linkedProduct) return null;
+    if (linkedGroup) return linkedGroup;
+    return productGroups.find((g) => g.category === linkedProduct.category) ?? null;
+  }, [linkedProduct, linkedGroup, productGroups]);
+
   useEffect(() => {
     if (open) {
       setName(item?.name ?? "");
@@ -86,13 +99,11 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
       setAliasInput("");
       setProductId(item?.product_id ?? null);
       const initialName = item?.name ?? "";
-      setPorcoGroup(
-        !!initialName &&
-          (isCanonicalPorcoName(initialName) ||
-            extraPorcoNames.some((n) => normName(n) === normName(initialName))),
+      setJoinGroup(
+        !!initialName && !!findGroupForProduct(initialName, productGroups),
       );
     }
-  }, [open, item, extraPorcoNames]);
+  }, [open, item, productGroups]);
 
   const handleSelectProduct = (val: string) => {
     if (val === NONE_VALUE) {
