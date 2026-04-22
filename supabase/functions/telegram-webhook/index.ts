@@ -864,40 +864,63 @@ const NEEDS_TABLE_TEXT =
 
 // ─────────────────────────── preview (dry-run) ───────────────────────────
 
-async function previewCommand(cmd: Command): Promise<string> {
+async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   if (cmd.kind === "HELP") return `ℹ️ (preview) Mostraria a ajuda.`;
   if (cmd.kind === "PARSE_ERROR") {
     return `❓ (preview) Não interpretaria: "${cmd.raw}" — faltou mesa, ação ou produto.`;
   }
-  if (cmd.kind === "VIEW") {
-    return `📋 (preview) Mostraria o pedido da mesa ${cmd.table}.`;
+
+  // Resolver contexto para *_NOMESA antes de exibir.
+  let ctxNote = "";
+  let working: Command = cmd;
+  if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
+    const ctxTable = getLastTable(chatId);
+    if (!ctxTable) {
+      return `⚠️ (preview) Nenhuma mesa em contexto. Envie a mesa explícita.`;
+    }
+    ctxNote = ` (mesa ${ctxTable} do contexto)`;
+    if (cmd.kind === "VIEW_NOMESA") {
+      working = { kind: "VIEW", table: ctxTable, fromContext: true };
+    } else {
+      const k = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
+      working = { kind: k, table: ctxTable, qty: cmd.qty, productText: cmd.productText, fromContext: true };
+    }
+  }
+  if (working.kind === "NEEDS_TABLE") {
+    return `⚠️ (preview) Nenhuma mesa em contexto. Envie a mesa explícita.`;
+  }
+  if (working.kind === "VIEW") {
+    return `📋 (preview${ctxNote}) Mostraria o pedido da mesa ${working.table}.`;
+  }
+  if (working.kind !== "ADD" && working.kind !== "REMOVE") {
+    return `❓ (preview) Comando não suportado.`;
   }
 
   // ADD/REMOVE — resolve produto sem executar mutação
-  const resolution = await resolveProduct(cmd.productText);
-  const op = cmd.kind === "ADD" ? "+" : "-";
-  const verbo = cmd.kind === "ADD" ? "Adicionaria" : "Removeria";
+  const resolution = await resolveProduct(working.productText);
+  const op = working.kind === "ADD" ? "+" : "-";
+  const verbo = working.kind === "ADD" ? "Adicionaria" : "Removeria";
 
   switch (resolution.kind) {
     case "not_found": {
-      const sugg = await suggestProducts(cmd.productText);
+      const sugg = await suggestProducts(working.productText);
       const tail = sugg.length > 0 ? ` Sugestões: ${sugg.join(", ")}.` : "";
-      return `❓ (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → produto não encontrado.${tail}`;
+      return `❓ (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → produto não encontrado.${tail}`;
     }
     case "ambiguous": {
       const list = resolution.candidates.map((p) => p.name).join(" | ");
-      return `🤔 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → ambíguo: ${list}.`;
+      return `🤔 (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → ambíguo: ${list}.`;
     }
     case "is_group_trigger": {
       const variants = resolution.variants.join(" | ");
-      return `📦 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → grupo "${resolution.group.name}" com variantes: ${variants}.`;
+      return `📦 (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → grupo "${resolution.group.name}" com variantes: ${variants}.`;
     }
     case "out_of_stock":
-      return `❌ (preview) Mesa ${cmd.table} ${op}${cmd.qty} ${resolution.product.name} → esgotado.`;
+      return `❌ (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} ${resolution.product.name} → esgotado.`;
     case "no_linked_product":
-      return `⚠️ (preview) "${resolution.itemName}" sem produto vinculado.`;
+      return `⚠️ (preview${ctxNote}) "${resolution.itemName}" sem produto vinculado.`;
     case "found":
-      return `✅ (preview) ${verbo} na Mesa ${cmd.table}: ${op}${cmd.qty} ${resolution.product.name} (${fmtBRL(resolution.product.price)}).`;
+      return `✅ (preview${ctxNote}) ${verbo} na Mesa ${working.table}: ${op}${working.qty} ${resolution.product.name} (${fmtBRL(resolution.product.price)}).`;
   }
 }
 
