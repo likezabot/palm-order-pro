@@ -465,6 +465,29 @@ function extractQtyProductFromTail(s: string): { qty: number; productText: strin
   return { qty: 1, productText: t };
 }
 
+// Parser solto para linhas de continuação em modo de operação herdada.
+// Aceita "<qty> [unit] <produto>" OU "<produto> <qty> [unit]".
+const STOCK_UNIT_RE_GLOBAL = "(?:kg|g|l|ml|un|unidade|unidades)";
+function parseStockTailLoose(raw: string): { qty: number; unit?: string; itemText: string } | null {
+  const t = normalize(raw);
+  if (!t) return null;
+  const m1 = t.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE_GLOBAL})?\\s+(.+)$`));
+  if (m1) {
+    const qty = parseFloat(m1[1].replace(",", "."));
+    if (Number.isFinite(qty) && qty > 0) {
+      return { qty, unit: m1[2] || undefined, itemText: m1[3].trim() };
+    }
+  }
+  const m2 = t.match(new RegExp(`^(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE_GLOBAL})?$`));
+  if (m2) {
+    const qty = parseFloat(m2[2].replace(",", "."));
+    if (Number.isFinite(qty) && qty > 0) {
+      return { qty, unit: m2[3] || undefined, itemText: m2[1].trim() };
+    }
+  }
+  return null;
+}
+
 function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
@@ -497,6 +520,7 @@ function parseCommand(raw: string): Command {
   const parseStockTail = (tail: string, qtyRequired: boolean): { qty: number; unit?: string; itemText: string } | null => {
     const t = tail.trim();
     if (!t) return null;
+    // Formato canônico: <qty> [unit] <produto>
     const m = t.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?\\s+(.+)$`));
     if (m) {
       const qty = parseFloat(m[1].replace(",", "."));
@@ -504,25 +528,34 @@ function parseCommand(raw: string): Command {
         return { qty, unit: m[2] || undefined, itemText: m[3].trim() };
       }
     }
+    // Número por extenso na frente
     const m2 = t.match(/^(\S+)\s+(.+)$/);
     if (m2) {
       const qty = NUM_WORDS_GLOBAL[m2[1]];
       if (qty !== undefined) return { qty, itemText: m2[2].trim() };
     }
+    // Fallback: ordem invertida "<produto> <qty> [unit]" (ex.: "medalhão 20", "coca 5kg")
+    const m3 = t.match(new RegExp(`^(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?$`));
+    if (m3) {
+      const qty = parseFloat(m3[2].replace(",", "."));
+      if (Number.isFinite(qty) && qty > 0) {
+        return { qty, unit: m3[3] || undefined, itemText: m3[1].trim() };
+      }
+    }
     if (!qtyRequired) return { qty: 1, itemText: t };
     return null;
   };
 
-  // ENTRADA: "entrada 10 coca", "entrou 5kg picanha", "+ 10 coca", "chegou 20 cerva", "repor 10 coca", "abasteci 5 coca"
-  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)\s+(.+)$/) ||
+  // ENTRADA: "entrada 10 coca", "entrada de estoque medalhão 20", "entrou 5kg picanha", "+ 10 coca"
+  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)(?:\s+(?:de|do|no|ao|em|para|pra)\s+estoque)?\s+(.+)$/) ||
                    text.match(/^\+\s+(\d.+)$/);
   if (stockIn) {
     const parsed = parseStockTail(stockIn[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "in", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
   }
 
-  // SAÍDA: "saida 2 coca", "usei 1kg picanha", "vendi 3 coca", "acabou 2 coca", "quebrou 1 prato"
-  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
+  // SAÍDA: "saida 2 coca", "saida do estoque 5 coca", "usei 1kg picanha", "vendi 3 coca"
+  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)(?:\s+(?:de|do|no|em|para|pra)\s+estoque)?\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
   if (stockOut) {
     const parsed = parseStockTail(stockOut[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "out", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
@@ -3865,9 +3898,32 @@ Deno.serve(async (req) => {
 
       const slots: Slot[] = [];
 
+      // Modo "operação herdada": se a 1ª linha estabelece um STOCK_MOVEMENT,
+      // linhas seguintes que sozinhas não casam com nenhum verbo são tratadas
+      // como continuação (mesma operação in/out/adjustment).
+      let inheritedStockType: "in" | "out" | "adjustment" | null = null;
+
       for (const line of lines) {
         try {
-          const parsed = parseCommand(line);
+          let parsed = parseCommand(line);
+
+          if (parsed.kind === "PARSE_ERROR" && inheritedStockType) {
+            const tail = parseStockTailLoose(line);
+            if (tail) {
+              parsed = {
+                kind: "STOCK_MOVEMENT",
+                type: inheritedStockType,
+                qty: tail.qty,
+                itemText: tail.itemText,
+                unit: tail.unit,
+              };
+            }
+          }
+
+          if (parsed.kind === "STOCK_MOVEMENT") {
+            inheritedStockType = parsed.type;
+          }
+
           const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
 
           if (cmd.kind === "ADD" || cmd.kind === "REMOVE") {
