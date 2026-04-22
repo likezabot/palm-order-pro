@@ -63,23 +63,36 @@ function parseCommand(raw: string): Command {
   if (viewB) return { kind: "VIEW", table: viewB[1] };
 
   // Operadores
-  const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar"];
-  const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar"];
+  const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
+  const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
   const ALL_OPS = [...ADD_OPS, ...REM_OPS];
   const opAlt = ALL_OPS.map((o) => o.replace(/[+\-]/g, "\\$&")).join("|");
 
   const classify = (op: string): "ADD" | "REMOVE" =>
     ADD_OPS.includes(op) ? "ADD" : "REMOVE";
 
-  // Extrai qty + produto de uma string ("2 coca" ou "coca")
+  // Números por extenso (1–10)
+  const NUM_WORDS: Record<string, number> = {
+    um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
+    seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+  };
+  const parseQty = (token: string): number | null => {
+    if (/^\d+$/.test(token)) {
+      const n = parseInt(token, 10);
+      return n >= 1 ? n : null;
+    }
+    const w = NUM_WORDS[token];
+    return w ?? null;
+  };
+
+  // Extrai qty + produto de uma string ("2 coca", "um bovino" ou "coca")
   const extractQtyProduct = (s: string): { qty: number; productText: string } | null => {
     const t = s.trim();
     if (!t) return null;
-    const m = t.match(/^(\d+)\s+(.+)$/);
+    const m = t.match(/^(\S+)\s+(.+)$/);
     if (m) {
-      const qty = parseInt(m[1], 10);
-      if (qty < 1) return null;
-      return { qty, productText: m[2].trim() };
+      const qty = parseQty(m[1]);
+      if (qty !== null) return { qty, productText: m[2].trim() };
     }
     return { qty: 1, productText: t };
   };
