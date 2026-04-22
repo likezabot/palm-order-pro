@@ -1736,7 +1736,7 @@ function testOrPlain(): Response {
     });
   }
   clearTestContext();
-  return testOrPlain();
+  return new Response("ok", { status: 200, headers: corsHeaders });
 }
 
 Deno.serve(async (req) => {
