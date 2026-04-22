@@ -18,7 +18,7 @@ export function useProductStockMap() {
         .not("product_id", "is", null);
       if (error) throw error;
       const map = new Map<string, number>();
-      for (const row of (data ?? []) as Array<{ product_id: string; current_stock: number }>) {
+      for (const row of ((data ?? []) as unknown) as Array<{ product_id: string; current_stock: number }>) {
         if (row.product_id) map.set(row.product_id, Number(row.current_stock));
       }
       return map;
