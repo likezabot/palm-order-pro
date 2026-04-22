@@ -1410,6 +1410,32 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       successTable: cmd.table,
     };
   }
+  if (cmd.kind === "UNDO") {
+    cleanupUndos();
+    const chatId = _undoChatId();
+    const stack = chatUndoStack.get(chatId) ?? [];
+    if (stack.length === 0) return { text: "↩️ Nada para desfazer." };
+    const tokensToProcess = cmd.all ? [...stack] : [stack[stack.length - 1]];
+    const results: string[] = [];
+    for (const token of tokensToProcess) {
+      const entry = pendingUndos.get(token);
+      if (!entry) continue;
+      try {
+        const r = await executeUndoOps(entry.table, entry.ops, waiter);
+        results.push(r);
+      } catch (e: any) {
+        results.push(`❌ Falha ao desfazer mesa ${entry.table}: ${String(e?.message ?? e)}`);
+      }
+      pendingUndos.delete(token);
+      consumedUndos.set(token, Date.now());
+    }
+    // Remove tokens consumidos do stack
+    const remaining = (chatUndoStack.get(chatId) ?? []).filter((t) => !tokensToProcess.includes(t));
+    if (remaining.length === 0) chatUndoStack.delete(chatId);
+    else chatUndoStack.set(chatId, remaining);
+    if (results.length === 0) return { text: "↩️ Nada para desfazer." };
+    return { text: results.join("\n") };
+  }
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
     // Não deveria chegar aqui (resolveWithContext converte antes), defensivo:
     return { text: NEEDS_TABLE_TEXT };
