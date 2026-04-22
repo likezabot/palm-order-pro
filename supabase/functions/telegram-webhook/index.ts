@@ -22,24 +22,53 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
-// Modo turbo: contexto da última mesa por chat (TTL 15min, in-memory, best-effort).
+// Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
 const LAST_TABLE_TTL_MS = 15 * 60_000;
-const lastTableByChat = new Map<number, { table: string; ts: number }>();
-function getLastTable(chatId: number): string | null {
-  const now = Date.now();
-  for (const [k, v] of lastTableByChat) {
-    if (now - v.ts > LAST_TABLE_TTL_MS) lastTableByChat.delete(k);
-  }
-  const entry = lastTableByChat.get(chatId);
-  if (!entry) return null;
-  if (now - entry.ts > LAST_TABLE_TTL_MS) {
-    lastTableByChat.delete(chatId);
+function lastTableSettingsKey(chatId: number): string {
+  return `telegram_last_table:${chatId}`;
+}
+async function getLastTable(chatId: number): Promise<string | null> {
+  const { data, error } = await sb
+    .from("settings")
+    .select("id, value, updated_at")
+    .eq("key", lastTableSettingsKey(chatId))
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.value) return null;
+
+  try {
+    const parsed = JSON.parse(data.value);
+    const table = typeof parsed?.table === "string" ? parsed.table : null;
+    const ts = typeof parsed?.ts === "number"
+      ? parsed.ts
+      : Date.parse(parsed?.ts ?? data.updated_at ?? "");
+    if (!table || !Number.isFinite(ts) || Date.now() - ts > LAST_TABLE_TTL_MS) {
+      return null;
+    }
+    return table;
+  } catch {
     return null;
   }
-  return entry.table;
 }
-function setLastTable(chatId: number, table: string): void {
-  lastTableByChat.set(chatId, { table, ts: Date.now() });
+async function setLastTable(chatId: number, table: string): Promise<void> {
+  const key = lastTableSettingsKey(chatId);
+  const value = JSON.stringify({ table, ts: Date.now() });
+  const { data: existing } = await sb
+    .from("settings")
+    .select("id")
+    .eq("key", key)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.id) {
+    await sb.from("settings").update({ value }).eq("id", existing.id);
+    return;
+  }
+
+  await sb.from("settings").insert({ key, value });
 }
 
 // ─────────────────────────── helpers ───────────────────────────
