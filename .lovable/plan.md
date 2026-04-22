@@ -1,51 +1,76 @@
 
 
-## Parser do Telegram: linguagem natural
+## Parser Telegram: plurais + mensagens de erro melhores
 
-### Diagnóstico do parser atual
+### Mudanças (arquivo único: `supabase/functions/telegram-webhook/index.ts`)
 
-O parser já cobre 4 dos 5 exemplos pedidos via Formas 1/2/3 e os dicionários `ADD_OPS`/`REM_OPS`. Único caso que falha hoje:
+#### 1. Plural simples no `productText`
 
-- **"mesa 1 mais um bovino"** — falta o operador `mais` e o número por extenso `um`.
+Adicionar helper `singularize(text)` aplicado **antes** de chamar `resolveProduct`:
 
-Os outros exemplos já funcionam (testados mentalmente contra os regexes existentes). O plano abaixo fecha esse gap sem mexer no fluxo de execução.
+- Regras de despluralização tokenizada (palavra a palavra), conservadora:
+  - `...ões` → `...ao` (ex: `medalhoes` → `medalhao`)
+  - `...ais` → `...al`, `...eis` → `...el`, `...ois` → `...ol`, `...uis` → `...ul` (ex: `pasteis` → `pastel`)
+  - `...ns` → `...m` (ex: `garagens` → `garagem`)
+  - `...res`/`...zes`/`...ses` → tira `es` (ex: `colheres` → `colher`)
+  - `...s` final (não precedido por vogal acentuada nem `s`) → tira `s` (ex: `cocas` → `coca`, `bovinos` → `bovino`, `aguas` → `agua`)
+- Palavras com ≤3 letras ou que terminam em `ás/és/ís/ós/ús` permanecem intactas (evita quebrar `gas`, `mes`).
+- Aplicado token a token preservando dígitos e unidades (`350`, `2l`, `600ml` ficam como estão).
+- Como o fallback de `resolveProduct` já usa `ILIKE %norm%`, singularizar aumenta acerto sem regredir buscas que já funcionam (a versão singular sempre casa o nome cadastrado, que está no singular).
 
-### Mudanças no `parseCommand` (arquivo único: `supabase/functions/telegram-webhook/index.ts`)
+Validação dos exemplos pedidos:
+| Entrada | Após parser | Singularizado | Resolve |
+|---|---|---|---|
+| `mesa 1 mais duas cocas 350` | qty=2, "cocas 350" | "coca 350" | alias `coca 350` ✅ |
+| `tira duas aguas da mesa 1` | qty=2, "aguas" | "agua" | alias `agua` (Água sem gás) ✅ |
+| `acrescenta tres bovinos na mesa 2` | qty=3, "bovinos" | "bovino" | slug `bovino` ✅ |
 
-**1. Expandir dicionários de operadores**
-- `ADD_OPS` ganha: `mais`, `soma`, `somar`, `inclui`, `incluir`, `acrescenta`, `acrescentar`
-- `REM_OPS` ganha: `menos`, `subtrai`, `subtrair`, `exclui`, `excluir`, `desconta`, `descontar`
+#### 2. Mensagens de erro mais claras e úteis
 
-**2. Suporte a números por extenso (1–10)**
-- Novo helper `parseQty(token)` que aceita dígito (`"2"`) ou palavra (`um`, `uma`, `dois`, `duas`, `tres`, `quatro`, `cinco`, `seis`, `sete`, `oito`, `nove`, `dez`).
-- Usado dentro de `extractQtyProduct`: se o primeiro token for dígito OU palavra-número, vira `qty` e o resto vira `productText`. Senão, `qty=1` e tudo é produto (comportamento atual).
+Reescrita das respostas em `handleCommand` e do `HELP_TEXT`:
 
-**3. Sem novas regex de forma**
-- As 3 formas existentes (canônica, com preposição, sem preposição) continuam idênticas. A expansão dos dicionários e do `extractQtyProduct` é suficiente para cobrir todos os exemplos.
+- **PARSE_ERROR**: explica o que faltou (mesa? operador? produto?) e mostra 2 exemplos curtos no topo (não dump do help completo).
+  ```
+  ❓ Não consegui interpretar: "<raw>"
+  
+  Faltou identificar mesa/ação/produto. Exemplos:
+  • mesa 3 + 2 coca 350
+  • tira 1 agua da mesa 1
+  
+  Envie "ajuda" para ver todos os formatos.
+  ```
+- **not_found**: sugere os 3 produtos mais próximos via `ILIKE` parcial em palavras do texto (se houver). Sem sugestões → texto atual.
+  ```
+  ❓ Não achei "<productText>" no cardápio.
+  Talvez quis dizer: Coca-Cola 350ml, Coca-Cola 600ml, Coca-Cola 2L?
+  Repita com o nome exato.
+  ```
+- **ambiguous**: numera candidatos e dá dica concreta (qual diferença olhar — tamanho/variante).
+  ```
+  🤔 Encontrei várias opções para "<productText>":
+    1) Coca-Cola 350ml
+    2) Coca-Cola 600ml
+    3) Coca-Cola 2L
+  Especifique o tamanho/variante e reenvie.
+  ```
+- **is_group_trigger**: lista variantes em bullets (não vírgula corrida) — fica legível em mobile.
+- **out_of_stock**: já é claro; só adiciona dica de tentar variante alternativa quando aplicável.
+- **version_conflict**: incluir sugestão "aguarde 5s e reenvie".
+- **HELP_TEXT**: ampliar com a sintaxe natural já suportada (mais/tira/acrescenta), número por extenso, e a regra de plural.
 
-### Validação dos casos pedidos após mudança
+Sem mudança em fluxo (`executeAdd`/`executeRemove`/`resolveProduct`/banco) — apenas helper novo + textos.
 
-| Entrada | Forma | Resultado |
-|---|---|---|
-| `mesa 1 + 1 bovino` | F1 | ADD mesa=1 qty=1 bovino ✅ (regressão) |
-| `mesa 1 mais um bovino` | F1 | ADD mesa=1 qty=1 bovino ✅ (novo) |
-| `adiciona 1 bovino na mesa 1` | F2 | ADD mesa=1 qty=1 bovino ✅ |
-| `mesa 1 coloca 2 coca 350` | F1 | ADD mesa=1 qty=2 "coca 350" ✅ |
-| `tira 1 agua da mesa 2` | F2 | REMOVE mesa=2 qty=1 agua ✅ |
-| `remove 1 tulipa mesa 3` | F3 | REMOVE mesa=3 qty=1 tulipa ✅ |
+### Garantias
 
-### Garantias mantidas
+- **Compatibilidade total**: singularize é puro string→string aplicado entre parser e resolver; canônico `mesa N + 1 coca` continua intacto.
+- **Sem ambiguidade silenciosa**: singularize **não altera** a lógica de resolução ambígua. "cocas" vira "coca" → fuzzy retorna 5 matches → bot pede para especificar (regra atual mantida).
+- **Sem mudança de banco**: nenhum migration, nenhuma alteração em RLS/aliases.
+- **Sem mudança em pedidos**: zero toque em `executeAdd`/`executeRemove`.
 
-- **Compatibilidade total**: nenhuma regra antiga removida; apenas adições.
-- **Mesmo fluxo de execução**: `executeAdd`/`executeRemove`/`resolveProduct` intocados.
-- **Sem ambiguidade silenciosa**: `resolveProduct` continua devolvendo `ambiguous` → bot pede para especificar. Aliases curtos ambíguos (coca, fanta…) seguem fora do dicionário.
-- **Um comando por mensagem**: parser já trata a mensagem como expressão única (sem split por `;` ou `\n`); nada muda.
-- **Sem chute de produto**: a tradução natural→canônico acontece só no parser (operador + qty); a resolução do produto não é afetada.
+### Fora de escopo
 
-### O que NÃO entra nesta etapa
-
-- Múltiplos comandos numa mesma mensagem.
-- Plurais/concordância no nome do produto (delegado ao fuzzy de `resolveProduct`).
-- Números acima de 10 por extenso (raro em pedido de mesa; dígito segue funcionando).
-- Mudanças em testes/memória (alteração é mínima e contida no parser).
+- Plurais irregulares (`pães` → `pão` etc.) — não há produto cadastrado que precise hoje.
+- Concordância de número/gênero em adjetivos compostos.
+- Múltiplos comandos por mensagem (próxima iteração).
+- Fuzzy phonetic / typo-tolerance (Levenshtein) — fora desta etapa.
 
