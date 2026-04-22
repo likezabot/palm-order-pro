@@ -1197,12 +1197,12 @@ Deno.serve(async (req) => {
     }
 
     if (isPreview) {
-      // Preview nunca emite botões — texto consolidado
+      // Preview nunca emite botões — texto consolidado. Usa contexto mas NÃO grava.
       const results: string[] = [];
       for (const line of lines) {
         try {
           const cmd = parseCommand(line);
-          results.push(await previewCommand(cmd));
+          results.push(await previewCommand(cmd, chatId));
         } catch (e) {
           console.error("preview line error:", line, e);
           results.push(`❌ "${line}": erro inesperado`);
@@ -1217,16 +1217,19 @@ Deno.serve(async (req) => {
     }
 
     if (lines.length <= 1) {
-      const cmd = parseCommand(lines[0] ?? text);
+      const parsed = parseCommand(lines[0] ?? text);
+      const cmd = resolveWithContext(parsed, chatId);
       const reply = await handleCommand(cmd, waiter);
       await sendTelegram(chatId, reply.text, reply.keyboard);
+      if (reply.successTable) setLastTable(chatId, reply.successTable);
     } else {
       // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
       const textResults: string[] = [];
       const pendingChoices: HandlerReply[] = [];
       for (const line of lines) {
         try {
-          const cmd = parseCommand(line);
+          const parsed = parseCommand(line);
+          const cmd = resolveWithContext(parsed, chatId);
           const reply = await handleCommand(cmd, waiter);
           if (reply.keyboard && reply.keyboard.length > 0) {
             pendingChoices.push(reply);
@@ -1234,6 +1237,8 @@ Deno.serve(async (req) => {
           } else {
             textResults.push(reply.text);
           }
+          // Atualiza contexto entre linhas para que a próxima linha possa usar mesa implícita
+          if (reply.successTable) setLastTable(chatId, reply.successTable);
         } catch (e) {
           console.error("line error:", line, e);
           textResults.push(`❌ "${line}": erro inesperado`);
