@@ -116,7 +116,29 @@ function registerBatchUndo(chatId: number, table: string, ops: UndoOp[]): string
   const stack = chatUndoStack.get(chatId) ?? [];
   stack.push(token);
   chatUndoStack.set(chatId, stack);
+  // Persiste em DB (multi-isolate safe). Fire-and-forget.
+  sb.from("telegram_undo_stack")
+    .insert({ token, chat_id: chatId, table_name: table, ops })
+    .then((r) => { if (r.error) console.warn("undo persist:", r.error.message); });
   return token;
+}
+
+async function loadChatUndoStackFromDb(chatId: number): Promise<{ token: string; table: string; ops: UndoOp[] }[]> {
+  const cutoff = new Date(Date.now() - UNDO_TTL_MS).toISOString();
+  const { data, error } = await sb
+    .from("telegram_undo_stack")
+    .select("token, table_name, ops, created_at")
+    .eq("chat_id", chatId)
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: true });
+  if (error) { console.warn("undo load:", error.message); return []; }
+  return (data ?? []).map((r: any) => ({ token: r.token, table: r.table_name, ops: r.ops as UndoOp[] }));
+}
+
+async function deleteUndoTokensFromDb(tokens: string[]): Promise<void> {
+  if (tokens.length === 0) return;
+  const { error } = await sb.from("telegram_undo_stack").delete().in("token", tokens);
+  if (error) console.warn("undo delete:", error.message);
 }
 function buildUndoSingleKeyboard(table: string, productId: string, qty: number, op: "a" | "r"): InlineButton[][] {
   // op = ação original ("a" → ADD foi feito → undo é REMOVE)
