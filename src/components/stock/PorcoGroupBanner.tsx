@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Product } from "@/lib/types";
 import type { InventoryItem } from "@/lib/inventory";
 import { formatQty, getStockStatus } from "@/lib/inventory";
-import { getPorcoGroupInventory } from "@/lib/porco-group";
+import { getPorcoGroupInventory, useExtraPorcoNames } from "@/lib/porco-group";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -24,6 +24,7 @@ const DISPLAY_NAMES: Record<string, string> = {
 };
 
 export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
+  const { data: extraNames = [] } = useExtraPorcoNames();
   const { data: products = [] } = useQuery({
     queryKey: ["porco-group-products"],
     staleTime: 30_000,
@@ -37,7 +38,7 @@ export const PorcoGroupBanner = ({ items, onCreateForProduct }: Props) => {
     },
   });
 
-  const group = getPorcoGroupInventory(items, products);
+  const group = getPorcoGroupInventory(items, products, extraNames);
   const anyExists = group.some((g) => g.product);
   if (!anyExists) return null;
 

@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 import type { Product } from "@/lib/types";
-import { getPorcoGroupProducts } from "@/lib/porco-group";
+import { getPorcoGroupProducts, useExtraPorcoNames } from "@/lib/porco-group";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -20,7 +20,8 @@ const DISPLAY_NAMES: Record<string, string> = {
 };
 
 export const PorcoGroupBanner = ({ products }: Props) => {
-  const variants = getPorcoGroupProducts(products);
+  const { data: extraNames = [] } = useExtraPorcoNames();
+  const variants = getPorcoGroupProducts(products, extraNames);
   const anyExists = variants.some((v) => v.product);
   if (!anyExists) return null;
 

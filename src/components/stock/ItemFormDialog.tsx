@@ -28,6 +28,19 @@ import {
   type InventoryItem,
 } from "@/lib/inventory";
 import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  PORCO_GROUP_NAMES,
+  PORCO_EXTRA_NAMES_KEY,
+  addPorcoExtraName,
+  useExtraPorcoNames,
+} from "@/lib/porco-group";
+
+const normName = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+const isCanonicalPorcoName = (name: string) =>
+  PORCO_GROUP_NAMES.some((n) => normName(n) === normName(name));
 
 type Props = {
   open: boolean;
@@ -51,6 +64,9 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
   const upsert = useUpsertInventoryItem();
   const deactivate = useDeactivateItem();
   const { data: menuProducts = [] } = useMenuProductsForStock();
+  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
+  const queryClient = useQueryClient();
+  const [porcoGroup, setPorcoGroup] = useState(false);
 
   const slug = useMemo(() => slugify(name), [name]);
 
@@ -74,8 +90,14 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
       setAliases(item?.aliases ?? []);
       setAliasInput("");
       setProductId(item?.product_id ?? null);
+      const initialName = item?.name ?? "";
+      setPorcoGroup(
+        !!initialName &&
+          (isCanonicalPorcoName(initialName) ||
+            extraPorcoNames.some((n) => normName(n) === normName(initialName))),
+      );
     }
-  }, [open, item]);
+  }, [open, item, extraPorcoNames]);
 
   const handleSelectProduct = (val: string) => {
     if (val === NONE_VALUE) {
@@ -116,6 +138,22 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
         current_stock: parseFloat(initialStock.replace(",", ".")) || 0,
         product_id: productId,
       });
+      // Mirror Porco group flag into settings extras (if linked product is in Espetos
+      // and user opted in with a non-canonical name).
+      if (
+        porcoGroup &&
+        linkedProduct?.category === "espetos" &&
+        !isCanonicalPorcoName(finalName)
+      ) {
+        try {
+          await addPorcoExtraName(finalName);
+          await queryClient.invalidateQueries({
+            queryKey: ["settings", PORCO_EXTRA_NAMES_KEY],
+          });
+        } catch (e) {
+          console.error("Failed to register Porco group extra name", e);
+        }
+      }
       toast({ title: isEdit ? "Item atualizado" : "Item criado" });
       onOpenChange(false);
     } catch (e: any) {
@@ -176,6 +214,43 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
               </p>
             )}
           </div>
+
+          {linkedProduct?.category === "espetos" && (
+            <div className="rounded-md border border-border bg-card/40 p-3">
+              <Label className="flex items-center gap-1 mb-2">
+                🐷 Grupo / Popup (opcional)
+              </Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPorcoGroup(false)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                    !porcoGroup
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-background text-foreground"
+                  }`}
+                >
+                  Nenhum
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPorcoGroup(true)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                    porcoGroup
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-background text-foreground"
+                  }`}
+                >
+                  Grupo Porco
+                </button>
+              </div>
+              {porcoGroup && !isCanonicalPorcoName(linkedProduct.name) && (
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  "{linkedProduct.name}" será adicionado como variante extra do popup do Porco.
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <Label htmlFor="name">Nome</Label>
