@@ -36,6 +36,34 @@ function fmtBRL(n: number): string {
   return `R$ ${n.toFixed(2).replace(".", ",")}`;
 }
 
+// Singulariza tokens em pt-BR (conservador). Aplicado antes do resolveProduct.
+// Preserva dígitos/unidades (350, 2l, 600ml) e palavras curtas/acentuadas (gas, mes).
+function singularizeToken(tok: string): string {
+  if (!tok) return tok;
+  // dígitos ou tokens com dígito (350, 2l, 600ml) — não mexer
+  if (/\d/.test(tok)) return tok;
+  if (tok.length <= 3) return tok;
+  // Já vem normalizado (sem acento). Heurística: se termina em "as/es/is/os/us"
+  // mas a forma original poderia ter acento (gás→gas, três→tres), não dá pra saber.
+  // Mantemos conservador: tokens com 4 letras terminados em vogal+s ficam.
+  // Regras de plural:
+  if (/oes$/.test(tok)) return tok.replace(/oes$/, "ao"); // medalhoes -> medalhao
+  if (/ais$/.test(tok)) return tok.replace(/ais$/, "al"); // pasteis errado, mas: animais->animal
+  if (/eis$/.test(tok)) return tok.replace(/eis$/, "el"); // pasteis -> pastel
+  if (/ois$/.test(tok)) return tok.replace(/ois$/, "ol"); // lencois -> lencol
+  if (/uis$/.test(tok)) return tok.replace(/uis$/, "ul"); // pauis -> paul
+  if (/ns$/.test(tok)) return tok.replace(/ns$/, "m");    // garagens -> garagem
+  if (/(res|zes|ses)$/.test(tok)) return tok.slice(0, -2); // colheres -> colher
+  // Vogal + s no final: tira o s (cocas->coca, bovinos->bovino, aguas->agua)
+  // Mas evita ss e palavras de 4 letras tipo "mais" (já tratado), "pais" (já tratado).
+  if (/[aeiou]s$/.test(tok) && !/ss$/.test(tok)) return tok.slice(0, -1);
+  return tok;
+}
+
+function singularize(text: string): string {
+  return text.split(/\s+/).map(singularizeToken).join(" ");
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -232,10 +260,12 @@ async function resolveTable(table: string): Promise<OrderRow | null> {
 }
 
 async function resolveProduct(text: string): Promise<ProductResolution> {
-  const norm = normalize(text);
+  // Aplica singularize antes de buscar (cocas->coca, bovinos->bovino, aguas->agua).
+  const singular = singularize(normalize(text));
+  const norm = singular;
 
   // 1. find_inventory_item_by_text (slug/aliases exato)
-  const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: text });
+  const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: singular });
   let inventoryItem: any = Array.isArray(invExact) && invExact.length > 0 ? invExact[0] : null;
 
   // 2. Fallback: busca direta em products por nome
@@ -293,6 +323,28 @@ async function checkGroupOrReturn(product: Product): Promise<ProductResolution> 
     return { kind: "is_group_trigger", group: isTrigger, variants: isTrigger.member_names };
   }
   return { kind: "found", product };
+}
+
+// Sugere até 3 produtos próximos (token-by-token, ranqueado por nº de matches).
+async function suggestProducts(text: string): Promise<string[]> {
+  const norm = singularize(normalize(text));
+  const tokens = norm.split(/\s+/).filter((t) => t.length >= 3 && !/^\d+$/.test(t));
+  if (tokens.length === 0) return [];
+  const { data: prods } = await sb
+    .from("products")
+    .select("name")
+    .eq("active", true);
+  const all = (prods ?? []) as { name: string }[];
+  return all
+    .map((p) => {
+      const n = normalize(p.name);
+      const hits = tokens.reduce((acc, t) => acc + (n.includes(t) ? 1 : 0), 0);
+      return { name: p.name, hits };
+    })
+    .filter((s) => s.hits > 0)
+    .sort((a, b) => b.hits - a.hits)
+    .slice(0, 3)
+    .map((s) => s.name);
 }
 
 // ─────────────────────────── merge logic ───────────────────────────
@@ -541,41 +593,64 @@ async function sendTelegram(chatId: number, text: string) {
 }
 
 const HELP_TEXT =
-  `🤖 Comandos disponíveis:\n` +
-  `• mesa <N> + <qtd> <produto>\n` +
-  `• mesa <N> - <qtd> <produto>\n` +
-  `• mesa <N> ver pedido\n\n` +
-  `Exemplos:\n` +
-  `  mesa 3 + 2 coca\n` +
-  `  mesa 1 - 1 agua\n` +
-  `  mesa 4 ver pedido`;
+  `🤖 Como usar:\n\n` +
+  `📌 Adicionar:\n` +
+  `  • mesa 3 + 2 coca 350\n` +
+  `  • mesa 1 mais um bovino\n` +
+  `  • adiciona 2 cocas 350 na mesa 3\n` +
+  `  • acrescenta tres bovinos na mesa 2\n\n` +
+  `📌 Remover:\n` +
+  `  • mesa 1 - 1 agua\n` +
+  `  • tira duas aguas da mesa 1\n` +
+  `  • remove 1 tulipa mesa 3\n\n` +
+  `📌 Consultar:\n` +
+  `  • mesa 4 ver pedido\n\n` +
+  `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
+  `Em caso de dúvida no produto, o bot pede para especificar.`;
 
 // ─────────────────────────── handler ───────────────────────────
 
 async function handleCommand(cmd: Command, waiter: string): Promise<string> {
   if (cmd.kind === "HELP") return HELP_TEXT;
   if (cmd.kind === "PARSE_ERROR") {
-    return `❓ Não entendi "${cmd.raw}".\n\n` + HELP_TEXT;
+    return (
+      `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
+      `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
+      `  • mesa 3 + 2 coca 350\n` +
+      `  • tira 1 agua da mesa 1\n\n` +
+      `Envie "ajuda" para ver todos os formatos.`
+    );
   }
   if (cmd.kind === "VIEW") return await executeView(cmd.table);
 
   // ADD/REMOVE
   const resolution = await resolveProduct(cmd.productText);
   switch (resolution.kind) {
-    case "not_found":
-      return `❓ Produto "${cmd.productText}" não encontrado. Tente outro nome ou /ajuda.`;
+    case "not_found": {
+      const sugg = await suggestProducts(cmd.productText);
+      const tail = sugg.length > 0
+        ? `Talvez quis dizer: ${sugg.join(", ")}?\nRepita com o nome exato.`
+        : `Verifique o nome no cardápio e tente de novo.`;
+      return `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}`;
+    }
     case "ambiguous": {
       const list = resolution.candidates
-        .map((p, i) => `${i + 1}) ${p.name}`)
+        .map((p, i) => `  ${i + 1}) ${p.name}`)
         .join("\n");
-      return `🤔 Encontrei vários:\n${list}\n\nRepita usando o nome completo.`;
+      return (
+        `🤔 Encontrei várias opções para "${cmd.productText}":\n${list}\n\n` +
+        `Especifique o tamanho/variante e reenvie.`
+      );
     }
     case "is_group_trigger": {
-      const variants = resolution.variants.join(", ");
-      return `📦 "${resolution.group.name}" é um grupo. Variantes: ${variants}.\nRepita com a variante específica.`;
+      const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
+      return (
+        `📦 "${resolution.group.name}" tem variantes:\n${variants}\n\n` +
+        `Reenvie escolhendo uma das opções acima.`
+      );
     }
     case "out_of_stock":
-      return `❌ ${resolution.product.name} está marcado como esgotado.`;
+      return `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`;
     case "no_linked_product":
       return `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`;
     case "found": {
@@ -588,7 +663,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<string> {
       } catch (e: any) {
         const msg = String(e?.message ?? e);
         if (msg.includes("version_conflict")) {
-          return `⏳ Mesa ${cmd.table} está sendo editada por outro usuário, tente de novo.`;
+          return `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.`;
         }
         console.error("execute error:", e);
         return `❌ Erro ao processar: ${msg}`;

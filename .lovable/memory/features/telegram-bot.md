@@ -9,7 +9,11 @@ Edge function `telegram-webhook` permite editar pedidos via texto:
 - `mesa N ver pedido` → VIEW
 - `ajuda` / `/start` / `/help` → HELP
 
-Parser também aceita variações naturais: "adiciona 1 bovino na mesa 1", "coloca 2 coca na mesa 3", "mesa 2 tira 1 agua". Operadores ADD: +, add, adiciona(r), coloca(r), poe, manda(r), bota(r). Operadores REMOVE: -, remove(r), tira(r), retira(r), cancela(r). Sem operador explícito → PARSE_ERROR (nunca chuta).
+Parser também aceita variações naturais: "adiciona 1 bovino na mesa 1", "coloca 2 coca na mesa 3", "mesa 2 tira 1 agua", "mesa 1 mais um bovino", "acrescenta tres bovinos na mesa 2". Operadores ADD: +, add, adiciona(r), coloca(r), poe, manda(r), bota(r), mais, soma(r), inclui(r), acrescenta(r). Operadores REMOVE: -, remove(r), tira(r), retira(r), cancela(r), menos, subtrai(r), exclui(r), desconta(r). Aceita números por extenso 1–10 (um/uma, dois/duas, tres…dez). Sem operador explícito → PARSE_ERROR (nunca chuta).
+
+**Plural simples:** singularize() roda antes de resolveProduct (cocas→coca, bovinos→bovino, aguas→agua, medalhoes→medalhao, pasteis→pastel, garagens→garagem). Conservador: ignora dígitos/unidades, palavras ≤3 letras, e ss final. Não altera ambiguidade — "cocas" → "coca" → fuzzy pede variante.
+
+**Mensagens de erro:** PARSE_ERROR mostra 2 exemplos curtos + ponteiro pra "ajuda". not_found sugere top 3 produtos próximos via match de tokens. ambiguous numera candidatos. is_group_trigger lista variantes em bullets. version_conflict sugere "aguarde 5s".
 
 **Regras v1:**
 - NÃO mexe em estoque (consistência com PDV que também não decrementa).
