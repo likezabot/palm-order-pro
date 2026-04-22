@@ -134,6 +134,77 @@ export const SystemTab = () => {
           {archiving ? "ARQUIVANDO…" : "ARQUIVAR AGORA"}
         </Button>
       </div>
+
+      <div className="rounded-xl border-2 border-border p-5 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-primary/10 p-2.5">
+            <History className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-black text-lg text-slate-900">
+              Histórico de arquivamentos
+            </h3>
+            <p className="text-sm text-slate-600 mt-1">
+              Últimas 20 execuções (manual ou automática às 04:00).
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={loadLogs}
+            disabled={loadingLogs}
+          >
+            <RefreshCw className={`w-4 h-4 ${loadingLogs ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+
+        {logs.length === 0 ? (
+          <p className="text-sm text-slate-500 text-center py-4">
+            {loadingLogs ? "Carregando…" : "Nenhuma execução registrada ainda."}
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {logs.map((log) => {
+              const r = log.result || {};
+              const ok = log.status === "success";
+              return (
+                <div
+                  key={log.id}
+                  className={`rounded-lg border p-3 text-sm ${
+                    ok ? "border-border bg-muted/30" : "border-destructive/40 bg-destructive/5"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-bold text-slate-900">
+                      {new Date(log.executed_at).toLocaleString("pt-BR")}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded font-mono bg-background border">
+                      {log.trigger_source}
+                    </span>
+                  </div>
+                  {ok ? (
+                    <div className="text-xs text-slate-600 grid grid-cols-2 gap-x-2">
+                      <span>Pedidos: <b>{String(r.deleted_orders ?? 0)}</b></span>
+                      <span>Itens: <b>{String(r.deleted_order_items ?? 0)}</b></span>
+                      <span>Dias resumo: <b>{String(r.archived_summary_days ?? 0)}</b></span>
+                      <span>Garçons: <b>{String(r.archived_waiter_rows ?? 0)}</b></span>
+                      <span>Produtos: <b>{String(r.archived_product_rows ?? 0)}</b></span>
+                      <span>Mov. estoque: <b>{String(r.deleted_inventory_movements ?? 0)}</b></span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-destructive font-mono break-all">
+                      {log.error_message}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-500 mt-1">
+                    {log.days_kept} dias mantidos · {log.duration_ms ?? 0}ms
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
