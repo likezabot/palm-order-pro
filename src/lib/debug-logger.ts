@@ -13,7 +13,14 @@
  *   - "bridge"    → health-check do bridge .exe
  */
 
-export type DebugCategory = "realtime" | "print" | "queue" | "bridge" | "system";
+export type DebugCategory =
+  | "realtime"
+  | "print"
+  | "queue"
+  | "bridge"
+  | "system"
+  | "global-orders"
+  | "global-print";
 export type DebugLevel = "info" | "warn" | "error" | "success";
 
 export interface DebugLogEntry {
