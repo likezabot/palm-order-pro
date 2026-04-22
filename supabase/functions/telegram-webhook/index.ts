@@ -1852,20 +1852,42 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
-  // ─── PICK WAITER: pw|<idx> ───
+  // ─── REFRESH lista de garçons (botão 🔄) ───
+  if (data === "pw_refresh") {
+    const names = await listWaiterNames();
+    await answerCallback(cbId, names.length ? `${names.length} garçom(ns)` : "Nenhum cadastrado");
+    await editTelegramMessage(
+      chatId,
+      messageId,
+      buildWaiterPickerMessage(names, username),
+      buildWaiterPickerKeyboard(names),
+    );
+    return;
+  }
+
+  // ─── PICK WAITER: pw|<base64url(nome)> ───
   if (data.startsWith("pw|")) {
     if (typeof userId !== "number") {
       await answerCallback(cbId, "Sem usuário");
       return;
     }
-    const idx = parseInt(data.slice(3), 10);
-    const names = await listWaiterNames();
-    if (!Number.isFinite(idx) || idx < 0 || idx >= names.length) {
+    const picked = decodeWaiterName(data.slice(3));
+    if (!picked) {
       await answerCallback(cbId, "Opção inválida");
-      await editTelegramMessage(chatId, messageId, "❌ Opção inválida. Mande qualquer mensagem para ver a lista de novo.");
       return;
     }
-    const picked = names[idx];
+    // Revalida em tempo real: o garçom ainda existe no Palm?
+    const names = await listWaiterNames();
+    if (!names.includes(picked)) {
+      await answerCallback(cbId, "Garçom não existe mais");
+      await editTelegramMessage(
+        chatId,
+        messageId,
+        `⚠️ *${picked}* não está mais cadastrado no Palm.\nEscolha outro:`,
+        buildWaiterPickerKeyboard(names),
+      );
+      return;
+    }
     await setWaiterBinding(userId, picked, username);
     await answerCallback(cbId, `Olá, ${picked}!`);
     await editTelegramMessage(
