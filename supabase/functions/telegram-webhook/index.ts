@@ -91,10 +91,46 @@ function sleep(ms: number) {
 // ─────────────────────────── parser ───────────────────────────
 
 type Command =
-  | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string }
-  | { kind: "VIEW"; table: string }
+  | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string; fromContext?: boolean }
+  | { kind: "VIEW"; table: string; fromContext?: boolean }
+  | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
+  | { kind: "VIEW_NOMESA" }
+  | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string };
+
+// Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
+const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
+const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
+const ALL_OPS = [...ADD_OPS, ...REM_OPS];
+const VIEW_TOKENS = [
+  "ver", "ve", "consulta", "consultar", "consulte",
+  "total", "totais", "pedido", "pedidos",
+  "mostra", "mostrar", "mostre", "lista", "listar", "liste",
+  "resumo", "extrato", "conta", "quanto",
+];
+const VIEW_PHRASES = ["como esta", "como ta", "como anda"];
+const NUM_WORDS_GLOBAL: Record<string, number> = {
+  um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
+  seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+};
+function parseQtyToken(token: string): number | null {
+  if (/^\d+$/.test(token)) {
+    const n = parseInt(token, 10);
+    return n >= 1 ? n : null;
+  }
+  return NUM_WORDS_GLOBAL[token] ?? null;
+}
+function extractQtyProductFromTail(s: string): { qty: number; productText: string } | null {
+  const t = s.trim();
+  if (!t) return null;
+  const m = t.match(/^(\S+)\s+(.+)$/);
+  if (m) {
+    const qty = parseQtyToken(m[1]);
+    if (qty !== null) return { qty, productText: m[2].trim() };
+  }
+  return { qty: 1, productText: t };
+}
 
 function parseCommand(raw: string): Command {
   const text = normalize(raw);
