@@ -8,9 +8,11 @@ import ItemFormDialog from "@/components/stock/ItemFormDialog";
 import HistoryDialog from "@/components/stock/HistoryDialog";
 import ImportFromMenuDialog from "@/components/stock/ImportFromMenuDialog";
 import CriticalStockSection, { getCriticalItems } from "@/components/stock/CriticalStockSection";
-import { useInventoryItems } from "@/hooks/use-inventory";
+import { useInventoryItems, useBulkImportFromMenu } from "@/hooks/use-inventory";
 import { useAutoSyncMenuToStock } from "@/hooks/use-auto-sync-menu-to-stock";
 import { useMenuProductsForStock } from "@/hooks/use-menu-products-for-stock";
+import { PorcoGroupBanner } from "@/components/stock/PorcoGroupBanner";
+import { toast } from "@/hooks/use-toast";
 import {
   type InventoryItem,
   DISPLAY_CATEGORIES,
@@ -27,7 +29,17 @@ export default function Stock() {
   const [searchParams] = useSearchParams();
   const { data: items = [], isLoading } = useInventoryItems();
   const { data: menuProducts = [] } = useMenuProductsForStock();
+  const bulkImport = useBulkImportFromMenu();
   useAutoSyncMenuToStock();
+
+  const createInventoryForProduct = async (product: { id: string; name: string; category: string }) => {
+    try {
+      await bulkImport.mutateAsync([product]);
+      toast({ title: `${product.name} criado no estoque` });
+    } catch (e: any) {
+      toast({ title: "Erro ao criar", description: e.message, variant: "destructive" });
+    }
+  };
 
   const pendingMenu = useMemo(
     () => menuProducts.filter((p) => !p.linked && p.active).length,
