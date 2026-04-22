@@ -455,14 +455,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         onRename={(v) => onRenameTable?.(v)}
       />
 
-      <SubgroupDialog
-        subgroup={openSubgroup}
-        products={subgroupProducts}
-        onClose={() => setOpenSubgroup(null)}
-        onAdd={handleAdd}
-        getQty={getQty}
-        isEsgotado={isEsgotado}
-      />
 
       <EsgotadoConfirmDialog
         open={!!esgotadoPending}
