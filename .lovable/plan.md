@@ -1,38 +1,48 @@
 
 
-## Liberar mesa instantaneamente ao fechar conta
+## Badge "+N" nas abas de categoria
 
-### Problema
-Ao tocar "Fechar mesa", o app chama `pay_order` e volta pra grade, mas **a mesa continua vermelha** por 1–3s até o Realtime entregar o UPDATE de `status='paid'`. Em fluxo intenso, isso atrasa pegar o próximo pedido na mesma mesa.
+### Objetivo
+Mostrar nas abas de categoria (Refeições, Espetos, Bebidas, Cervejas, Favoritos) um indicador discreto com a quantidade de itens já adicionados ao carrinho daquela categoria — para o garçom saber, sem trocar de aba, que tem coisas lá.
 
-Causa: `CloseOrder` não toca no cache `["active-orders"]` — depende 100% do Realtime. Como agora temos cache persistente + `placeholderData` + `staleTime: 60s`, a UI exibe o estado antigo até o canal entregar o evento.
+### Como funciona hoje
+- `MenuView` já calcula `getQty` por produto a partir do `cart`.
+- Cada `product.category` está em `CATEGORIES`. Variantes sintéticas de Porco (`porco-variant::*`) contam como `espetos`.
+- Tabs renderizam só o label (ex: "Espetos"), sem badge.
 
-### Solução: remoção otimista do pedido do cache
+### Mudança
+**`src/components/palm/MenuView.tsx`** — adicionar contagem por categoria e renderizar badge no tab.
 
-**`src/components/cashier/CloseOrder.tsx`**
-1. Importar `useQueryClient`.
-2. Em `handleConfirm`, **antes** de chamar o RPC:
-   - Snapshot do cache atual: `queryClient.getQueryData(["active-orders"])`.
-   - Remover o pedido fechado: `setQueryData(["active-orders"], prev => prev.filter(o => o.id !== order.id))`.
-   - Cancelar queries em voo: `queryClient.cancelQueries({ queryKey: ["active-orders"] })`.
-3. Chamar `pay_order`.
-4. Em **sucesso**: invalidar `["active-orders"]` (refetch silencioso confirma o estado) e chamar `onClosed()`.
-5. Em **erro**: restaurar snapshot (`setQueryData` com valor original) + toast de erro.
+1. **Calcular contagens** com `useMemo` baseado em `cart` + `products`:
+   - Para cada item do carrinho, achar o `product.category` correspondente:
+     - Se `id` começa com `porco-variant::` → `espetos`.
+     - Senão buscar `products.find(p => p.id === item.product.id)?.category`.
+   - Somar `quantity` por categoria → `Record<string, number>`.
+   - Total geral para o badge de "Favoritos" = soma de tudo (favoritos é virtual, mostra qualquer item adicionado).
+   
+   Alternativa mais simples para favoritos: contar só itens cujo `product.id` está em `favoriteIds`. **Vou usar essa** — bate com o que a aba mostra.
 
-**Resultado**
-- Toque em "Fechar e imprimir" / "Fechar sem imprimir" → mesa some da grade **no mesmo frame** que o usuário volta pra TableGrid.
-- Se o RPC falhar (raro), a mesa volta a aparecer e mostra o erro.
-- Realtime continua como rede de segurança para sincronizar outros dispositivos.
+2. **Renderizar badge no tab** quando `qty > 0`:
+   - Posição: à direita do label, inline (não absoluto, pra não cortar com `overflow-x-auto`).
+   - Estilo discreto:
+     - Tab inativa: pill pequena `bg-primary/15 text-primary` com `+N`.
+     - Tab ativa: `bg-primary-foreground/20 text-primary-foreground` (fica legível sobre o gradiente laranja).
+   - Formato: `+1`, `+2`, `+12` (sem cap).
+   - Tamanho: `text-[11px] font-bold px-1.5 py-0.5 rounded-full ml-1.5`.
 
-### Bônus de robustez
-Aplicar o mesmo padrão otimista em **Cashier** (`src/pages/Cashier.tsx`) onde o pagamento via PDV também usa `pay_order` — assim a mesa some instantâneo da grade do Palm em outros tablets via Realtime, e do próprio Cashier sem esperar o roundtrip.
-
-### Arquivos
-- **Editado** `src/components/cashier/CloseOrder.tsx` — atualização otimista + rollback em erro.
-- **Editado** `src/pages/Cashier.tsx` — mesmo padrão otimista no fluxo de pagamento (verificar handler do `pay_order`).
+3. **Botão Favoritos** (ícone-only): badge sobreposto no canto superior direito, igual padrão dos cards (`absolute -top-1 -right-1`), pra não quebrar o layout do ícone estrela.
 
 ### Detalhes técnicos
-- Usar `queryClient.cancelQueries` antes do `setQueryData` para evitar que um refetch em voo sobrescreva o cache otimista.
-- O `["order-items", order.id]` pode ser deixado intacto — não afeta a grade.
-- Não mexemos no RPC nem em RLS — só em cache do cliente.
+- Sem novas queries — tudo derivado do `cart` que já está no escopo.
+- `useMemo` com deps `[cart, products, favoriteIds]`.
+- Não muda comportamento de cliques nem o restante da grade.
+- Badges também aparecem quando o usuário está na aba ativa (consistência visual; ele vê os "+N" sumirem conforme limpa o carrinho).
+
+### Resultado visual
+```
+[★ +3]  [Refeições +1]  [Espetos]  [Bebidas +2]  [Cervejas]
+```
+
+### Arquivos
+- **Editado** `src/components/palm/MenuView.tsx` — `categoryQty` memo + badge nos tabs.
 
