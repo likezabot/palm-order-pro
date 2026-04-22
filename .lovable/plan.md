@@ -1,324 +1,112 @@
-` (this is research, not a build task).
-
-# Relatório técnico-operacional — Telegram bot (espetaria)
-
-## 1. Fluxo completo (request → resposta)
-
-1. **Webhook recebido** em `Deno.serve` da edge function `telegram-webhook`.
-2. **Dedupe**: `isDuplicate(update_id)` em `Map` in-memory (TTL 5min). Bloqueia retries do Telegram.
-3. **Roteamento**:
-   - `update.callback_query` → `handleCallbackQuery` (clique de botão inline).
-   - `update.message.text` → fluxo de texto.
-4. **Whitelist**: `getAllowedChats()` lê `settings.telegram_allowed_chats`. Se chat_id ausente → ignora silenciosamente.
-5. **Split multi-comando**: mensagem dividida por `\n`, máx 10 linhas. 1ª linha pode ter prefixo `preview` → modo dry-run.
-6. **Por linha**:
-   - `parseCommand(raw)` → tenta nessa ordem: HELP → VIEW canônico → VIEW natural → ADD/REMOVE formas f1/f2/f3 → fallback NOMESA (ADD/REMOVE/VIEW sem mesa) → `PARSE_ERROR`.
-   - `resolveWithContext(cmd, chatId)` → se `*_NOMESA`, lê `settings.telegram_last_table:<chatId>` (TTL 15min). Vira ADD/REMOVE/VIEW normal com `fromContext=true`, ou `NEEDS_TABLE`.
-   - `handleCommand` (ou `previewCommand`):
-     - `resolveProduct(text)` → `singularize` → RPC `find_inventory_item_by_text` (slug/aliases) → fallback `products` por `ILIKE`/includes → fallback `inventory_items` por nome. Resultados: `found` / `ambiguous` / `not_found` / `is_group_trigger` / `out_of_stock` / `no_linked_product`.
-     - Se `ambiguous`/`is_group_trigger`: `autoPickFromCandidates` (heurística por tokens: tamanho ±10, modificadores ±5, palavras ≥3 letras +1; vencedor só com score>0 e folga ≥5). Se não decidir → monta `inline_keyboard` (`a|table|uuid|qty` ou `r|...`).
-     - Se `found`: `executeAdd` / `executeRemove` / `executeView`. ADD/REMOVE chamam RPC `create_order` ou `update_order_items` com `expected_version`; até 3 retries em `version_conflict`.
-7. **`HandlerReply` → resposta**: prefixa `📍 (mesa N, contexto)` quando `fromContext`. Em sucesso real, `setLastTable(chatId, table)` grava em `settings`.
-8. **Send**: `sendMessage` (texto + opcional `reply_markup.inline_keyboard`). Em multi-comando: 1 msg consolidada `📊 N comandos processados:` + 1 msg por ambíguo (com botões).
-9. **Callback de botão**: dedupe por `callback_query.id` → executa ADD/REMOVE → `answerCallbackQuery` + `editMessageText` (substitui botões pelo resultado) → `setLastTable` em sucesso.
-
-## 2. Capacidades atuais
-
-**Comandos canônicos** (formas f1/f2/f3):
-- `mesa N + qty produto`, `mesa N - qty produto`
-- `+ qty produto na mesa N`, `- qty produto da mesa N`
-- `+ qty produto mesa N`
-
-**Linguagem natural (operadores)**:
-- ADD: `+`, `add`, `adiciona(r)`, `coloca(r)`, `poe`, `manda(r)`, `bota(r)`, `mais`, `soma(r)`, `inclui(r)`, `acrescenta(r)`
-- REMOVE: `-`, `remove(r)`, `tira(r)`, `retira(r)`, `cancela(r)`, `menos`, `subtrai(r)`, `exclui(r)`, `desconta(r)`
-- Números por extenso: `um/uma … dez`
-- Plurais: `cocas→coca`, `bovinos→bovino`, `medalhoes→medalhao`, `pasteis→pastel`, `garagens→garagem`
-
-**VIEW natural**: `mesa N ver pedido | consulta | total | pedido | resumo | extrato | conta | quanto`, `consultar mesa N`, `como está/ta/anda a mesa N`, `quanto deu a mesa N`.
-
-**Modo turbo (contexto)**: depois de operação bem-sucedida em mesa N, por 15 min aceita `mais um boi`, `+ 1 coca 350`, `tira uma agua`, `ver pedido`, `total`, `consultar`. Persistido em `settings` (sobrevive cold start). Resposta marcada com `📍 (mesa N, contexto)`.
-
-**Multi-comando**: até 10 linhas separadas por `\n`, sequenciais, falha por linha não bloqueia. Contexto atualizado entre linhas (linha 1 fixa mesa, linha 2 já usa).
-
-**Preview**: prefixo `preview` na 1ª linha → dry-run sem mutações, sem botões.
-
-**Botões inline**: até 8 botões `Nx Nome — R$ X,XX` + Cancelar. `callback_data` compacto (≤64 bytes). `editMessageText` substitui botões pelo resultado. Dedupe de callback_id.
-
-**Auto-pick determinístico**: resolve `coca 350`, `coca zero 600` automaticamente; só pergunta quando realmente ambíguo (`coca` puro). Penaliza zero/diet/light se usuário não citou.
-
-**Outras garantias**: dedupe `update_id` 5min, retry 3× em `version_conflict`, whitelist obrigatória, bloqueio de `BALCÃO`, identificação `Telegram (@username)`, sugestão top-3 em `not_found`.
-
-## 3. Limitações reais
-
-**Parser / linguagem**:
-- Não entende decimais nem `1/2`, nem qty > 99.
-- Português regional: `bota dois X`, `joga um Y` (joga não está em ADD_OPS), `tasca`, `traz`, `põe` (com til já normalizado funciona, mas `joga`/`traz`/`tasca` não).
-- "mesa N" só com dígitos: `mesa um`, `m1`, `mesa1` (sem espaço) **não** funcionam.
-- Notas no item (`+ 1 picanha bem passada`) entram no productText e podem quebrar match.
-- Não suporta múltiplos itens em uma linha (`+ 1 coca e 2 agua`) — força multi-linha.
-- `mais` é ambíguo: em "mesa 1 mais 1 coca" vira ADD, mas frases tipo "mais ou menos" (sem qty depois) caem em PARSE_ERROR sem mensagem específica.
-
-**Resolução de produto**:
-- Match em `products.name` é `includes` simples sem stemming/distância — typos (`bovin`, `picana`, `coxinia`) caem em `not_found`.
-- Sugestão "top 3" baseada em tokens é fraca para typos de 1–2 letras.
-- Aliases ambíguos curtos foram removidos por design — bom, mas exige manutenção manual em `inventory_items.aliases`.
-- Auto-pick depende de tokens conhecidos (350/600/2l/zero/diet/light/lata/longneck/gelada). Variantes novas (ex: `1.5l`, `garrafa`, `chope`) não pontuam.
-- `out_of_stock` só dispara se `products.active=false`; não respeita `inventory_items.current_stock`.
-
-**Modo turbo**:
-- Contexto é por **chat_id**, não por usuário. Em grupo, dois garçons compartilham a mesma "última mesa" → potencial confusão.
-- 15 min é fixo; em hora de pico pode ser pouco, em hora morta pode ser muito.
-- Não há comando explícito para "fixar mesa N por 1h" nem "esquecer mesa".
-- Após `preview`, contexto não é gravado — correto, mas usuário pode achar que ficou ativo.
-
-**Operacional / impressão / estoque**:
-- Bot **não** decrementa estoque (consistente com PDV, mas significa que Telegram cego para `inventory_items.current_stock`).
-- `update_order_items` regrava todos os itens e marca `print_status='pending'` — cada ADD/REMOVE re-imprime delta. Em multi-comando de 5 linhas → 5 reimpressões na mesma mesa (deveria batchar).
-- Sem confirmação/undo: `- 5 picanha` aplica direto, sem "tem certeza".
-- `version_conflict` em concorrência alta (garçom + Telegram simultâneos) tenta 3× e desiste — usuário tem que reenviar.
-
-**Edge cases**:
-- Cold start em `getLastTable` adiciona ~200–500ms a cada comando turbo (DB roundtrip por mensagem).
-- Sem rate-limit por chat: garçom pode mandar 50 linhas de ruído.
-- `BALCÃO` bloqueado → balcão não pode ser editado por Telegram.
-- Mensagens > 4096 chars (lista grande de pedido) podem estourar limite do Telegram.
-
-## 4. Pontos de melhoria prioritários (impacto operacional)
-
-1. **Cache do contexto em memória + DB write assíncrono.** Hoje cada `*_NOMESA` faz SELECT em `settings`. Cachear `Map<chatId, {table, ts}>` em memória da instância e só consultar DB no miss derruba latência turbo de ~400ms para ~5ms. DB write em fire-and-forget.
-2. **Batch de impressão por janela.** Em multi-comando, agregar todos ADDs/REMOVEs da mesma mesa em UMA chamada `update_order_items` em vez de N. Reduz reimpressão e race conditions.
-3. **Distância de Levenshtein no fallback de produto.** Aceitar `bovin`, `picana`, `coxinia` quando `not_found` exato. Threshold 1–2 letras evita chute, ainda pede confirmação se ambíguo.
-4. **Parser de múltiplos itens na mesma linha.** `+ 1 coca e 2 agua na mesa 3` → split por `e`/`,`/`+`. Garçom de espetaria normalmente fala combo.
-5. **Contexto por usuário em grupos.** Quando `chat.type === 'group'`, chave virar `telegram_last_table:<chat_id>:<user_id>`. Evita garçom A sobrescrever mesa do garçom B.
-6. **Comando `mesa N` sem operação para fixar contexto.** Hoje `mesa 1` sozinho → PARSE_ERROR. Deveria responder "📍 Mesa 1 fixada por 15 min" sem executar nada.
-7. **Undo curto (60s) no callback.** Resposta de ADD/REMOVE incluir botão "↩️ Desfazer". Reduz erro humano sem atrapalhar fluxo.
-8. **Mensagem de erro com botão de reenvio.** `not_found` com top-3 → top-3 viram botões clicáveis (já temos infra de inline keyboard).
-9. **Status de impressão na resposta.** Após ADD bem-sucedido, mostrar `🖨️ enviado para impressão` ou `⚠️ impressora offline` (já existe `print_status`). Garçom hoje não sabe se pedido caiu na cozinha.
-10. **Rate limit por chat (10 msgs/min).** Evita ruído acidental.
-11. **TTL configurável** via `settings.telegram_context_ttl_min` — pico vs vazio.
-
-## 5. Ideias avançadas (sem implementar)
-
-- **Áudio (Whisper)**: download de `voice` via `getFile`, transcrição via OpenAI Whisper / Lovable AI, passa pelo mesmo parser. "Mesa 3 mais duas coca e um bovino" → 1 toque.
-- **Resumo de turno por garçom**: comando `meu turno` → soma vendas do `Telegram (@user)` no dia, top produtos, ticket médio. Direto do `order_items.waiter_name`.
-- **Sugestão pró-ativa**: ao abrir mesa nova via Telegram, bot manda combo recorrente daquele horário ("Geralmente neste horário: 2 chopp + 1 picanha. Adicionar?"). Botões já prontos.
-- **Status da cozinha em tempo real**: `mesa 3 cozinha` → mostra quais itens estão em `preparing` vs `done` (já temos kanban). Garçom para de ir até a cozinha perguntar.
-- **Alerta automático de itens parados**: bot DM o garçom quando item está há > X min em `preparing` (Realtime + cron).
-- **Comando de fechamento + envio do recibo**: `mesa 3 fechar pix 100` → chama `pay_order` + envia PDF/imagem do recibo via `sendDocument`.
-- **Insights diários (cron 22h)**: top 5 produtos, mesas mais lucrativas, garçons do dia, comparado à semana passada. Direto no chat do dono.
-- **Modo "comanda compartilhada"**: 1 grupo do Telegram = 1 mesa. Mensagens normais viram itens automaticamente, sem operador. Pra eventos/aniversários.
-- **Reconhecimento de foto do cardápio**: cliente manda foto apontando item → Vision model identifica → bot adiciona.
-- **Roteamento por NLP intent**: trocar regex por classificador leve (Lovable AI gemini-flash-lite) que retorna `{intent, table, qty, product, modifiers}`. Cobre frases livres que regex nunca pega, mantendo "sem chute" via threshold de confiança.
-- **Integração com impressão**: comando `mesa 3 reimprimir` → seta `print_status='pending'` direto.
-- **Auditoria por garçom**: log estruturado em tabela `telegram_audit` (quem, o quê, quando, sucesso/falha) — base para ranking, treinamento e disputa de erro.I tried calling a non-existent tool. Let me deliver the report directly as text (this is a research/analysis request, not a build task — no `<lov-plan>` needed).
-
-# Relatório técnico-operacional — Telegram bot (espetaria)
-
-## 1. Fluxo completo (request → resposta)
-
-1. **Webhook** recebido em `Deno.serve` da edge `telegram-webhook`.
-2. **Dedupe** por `update_id` em `Map` in-memory (TTL 5min).
-3. **Roteamento**: `callback_query` → `handleCallbackQuery`; `message.text` → fluxo texto.
-4. **Whitelist**: `getAllowedChats()` lê `settings.telegram_allowed_chats`. Chat fora da lista → ignora silenciosamente.
-5. **Split multi-comando**: mensagem dividida por `\n`, máx 10 linhas. Prefixo `preview` na 1ª linha → dry-run.
-6. **Por linha**:
-   - `parseCommand`: HELP → VIEW canônico → VIEW natural → ADD/REMOVE f1/f2/f3 → fallback `*_NOMESA` → `PARSE_ERROR`.
-   - `resolveWithContext`: se `*_NOMESA`, lê `settings.telegram_last_table:<chatId>` (TTL 15min). Vira ADD/REMOVE/VIEW com `fromContext=true`, ou `NEEDS_TABLE`.
-   - `handleCommand`/`previewCommand`:
-     - `resolveProduct`: `singularize` → RPC `find_inventory_item_by_text` (slug/aliases) → fallback `products` por includes → fallback `inventory_items` por nome. Resultados: `found`/`ambiguous`/`not_found`/`is_group_trigger`/`out_of_stock`/`no_linked_product`.
-     - Ambíguo → `autoPickFromCandidates` (tamanho ±10, modificadores ±5, palavras livres +1; vencedor com score>0 e folga ≥5). Senão → `inline_keyboard` (`callback_data` compacto `a|table|uuid|qty`).
-     - `executeAdd/Remove/View`: RPC `create_order` ou `update_order_items` com `expected_version`; até 3 retries em `version_conflict`.
-7. **Resposta**: prefixa `📍 (mesa N, contexto)` quando `fromContext`. Em sucesso real, `setLastTable(chatId, table)` grava em `settings`.
-8. **Send**: `sendMessage` (texto + opcional `inline_keyboard`). Multi-comando: 1 msg consolidada `📊 N comandos processados:` + 1 msg por ambíguo.
-9. **Callback**: dedupe por `callback_query.id` → executa → `answerCallbackQuery` + `editMessageText` (substitui botões pelo resultado) → `setLastTable` em sucesso.
-
-## 2. Capacidades atuais
-
-**Comandos canônicos** (f1/f2/f3): `mesa N + qty produto`, `mesa N - qty produto`, `+ qty produto na/da mesa N`, `+ qty produto mesa N`.
-
-**Operadores naturais**:
-- ADD: `+`, `add`, `adiciona(r)`, `coloca(r)`, `poe`, `manda(r)`, `bota(r)`, `mais`, `soma(r)`, `inclui(r)`, `acrescenta(r)`.
-- REMOVE: `-`, `remove(r)`, `tira(r)`, `retira(r)`, `cancela(r)`, `menos`, `subtrai(r)`, `exclui(r)`, `desconta(r)`.
-- Números por extenso: `um/uma…dez`.
-- Plurais: `cocas→coca`, `bovinos→bovino`, `medalhoes→medalhao`, `pasteis→pastel`, `garagens→garagem`.
-
-**VIEW natural**: `mesa N ver pedido|consulta|total|pedido|resumo|extrato|conta|quanto`, `consultar mesa N`, `como está/ta/anda a mesa N`, `quanto deu a mesa N`.
-
-**Modo turbo**: depois de operação bem-sucedida em mesa N, por 15 min aceita `mais um boi`, `+ 1 coca 350`, `tira uma agua`, `ver pedido`, `total`. Persistido em `settings` (sobrevive cold start). Marca resposta com `📍 (mesa N, contexto)`.
-
-**Multi-comando**: até 10 linhas, sequenciais, falha por linha não bloqueia. Contexto atualizado entre linhas.
-
-**Preview**: `preview` na 1ª linha → mostra interpretação sem mutação. Nunca emite botões.
-
-**Botões inline**: até 8 + Cancelar. `Nx Nome — R$ X,XX`. `editMessageText` substitui botões pelo resultado. Dedupe de callback_id.
-
-**Auto-pick**: resolve `coca 350`, `coca zero 600` automaticamente; só pergunta em `coca` puro. Penaliza zero/diet/light se não citado.
-
-**Outras**: dedupe `update_id` 5min, retry 3× em `version_conflict`, whitelist obrigatória, bloqueio de `BALCÃO`, identificação `Telegram (@username)`, sugestão top-3 em `not_found`.
-
-## 3. Limitações reais
-
-**Parser / linguagem**:
-- Sem decimais, frações ou qty > 99.
-- Verbos regionais não cobertos: `joga`, `traz`, `tasca`.
-- `mesa N` exige dígito + espaço. `mesa um`, `m1`, `mesa1` não funcionam.
-- Notas no item (`+ 1 picanha bem passada`) entram no productText e quebram match.
-- **Sem múltiplos itens por linha** (`+ 1 coca e 2 agua`) — força quebra de linha.
-- `mesa 1 mais` (sem qty/produto) cai em PARSE_ERROR genérico.
-
-**Resolução de produto**:
-- Match em `products.name` é `includes` puro — sem stemming nem distância. Typos (`bovin`, `picana`, `coxinia`) → `not_found`.
-- Sugestão top-3 baseada em tokens é fraca para typos curtos.
-- Aliases exigem manutenção manual em `inventory_items.aliases`.
-- Auto-pick conhece tokens fixos (350/600/2l/zero/diet/light/lata/longneck/gelada). Variantes novas (`1.5l`, `garrafa`, `chope`) não pontuam.
-- `out_of_stock` só dispara via `products.active=false`; ignora `inventory_items.current_stock`.
-
-**Modo turbo**:
-- Contexto por **chat_id**, não por usuário → em grupo, dois garçons compartilham/sobrescrevem mesa.
-- TTL 15min fixo, sem ajuste por horário.
-- Sem comando para fixar/esquecer mesa explicitamente.
-- Cada `*_NOMESA` faz roundtrip ao DB (~200–500ms latência extra).
-
-**Operacional**:
-- Bot **não decrementa estoque** (consistente com PDV, mas cego ao stock real).
-- `update_order_items` regrava itens e marca `print_status='pending'` em **cada** ADD/REMOVE → 5 linhas multi-comando = 5 reimpressões na mesma mesa.
-- Sem confirmação/undo: `- 5 picanha` aplica direto.
-- `version_conflict`: 3 tentativas e desiste — usuário reenvia.
-- Sem rate-limit por chat.
-- Resposta de pedido grande pode passar de 4096 chars (limite Telegram).
-- `BALCÃO` bloqueado de edição via Telegram.
-
-## 4. Pontos de melhoria prioritários
-
-1. **Cache do contexto em memória** com fallback DB. Latência turbo de ~400ms → ~5ms. DB write em fire-and-forget.
-2. **Batch de impressão por janela em multi-comando**. Agregar todos ADDs/REMOVEs da mesma mesa em UMA chamada `update_order_items`. Reduz reimpressões e race conditions.
-3. **Distância de Levenshtein no fallback de produto** (threshold 1–2 letras). Resolve `bovin`, `picana`, `coxinia` ainda sem chute.
-4. **Múltiplos itens por linha**: split por `e`/`,`/`+`. Garçom raramente pede 1 item só.
-5. **Contexto por usuário em grupos**: chave `telegram_last_table:<chat_id>:<user_id>` quando `chat.type === 'group'`.
-6. **Comando `mesa N` sozinho fixa contexto** sem executar (hoje vira PARSE_ERROR).
-7. **Botão "↩️ Desfazer" (60s)** após cada ADD/REMOVE bem-sucedido.
-8. **Top-3 do `not_found` viram botões clicáveis** (infra de inline keyboard já pronta).
-9. **Status de impressão na resposta**: `🖨️ enviado` ou `⚠️ impressora offline` lendo `print_status`. Garçom hoje não sabe se caiu na cozinha.
-10. **Rate limit por chat** (~10 msgs/min) contra ruído acidental.
-11. **TTL de contexto configurável** via `settings.telegram_context_ttl_min`.
-
-## 5. Ideias avançadas (sem implementar)
-
-- **Comando por áudio**: download de `voice` via `getFile` → Whisper / Lovable AI → mesmo parser. "Mesa 3 mais duas coca e um bovino" em 1 toque.
-- **Resumo de turno**: `meu turno` → vendas do `Telegram (@user)` no dia, top produtos, ticket médio.
-- **Sugestão pró-ativa**: ao abrir mesa nova, bot oferece combo recorrente daquele horário com botões.
-- **Status da cozinha em tempo real**: `mesa 3 cozinha` → itens em `preparing` vs `done`. Elimina ida do garçom à cozinha.
-- **Alerta de itens parados**: DM ao garçom quando item está há > X min em `preparing`.
-- **Fechamento + recibo**: `mesa 3 fechar pix 100` → chama `pay_order` + envia recibo via `sendDocument`.
-- **Insights diários (cron 22h)**: top produtos, mesas mais lucrativas, garçons do dia, comparativo semana anterior — DM ao dono.
-- **Modo comanda compartilhada**: 1 grupo Telegram = 1 mesa. Eventos/aniversários.
-- **Foto do cardápio**: cliente manda foto → Vision model identifica → bot adiciona.
-- **Roteamento por NLP intent** (Lovable AI gemini-flash-lite) com threshold de confiança — cobre frases livres mantendo "sem chute".
-- **`mesa 3 reimprimir`** → reseta `print_status='pending'`.
-- **Auditoria por garçom** (`telegram_audit`): base para ranking, treinamento, disputa de erro.The user asked for a research/analysis report, no code changes. I'll deliver the report directly as the response.
-
-# Relatório técnico-operacional — Telegram bot (espetaria)
-
-## 1. Fluxo completo (request → resposta)
-
-1. **Webhook** recebido em `Deno.serve` da edge `telegram-webhook`.
-2. **Dedupe** por `update_id` em `Map` in-memory (TTL 5min).
-3. **Roteamento**: `callback_query` → `handleCallbackQuery`; `message.text` → fluxo texto.
-4. **Whitelist**: `getAllowedChats()` lê `settings.telegram_allowed_chats`. Chat fora da lista → ignora silenciosamente.
-5. **Split multi-comando**: mensagem dividida por `\n`, máx 10 linhas. Prefixo `preview` na 1ª linha → dry-run.
-6. **Por linha**:
-   - `parseCommand`: HELP → VIEW canônico → VIEW natural → ADD/REMOVE f1/f2/f3 → fallback `*_NOMESA` → `PARSE_ERROR`.
-   - `resolveWithContext`: se `*_NOMESA`, lê `settings.telegram_last_table:<chatId>` (TTL 15min). Vira ADD/REMOVE/VIEW com `fromContext=true`, ou `NEEDS_TABLE`.
-   - `handleCommand`/`previewCommand`:
-     - `resolveProduct`: `singularize` → RPC `find_inventory_item_by_text` (slug/aliases) → fallback `products` por includes → fallback `inventory_items` por nome. Resultados: `found`/`ambiguous`/`not_found`/`is_group_trigger`/`out_of_stock`/`no_linked_product`.
-     - Ambíguo → `autoPickFromCandidates` (tamanho ±10, modificadores ±5, palavras livres +1; vencedor com score>0 e folga ≥5). Senão → `inline_keyboard` (`callback_data` compacto `a|table|uuid|qty`).
-     - `executeAdd/Remove/View`: RPC `create_order` ou `update_order_items` com `expected_version`; até 3 retries em `version_conflict`.
-7. **Resposta**: prefixa `📍 (mesa N, contexto)` quando `fromContext`. Em sucesso real, `setLastTable(chatId, table)` grava em `settings`.
-8. **Send**: `sendMessage` (texto + opcional `inline_keyboard`). Multi-comando: 1 msg consolidada `📊 N comandos processados:` + 1 msg por ambíguo.
-9. **Callback**: dedupe por `callback_query.id` → executa → `answerCallbackQuery` + `editMessageText` (substitui botões pelo resultado) → `setLastTable` em sucesso.
-
-## 2. Capacidades atuais
-
-**Comandos canônicos** (f1/f2/f3): `mesa N + qty produto`, `mesa N - qty produto`, `+ qty produto na/da mesa N`, `+ qty produto mesa N`.
-
-**Operadores naturais**:
-- ADD: `+`, `add`, `adiciona(r)`, `coloca(r)`, `poe`, `manda(r)`, `bota(r)`, `mais`, `soma(r)`, `inclui(r)`, `acrescenta(r)`.
-- REMOVE: `-`, `remove(r)`, `tira(r)`, `retira(r)`, `cancela(r)`, `menos`, `subtrai(r)`, `exclui(r)`, `desconta(r)`.
-- Números por extenso: `um/uma…dez`.
-- Plurais: `cocas→coca`, `bovinos→bovino`, `medalhoes→medalhao`, `pasteis→pastel`, `garagens→garagem`.
-
-**VIEW natural**: `mesa N ver pedido|consulta|total|pedido|resumo|extrato|conta|quanto`, `consultar mesa N`, `como está/ta/anda a mesa N`, `quanto deu a mesa N`.
-
-**Modo turbo**: depois de operação bem-sucedida em mesa N, por 15 min aceita `mais um boi`, `+ 1 coca 350`, `tira uma agua`, `ver pedido`, `total`. Persistido em `settings` (sobrevive cold start). Marca resposta com `📍 (mesa N, contexto)`.
-
-**Multi-comando**: até 10 linhas, sequenciais, falha por linha não bloqueia. Contexto atualizado entre linhas.
-
-**Preview**: `preview` na 1ª linha → mostra interpretação sem mutação. Nunca emite botões.
-
-**Botões inline**: até 8 + Cancelar. `Nx Nome — R$ X,XX`. `editMessageText` substitui botões pelo resultado. Dedupe de callback_id.
-
-**Auto-pick**: resolve `coca 350`, `coca zero 600` automaticamente; só pergunta em `coca` puro. Penaliza zero/diet/light se não citado.
-
-**Outras**: dedupe `update_id` 5min, retry 3× em `version_conflict`, whitelist obrigatória, bloqueio de `BALCÃO`, identificação `Telegram (@username)`, sugestão top-3 em `not_found`.
-
-## 3. Limitações reais
-
-**Parser / linguagem**:
-- Sem decimais, frações ou qty > 99.
-- Verbos regionais não cobertos: `joga`, `traz`, `tasca`.
-- `mesa N` exige dígito + espaço. `mesa um`, `m1`, `mesa1` não funcionam.
-- Notas no item (`+ 1 picanha bem passada`) entram no `productText` e quebram o match.
-- **Sem múltiplos itens por linha** (`+ 1 coca e 2 agua`) — força quebra de linha.
-- `mesa 1 mais` (sem qty/produto) cai em PARSE_ERROR genérico.
-
-**Resolução de produto**:
-- Match em `products.name` é `includes` puro — sem stemming nem distância. Typos (`bovin`, `picana`, `coxinia`) → `not_found`.
-- Sugestão top-3 baseada em tokens é fraca para typos curtos.
-- Aliases exigem manutenção manual em `inventory_items.aliases`.
-- Auto-pick conhece tokens fixos (350/600/2l/zero/diet/light/lata/longneck/gelada). Variantes novas (`1.5l`, `garrafa`, `chope`) não pontuam.
-- `out_of_stock` só dispara via `products.active=false`; ignora `inventory_items.current_stock`.
-
-**Modo turbo**:
-- Contexto por **chat_id**, não por usuário → em grupo, dois garçons compartilham/sobrescrevem mesa.
-- TTL 15min fixo, sem ajuste por horário.
-- Sem comando para fixar/esquecer mesa explicitamente.
-- Cada `*_NOMESA` faz roundtrip ao DB (~200–500ms latência extra).
-
-**Operacional**:
-- Bot **não decrementa estoque** (consistente com PDV, mas cego ao stock real).
-- `update_order_items` regrava itens e marca `print_status='pending'` em **cada** ADD/REMOVE → 5 linhas multi-comando na mesma mesa = 5 reimpressões.
-- Sem confirmação/undo: `- 5 picanha` aplica direto.
-- `version_conflict`: 3 tentativas e desiste — usuário reenvia.
-- Sem rate-limit por chat.
-- Resposta de pedido grande pode passar de 4096 chars (limite Telegram).
-- `BALCÃO` bloqueado de edição via Telegram.
-
-## 4. Pontos de melhoria prioritários
-
-1. **Cache do contexto em memória** com fallback DB. Latência turbo de ~400ms → ~5ms. DB write em fire-and-forget.
-2. **Batch de impressão por janela em multi-comando**. Agregar todos ADDs/REMOVEs da mesma mesa em UMA chamada `update_order_items`. Reduz reimpressões e race conditions.
-3. **Distância de Levenshtein no fallback de produto** (threshold 1–2 letras). Resolve `bovin`, `picana`, `coxinia` ainda sem chute.
-4. **Múltiplos itens por linha**: split por `e`/`,`/`+`. Garçom raramente pede 1 item só.
-5. **Contexto por usuário em grupos**: chave `telegram_last_table:<chat_id>:<user_id>` quando `chat.type === 'group'`.
-6. **Comando `mesa N` sozinho fixa contexto** sem executar (hoje vira PARSE_ERROR).
-7. **Botão "↩️ Desfazer" (60s)** após cada ADD/REMOVE bem-sucedido.
-8. **Top-3 do `not_found` viram botões clicáveis** (infra de inline keyboard já pronta).
-9. **Status de impressão na resposta**: `🖨️ enviado` ou `⚠️ impressora offline` lendo `print_status`. Garçom hoje não sabe se caiu na cozinha.
-10. **Rate limit por chat** (~10 msgs/min) contra ruído acidental.
-11. **TTL de contexto configurável** via `settings.telegram_context_ttl_min`.
-
-## 5. Ideias avançadas (sem implementar)
-
-- **Comando por áudio**: download de `voice` via `getFile` → Whisper/Lovable AI → mesmo parser. "Mesa 3 mais duas coca e um bovino" em 1 toque.
-- **Resumo de turno**: `meu turno` → vendas do `Telegram (@user)` no dia, top produtos, ticket médio.
-- **Sugestão pró-ativa**: ao abrir mesa nova, bot oferece combo recorrente daquele horário com botões.
-- **Status da cozinha em tempo real**: `mesa 3 cozinha` → itens em `preparing` vs `done`. Elimina ida do garçom à cozinha.
-- **Alerta de itens parados**: DM ao garçom quando item está há > X min em `preparing`.
-- **Fechamento + recibo**: `mesa 3 fechar pix 100` → chama `pay_order` + envia recibo via `sendDocument`.
-- **Insights diários (cron 22h)**: top produtos, mesas mais lucrativas, garçons do dia, comparativo semana anterior — DM ao dono.
-- **Modo comanda compartilhada**: 1 grupo Telegram = 1 mesa. Eventos/aniversários.
-- **Foto do cardápio**: cliente manda foto → vision model identifica → bot adiciona.
-- **Roteamento por NLP intent** (Lovable AI `gemini-flash-lite`) com threshold de confiança — cobre frases livres mantendo "sem chute".
-- **`mesa 3 reimprimir`** → reseta `print_status='pending'`.
-- **Auditoria por garçom** (`telegram_audit`): base para ranking, treinamento e disputa de erro.<lov-code></lov-code>
+
+
+## Pacote completo de melhorias — Telegram bot
+
+Arquivo único: `supabase/functions/telegram-webhook/index.ts`. Sem mudanças de banco, RLS, RPCs, parser canônico, dedupe, whitelist, preview, multi-comando, auto-pick.
+
+### 1. Batch de impressão (multi-comando)
+
+No bloco `lines.length > 1` do `Deno.serve`:
+
+- 1ª passada: parse + `resolveWithContext` por linha. Separa em 3 baldes:
+  - **batchable**: `ADD`/`REMOVE` resolvidos, com mesa válida e produto resolvido sem ambiguidade (incluindo auto-pick).
+  - **standalone**: `VIEW`, `HELP`, `PARSE_ERROR`, `NEEDS_TABLE`, esgotado, sem produto vinculado, erro inesperado → executa como hoje, 1 resposta por linha.
+  - **pending choices**: ambíguos → continuam como hoje (botões em mensagens separadas, fora do batch).
+- Resolve produto antes do agrupamento (chama `resolveProduct`/`autoPickFromCandidates`); se não precisa de botão, vai para batchable.
+- Agrupa batchable por `cmd.table`. Para cada mesa:
+  - Carrega `order` + `order_items` UMA vez.
+  - Se mesa não existe e há ADDs: cria pedido com itens já agregados (1 `create_order`).
+  - Se mesa existe: aplica todos os ADDs/REMOVEs em memória, computa `delta` final, chama `update_order_items` UMA vez com `p_should_print=true`, `p_print_type='extra'`. Itens removidos não entram no delta (já hoje só ADD positivo entra).
+  - Atualiza contexto com a mesa (`setLastTable`) apenas após sucesso da mesa inteira.
+  - Wrappa com `withVersionRetry` (3 tentativas).
+- Linha não-batchable executa imediatamente, na ordem original, antes ou depois conforme posição (preserva mensagens claras "linha N").
+- Resposta consolidada: `📊 N comandos processados:` + por mesa "✅ Mesa T: +2 Coca, -1 Água, +1 Bovino — Total R$ X,XX (1 impressão)" + linhas standalone individuais + ambíguos vão como mensagens com botões depois.
+
+Status de impressão (item 6.4) lê `print_status` da mesa pós-update (`pending`/`printed`) → `🖨️ enviado` ou `⚠️ aguardando impressão`.
+
+### 2. Botão de desfazer (60s)
+
+- Após `executeAdd` ou `executeRemove` bem-sucedido (single-line, multi-line batch e callback), anexar 1 botão `[↩️ Desfazer]` na resposta.
+- `callback_data`: `u|<table>|<product_id>|<qty>|<op>` onde `op` é `a` (foi ADD → undo remove) ou `r` (foi REMOVE → undo add). Para batch: 1 botão por mesa, `callback_data` `ub|<token>` onde `token` é chave para `Map` in-memory `pendingUndos: Map<token, { chatId, table, ops: [{op, productId, qty}], ts }>` (TTL 60s, cleanup preguiçoso).
+- `handleCallbackQuery` ganha branch `data.startsWith("u|")` e `data.startsWith("ub|")`:
+  - Valida TTL e dedupe (callback dedupe já existe).
+  - Executa ações inversas via `executeAdd`/`executeRemove` (mantém RPC; reimprime apenas o delta inverso, conforme decisão "consolidada com tudo").
+  - `editMessageText` → "↩️ Operação desfeita" (remove botão).
+  - Marca token como consumido (remove do Map).
+- Se TTL expirou: `editMessageText` → "⏱ Desfazer expirado".
+- Compatível com mensagens com outros botões (ambíguos não recebem undo — só a resposta final pós-execução).
+
+### 3. Fuzzy match (Levenshtein)
+
+- Adicionar `levenshtein(a: string, b: string): number` puro JS (matriz O(n·m)).
+- Em `resolveProduct`, no ramo "matches.length === 0" do fallback `products`:
+  - Calcula distância de cada token significativo do input (>3 letras, sem dígitos) contra cada `products.name` normalizado (token-a-token).
+  - Filtra produtos com distância ≤2 em pelo menos um token-chave do nome.
+  - Se sobra **exatamente 1**: retorna `found` com flag `fuzzyMatched=true`.
+  - Se sobra 2+: vira `ambiguous` (botões existentes).
+  - Se sobra 0: continua para `inventory_items` fallback / `not_found`.
+- Resposta marca correção: `✅ Mesa 3 → +1 Bovino (interpretado de "bovin")`.
+- Não roda fuzzy em tokens ≤3 letras nem em texto vazio.
+
+### 4. Rate limit por chat (best-effort)
+
+⚠️ Backend não tem primitivos de rate limit; implementação é ad-hoc in-memory (pode falhar em cold start / multi-instância).
+
+- `Map<chatId, number[]>` com timestamps das últimas mensagens (TTL 60s, cleanup preguiçoso).
+- Antes de processar texto (após whitelist, antes do parse), checa se passou de 10 msgs/60s. Se sim:
+  - Responde `⚠️ Muitas ações seguidas. Aguarde alguns segundos.` e retorna.
+  - Não conta a própria mensagem de aviso (rate-limit do aviso usa flag separada para não spammar).
+- Callbacks (botões inline) **não passam pelo rate limit** — usuário deve poder confirmar undo/escolha sempre.
+
+### 5. Contexto por usuário em grupos
+
+- Aceitar `chat.type` no payload (já vem em `update.message.chat.type`).
+- `lastTableSettingsKey(chatId, userId?, chatType?)`: se `chatType === "group" || "supergroup"` e `userId` definido → `telegram_last_table:${chatId}:${userId}`, senão chave atual.
+- Propagar `userId` (e `chatType`) por todo o fluxo: `getLastTable`/`setLastTable`/`resolveWithContext`/`previewCommand`/`handleCallbackQuery` (callback usa `cb.message.chat.type` + `cb.from.id`).
+- TTL e shape do payload inalterados.
+
+### 6. UX
+
+**6.1 Fixar mesa manualmente**
+- Em `parseCommand`, antes do `PARSE_ERROR` final: se texto matchar `^mesa\s+(\d+)$` → novo tipo `{ kind: "SET_TABLE", table }`.
+- `handleCommand`: para `SET_TABLE`, retorna `{ text: "📍 Mesa N definida para os próximos comandos (15 min).", successTable: table }` — `setLastTable` é disparado pelo fluxo padrão.
+
+**6.2 Mensagens de erro**
+- `PARSE_ERROR`: já mostra exemplos. Vou refinar para detectar caso parcial (tem mesa sem operador / tem operador sem produto / tem qty sem produto) e dar exemplo direcionado, em vez do texto genérico atual. Sem inventar interpretação — só sugestão de formato.
+
+**6.3 Botões para sugestões `not_found`**
+- `suggestProducts` já retorna até 3 nomes. Mapear para botões clicáveis com `callback_data: a|<table>|<product_id>|<qty>` ou `r|...` (mesmo formato dos ambíguos). Resposta: "❓ Não achei … Talvez:" + botões.
+- Buscar `id` dos sugeridos junto (refactor de `suggestProducts` para retornar `{id, name}`).
+- Em comando turbo (sem mesa) sem contexto: continua sem botões (não há `table`).
+
+**6.4 Status de impressão**
+- Após `executeAdd`/`executeRemove` (e batch): re-fetch `orders.print_status` da mesa.
+- Append na linha: `🖨️ enviado para impressão` (`pending`/`printing`) ou `⚠️ aguardando fila` (`printed` raro pós-update) ou `❌ falha (<print_last_error>)` se houver erro recente.
+
+### Atualização de memória
+
+`mem://features/telegram-bot.md` ganha seções:
+- **Batch multi-comando**: agrupamento por mesa, 1 update/print por mesa, ambíguos saem do batch.
+- **Undo (60s)**: tokens in-memory `pendingUndos`, callback `u|...`/`ub|...`, reimprime delta inverso, edita mensagem.
+- **Fuzzy match**: Levenshtein ≤2, só auto se candidato único, marca "interpretado de".
+- **Rate limit**: 10/60s in-memory por chat, não bloqueia callbacks, best-effort.
+- **Contexto por usuário em grupos**: chave `:userId` quando `chat.type` é group/supergroup.
+- **Comando `mesa N`**: novo `SET_TABLE`, fixa contexto sem executar.
+- **Sugestões clicáveis**: not_found vira botões.
+- **Status de impressão**: append `🖨️`/`⚠️` lendo `print_status`.
+
+### Garantias
+
+- Comandos canônicos, multi-comando, preview, contexto turbo, auto-pick, dedupe, whitelist, plurais, VIEW natural — preservados.
+- Sem mudança em `supabase/migrations/*`, RPCs, RLS, índices.
+- Determinístico: fuzzy só auto-aplica com 1 candidato; resto pede confirmação.
+- Edge function permanece um arquivo único.
+
+### Fora de escopo
+
+- Persistência de undo/rate-limit em DB (sobrevive cold start).
+- Múltiplos itens por linha (`+1 coca e 2 agua`).
+- Decimais/frações, qty > 99.
+- Audio/voice, NLP intent, kitchen status, cron de insights.
+- Rate limit configurável via settings.
+
