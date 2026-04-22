@@ -13,9 +13,16 @@ Edge function `telegram-webhook` permite editar pedidos via texto:
 **Estoque (NOVO):**
 - `entrada 10 coca` / `entrou 5kg picanha` / `chegou 20 cerva` / `+ 10 coca` → STOCK_MOVEMENT type=in (chama RPC `apply_inventory_movement`).
 - `saida 2 coca` / `usei 1kg picanha` / `gastei 3 carvao` / `tirei 2 coca do estoque` → STOCK_MOVEMENT type=out.
-- `ajuste coca 50` / `setar coca para 50` / `atualiza coca = 30` / `tem 12 coca` → STOCK_MOVEMENT type=adjustment.
+- `ajuste coca 50` / `setar coca para 50` / `atualiza coca = 30` / `contei 50 coca` / `marca coca 50` / `tem 12 coca` → STOCK_MOVEMENT type=adjustment.
+- `estoque coca` / `saldo coca` / `quanto tem de coca` / `quanta coca tem` / `qtd coca` / `tem coca?` → STOCK_QUERY (saldo de UM item).
 - `estoque` (sozinho) / `criticos` / `alertas` / `o que falta` / `precisa repor` → STOCK_CRITICAL.
-- `lista estoque` / `inventario` / `tudo do estoque` / `todos itens` → STOCK_LIST (NOVO; até 30 itens ativos com saldo).
+- `lista estoque` / `inventario` / `tudo do estoque` / `todos itens` / `estoque completo` → STOCK_LIST (NOVO; até 30 itens ativos com saldo, ordem alfabética).
+- Aliases extras pra movimentos: IN aceita `repor|abasteci|entregou|subir|reposicao`; OUT aceita `vendi|acabou|quebrou|descartei|perdi|baixa`.
+
+**Múltiplos comandos numa mensagem (NOVO):**
+- Separadores aceitos pelo `splitCommands(text)`: quebra de linha, `;`, ` | ` (com espaços), ` // ` (com espaços).
+- Auto-split por `mesa N` repetida na mesma linha (só se TODAS as partes contêm operador/ação reconhecível). Conservador: produtos com "mesa" no nome não quebram.
+- Limite de 10 comandos por mensagem mantido. Consolidação ADD/REMOVE da mesma mesa numa só impressão mantida.
 - Gatilhos são EXPLÍCITOS para nunca confundir com pedidos. Em particular: `-N produto` SEM mesa continua sendo REMOVE_NOMESA (pedido), não saída de estoque.
 - Resolver `resolveStockItem(text)`: 1) RPC `find_inventory_item_by_text` (slug/aliases exato); 2) match por inclusão de tokens em `inventory_items where is_active=true`; 3) fuzzy Levenshtein ≤2 nos tokens significativos. 0 hits → not_found. 1 → executa. 2–8 → ambíguo com botões.
 - Botões inline ambíguos: `callback_data` `s|<in|out|adj>|<itemId>|<qty>` (até 8 candidatos + Cancelar).
