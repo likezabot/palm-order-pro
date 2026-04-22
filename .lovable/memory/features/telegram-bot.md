@@ -6,8 +6,10 @@ type: feature
 Edge function `telegram-webhook` permite editar pedidos via texto:
 - `mesa N + qty produto` → ADD (cria pedido se não existir, ou update_order_items com print extra)
 - `mesa N - qty produto` → REMOVE (sem impressão)
-- `mesa N ver pedido` → VIEW
+- `mesa N ver pedido` → VIEW (também aceita variações naturais — ver abaixo)
 - `ajuda` / `/start` / `/help` → HELP
+
+**Gatilhos VIEW naturais:** parser detecta VIEW antes de ADD/REMOVE. Requer `mesa N` + 1 gatilho, SEM operador ADD/REMOVE e SEM padrão `<qty> <produto>` (senão segue ADD/REMOVE — preserva "sem chute"). Tokens: ver/ve, consulta/consultar/consulte, total/totais, pedido/pedidos, mostra/mostrar/mostre, lista/listar/liste, resumo, extrato, conta, quanto. Frases compostas (includes): "como esta", "como ta", "como anda". Cobre "mesa 1 consulta", "consultar mesa 1", "total mesa 1", "como está a mesa 1", "quanto deu a mesa 3". `mesa 1 mais 1 coca` continua ADD.
 
 Parser também aceita variações naturais: "adiciona 1 bovino na mesa 1", "coloca 2 coca na mesa 3", "mesa 2 tira 1 agua", "mesa 1 mais um bovino", "acrescenta tres bovinos na mesa 2". Operadores ADD: +, add, adiciona(r), coloca(r), poe, manda(r), bota(r), mais, soma(r), inclui(r), acrescenta(r). Operadores REMOVE: -, remove(r), tira(r), retira(r), cancela(r), menos, subtrai(r), exclui(r), desconta(r). Aceita números por extenso 1–10 (um/uma, dois/duas, tres…dez). Sem operador explícito → PARSE_ERROR (nunca chuta).
 
