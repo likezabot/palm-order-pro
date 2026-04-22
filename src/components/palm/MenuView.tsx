@@ -361,7 +361,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
               </button>
             )}
             {filtered
-              .filter((p) => !(showPorcoCard && porcoReal && p.id === porcoReal.id))
+              .filter((p) => !(showPorcoCard && porcoBase && p.id === porcoBase.id))
               .map((product) => {
                 const qty = getQty(product.id);
                 const esgotado = isEsgotado(product.id);
@@ -404,7 +404,20 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         ))}
       </div>
 
-      <PorcoVariantDialog open={porcoOpen} onOpenChange={setPorcoOpen} onPick={addPorcoVariant} />
+      <PorcoVariantDialog
+        open={porcoOpen}
+        onOpenChange={setPorcoOpen}
+        variants={porcoVariants.map((v) => ({
+          name: v.name === "porco" ? "Porco" : v.name === "panceta suína" ? "Panceta suína" : "Costela suína",
+          product: v.product,
+        }))}
+        isEsgotado={isEsgotado}
+        getQty={getQty}
+        onPick={(_name, product) => {
+          setPorcoOpen(false);
+          handleAdd(product);
+        }}
+      />
 
       {canMove && existingOrderId && originalTableName && (
         <MoveTableDialog
