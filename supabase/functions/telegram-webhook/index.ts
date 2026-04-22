@@ -847,11 +847,20 @@ const HELP_TEXT =
   `  • remove 1 tulipa mesa 3\n\n` +
   `📌 Consultar:\n` +
   `  • mesa 4 ver pedido\n\n` +
+  `💨 Atalhos (até 15 min após usar uma mesa):\n` +
+  `  • mais um boi\n` +
+  `  • + 1 coca 350\n` +
+  `  • tira uma agua\n` +
+  `  • ver pedido / total / consultar\n\n` +
   `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
   `Em caso de dúvida no produto, o bot pede para especificar.\n\n` +
   `🔍 Modo preview:\n` +
   `Comece a mensagem com "preview" para ver como cada linha seria interpretada SEM executar.\n` +
   `Ex:\n  preview\n  mesa 1 + 2 coca 350\n  tira 1 agua da mesa 1`;
+
+const NEEDS_TABLE_TEXT =
+  `⚠️ Não sei qual mesa usar. Envie no formato completo, ex: \`mesa 1 + 1 coca 350\` ` +
+  `(ou use uma mesa nos últimos 15 min).`;
 
 // ─────────────────────────── preview (dry-run) ───────────────────────────
 
