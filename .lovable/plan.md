@@ -1,75 +1,77 @@
 
 
-## Multi-comando por linha no bot do Telegram
+## Parser Telegram: variações naturais para VIEW
 
 ### Mudança (arquivo único: `supabase/functions/telegram-webhook/index.ts`)
 
-Hoje `Deno.serve` chama `parseCommand(text)` uma única vez. Vou trocar por um wrapper que quebra a mensagem em linhas, processa cada uma de forma independente e devolve uma resposta consolidada. Parser, `resolveProduct`, `executeAdd`/`executeRemove`/`executeView` ficam intocados.
+Hoje o parser só reconhece VIEW via regex `mesa N ver pedido`. Vou ampliar o reconhecimento para frases naturais sem afetar ADD/REMOVE.
 
-### Como fica o roteamento
+### Como detectar VIEW
 
-1. Receber `text` do Telegram.
-2. `lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)` → ignora linhas vazias.
-3. **1 linha** → comportamento atual (zero diferença visível para mensagens normais).
-4. **2+ linhas** → roda em loop sequencial (ordem original); para cada linha:
-   - `parseCommand(line)` → `handleCommand(cmd, waiter)`.
-   - Captura a resposta (string) e adiciona a um array `results`.
-   - Se `handleCommand` lançar exceção inesperada, captura e adiciona `❌ "<linha>": erro inesperado` — **não interrompe** as demais (regra 8).
-5. Monta resposta final juntando os resultados.
+Adicionar uma etapa **antes** de tentar ADD/REMOVE no `parseCommand`:
 
-### Limites de segurança
+1. Extrair número de mesa da frase (regex tolerante: `/mesa\s+(\d+)/i` ou `/\bm\s*(\d+)\b/i`).
+2. Se há mesa **e** a frase contém algum **verbo/substantivo de consulta**, retorna `{ kind: "VIEW", table: N }`.
+3. Caso contrário, segue o fluxo atual (ADD/REMOVE/HELP/PARSE_ERROR).
 
-- **Máx. 10 linhas por mensagem**. Acima disso responde `⚠️ Máx. 10 comandos por mensagem. Você enviou N. Divida em mensagens menores.` e não executa nada.
-- **Execução estritamente sequencial** (await em série, não `Promise.all`) — evita corrida de versão na mesma mesa.
-- **Dedupe inalterado**: a mensagem inteira ainda conta como 1 `update_id` (Telegram envia 1 update por mensagem).
-- **HELP e PARSE_ERROR por linha**: se uma linha for "ajuda" no meio do bloco, retorna o HELP só pra essa linha (não interrompe o resto).
+### Dicionário de gatilhos VIEW
 
-### Formato da resposta consolidada
+Lista de tokens (normalizados, sem acento, lowercase) — basta **um** deles aparecer junto com a mesa:
 
-Para mensagens multi-linha, formato compacto (uma seção por linha):
+- `ver`, `vê`
+- `consulta`, `consultar`, `consulte`
+- `total`, `totais`
+- `pedido`, `pedidos`
+- `mostra`, `mostrar`, `mostre`
+- `lista`, `listar`, `liste`
+- `resumo`
+- `como esta`, `como ta`, `como anda` (frases compostas — checagem por `includes`)
+- `quanto`, `quanto deu`, `quanto ficou`
+- `extrato`, `conta`
 
-```
-📊 4 comandos processados:
+### Anti-conflito com ADD/REMOVE
 
-✅ Mesa 1 → +1 Bovino (R$ 12,00)
-   Total da mesa: R$ 24,00 (2 itens)
+VIEW só dispara se a linha **NÃO contiver**:
 
-✅ Mesa 1 → +1 Coca-Cola 350ml (R$ 7,00)
-   Total da mesa: R$ 31,00 (3 itens)
+- Operador explícito ADD/REMOVE (`+`, `-`, `add`, `adiciona`, `coloca`, `tira`, `remove`, `mais`, `menos`, etc. — reaproveitar `ADD_OPS`/`REM_OPS`).
+- Quantidade numérica fora do número de mesa (ex: `mesa 1 + 2 coca` nunca cai em VIEW).
 
-➖ Mesa 1 → -1 Água sem gás
-   Total da mesa: R$ 27,00 (2 itens)
+Heurística: detectar VIEW só quando **não há operador** E **não há `<qty> <produto>`** após a mesa. Se tiver dúvida, segue o caminho atual (ADD/REMOVE) — preserva regra "sem chute".
 
-📋 Mesa 1:
-   2× Bovino — R$ 24,00
-   1× Coca-Cola 350ml — R$ 7,00
-   ───────────────
-   Total: R$ 31,00
-```
+### Exemplos cobertos
 
-Erros aparecem inline, na posição da linha, sem abortar:
+| Entrada | Resultado |
+|---|---|
+| `mesa 1 ver pedido` | VIEW mesa 1 (já funciona) |
+| `mesa 1 consulta` / `mesa 1 consultar` | VIEW mesa 1 |
+| `consultar mesa 1` / `ver mesa 1` | VIEW mesa 1 |
+| `total mesa 1` / `total da mesa 1` | VIEW mesa 1 |
+| `como está a mesa 1` / `como ta a mesa 1` | VIEW mesa 1 |
+| `quanto deu a mesa 3` | VIEW mesa 3 |
+| `mesa 1 + 1 bovino` | ADD (inalterado) |
+| `mesa 1 mais um bovino` | ADD (inalterado, "mais" é ADD_OP) |
+| `mesa 1` (sozinho) | PARSE_ERROR (sem gatilho) |
 
-```
-✅ Mesa 1 → +1 Bovino ...
-🤔 Encontrei várias opções para "coca": ...
-✅ Mesa 1 → +1 Água sem gás ...
-```
+### Multi-comando, preview e botões
+
+- Funciona dentro de cada linha do split (regra atual).
+- `previewCommand` para VIEW já existe — sem mudanças.
+- VIEW nunca emite inline keyboard.
 
 ### Garantias
 
-- **Compatibilidade total**: 1 linha = comportamento idêntico ao atual (mesma resposta, sem cabeçalho extra).
-- **Linguagem natural**: já suportada desde a iteração anterior — nada a mudar no parser.
-- **Sem ambiguidade silenciosa**: `resolveProduct` continua devolvendo `ambiguous`/`is_group_trigger` por linha; cada um vira sua própria resposta.
-- **Falha isolada**: cada linha tem try/catch próprio.
-- **Sem mudança em banco, fluxo de pedido, RLS, dedupe, whitelist**.
+- **Compatibilidade total**: regex atual `mesa N ver pedido` continua funcionando (cai no novo gatilho).
+- **Sem ambiguidade silenciosa**: gatilhos VIEW só disparam quando claramente não há ADD/REMOVE.
+- **Sem mudança em banco, executeView, RLS, fluxo de execução**.
+- **Conflito com `mais`**: a palavra `mais` continua sendo ADD_OP — frases como "mesa 1 mais 1 coca" não viram VIEW por causa da checagem de operador/qty.
 
 ### Atualização da memória
 
-`mem://features/telegram-bot.md` ganha 2 linhas: "Multi-comando: 1 por linha, máx 10, execução sequencial, falha de uma linha não bloqueia as outras."
+`mem://features/telegram-bot.md` ganha lista de gatilhos VIEW + nota sobre anti-conflito com ADD/REMOVE.
 
 ### Fora de escopo
 
-- Paralelização (intencionalmente sequencial).
-- Transação atômica entre linhas (cada linha é independente — se a 2ª falhar, a 1ª permanece aplicada).
-- Continuação cross-message (cada mensagem é autocontida).
+- Frases sem mesa explícita (ex: "ver tudo", "todas as mesas").
+- Filtros parciais (ex: "mesa 1 só bebidas").
+- Plurais de gatilhos além dos listados.
 
