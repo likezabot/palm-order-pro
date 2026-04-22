@@ -497,6 +497,7 @@ function parseCommand(raw: string): Command {
   const parseStockTail = (tail: string, qtyRequired: boolean): { qty: number; unit?: string; itemText: string } | null => {
     const t = tail.trim();
     if (!t) return null;
+    // Formato canônico: <qty> [unit] <produto>
     const m = t.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?\\s+(.+)$`));
     if (m) {
       const qty = parseFloat(m[1].replace(",", "."));
@@ -504,25 +505,34 @@ function parseCommand(raw: string): Command {
         return { qty, unit: m[2] || undefined, itemText: m[3].trim() };
       }
     }
+    // Número por extenso na frente
     const m2 = t.match(/^(\S+)\s+(.+)$/);
     if (m2) {
       const qty = NUM_WORDS_GLOBAL[m2[1]];
       if (qty !== undefined) return { qty, itemText: m2[2].trim() };
     }
+    // Fallback: ordem invertida "<produto> <qty> [unit]" (ex.: "medalhão 20", "coca 5kg")
+    const m3 = t.match(new RegExp(`^(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?$`));
+    if (m3) {
+      const qty = parseFloat(m3[2].replace(",", "."));
+      if (Number.isFinite(qty) && qty > 0) {
+        return { qty, unit: m3[3] || undefined, itemText: m3[1].trim() };
+      }
+    }
     if (!qtyRequired) return { qty: 1, itemText: t };
     return null;
   };
 
-  // ENTRADA: "entrada 10 coca", "entrou 5kg picanha", "+ 10 coca", "chegou 20 cerva", "repor 10 coca", "abasteci 5 coca"
-  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)\s+(.+)$/) ||
+  // ENTRADA: "entrada 10 coca", "entrada de estoque medalhão 20", "entrou 5kg picanha", "+ 10 coca"
+  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)(?:\s+(?:de|do|no|ao|em|para|pra)\s+estoque)?\s+(.+)$/) ||
                    text.match(/^\+\s+(\d.+)$/);
   if (stockIn) {
     const parsed = parseStockTail(stockIn[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "in", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
   }
 
-  // SAÍDA: "saida 2 coca", "usei 1kg picanha", "vendi 3 coca", "acabou 2 coca", "quebrou 1 prato"
-  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
+  // SAÍDA: "saida 2 coca", "saida do estoque 5 coca", "usei 1kg picanha", "vendi 3 coca"
+  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)(?:\s+(?:de|do|no|em|para|pra)\s+estoque)?\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
   if (stockOut) {
     const parsed = parseStockTail(stockOut[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "out", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
