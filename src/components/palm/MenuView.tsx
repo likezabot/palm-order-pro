@@ -14,6 +14,7 @@ import {
 } from "./menu-subgroups";
 import { RenameTableDialog } from "./RenameTableDialog";
 import { PorcoVariantDialog } from "./PorcoVariantDialog";
+import { getPorcoGroupProducts } from "@/lib/porco-group";
 import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
 import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
