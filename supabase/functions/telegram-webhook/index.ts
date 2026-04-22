@@ -1530,19 +1530,168 @@ function buildChoiceKeyboard(
   return rows;
 }
 
+// ─────────────────────────── ESTOQUE ───────────────────────────
+type StockItem = {
+  id: string;
+  name: string;
+  slug: string;
+  unit: string;
+  current_stock: number;
+  min_stock: number;
+  product_id: string | null;
+};
+
+type StockResolution =
+  | { kind: "found"; item: StockItem }
+  | { kind: "ambiguous"; candidates: StockItem[] }
+  | { kind: "not_found" };
+
+async function resolveStockItem(text: string): Promise<StockResolution> {
+  const singular = singularize(normalize(text));
+  if (!singular) return { kind: "not_found" };
+
+  // 1. Match exato via RPC (slug/aliases)
+  const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: singular });
+  if (Array.isArray(invExact) && invExact.length > 0) {
+    return { kind: "found", item: invExact[0] as StockItem };
+  }
+
+  // 2. Match por inclusão de tokens em todos os itens ativos
+  const { data: all } = await sb
+    .from("inventory_items")
+    .select("id,name,slug,unit,current_stock,min_stock,product_id,aliases")
+    .eq("is_active", true);
+  const items: StockItem[] = (all ?? []) as StockItem[];
+
+  const matches = items.filter((i) => {
+    const n = normalize(i.name);
+    return n.includes(singular) || singular.includes(n);
+  });
+
+  if (matches.length === 1) return { kind: "found", item: matches[0] };
+  if (matches.length >= 2 && matches.length <= 8) return { kind: "ambiguous", candidates: matches };
+  if (matches.length > 8) return { kind: "ambiguous", candidates: matches.slice(0, 8) };
+
+  // 3. Fuzzy Levenshtein ≤2 nos tokens significativos
+  const userTokens = singular.split(/\s+/).filter((t) => t.length > 3 && !/\d/.test(t));
+  if (userTokens.length > 0) {
+    const fuzzyHits: StockItem[] = [];
+    for (const it of items) {
+      const candTokens = normalize(it.name).split(/\s+/).filter((t) => t.length > 2);
+      let hit = false;
+      for (const ut of userTokens) {
+        for (const ct of candTokens) {
+          if (Math.abs(ut.length - ct.length) > 2) continue;
+          if (levenshtein(ut, ct) <= 2) { hit = true; break; }
+        }
+        if (hit) break;
+      }
+      if (hit) fuzzyHits.push(it);
+    }
+    if (fuzzyHits.length === 1) return { kind: "found", item: fuzzyHits[0] };
+    if (fuzzyHits.length >= 2 && fuzzyHits.length <= 8) return { kind: "ambiguous", candidates: fuzzyHits };
+  }
+
+  return { kind: "not_found" };
+}
+
+function fmtStockQty(n: number, unit: string): string {
+  const v = Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/\.?0+$/, "");
+  return `${v} ${unit || ""}`.trim();
+}
+
+// callback_data: s|<type>|<itemId>|<qty>  (type ∈ in/out/adj)
+function buildStockChoiceKeyboard(type: "in" | "out" | "adjustment", qty: number, items: StockItem[]): InlineButton[][] {
+  const code = type === "in" ? "in" : type === "out" ? "out" : "adj";
+  const rows: InlineButton[][] = items.slice(0, 8).map((it) => [{
+    text: `${it.name} (${fmtStockQty(it.current_stock, it.unit)})`,
+    callback_data: `s|${code}|${it.id}|${qty}`,
+  }]);
+  rows.push([{ text: "❌ Cancelar", callback_data: "x" }]);
+  return rows;
+}
+
+async function executeStockMovement(
+  item: StockItem,
+  type: "in" | "out" | "adjustment",
+  qty: number,
+  waiter: string,
+): Promise<{ text: string; previousStock: number; newStock: number }> {
+  const previousStock = Number(item.current_stock);
+  const note = `Telegram (${waiter})`;
+  const { data, error } = await sb.rpc("apply_inventory_movement", {
+    p_item_id: item.id,
+    p_type: type,
+    p_quantity: qty,
+    p_note: note,
+    p_source: "telegram",
+  });
+  if (error) throw new Error(error.message);
+  const result = data as any;
+  const newStock = Number(result?.new_stock ?? previousStock);
+  const min = Number(item.min_stock);
+  const verb = type === "in" ? "Entrada" : type === "out" ? "Saída" : "Ajuste";
+  const icon = type === "in" ? "📥" : type === "out" ? "📤" : "🔧";
+  const qtyStr = fmtStockQty(qty, item.unit);
+  let text = `${icon} ${verb}: ${qtyStr} de *${item.name}*\n   Saldo: ${fmtStockQty(newStock, item.unit)}`;
+  if (newStock <= 0) {
+    text += `\n🚨 Item zerado!`;
+  } else if (min > 0 && newStock <= min) {
+    text += `\n⚠️ Atingiu o crítico (mín ${fmtStockQty(min, item.unit)})`;
+  }
+  return { text, previousStock, newStock };
+}
+
+async function executeStockUndo(entry: StockUndoEntry, waiter: string): Promise<string> {
+  // IN  → reverte com OUT da mesma quantidade
+  // OUT → reverte com IN da mesma quantidade
+  // ADJUSTMENT → aplica novo ADJUSTMENT com previousStock
+  const note = `Telegram undo (${waiter})`;
+  let invType: "in" | "out" | "adjustment";
+  let invQty: number;
+  if (entry.type === "in") { invType = "out"; invQty = entry.qty; }
+  else if (entry.type === "out") { invType = "in"; invQty = entry.qty; }
+  else { invType = "adjustment"; invQty = entry.previousStock; }
+
+  const { data, error } = await sb.rpc("apply_inventory_movement", {
+    p_item_id: entry.itemId,
+    p_type: invType,
+    p_quantity: invQty,
+    p_note: note,
+    p_source: "telegram",
+  });
+  if (error) throw new Error(error.message);
+  const newStock = Number((data as any)?.new_stock ?? 0);
+  return `↩️ Estoque revertido: *${entry.itemName}* → ${fmtStockQty(newStock, entry.unit)}`;
+}
+
+async function executeStockQuery(item: StockItem): Promise<string> {
+  const min = Number(item.min_stock);
+  const cur = Number(item.current_stock);
+  let icon = "📦";
+  if (cur <= 0) icon = "🚨";
+  else if (min > 0 && cur <= min) icon = "⚠️";
+  const minLine = min > 0 ? ` (mín ${fmtStockQty(min, item.unit)})` : "";
+  return `${icon} *${item.name}*: ${fmtStockQty(cur, item.unit)}${minLine}`;
+}
+
 const HELP_TEXT =
   `🤖 Como usar:\n\n` +
   `📌 Adicionar:\n` +
   `  • mesa 3 + 2 coca 350\n` +
   `  • mesa 1 mais um bovino\n` +
-  `  • adiciona 2 cocas 350 na mesa 3\n` +
-  `  • acrescenta tres bovinos na mesa 2\n\n` +
+  `  • adiciona 2 cocas 350 na mesa 3\n\n` +
   `📌 Remover:\n` +
   `  • mesa 1 - 1 agua\n` +
-  `  • tira duas aguas da mesa 1\n` +
-  `  • remove 1 tulipa mesa 3\n\n` +
+  `  • tira duas aguas da mesa 1\n\n` +
   `📌 Consultar:\n` +
   `  • mesa 4 ver pedido\n\n` +
+  `📦 Estoque:\n` +
+  `  • entrada 10 coca → soma ao saldo\n` +
+  `  • saida 2 picanha → subtrai\n` +
+  `  • ajuste coca 50 → define valor exato\n` +
+  `  • estoque coca → mostra saldo\n` +
+  `  • estoque (sozinho) → lista críticos\n\n` +
   `💨 Atalhos (até 15 min após usar uma mesa):\n` +
   `  • mais um boi\n` +
   `  • + 1 coca 350\n` +
@@ -1553,6 +1702,7 @@ const HELP_TEXT =
   `🔍 Modo preview:\n` +
   `Comece a mensagem com "preview" para ver como cada linha seria interpretada SEM executar.\n` +
   `Ex:\n  preview\n  mesa 1 + 2 coca 350\n  tira 1 agua da mesa 1`;
+
 
 const NEEDS_TABLE_TEXT =
   `⚠️ Não sei qual mesa usar. Envie no formato completo, ex: \`mesa 1 + 1 coca 350\` ` +
