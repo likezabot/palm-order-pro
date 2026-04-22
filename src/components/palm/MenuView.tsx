@@ -345,97 +345,107 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         )}
 
         {!isLoading && !error && products.length > 0 && filtered.length > 0 && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-1.5 p-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2.5">
             {filtered.map((product) => {
               const groupEntry = groupByTriggerId.get(product.id);
               if (groupEntry) {
                 const { group, triggerProduct, variantCount } = groupEntry;
                 const groupQty = getGroupQty(group);
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={`__group__${group.id}`}
-                    className="relative flex flex-col rounded-2xl border border-border bg-card p-2.5 shadow-soft hover:shadow-card hover:border-primary/40 transition-all"
+                    onClick={() => {
+                      playFeedback("click");
+                      setOpenGroup(group);
+                    }}
+                    aria-label={`Abrir opções de ${group.name}`}
+                    className={`group/card relative flex flex-col items-start text-left rounded-2xl border p-3.5 min-h-[96px] transition-all active:scale-[0.98] shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] hover:shadow-[0_4px_12px_hsl(var(--foreground)/0.06)] ${
+                      groupQty > 0
+                        ? "bg-primary/[0.04] border-primary/30"
+                        : "bg-card border-border/50 hover:border-primary/25"
+                    }`}
                   >
-                    <span className="font-bold text-base text-foreground leading-tight">
+                    <span className={`font-semibold text-[15px] leading-snug text-foreground ${groupQty > 0 ? "pl-7" : ""}`}>
                       {group.name}
                     </span>
-                    <span className="mt-0.5 text-[11px] text-muted-foreground">
-                      Ver opções · {variantCount} {variantCount === 1 ? "opção" : "opções"}
+                    <span className="mt-auto pt-2 flex items-baseline gap-1.5 tabular-nums text-muted-foreground">
+                      <span className="text-[11px] uppercase tracking-wider opacity-60">a partir</span>
+                      <span className="text-sm font-medium text-foreground/80">R$ {triggerProduct.price.toFixed(2)}</span>
                     </span>
-                    <span className="mt-1 text-base font-extrabold text-primary">
-                      R$ {triggerProduct.price.toFixed(2)}
+                    <span className="absolute bottom-2 right-2.5 text-[10px] font-medium text-muted-foreground/60 tracking-wide">
+                      +{variantCount}
                     </span>
-                    <button
-                      onClick={() => {
-                        playFeedback("click");
-                        setOpenGroup(group);
-                      }}
-                      className="mt-2 w-full rounded-lg bg-primary px-2 py-2 text-sm font-bold text-primary-foreground active:scale-95 transition-transform"
-                    >
-                      Ver opções
-                    </button>
                     {groupQty > 0 && (
-                      <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
+                      <span
+                        key={groupQty}
+                        className="absolute -top-1.5 -right-1.5 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground ring-2 ring-background px-1.5 animate-badge-pop tabular-nums"
+                      >
                         {groupQty}
                       </span>
                     )}
-                  </div>
+                  </button>
                 );
               }
               const qty = getQty(product.id);
               const esgotado = isEsgotado(product.id);
               return (
-                <div
+                <button
+                  type="button"
                   key={product.id}
-                  className={`relative flex flex-col rounded-2xl border p-2.5 shadow-soft transition-all ${
+                  onClick={() => handleAdd(product)}
+                  aria-label={`Adicionar ${product.name} — R$ ${product.price.toFixed(2)}`}
+                  className={`group/card relative flex flex-col items-start text-left rounded-2xl border p-3.5 min-h-[96px] transition-all active:scale-[0.98] shadow-[0_1px_2px_hsl(var(--foreground)/0.04)] ${
                     esgotado
-                      ? "bg-muted/30 border-border opacity-60"
-                      : "bg-card border-border hover:border-primary/40 hover:shadow-card"
+                      ? "bg-muted/20 border-border/40 opacity-50 cursor-not-allowed"
+                      : qty > 0
+                        ? "bg-primary/[0.04] border-primary/30 hover:shadow-[0_4px_12px_hsl(var(--foreground)/0.06)]"
+                        : "bg-card border-border/50 hover:border-primary/25 hover:shadow-[0_4px_12px_hsl(var(--foreground)/0.06)]"
                   }`}
                 >
-                  <span className={`font-bold text-base leading-tight text-foreground ${qty > 0 ? "pl-9" : ""}`}>
+                  <span className={`font-semibold text-[15px] leading-snug text-foreground ${qty > 0 ? "pl-7" : ""}`}>
                     {product.name}
                   </span>
-                  {esgotado && (
-                    <span className="mt-0.5 text-[11px] italic text-muted-foreground">
-                      Indisponível
-                    </span>
-                  )}
-                  <span className={`mt-1 text-base font-extrabold ${esgotado ? "text-muted-foreground" : "text-primary"}`}>
+                  <span className="mt-auto pt-2 text-sm font-medium text-foreground/80 tabular-nums">
                     R$ {product.price.toFixed(2)}
                   </span>
-                  <button
-                    onClick={() => handleAdd(product)}
-                    className={`mt-2 w-full rounded-lg px-2 py-2 text-sm font-bold transition-transform active:scale-95 ${
-                      esgotado
-                        ? "bg-muted text-muted-foreground cursor-not-allowed"
-                        : "bg-primary text-primary-foreground"
-                    }`}
-                  >
-                    {esgotado ? "Indisponível" : "Adicionar"}
-                  </button>
+                  {esgotado && (
+                    <span className="absolute bottom-2 right-2.5 text-[10px] italic text-muted-foreground/70">
+                      indisponível
+                    </span>
+                  )}
                   {qty > 0 && (
                     <span
                       key={qty}
-                      className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop"
+                      className="absolute -top-1.5 -right-1.5 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground ring-2 ring-background px-1.5 animate-badge-pop tabular-nums"
                     >
                       {qty}
                     </span>
                   )}
                   {qty > 0 && (
-                    <button
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         playFeedback("click");
                         onDecrement(product);
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          playFeedback("click");
+                          onDecrement(product);
+                        }
+                      }}
                       aria-label={`Diminuir ${product.name}`}
-                      className="absolute top-2 left-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/15 text-destructive border border-destructive/40 active:scale-90 hover:bg-destructive/25 transition-all shadow-soft"
+                      className="absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-background/70 backdrop-blur-sm text-muted-foreground border border-border/60 active:scale-90 hover:text-foreground hover:border-border transition-all"
                     >
-                      <Minus size={16} strokeWidth={3} />
-                    </button>
+                      <Minus size={14} strokeWidth={2.5} />
+                    </span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
