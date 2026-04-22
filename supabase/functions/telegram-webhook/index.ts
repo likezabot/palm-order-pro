@@ -260,6 +260,10 @@ function parseCommand(raw: string): Command {
     return { kind: "HELP" };
   }
 
+  // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
+  const setT = text.match(/^mesa\s+(\d+)$/);
+  if (setT) return { kind: "SET_TABLE", table: setT[1] };
+
   // VIEW: "mesa N ver pedido" / "mesa N ver" / "mesa N pedido" / "ver [pedido] [da/na] mesa N"
   const viewA = text.match(/^mesa\s+(\d+)\s+(?:ver(?:\s+pedido)?|pedido)$/);
   if (viewA) return { kind: "VIEW", table: viewA[1] };
