@@ -43,6 +43,7 @@ const SortableProductCard = ({
   return (
     <div
       ref={setNodeRef}
+      data-product-id={product.id}
       style={style}
       onClick={() => {
         if (selectionMode && onToggleSelected) onToggleSelected(product.id);
