@@ -987,7 +987,7 @@ async function executeBatchForTable(
             note: i.note,
             subtotal: i.subtotal,
           })),
-          p_should_print: printEnabled,
+          p_should_print: shouldPrint(printEnabled),
         });
       } catch (e: any) {
         const msg = String(e?.message ?? e);
@@ -1054,7 +1054,7 @@ async function executeBatchForTable(
       p_delta_items: printEnabled && delta.length > 0 ? delta : null,
       p_print_type: printEnabled && delta.length > 0 ? "extra" : null,
       p_expected_version: order.version,
-      p_should_print: printEnabled && delta.length > 0,
+      p_should_print: shouldPrint(printEnabled && delta.length > 0),
     });
 
     return {
