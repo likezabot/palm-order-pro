@@ -89,18 +89,43 @@ function buildWaiterPickerMessage(names: string[], username?: string): string {
   if (names.length === 0) {
     return greet +
       "Nenhum garçom cadastrado no Palm ainda.\n" +
-      "Peça ao admin para abrir o módulo *Admin* e criar seu nome em Garçons.";
+      "Peça ao admin para abrir o módulo *Admin* e criar seu nome em Garçons.\n\n" +
+      "Quando cadastrar, toque em 🔄 abaixo.";
   }
   return greet +
-    "Antes de começar, toque no seu nome abaixo 👇\n" +
-    "(Você precisa estar cadastrado no Palm. Se não estiver, peça ao admin.)";
+    `Toque no seu nome 👇  _(${names.length} cadastrado${names.length === 1 ? "" : "s"} no Palm)_\n` +
+    "Se não estiver na lista, peça ao admin pra cadastrar e toque em 🔄.";
 }
-// Botões clicáveis com nomes dos garçons. callback_data: pw|<idx> (idx é a posição em listWaiterNames()).
+// Botões clicáveis com nomes dos garçons. Layout em grade 2 colunas (1 col se houver ≤3 nomes).
+// callback_data: pw|<nome-base64url> — assim sobrevive a reordenações/inclusões entre o envio e o clique.
+function encodeWaiterName(name: string): string {
+  // base64url sem padding, ASCII-safe pro callback_data (limite 64 bytes)
+  const b64 = btoa(unescape(encodeURIComponent(name)));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function decodeWaiterName(token: string): string | null {
+  try {
+    const b64 = token.replace(/-/g, "+").replace(/_/g, "/");
+    return decodeURIComponent(escape(atob(b64)));
+  } catch { return null; }
+}
 function buildWaiterPickerKeyboard(names: string[]): InlineButton[][] {
   const rows: InlineButton[][] = [];
-  for (let i = 0; i < names.length && i < 24; i++) {
-    rows.push([{ text: `👤 ${names[i]}`, callback_data: `pw|${i}` }]);
+  const cols = names.length > 3 ? 2 : 1;
+  const max = Math.min(names.length, 30);
+  for (let i = 0; i < max; i += cols) {
+    const row: InlineButton[] = [];
+    for (let j = 0; j < cols && i + j < max; j++) {
+      const n = names[i + j];
+      const enc = encodeWaiterName(n);
+      // 60 bytes de callback_data é o limite seguro (pw| = 3 chars + token)
+      if (`pw|${enc}`.length <= 60) {
+        row.push({ text: `👤 ${n}`, callback_data: `pw|${enc}` });
+      }
+    }
+    if (row.length > 0) rows.push(row);
   }
+  rows.push([{ text: "🔄 Atualizar lista", callback_data: "pw_refresh" }]);
   return rows;
 }
 
@@ -1302,9 +1327,9 @@ async function answerCallback(callbackId: string, text?: string) {
   }
 }
 
-async function editTelegramMessage(chatId: number, messageId: number, text: string) {
+async function editTelegramMessage(chatId: number, messageId: number, text: string, keyboard?: InlineButton[][]) {
   if (isTestChat(chatId)) {
-    testCaptureBuffer.push({ chatId, text, kind: "edit", messageId });
+    testCaptureBuffer.push({ chatId, text, kind: "edit", messageId, keyboard });
     return;
   }
   try {
@@ -1315,7 +1340,7 @@ async function editTelegramMessage(chatId: number, messageId: number, text: stri
         chat_id: chatId,
         message_id: messageId,
         text,
-        reply_markup: { inline_keyboard: [] },
+        reply_markup: { inline_keyboard: keyboard ?? [] },
       }),
     });
   } catch (e) {
@@ -1827,20 +1852,42 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
-  // ─── PICK WAITER: pw|<idx> ───
+  // ─── REFRESH lista de garçons (botão 🔄) ───
+  if (data === "pw_refresh") {
+    const names = await listWaiterNames();
+    await answerCallback(cbId, names.length ? `${names.length} garçom(ns)` : "Nenhum cadastrado");
+    await editTelegramMessage(
+      chatId,
+      messageId,
+      buildWaiterPickerMessage(names, username),
+      buildWaiterPickerKeyboard(names),
+    );
+    return;
+  }
+
+  // ─── PICK WAITER: pw|<base64url(nome)> ───
   if (data.startsWith("pw|")) {
     if (typeof userId !== "number") {
       await answerCallback(cbId, "Sem usuário");
       return;
     }
-    const idx = parseInt(data.slice(3), 10);
-    const names = await listWaiterNames();
-    if (!Number.isFinite(idx) || idx < 0 || idx >= names.length) {
+    const picked = decodeWaiterName(data.slice(3));
+    if (!picked) {
       await answerCallback(cbId, "Opção inválida");
-      await editTelegramMessage(chatId, messageId, "❌ Opção inválida. Mande qualquer mensagem para ver a lista de novo.");
       return;
     }
-    const picked = names[idx];
+    // Revalida em tempo real: o garçom ainda existe no Palm?
+    const names = await listWaiterNames();
+    if (!names.includes(picked)) {
+      await answerCallback(cbId, "Garçom não existe mais");
+      await editTelegramMessage(
+        chatId,
+        messageId,
+        `⚠️ *${picked}* não está mais cadastrado no Palm.\nEscolha outro:`,
+        buildWaiterPickerKeyboard(names),
+      );
+      return;
+    }
     await setWaiterBinding(userId, picked, username);
     await answerCallback(cbId, `Olá, ${picked}!`);
     await editTelegramMessage(
