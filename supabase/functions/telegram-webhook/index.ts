@@ -789,8 +789,6 @@ async function executeView(table: string): Promise<string> {
 
 // ─────────────────────────── telegram ───────────────────────────
 
-type InlineButton = { text: string; callback_data: string };
-
 async function sendTelegram(chatId: number, text: string, keyboard?: InlineButton[][]) {
   try {
     const body: any = { chat_id: chatId, text };
