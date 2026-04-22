@@ -284,8 +284,8 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                   }}
                   className={`relative inline-flex min-w-[88px] items-center justify-center whitespace-nowrap px-4 py-3 pr-5 text-sm transition-colors ${
                     isActive
-                      ? "text-foreground font-bold bg-foreground/[0.03]"
-                      : "text-muted-foreground font-semibold hover:text-foreground"
+                      ? "text-foreground font-bold bg-primary/5"
+                      : "text-muted-foreground/70 font-semibold hover:text-foreground"
                   }`}
                 >
                   <span>{CATEGORY_LABELS[cat]}</span>
@@ -300,7 +300,7 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                     </span>
                   )}
                   {isActive && (
-                    <span className="absolute left-2 right-2 bottom-0 h-[3px] rounded-full bg-brand-gradient" />
+                    <span className="absolute left-2 right-2 bottom-0 h-[4px] rounded-full bg-brand-gradient" />
                   )}
                 </button>
               );
