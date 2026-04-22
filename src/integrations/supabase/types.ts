@@ -165,6 +165,63 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_log: {
+        Row: {
+          dedupe_key: string
+          entity_id: string
+          event_type: string
+          id: number
+          sent_at: string
+        }
+        Insert: {
+          dedupe_key: string
+          entity_id: string
+          event_type: string
+          id?: number
+          sent_at?: string
+        }
+        Update: {
+          dedupe_key?: string
+          entity_id?: string
+          event_type?: string
+          id?: number
+          sent_at?: string
+        }
+        Relationships: []
+      }
+      notification_queue: {
+        Row: {
+          consolidate_key: string
+          created_at: string
+          entity_id: string
+          event_type: string
+          id: number
+          payload: Json
+          processed_at: string | null
+          send_after: string
+        }
+        Insert: {
+          consolidate_key: string
+          created_at?: string
+          entity_id: string
+          event_type: string
+          id?: number
+          payload?: Json
+          processed_at?: string | null
+          send_after?: string
+        }
+        Update: {
+          consolidate_key?: string
+          created_at?: string
+          entity_id?: string
+          event_type?: string
+          id?: number
+          payload?: Json
+          processed_at?: string | null
+          send_after?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           id: string
@@ -482,6 +539,7 @@ export type Database = {
         Args: { p_order_id: string; p_target_table: string }
         Returns: undefined
       }
+      normalize_waiter_name: { Args: { p_name: string }; Returns: string }
       pay_order: {
         Args: {
           p_amount_paid: number

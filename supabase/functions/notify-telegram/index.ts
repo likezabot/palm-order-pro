@@ -1,0 +1,160 @@
+// Drena fila de notificações e envia mensagens consolidadas pro Telegram.
+import { createClient } from "npm:@supabase/supabase-js@2.45.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const sb = createClient(SUPABASE_URL, SERVICE_KEY);
+
+function fmtBRL(n: number): string {
+  return `R$ ${Number(n || 0).toFixed(2).replace(".", ",")}`;
+}
+
+async function getNotifyChats(): Promise<number[]> {
+  const { data } = await sb.from("settings").select("value").eq("key", "telegram_notify_chats").maybeSingle();
+  if (!data?.value) return [];
+  try {
+    const arr = JSON.parse(data.value);
+    return Array.isArray(arr) ? arr.map(Number).filter(Number.isFinite) : [];
+  } catch { return []; }
+}
+
+async function getNotifyConfig(): Promise<Record<string, boolean>> {
+  const { data } = await sb.from("settings").select("value").eq("key", "telegram_notify_config").maybeSingle();
+  if (!data?.value) return { orders: true, payments: true, stock_critical: true, daily_report: true };
+  try { return JSON.parse(data.value); } catch { return {}; }
+}
+
+async function sendTelegram(chatId: number, text: string): Promise<boolean> {
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    return r.ok;
+  } catch (e) {
+    console.error("send fail", e);
+    return false;
+  }
+}
+
+async function broadcast(text: string, chats: number[]) {
+  for (const c of chats) await sendTelegram(c, text);
+}
+
+function formatDelta(delta: any[]): string {
+  if (!Array.isArray(delta) || delta.length === 0) return "";
+  const lines: string[] = [];
+  for (const d of delta) {
+    const qty = Number(d.quantity || 0);
+    const name = d.product_name || "item";
+    if (qty > 0) lines.push(`  ➕ ${qty}× ${name}`);
+    else if (qty < 0) lines.push(`  ➖ ${Math.abs(qty)}× ${name}`);
+  }
+  return lines.join("\n");
+}
+
+async function processQueue(): Promise<{ processed: number; sent: number }> {
+  const chats = await getNotifyChats();
+  const cfg = await getNotifyConfig();
+  if (chats.length === 0) return { processed: 0, sent: 0 };
+
+  // Pega todos os eventos cuja janela de consolidação venceu, agrupa por consolidate_key
+  const { data: rows, error } = await sb
+    .from("notification_queue")
+    .select("*")
+    .is("processed_at", null)
+    .lte("send_after", new Date().toISOString())
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (error) { console.error(error); return { processed: 0, sent: 0 }; }
+  if (!rows || rows.length === 0) return { processed: 0, sent: 0 };
+
+  // Agrupa por consolidate_key — só o último registro de cada chave conta (estado atual)
+  const byKey = new Map<string, any>();
+  const allIds: number[] = [];
+  for (const r of rows) {
+    allIds.push(r.id);
+    const prev = byKey.get(r.consolidate_key);
+    if (!prev || new Date(r.created_at) > new Date(prev.created_at)) {
+      byKey.set(r.consolidate_key, r);
+    }
+  }
+
+  let sent = 0;
+  for (const evt of byKey.values()) {
+    const dedupeKey = `${evt.event_type}:${evt.entity_id}:${evt.created_at}`;
+    // Idempotência
+    const { data: existing } = await sb.from("notification_log")
+      .select("id").eq("dedupe_key", dedupeKey).maybeSingle();
+    if (existing) continue;
+
+    let text = "";
+    const p = evt.payload || {};
+
+    if (evt.event_type === "order_created" && cfg.orders !== false) {
+      // Busca itens atuais
+      const { data: items } = await sb.from("order_items")
+        .select("product_name,quantity").eq("order_id", evt.entity_id);
+      const itemLines = (items || []).map((i: any) => `  • ${i.quantity}× ${i.product_name}`).join("\n");
+      text = `🆕 <b>Novo pedido — Mesa ${p.table_name}</b>\n` +
+             `Garçom: ${p.waiter_name || "—"}\n` +
+             (itemLines ? itemLines + "\n" : "") +
+             `Total: <b>${fmtBRL(p.total)}</b>`;
+    } else if (evt.event_type === "order_delta" && cfg.orders !== false) {
+      const deltaText = formatDelta(p.delta || []);
+      if (!deltaText) continue;
+      text = `🔄 <b>Mesa ${p.table_name}</b> atualizada\n` +
+             deltaText + "\n" +
+             `Total: <b>${fmtBRL(p.total)}</b>`;
+    } else if (evt.event_type === "order_paid" && cfg.payments !== false) {
+      const paid = Number(p.amount_paid || 0);
+      const total = Number(p.total || 0);
+      const change = paid > total ? paid - total : 0;
+      text = `✅ <b>Mesa ${p.table_name} paga</b>\n` +
+             `Garçom: ${p.waiter_name || "—"}\n` +
+             `Método: ${p.payment_method || "—"} · ${fmtBRL(total)}` +
+             (change > 0 ? `\nTroco: ${fmtBRL(change)}` : "");
+    } else if (evt.event_type === "stock_critical" && cfg.stock_critical !== false) {
+      text = `⚠️ <b>Estoque crítico</b>\n${p.name}: ${p.current} ${p.unit || ""} (mín ${p.min})`;
+    } else if (evt.event_type === "stock_zero" && cfg.stock_critical !== false) {
+      text = `🚨 <b>Item zerado</b>\n${p.name}: ${p.current} ${p.unit || ""}`;
+    } else {
+      continue;
+    }
+
+    await broadcast(text, chats);
+    await sb.from("notification_log").insert({
+      event_type: evt.event_type, entity_id: evt.entity_id, dedupe_key: dedupeKey,
+    });
+    sent++;
+  }
+
+  // Marca todos os processados
+  await sb.from("notification_queue").update({ processed_at: new Date().toISOString() })
+    .in("id", allIds);
+
+  return { processed: allIds.length, sent };
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  try {
+    const result = await processQueue();
+    return new Response(JSON.stringify({ ok: true, ...result }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error(e);
+    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
