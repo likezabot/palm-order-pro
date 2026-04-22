@@ -1,76 +1,75 @@
 
 
-## Parser Telegram: plurais + mensagens de erro melhores
+## Multi-comando por linha no bot do Telegram
 
-### Mudanças (arquivo único: `supabase/functions/telegram-webhook/index.ts`)
+### Mudança (arquivo único: `supabase/functions/telegram-webhook/index.ts`)
 
-#### 1. Plural simples no `productText`
+Hoje `Deno.serve` chama `parseCommand(text)` uma única vez. Vou trocar por um wrapper que quebra a mensagem em linhas, processa cada uma de forma independente e devolve uma resposta consolidada. Parser, `resolveProduct`, `executeAdd`/`executeRemove`/`executeView` ficam intocados.
 
-Adicionar helper `singularize(text)` aplicado **antes** de chamar `resolveProduct`:
+### Como fica o roteamento
 
-- Regras de despluralização tokenizada (palavra a palavra), conservadora:
-  - `...ões` → `...ao` (ex: `medalhoes` → `medalhao`)
-  - `...ais` → `...al`, `...eis` → `...el`, `...ois` → `...ol`, `...uis` → `...ul` (ex: `pasteis` → `pastel`)
-  - `...ns` → `...m` (ex: `garagens` → `garagem`)
-  - `...res`/`...zes`/`...ses` → tira `es` (ex: `colheres` → `colher`)
-  - `...s` final (não precedido por vogal acentuada nem `s`) → tira `s` (ex: `cocas` → `coca`, `bovinos` → `bovino`, `aguas` → `agua`)
-- Palavras com ≤3 letras ou que terminam em `ás/és/ís/ós/ús` permanecem intactas (evita quebrar `gas`, `mes`).
-- Aplicado token a token preservando dígitos e unidades (`350`, `2l`, `600ml` ficam como estão).
-- Como o fallback de `resolveProduct` já usa `ILIKE %norm%`, singularizar aumenta acerto sem regredir buscas que já funcionam (a versão singular sempre casa o nome cadastrado, que está no singular).
+1. Receber `text` do Telegram.
+2. `lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)` → ignora linhas vazias.
+3. **1 linha** → comportamento atual (zero diferença visível para mensagens normais).
+4. **2+ linhas** → roda em loop sequencial (ordem original); para cada linha:
+   - `parseCommand(line)` → `handleCommand(cmd, waiter)`.
+   - Captura a resposta (string) e adiciona a um array `results`.
+   - Se `handleCommand` lançar exceção inesperada, captura e adiciona `❌ "<linha>": erro inesperado` — **não interrompe** as demais (regra 8).
+5. Monta resposta final juntando os resultados.
 
-Validação dos exemplos pedidos:
-| Entrada | Após parser | Singularizado | Resolve |
-|---|---|---|---|
-| `mesa 1 mais duas cocas 350` | qty=2, "cocas 350" | "coca 350" | alias `coca 350` ✅ |
-| `tira duas aguas da mesa 1` | qty=2, "aguas" | "agua" | alias `agua` (Água sem gás) ✅ |
-| `acrescenta tres bovinos na mesa 2` | qty=3, "bovinos" | "bovino" | slug `bovino` ✅ |
+### Limites de segurança
 
-#### 2. Mensagens de erro mais claras e úteis
+- **Máx. 10 linhas por mensagem**. Acima disso responde `⚠️ Máx. 10 comandos por mensagem. Você enviou N. Divida em mensagens menores.` e não executa nada.
+- **Execução estritamente sequencial** (await em série, não `Promise.all`) — evita corrida de versão na mesma mesa.
+- **Dedupe inalterado**: a mensagem inteira ainda conta como 1 `update_id` (Telegram envia 1 update por mensagem).
+- **HELP e PARSE_ERROR por linha**: se uma linha for "ajuda" no meio do bloco, retorna o HELP só pra essa linha (não interrompe o resto).
 
-Reescrita das respostas em `handleCommand` e do `HELP_TEXT`:
+### Formato da resposta consolidada
 
-- **PARSE_ERROR**: explica o que faltou (mesa? operador? produto?) e mostra 2 exemplos curtos no topo (não dump do help completo).
-  ```
-  ❓ Não consegui interpretar: "<raw>"
-  
-  Faltou identificar mesa/ação/produto. Exemplos:
-  • mesa 3 + 2 coca 350
-  • tira 1 agua da mesa 1
-  
-  Envie "ajuda" para ver todos os formatos.
-  ```
-- **not_found**: sugere os 3 produtos mais próximos via `ILIKE` parcial em palavras do texto (se houver). Sem sugestões → texto atual.
-  ```
-  ❓ Não achei "<productText>" no cardápio.
-  Talvez quis dizer: Coca-Cola 350ml, Coca-Cola 600ml, Coca-Cola 2L?
-  Repita com o nome exato.
-  ```
-- **ambiguous**: numera candidatos e dá dica concreta (qual diferença olhar — tamanho/variante).
-  ```
-  🤔 Encontrei várias opções para "<productText>":
-    1) Coca-Cola 350ml
-    2) Coca-Cola 600ml
-    3) Coca-Cola 2L
-  Especifique o tamanho/variante e reenvie.
-  ```
-- **is_group_trigger**: lista variantes em bullets (não vírgula corrida) — fica legível em mobile.
-- **out_of_stock**: já é claro; só adiciona dica de tentar variante alternativa quando aplicável.
-- **version_conflict**: incluir sugestão "aguarde 5s e reenvie".
-- **HELP_TEXT**: ampliar com a sintaxe natural já suportada (mais/tira/acrescenta), número por extenso, e a regra de plural.
+Para mensagens multi-linha, formato compacto (uma seção por linha):
 
-Sem mudança em fluxo (`executeAdd`/`executeRemove`/`resolveProduct`/banco) — apenas helper novo + textos.
+```
+📊 4 comandos processados:
+
+✅ Mesa 1 → +1 Bovino (R$ 12,00)
+   Total da mesa: R$ 24,00 (2 itens)
+
+✅ Mesa 1 → +1 Coca-Cola 350ml (R$ 7,00)
+   Total da mesa: R$ 31,00 (3 itens)
+
+➖ Mesa 1 → -1 Água sem gás
+   Total da mesa: R$ 27,00 (2 itens)
+
+📋 Mesa 1:
+   2× Bovino — R$ 24,00
+   1× Coca-Cola 350ml — R$ 7,00
+   ───────────────
+   Total: R$ 31,00
+```
+
+Erros aparecem inline, na posição da linha, sem abortar:
+
+```
+✅ Mesa 1 → +1 Bovino ...
+🤔 Encontrei várias opções para "coca": ...
+✅ Mesa 1 → +1 Água sem gás ...
+```
 
 ### Garantias
 
-- **Compatibilidade total**: singularize é puro string→string aplicado entre parser e resolver; canônico `mesa N + 1 coca` continua intacto.
-- **Sem ambiguidade silenciosa**: singularize **não altera** a lógica de resolução ambígua. "cocas" vira "coca" → fuzzy retorna 5 matches → bot pede para especificar (regra atual mantida).
-- **Sem mudança de banco**: nenhum migration, nenhuma alteração em RLS/aliases.
-- **Sem mudança em pedidos**: zero toque em `executeAdd`/`executeRemove`.
+- **Compatibilidade total**: 1 linha = comportamento idêntico ao atual (mesma resposta, sem cabeçalho extra).
+- **Linguagem natural**: já suportada desde a iteração anterior — nada a mudar no parser.
+- **Sem ambiguidade silenciosa**: `resolveProduct` continua devolvendo `ambiguous`/`is_group_trigger` por linha; cada um vira sua própria resposta.
+- **Falha isolada**: cada linha tem try/catch próprio.
+- **Sem mudança em banco, fluxo de pedido, RLS, dedupe, whitelist**.
+
+### Atualização da memória
+
+`mem://features/telegram-bot.md` ganha 2 linhas: "Multi-comando: 1 por linha, máx 10, execução sequencial, falha de uma linha não bloqueia as outras."
 
 ### Fora de escopo
 
-- Plurais irregulares (`pães` → `pão` etc.) — não há produto cadastrado que precise hoje.
-- Concordância de número/gênero em adjetivos compostos.
-- Múltiplos comandos por mensagem (próxima iteração).
-- Fuzzy phonetic / typo-tolerance (Levenshtein) — fora desta etapa.
+- Paralelização (intencionalmente sequencial).
+- Transação atômica entre linhas (cada linha é independente — se a 2ª falhar, a 1ª permanece aplicada).
+- Continuação cross-message (cada mensagem é autocontida).
 
