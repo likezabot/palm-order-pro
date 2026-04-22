@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Inbox, RefreshCw, Trash2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Inbox, RefreshCw, Trash2, ChevronDown, ChevronUp, AlertTriangle, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,6 +9,7 @@ import {
 import { usePrintQueue } from "@/hooks/use-print-queue";
 import { clearPrintQueue, PRINT_QUEUE_MAX_ATTEMPTS } from "@/lib/print-queue";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const TYPE_LABEL: Record<string, string> = {
   full: "Comanda completa",
@@ -46,6 +47,20 @@ export default function PrintQueuePanel() {
     await retryNow();
   };
 
+  const handleClearOrphans = async () => {
+    const { data, error } = await supabase.rpc("force_clear_orphan_prints");
+    if (error) {
+      toast({ variant: "destructive", title: "Erro ao limpar órfãos", description: error.message });
+      return;
+    }
+    const cleared = (data as { cleared?: number } | null)?.cleared ?? 0;
+    toast({
+      title: cleared > 0 ? `${cleared} órfão(s) marcado(s) como impressos` : "Nenhum órfão encontrado",
+      description: "Pedidos pagos com impressão pendente foram resolvidos no banco.",
+    });
+    await refresh();
+  };
+
   return (
     <div className="border-b border-slate-100 bg-white">
       <div className="flex items-center justify-between gap-3 p-4">
@@ -70,6 +85,29 @@ export default function PrintQueuePanel() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 gap-1.5" title="Marca pedidos pagos com impressão pendente como impressos no banco (não toca na bridge).">
+                <Wand2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Limpar órfãos</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Limpar pedidos órfãos?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Todos os pedidos <strong>pagos</strong> que ainda estão com impressão "pendente" ou "imprimindo"
+                  serão marcados como impressos no banco. Útil quando a bridge ficou offline por muito tempo.
+                  <br /><br />
+                  <span className="text-muted-foreground">Não interfere na bridge .exe nem na fila local.</span>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearOrphans}>Limpar órfãos</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {total > 0 && (
             <>
               <Button size="sm" variant="outline" onClick={handleRetry} className="h-8 gap-1.5">

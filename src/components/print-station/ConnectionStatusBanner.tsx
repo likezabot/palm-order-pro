@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { CheckCircle2, WifiOff, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePrintQueue } from "@/hooks/use-print-queue";
 
 interface Props {
   realtimeStatus: "online" | "offline";
@@ -21,6 +22,8 @@ export default function ConnectionStatusBanner({ realtimeStatus, bridgeUrl }: Pr
   const [bridgeOnline, setBridgeOnline] = useState<boolean | null>(null); // null = ainda não checou
   const lastStatusRef = useRef<OverallStatus | null>(null);
   const { toast } = useToast();
+  const { jobs } = usePrintQueue();
+  const pendingCount = jobs.filter((j) => !j.dead).length;
 
   // Internet do navegador
   useEffect(() => {
@@ -114,7 +117,10 @@ export default function ConnectionStatusBanner({ realtimeStatus, bridgeUrl }: Pr
     },
     bridge_off: {
       title: "IMPRESSORA LOCAL OFFLINE",
-      sub: `A bridge .exe não responde em ${bridgeUrl}. Verifique se a janela está aberta.`,
+      sub:
+        pendingCount > 0
+          ? `${pendingCount} ${pendingCount === 1 ? "cupom aguardando" : "cupons aguardando"}. Bridge .exe não responde em ${bridgeUrl}.`
+          : `A bridge .exe não responde em ${bridgeUrl}. Verifique se a janela está aberta.`,
       Icon: AlertTriangle,
     },
   };
