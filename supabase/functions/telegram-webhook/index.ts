@@ -235,6 +235,7 @@ type Command =
   | { kind: "REPORT" }
   | { kind: "STOCK_CRITICAL" }
   | { kind: "NOTIFY_TOGGLE"; on: boolean }
+  | { kind: "TABLE_STATUS"; table: string }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
