@@ -1204,13 +1204,27 @@ async function runExecute(
   cmd: Extract<Command, { kind: "ADD" | "REMOVE" }>,
   product: Product,
   waiter: string,
+  fuzzyFrom?: string,
 ): Promise<HandlerReply> {
   const prefix = ctxPrefix(cmd);
   try {
     const text = cmd.kind === "ADD"
       ? await executeAdd(cmd.table, product, cmd.qty, waiter)
       : await executeRemove(cmd.table, product, cmd.qty, waiter);
-    return { text: prefix + text, successTable: isMutationSuccess(cmd.kind, text) ? cmd.table : undefined };
+    const success = isMutationSuccess(cmd.kind, text);
+    let extras = "";
+    if (fuzzyFrom && success) extras += `\n   (interpretado de "${fuzzyFrom}")`;
+    if (success) extras += "\n" + (await formatPrintStatus(cmd.table));
+    let keyboard: InlineButton[][] | undefined;
+    if (success) {
+      const op = cmd.kind === "ADD" ? "a" : "r";
+      keyboard = buildUndoSingleKeyboard(cmd.table, product.id, cmd.qty, op);
+    }
+    return {
+      text: prefix + text + extras,
+      successTable: success ? cmd.table : undefined,
+      keyboard,
+    };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes("version_conflict")) {
@@ -1219,6 +1233,24 @@ async function runExecute(
     console.error("execute error:", e);
     return { text: prefix + `❌ Erro ao processar: ${msg}` };
   }
+}
+
+// Lê print_status atual da mesa para feedback "🖨️ enviado / ⚠️ aguardando".
+async function formatPrintStatus(table: string): Promise<string> {
+  const order = await resolveTable(table);
+  if (!order) return "";
+  const { data } = await sb
+    .from("orders")
+    .select("print_status, print_last_error")
+    .eq("id", order.id)
+    .maybeSingle();
+  const ps = (data as any)?.print_status as string | undefined;
+  const err = (data as any)?.print_last_error as string | undefined;
+  if (!ps) return "";
+  if (ps === "pending" || ps === "printing") return "   🖨️ enviado para impressão";
+  if (ps === "printed") return "   🖨️ impresso";
+  if (ps === "failed") return `   ❌ falha na impressão${err ? ` (${err})` : ""}`;
+  return `   ⚠️ status: ${ps}`;
 }
 
 // Dedupe de callbacks pra evitar duplo-clique
