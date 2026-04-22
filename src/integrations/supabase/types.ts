@@ -90,6 +90,96 @@ export type Database = {
           },
         ]
       }
+      daily_product_stats: {
+        Row: {
+          created_at: string
+          date: string
+          product_id: string | null
+          product_name: string
+          quantity_sold: number
+          revenue: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          product_id?: string | null
+          product_name: string
+          quantity_sold?: number
+          revenue?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          product_id?: string | null
+          product_name?: string
+          quantity_sold?: number
+          revenue?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      daily_sales_summary: {
+        Row: {
+          created_at: string
+          date: string
+          orders_count: number
+          payment_breakdown: Json
+          total_revenue: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          orders_count?: number
+          payment_breakdown?: Json
+          total_revenue?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          orders_count?: number
+          payment_breakdown?: Json
+          total_revenue?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      daily_waiter_stats: {
+        Row: {
+          created_at: string
+          date: string
+          items_count: number
+          orders_count: number
+          revenue: number
+          tables_count: number
+          updated_at: string
+          waiter_name: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          items_count?: number
+          orders_count?: number
+          revenue?: number
+          tables_count?: number
+          updated_at?: string
+          waiter_name: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          items_count?: number
+          orders_count?: number
+          revenue?: number
+          tables_count?: number
+          updated_at?: string
+          waiter_name?: string
+        }
+        Relationships: []
+      }
       inventory_items: {
         Row: {
           aliases: string[]
@@ -558,6 +648,10 @@ export type Database = {
           p_source?: string
           p_type: string
         }
+        Returns: Json
+      }
+      archive_and_purge_old_data: {
+        Args: { p_days_keep?: number }
         Returns: Json
       }
       claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
