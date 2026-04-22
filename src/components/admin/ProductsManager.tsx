@@ -338,6 +338,9 @@ const ProductsManager = ({
 
       {/* Grid */}
       <div className={`px-3 ${selectionMode ? "pb-28" : "pb-10"}`}>
+        {!search && activeCategory === "espetos" && !hasFilters && (
+          <PorcoGroupBanner products={productsByCategory["espetos"] ?? []} />
+        )}
         {search ? (
           // Modo busca: lista todas categorias com header
           allFilteredIds.length === 0 ? (
