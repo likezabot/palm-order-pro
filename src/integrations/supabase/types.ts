@@ -750,6 +750,7 @@ export type Database = {
         Args: { p_new_name: string; p_order_id: string }
         Returns: undefined
       }
+      requeue_stuck_print_jobs: { Args: { p_seconds?: number }; Returns: Json }
       update_order_items: {
         Args: {
           p_delta_items?: Json

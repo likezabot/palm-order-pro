@@ -305,19 +305,28 @@ function singularizeToken(tok: string): string {
   // dígitos ou tokens com dígito (350, 2l, 600ml) — não mexer
   if (/\d/.test(tok)) return tok;
   if (tok.length <= 3) return tok;
-  // Já vem normalizado (sem acento). Heurística: se termina em "as/es/is/os/us"
-  // mas a forma original poderia ter acento (gás→gas, três→tres), não dá pra saber.
-  // Mantemos conservador: tokens com 4 letras terminados em vogal+s ficam.
+  // Whitelist: palavras curtas críticas que NÃO devem virar outra coisa.
+  // "bois" (plural de boi) cairia em "bol" pela regra ois→ol e quebraria
+  // o match com aliases curtos como "boi".
+  const SHORT_WHITELIST = new Set(["bois", "pois", "dois", "sois", "vois"]);
+  if (SHORT_WHITELIST.has(tok)) {
+    if (tok === "bois") return "boi";
+    return tok;
+  }
   // Regras de plural:
   if (/oes$/.test(tok)) return tok.replace(/oes$/, "ao"); // medalhoes -> medalhao
-  if (/ais$/.test(tok)) return tok.replace(/ais$/, "al"); // pasteis errado, mas: animais->animal
+  if (/ais$/.test(tok)) return tok.replace(/ais$/, "al"); // animais->animal
   if (/eis$/.test(tok)) return tok.replace(/eis$/, "el"); // pasteis -> pastel
-  if (/ois$/.test(tok)) return tok.replace(/ois$/, "ol"); // lencois -> lencol
+  if (/ois$/.test(tok)) {
+    // Palavras ≤4 letras terminadas em "ois" (bois, dois, sois) singularizam
+    // tirando só o "s". A regra ois→ol vale para palavras maiores
+    // (lencois→lencol, anzois→anzol, caracois→caracol).
+    if (tok.length <= 4) return tok.slice(0, -1);
+    return tok.replace(/ois$/, "ol");
+  }
   if (/uis$/.test(tok)) return tok.replace(/uis$/, "ul"); // pauis -> paul
   if (/ns$/.test(tok)) return tok.replace(/ns$/, "m");    // garagens -> garagem
   if (/(res|zes|ses)$/.test(tok)) return tok.slice(0, -2); // colheres -> colher
-  // Vogal + s no final: tira o s (cocas->coca, bovinos->bovino, aguas->agua)
-  // Mas evita ss e palavras de 4 letras tipo "mais" (já tratado), "pais" (já tratado).
   if (/[aeiou]s$/.test(tok) && !/ss$/.test(tok)) return tok.slice(0, -1);
   return tok;
 }
@@ -959,12 +968,22 @@ async function resolveTable(table: string): Promise<OrderRow | null> {
 
 async function resolveProduct(text: string): Promise<ProductResolution> {
   // Aplica singularize antes de buscar (cocas->coca, bovinos->bovino, aguas->agua).
-  const singular = singularize(normalize(text));
+  const original = normalize(text);
+  const singular = singularize(original);
   const norm = singular;
 
-  // 1. find_inventory_item_by_text (slug/aliases exato)
+  // 1. find_inventory_item_by_text (slug/aliases exato) — tenta singularizado
   const { data: invExact } = await sb.rpc("find_inventory_item_by_text", { p_text: singular });
   let inventoryItem: any = Array.isArray(invExact) && invExact.length > 0 ? invExact[0] : null;
+
+  // 1b. Fallback: tenta também com a forma ORIGINAL (sem singularize) caso
+  // a singularização tenha mutilado um alias curto (ex.: "bois" → "boi").
+  if (!inventoryItem && original && original !== singular) {
+    const { data: invExactOrig } = await sb.rpc("find_inventory_item_by_text", { p_text: original });
+    if (Array.isArray(invExactOrig) && invExactOrig.length > 0) {
+      inventoryItem = invExactOrig[0];
+    }
+  }
 
   // 2. Fallback: busca direta em products por nome
   if (!inventoryItem) {
