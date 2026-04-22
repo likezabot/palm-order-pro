@@ -11,7 +11,8 @@ import CriticalStockSection, { getCriticalItems } from "@/components/stock/Criti
 import { useInventoryItems, useBulkImportFromMenu } from "@/hooks/use-inventory";
 import { useAutoSyncMenuToStock } from "@/hooks/use-auto-sync-menu-to-stock";
 import { useMenuProductsForStock } from "@/hooks/use-menu-products-for-stock";
-import { PorcoGroupBanner } from "@/components/stock/PorcoGroupBanner";
+import { ProductGroupBanner } from "@/components/stock/ProductGroupBanner";
+import { useProductGroups, getGroupsForCategory } from "@/lib/product-groups";
 import { toast } from "@/hooks/use-toast";
 import {
   type InventoryItem,
