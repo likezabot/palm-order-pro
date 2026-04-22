@@ -1923,6 +1923,25 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     });
     return { text: `📦 *Estoque crítico (${crit.length})*\n\n` + lines.join("\n") };
   }
+  if (cmd.kind === "STOCK_LIST") {
+    const { data } = await sb.from("inventory_items")
+      .select("name,current_stock,min_stock,unit")
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+      .limit(30);
+    const items = data ?? [];
+    if (items.length === 0) return { text: "📦 Nenhum item ativo no estoque." };
+    const lines = items.map((i: any) => {
+      const cur = Number(i.current_stock);
+      const min = Number(i.min_stock);
+      let icon = "•";
+      if (cur <= 0) icon = "🚨";
+      else if (min > 0 && cur <= min) icon = "⚠️";
+      return `${icon} ${i.name}: ${cur} ${i.unit || ""}`.trim();
+    });
+    const more = items.length === 30 ? `\n\n_(mostrando 30 itens. Use \`estoque <nome>\` para ver um específico.)_` : "";
+    return { text: `📦 *Estoque (${items.length})*\n\n` + lines.join("\n") + more };
+  }
   if (cmd.kind === "STOCK_QUERY") {
     const res = await resolveStockItem(cmd.itemText);
     if (res.kind === "not_found") {
