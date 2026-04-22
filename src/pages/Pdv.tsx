@@ -75,7 +75,7 @@ const Pdv = () => {
       if (error) throw error;
       return data as Order[];
     },
-    refetchInterval: 10000,
+    refetchInterval: 30000,
   });
 
   const { data: allItems = [] } = useQuery({
@@ -85,7 +85,7 @@ const Pdv = () => {
       if (error) throw error;
       return data as OrderItem[];
     },
-    refetchInterval: 10000,
+    refetchInterval: 30000,
   });
 
   // Impressão MANUAL — reimpressão sob demanda
