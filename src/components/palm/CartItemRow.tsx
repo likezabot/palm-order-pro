@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { CartItem } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
+import { ConfirmRemoveDialog } from "./ConfirmRemoveDialog";
 
 interface Props {
   item: CartItem;
@@ -20,6 +22,7 @@ const CartItemRow = ({
   onRemove,
 }: Props) => {
   const { playFeedback } = useFeedback();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <div className="rounded-xl bg-card border border-border/70 p-3 shadow-soft transition-all hover:border-border animate-fade-in-up">
@@ -69,12 +72,22 @@ const CartItemRow = ({
       <button
         onClick={() => {
           playFeedback("heavy");
-          onRemove(item.product.id);
+          setConfirmOpen(true);
         }}
         className="mt-2 flex items-center gap-1 text-sm text-destructive font-semibold hover:underline"
       >
         <Trash2 size={14} /> REMOVER
       </button>
+
+      <ConfirmRemoveDialog
+        open={confirmOpen}
+        productName={item.product.name}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onRemove(item.product.id);
+        }}
+      />
     </div>
   );
 };
