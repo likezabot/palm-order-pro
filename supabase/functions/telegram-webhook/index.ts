@@ -2795,7 +2795,7 @@ async function wzShowCategoryPicker(chatId: number, messageId: number | undefine
     for (let j = 0; j < 2 && i + j < cats.length; j++) {
       const c = cats[i + j];
       const enc = encodeURIComponent(c.name).slice(0, 30);
-      row.push({ text: `📂 ${c.name} (${c.count})`, callback_data: action ? `wz|scope|cat|${enc}` : `wz|catview|${enc}` });
+      row.push({ text: `📂 ${c.label} (${c.count})`, callback_data: action ? `wz|scope|cat|${enc}` : `wz|catview|${enc}` });
     }
     rows.push(row);
   }
@@ -2846,7 +2846,7 @@ async function wzAskQty(chatId: number, messageId: number | undefined, action: W
     lines.push("");
     lines.push(action === "adj" ? `Ajustar saldo de todos para qual valor?` : `Quantas unidades em cada item?`);
   } else {
-    lines.push(`${wzActionLabel(action)} → categoria *${scope.category}*`);
+    lines.push(`${wzActionLabel(action)} → categoria *${wzCategoryLabel(scope.category)}*`);
     lines.push("");
     lines.push(action === "adj" ? `Ajustar saldo dos itens para qual valor?` : `Quantas unidades em cada item?`);
   }
@@ -2934,7 +2934,7 @@ async function wzShowMassReview(chatId: number, messageId: number | undefined, a
     return;
   }
   const verb = action === "in" ? "Entrada de +" : action === "out" ? "Saída de -" : "Ajuste para ";
-  const scopeLabel = scope.kind === "all" ? "todos os itens ativos" : `categoria *${(scope as any).category}*`;
+  const scopeLabel = scope.kind === "all" ? "todos os itens ativos" : `categoria *${wzCategoryLabel((scope as any).category)}*`;
   const previewLimit = fullList ? Math.min(items.length, 30) : 5;
 
   const lines: string[] = [];

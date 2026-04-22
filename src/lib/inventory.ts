@@ -23,13 +23,12 @@ export type InventoryMovement = {
   created_at: string;
 };
 
+// Categorias do cardápio (alinhadas com src/lib/types.ts CATEGORIES).
 export const STOCK_CATEGORIES = [
+  "refeicoes",
+  "espetos",
   "bebidas",
-  "carnes",
-  "descartáveis",
-  "gás/carvão",
-  "limpeza",
-  "outros",
+  "cervejas",
 ] as const;
 
 export const STOCK_UNITS = [
