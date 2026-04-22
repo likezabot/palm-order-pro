@@ -116,7 +116,29 @@ function registerBatchUndo(chatId: number, table: string, ops: UndoOp[]): string
   const stack = chatUndoStack.get(chatId) ?? [];
   stack.push(token);
   chatUndoStack.set(chatId, stack);
+  // Persiste em DB (multi-isolate safe). Fire-and-forget.
+  sb.from("telegram_undo_stack")
+    .insert({ token, chat_id: chatId, table_name: table, ops })
+    .then((r) => { if (r.error) console.warn("undo persist:", r.error.message); });
   return token;
+}
+
+async function loadChatUndoStackFromDb(chatId: number): Promise<{ token: string; table: string; ops: UndoOp[] }[]> {
+  const cutoff = new Date(Date.now() - UNDO_TTL_MS).toISOString();
+  const { data, error } = await sb
+    .from("telegram_undo_stack")
+    .select("token, table_name, ops, created_at")
+    .eq("chat_id", chatId)
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: true });
+  if (error) { console.warn("undo load:", error.message); return []; }
+  return (data ?? []).map((r: any) => ({ token: r.token, table: r.table_name, ops: r.ops as UndoOp[] }));
+}
+
+async function deleteUndoTokensFromDb(tokens: string[]): Promise<void> {
+  if (tokens.length === 0) return;
+  const { error } = await sb.from("telegram_undo_stack").delete().in("token", tokens);
+  if (error) console.warn("undo delete:", error.message);
 }
 function buildUndoSingleKeyboard(table: string, productId: string, qty: number, op: "a" | "r"): InlineButton[][] {
   // op = ação original ("a" → ADD foi feito → undo é REMOVE)
@@ -1390,24 +1412,26 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   if (cmd.kind === "UNDO") {
     cleanupUndos();
     const chatId = _undoChatId();
-    const stack = chatUndoStack.get(chatId) ?? [];
-    if (stack.length === 0) return { text: "↩️ Nada para desfazer." };
-    const tokensToProcess = cmd.all ? [...stack] : [stack[stack.length - 1]];
+    // Carrega stack persistido (multi-isolate safe). Inclui tokens criados em outros isolates.
+    const dbStack = await loadChatUndoStackFromDb(chatId);
+    if (dbStack.length === 0) return { text: "↩️ Nada para desfazer." };
+    const toProcess = cmd.all ? dbStack : [dbStack[dbStack.length - 1]];
     const results: string[] = [];
-    for (const token of tokensToProcess) {
-      const entry = pendingUndos.get(token);
-      if (!entry) continue;
+    const consumedTokens: string[] = [];
+    for (const entry of toProcess) {
       try {
         const r = await executeUndoOps(entry.table, entry.ops, waiter);
         results.push(r);
       } catch (e: any) {
         results.push(`❌ Falha ao desfazer mesa ${entry.table}: ${String(e?.message ?? e)}`);
       }
-      pendingUndos.delete(token);
-      consumedUndos.set(token, Date.now());
+      consumedTokens.push(entry.token);
+      pendingUndos.delete(entry.token);
+      consumedUndos.set(entry.token, Date.now());
     }
-    // Remove tokens consumidos do stack
-    const remaining = (chatUndoStack.get(chatId) ?? []).filter((t) => !tokensToProcess.includes(t));
+    await deleteUndoTokensFromDb(consumedTokens);
+    // Limpa stack in-memory desses tokens.
+    const remaining = (chatUndoStack.get(chatId) ?? []).filter((t) => !consumedTokens.includes(t));
     if (remaining.length === 0) chatUndoStack.delete(chatId);
     else chatUndoStack.set(chatId, remaining);
     if (results.length === 0) return { text: "↩️ Nada para desfazer." };
