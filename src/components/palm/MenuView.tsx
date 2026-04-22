@@ -42,7 +42,7 @@ interface Props {
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
-  const [porcoOpen, setPorcoOpen] = useState(false);
+  const [openGroup, setOpenGroup] = useState<ProductGroup | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [moveOpen, setMoveOpen] = useState(false);
@@ -50,10 +50,10 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   const [esgotadoPending, setEsgotadoPending] = useState<Product | null>(null);
   const { playFeedback } = useFeedback();
   const { data: stockMap } = useProductStockMap();
-  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
-  const hiddenEspetoNames = useMemo(
-    () => getHiddenEspetoNames(extraPorcoNames),
-    [extraPorcoNames],
+  const { data: productGroups = [] } = useProductGroups();
+  const hiddenProductNames = useMemo(
+    () => getHiddenProductNames(productGroups, activeCategory),
+    [productGroups, activeCategory],
   );
 
   const isEsgotado = (id: string) => isProductEsgotado(stockMap, id);
