@@ -1273,8 +1273,8 @@ function isMutationSuccess(kind: "ADD" | "REMOVE", text: string): boolean {
   return text.startsWith("➖ Mesa ") || text.startsWith("⚠️ Removidos ");
 }
 
-function ctxPrefix(cmd: { fromContext?: boolean; table?: string }): string {
-  return cmd.fromContext && cmd.table ? `📍 (mesa ${cmd.table}, contexto)\n` : "";
+function ctxPrefix(cmd: Extract<Command, { kind: "ADD" | "REMOVE" | "VIEW" }>): string {
+  return cmd.fromContext ? `📍 (mesa ${cmd.table}, contexto)\n` : "";
 }
 
 async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
