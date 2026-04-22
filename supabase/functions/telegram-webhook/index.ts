@@ -1603,6 +1603,8 @@ Deno.serve(async (req) => {
     const text: string | undefined = message?.text;
     const fromBot: boolean = message?.from?.is_bot === true;
     const username: string | undefined = message?.from?.username;
+    const userId: number | undefined = message?.from?.id;
+    const chatType: ChatType = message?.chat?.type;
     const updateId: number | undefined = update?.update_id;
 
     if (fromBot || !chatId || !text) {
@@ -1620,6 +1622,14 @@ Deno.serve(async (req) => {
         chatId,
         `🚫 Chat não autorizado.\nID deste chat: ${chatId}\n\nPeça ao admin para liberar em settings.telegram_allowed_chats.`,
       );
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+
+    // Rate limit (best-effort, in-memory). Não bloqueia callbacks.
+    if (!checkRateLimit(chatId)) {
+      if (shouldSendRateWarning(chatId)) {
+        await sendTelegram(chatId, `⚠️ Muitas ações seguidas. Aguarde alguns segundos.`);
+      }
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
@@ -1676,35 +1686,150 @@ Deno.serve(async (req) => {
 
     if (lines.length <= 1) {
       const parsed = parseCommand(lines[0] ?? text);
-      const cmd = await resolveWithContext(parsed, chatId);
+      const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
       const reply = await handleCommand(cmd, waiter);
       await sendTelegram(chatId, reply.text, reply.keyboard);
-      if (reply.successTable) await setLastTable(chatId, reply.successTable);
+      if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
     } else {
-      // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
-      const textResults: string[] = [];
-      const pendingChoices: HandlerReply[] = [];
+      // Multi-comando: tenta consolidar ADD/REMOVE da mesma mesa em UMA impressão.
+      // 1ª passada: parse + resolveContext + resolveProduct (sem mutação) por linha.
+      type Slot =
+        | { kind: "batchable"; line: string; table: string; op: BatchOp; cmdKind: "ADD" | "REMOVE"; fuzzyFrom?: string }
+        | { kind: "standalone"; line: string; reply: HandlerReply };
+
+      const slots: Slot[] = [];
+
       for (const line of lines) {
         try {
           const parsed = parseCommand(line);
-          const cmd = await resolveWithContext(parsed, chatId);
-          const reply = await handleCommand(cmd, waiter);
-          if (reply.keyboard && reply.keyboard.length > 0) {
-            pendingChoices.push(reply);
-            textResults.push(`🤔 "${line}" → escolha abaixo.`);
+          const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+
+          if (cmd.kind === "ADD" || cmd.kind === "REMOVE") {
+            const resolution = await resolveProduct(cmd.productText);
+            let chosen: Product | null = null;
+            let fuzzyFrom: string | undefined;
+
+            if (resolution.kind === "found") {
+              chosen = resolution.product;
+              fuzzyFrom = resolution.fuzzyFrom;
+            } else if (resolution.kind === "ambiguous") {
+              chosen = autoPickFromCandidates(cmd.productText, resolution.candidates);
+            } else if (resolution.kind === "is_group_trigger") {
+              const variantProducts = await fetchProductsByNames(resolution.variants);
+              chosen = autoPickFromCandidates(cmd.productText, variantProducts);
+            }
+
+            if (chosen) {
+              slots.push({
+                kind: "batchable",
+                line,
+                table: cmd.table,
+                cmdKind: cmd.kind,
+                op: { kind: cmd.kind, product: chosen, qty: cmd.qty, rawQty: cmd.qty },
+                fuzzyFrom,
+              });
+              continue;
+            }
+
+            // Não conseguiu resolver sem ambiguidade — vai standalone com botões.
+            const reply = await handleCommand(cmd, waiter);
+            slots.push({ kind: "standalone", line, reply });
           } else {
-            textResults.push(reply.text);
+            const reply = await handleCommand(cmd, waiter);
+            slots.push({ kind: "standalone", line, reply });
+            if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
           }
-          // Atualiza contexto entre linhas para que a próxima linha possa usar mesa implícita
-          if (reply.successTable) await setLastTable(chatId, reply.successTable);
         } catch (e) {
-          console.error("line error:", line, e);
-          textResults.push(`❌ "${line}": erro inesperado`);
+          console.error("line parse error:", line, e);
+          slots.push({ kind: "standalone", line, reply: { text: `❌ "${line}": erro inesperado` } });
         }
       }
+
+      // Agrupa batchable por mesa.
+      const batchByTable = new Map<string, { ops: BatchOp[]; lines: string[]; fuzzyNotes: string[] }>();
+      const ordered: { type: "batch_ref"; table: string } | { type: "standalone"; reply: HandlerReply; line: string }[] = [];
+      // Construímos resultados na ordem original; cada mesa de batch entra UMA vez (na primeira ocorrência).
+      const tableFirstIdx = new Map<string, number>();
+      const renderedSlots: Array<{ type: "batch"; table: string } | { type: "standalone"; reply: HandlerReply; line: string }> = [];
+
+      for (const s of slots) {
+        if (s.kind === "batchable") {
+          if (!batchByTable.has(s.table)) {
+            batchByTable.set(s.table, { ops: [], lines: [], fuzzyNotes: [] });
+            tableFirstIdx.set(s.table, renderedSlots.length);
+            renderedSlots.push({ type: "batch", table: s.table });
+          }
+          const bucket = batchByTable.get(s.table)!;
+          bucket.ops.push(s.op);
+          bucket.lines.push(s.line);
+          if (s.fuzzyFrom) bucket.fuzzyNotes.push(`"${s.fuzzyFrom}"→${s.op.product.name}`);
+        } else {
+          renderedSlots.push({ type: "standalone", reply: s.reply, line: s.line });
+        }
+      }
+
+      // Executa cada batch.
+      const batchResults = new Map<string, { text: string; keyboard?: InlineButton[][] }>();
+      const pendingChoices: HandlerReply[] = [];
+
+      for (const [table, bucket] of batchByTable) {
+        try {
+          const result = await executeBatchForTable(table, bucket.ops, waiter, /*shouldPrint*/ true);
+          let line = result.text;
+          if (bucket.fuzzyNotes.length > 0) {
+            line += `\n   (interpretado: ${bucket.fuzzyNotes.join(", ")})`;
+          }
+          if (result.ok) {
+            line += "\n" + (await formatPrintStatus(table));
+            await setLastTable(chatId, table, userId, chatType);
+          }
+          let keyboard: InlineButton[][] | undefined;
+          if (result.ok && result.ops.length > 0) {
+            const token = registerBatchUndo(chatId, table, result.ops);
+            keyboard = buildUndoBatchKeyboard(token);
+          }
+          batchResults.set(table, { text: line, keyboard });
+        } catch (e: any) {
+          const msg = String(e?.message ?? e);
+          const errLine = msg.includes("version_conflict")
+            ? `⏳ Mesa ${table}: conflito de versão. Aguarde 5s e reenvie.`
+            : `❌ Mesa ${table}: ${msg}`;
+          batchResults.set(table, { text: errLine });
+        }
+      }
+
+      // Coleta standalone com botões para envio em mensagens separadas.
+      for (const r of renderedSlots) {
+        if (r.type === "standalone" && r.reply.keyboard && r.reply.keyboard.length > 0) {
+          pendingChoices.push(r.reply);
+        }
+      }
+
+      // Monta texto consolidado.
+      const textBlocks: string[] = [];
+      for (const r of renderedSlots) {
+        if (r.type === "batch") {
+          textBlocks.push(batchResults.get(r.table)?.text ?? `(mesa ${r.table})`);
+        } else {
+          if (r.reply.keyboard && r.reply.keyboard.length > 0) {
+            textBlocks.push(`🤔 "${r.line}" → escolha abaixo.`);
+          } else {
+            textBlocks.push(r.reply.text);
+          }
+        }
+      }
+
       const header = `📊 ${lines.length} comandos processados:\n`;
-      await sendTelegram(chatId, header + "\n" + textResults.join("\n\n"));
-      // Mensagens separadas com botões
+      await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
+
+      // Botões de undo (1 por mesa batched) em mensagens separadas.
+      for (const [, res] of batchResults) {
+        if (res.keyboard) {
+          await sendTelegram(chatId, `↩️ Desfazer mesa?`, res.keyboard);
+        }
+      }
+
+      // Mensagens separadas com botões de escolha.
       for (const choice of pendingChoices) {
         await sendTelegram(chatId, choice.text, choice.keyboard);
       }
