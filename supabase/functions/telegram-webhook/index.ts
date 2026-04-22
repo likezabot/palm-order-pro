@@ -606,7 +606,49 @@ const HELP_TEXT =
   `📌 Consultar:\n` +
   `  • mesa 4 ver pedido\n\n` +
   `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
-  `Em caso de dúvida no produto, o bot pede para especificar.`;
+  `Em caso de dúvida no produto, o bot pede para especificar.\n\n` +
+  `🔍 Modo preview:\n` +
+  `Comece a mensagem com "preview" para ver como cada linha seria interpretada SEM executar.\n` +
+  `Ex:\n  preview\n  mesa 1 + 2 coca 350\n  tira 1 agua da mesa 1`;
+
+// ─────────────────────────── preview (dry-run) ───────────────────────────
+
+async function previewCommand(cmd: Command): Promise<string> {
+  if (cmd.kind === "HELP") return `ℹ️ (preview) Mostraria a ajuda.`;
+  if (cmd.kind === "PARSE_ERROR") {
+    return `❓ (preview) Não interpretaria: "${cmd.raw}" — faltou mesa, ação ou produto.`;
+  }
+  if (cmd.kind === "VIEW") {
+    return `📋 (preview) Mostraria o pedido da mesa ${cmd.table}.`;
+  }
+
+  // ADD/REMOVE — resolve produto sem executar mutação
+  const resolution = await resolveProduct(cmd.productText);
+  const op = cmd.kind === "ADD" ? "+" : "-";
+  const verbo = cmd.kind === "ADD" ? "Adicionaria" : "Removeria";
+
+  switch (resolution.kind) {
+    case "not_found": {
+      const sugg = await suggestProducts(cmd.productText);
+      const tail = sugg.length > 0 ? ` Sugestões: ${sugg.join(", ")}.` : "";
+      return `❓ (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → produto não encontrado.${tail}`;
+    }
+    case "ambiguous": {
+      const list = resolution.candidates.map((p) => p.name).join(" | ");
+      return `🤔 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → ambíguo: ${list}.`;
+    }
+    case "is_group_trigger": {
+      const variants = resolution.variants.join(" | ");
+      return `📦 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → grupo "${resolution.group.name}" com variantes: ${variants}.`;
+    }
+    case "out_of_stock":
+      return `❌ (preview) Mesa ${cmd.table} ${op}${cmd.qty} ${resolution.product.name} → esgotado.`;
+    case "no_linked_product":
+      return `⚠️ (preview) "${resolution.itemName}" sem produto vinculado.`;
+    case "found":
+      return `✅ (preview) ${verbo} na Mesa ${cmd.table}: ${op}${cmd.qty} ${resolution.product.name} (${fmtBRL(resolution.product.price)}).`;
+  }
+}
 
 // ─────────────────────────── handler ───────────────────────────
 
@@ -710,12 +752,36 @@ Deno.serve(async (req) => {
 
     const waiter = username ? `Telegram (@${username})` : "Telegram";
 
-    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    // Detecta modo preview: primeira linha (ou primeira palavra) = "preview"
+    let workingText = text;
+    let isPreview = false;
+    const rawLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (rawLines.length > 0 && /^preview\b/i.test(rawLines[0])) {
+      isPreview = true;
+      // Remove o token "preview" da primeira linha; se sobrar vazio, descarta a linha
+      const firstRest = rawLines[0].replace(/^preview\b[:\s-]*/i, "").trim();
+      const remaining = firstRest ? [firstRest, ...rawLines.slice(1)] : rawLines.slice(1);
+      workingText = remaining.join("\n");
+    }
+
+    const lines = workingText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+    if (isPreview && lines.length === 0) {
+      await sendTelegram(
+        chatId,
+        `🔍 Modo preview ativo, mas nenhum comando informado.\nEnvie:\n  preview\n  mesa 1 + 1 coca 350`,
+      );
+      return new Response("ok", { status: 200, headers: corsHeaders });
+    }
+
+    const runner = isPreview
+      ? (cmd: Command, _w: string) => previewCommand(cmd)
+      : handleCommand;
 
     if (lines.length <= 1) {
       const cmd = parseCommand(lines[0] ?? text);
-      const reply = await handleCommand(cmd, waiter);
-      await sendTelegram(chatId, reply);
+      const reply = await runner(cmd, waiter);
+      await sendTelegram(chatId, isPreview ? `🔍 Preview (nada foi executado):\n\n${reply}` : reply);
     } else if (lines.length > 10) {
       await sendTelegram(
         chatId,
@@ -726,14 +792,16 @@ Deno.serve(async (req) => {
       for (const line of lines) {
         try {
           const cmd = parseCommand(line);
-          const res = await handleCommand(cmd, waiter);
+          const res = await runner(cmd, waiter);
           results.push(res);
         } catch (e: any) {
           console.error("line error:", line, e);
           results.push(`❌ "${line}": erro inesperado`);
         }
       }
-      const header = `📊 ${lines.length} comandos processados:\n`;
+      const header = isPreview
+        ? `🔍 Preview de ${lines.length} comandos (nada foi executado):\n`
+        : `📊 ${lines.length} comandos processados:\n`;
       await sendTelegram(chatId, header + "\n" + results.join("\n\n"));
     }
   } catch (err) {
