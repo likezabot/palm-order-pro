@@ -600,25 +600,26 @@ async function checkGroupOrReturn(product: Product): Promise<ProductResolution> 
 }
 
 // Sugere até 3 produtos próximos (token-by-token, ranqueado por nº de matches).
-async function suggestProducts(text: string): Promise<string[]> {
+// Sugere até 3 produtos próximos (token-by-token, ranqueado por nº de matches).
+async function suggestProducts(text: string): Promise<Product[]> {
   const norm = singularize(normalize(text));
   const tokens = norm.split(/\s+/).filter((t) => t.length >= 3 && !/^\d+$/.test(t));
   if (tokens.length === 0) return [];
   const { data: prods } = await sb
     .from("products")
-    .select("name")
+    .select("id, name, price, active, category")
     .eq("active", true);
-  const all = (prods ?? []) as { name: string }[];
+  const all = (prods ?? []) as Product[];
   return all
     .map((p) => {
       const n = normalize(p.name);
       const hits = tokens.reduce((acc, t) => acc + (n.includes(t) ? 1 : 0), 0);
-      return { name: p.name, hits };
+      return { p, hits };
     })
     .filter((s) => s.hits > 0)
     .sort((a, b) => b.hits - a.hits)
     .slice(0, 3)
-    .map((s) => s.name);
+    .map((s) => s.p);
 }
 
 // ─────────────────────────── merge logic ───────────────────────────
