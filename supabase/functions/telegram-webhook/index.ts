@@ -1856,6 +1856,47 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     });
     return { text: `📦 *Estoque crítico (${crit.length})*\n\n` + lines.join("\n") };
   }
+  if (cmd.kind === "STOCK_QUERY") {
+    const res = await resolveStockItem(cmd.itemText);
+    if (res.kind === "not_found") {
+      return { text: `❓ Não achei "${cmd.itemText}" no estoque.\nUse \`estoque\` (sozinho) para ver itens críticos.` };
+    }
+    if (res.kind === "ambiguous") {
+      const list = res.candidates.slice(0, 5).map((i) => `  • ${i.name} — ${fmtStockQty(Number(i.current_stock), i.unit)}`).join("\n");
+      return { text: `🤔 Vários itens batem com "${cmd.itemText}":\n${list}\n\nSeja mais específico (ex: \`estoque coca 350\`).` };
+    }
+    return { text: await executeStockQuery(res.item) };
+  }
+  if (cmd.kind === "STOCK_MOVEMENT") {
+    const res = await resolveStockItem(cmd.itemText);
+    if (res.kind === "not_found") {
+      return {
+        text: `❓ Não achei "${cmd.itemText}" no estoque.\n` +
+              `Verifique o nome ou cadastre o item no Palm primeiro.`,
+      };
+    }
+    if (res.kind === "ambiguous") {
+      const verbo = cmd.type === "in" ? "Entrada" : cmd.type === "out" ? "Saída" : "Ajuste";
+      return {
+        text: `🤔 ${verbo} de ${cmd.qty}${cmd.unit ? " " + cmd.unit : ""} "${cmd.itemText}" — qual item?`,
+        keyboard: buildStockChoiceKeyboard(cmd.type, cmd.qty, res.candidates),
+      };
+    }
+    try {
+      const out = await executeStockMovement(res.item, cmd.type, cmd.qty, waiter);
+      const token = registerStockUndo({
+        itemId: res.item.id,
+        itemName: res.item.name,
+        unit: res.item.unit,
+        type: cmd.type,
+        qty: cmd.qty,
+        previousStock: out.previousStock,
+      });
+      return { text: out.text, keyboard: buildStockUndoKeyboard(token) };
+    } catch (e: any) {
+      return { text: `❌ Erro no estoque: ${String(e?.message ?? e)}` };
+    }
+  }
   if (cmd.kind === "NOTIFY_TOGGLE") {
     const newVal = JSON.stringify({
       orders: cmd.on, payments: cmd.on, stock_critical: cmd.on, daily_report: cmd.on,
