@@ -2216,6 +2216,14 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
+  // ─── WIZARD callbacks (wz|...) ───
+  if (data.startsWith("wz|")) {
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `Telegram (@${username})` : "Telegram");
+    const handled = await wzHandleCallback(cb, waiter);
+    if (handled) return;
+  }
+
   if (data === "x") {
     await answerCallback(cbId, "Cancelado");
     await editTelegramMessage(chatId, messageId, "❌ Cancelado.");
