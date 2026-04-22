@@ -3360,6 +3360,27 @@ async function wzHandleCallback(cb: any, waiter: string): Promise<boolean> {
     return true;
   }
 
+  // ── No-op (rótulos visuais) ──
+  if (op === "noop") {
+    await answerCallback(cbId);
+    return true;
+  }
+
+  // ── Paginação da lista de itens ──
+  if (op === "page") {
+    await answerCallback(cbId);
+    const page = parseInt(parts[2] || "0", 10) || 0;
+    const state = await wzGet(chatId);
+    const action = state?.data.action;
+    if (!action) {
+      await wzMainMenuV2(chatId, messageId);
+      return true;
+    }
+    const prevHistory = state?.data.history ?? [];
+    await wzShowItemPicker(chatId, messageId, action as WzAction, "awaiting_item", { ...(state?.data ?? {}), history: prevHistory.slice(0, -1) }, undefined, page);
+    return true;
+  }
+
   // ── Selecionar item da lista ──
   if (op === "item") {
     await answerCallback(cbId);
