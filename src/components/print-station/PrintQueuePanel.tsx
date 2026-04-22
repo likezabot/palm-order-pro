@@ -85,6 +85,29 @@ export default function PrintQueuePanel() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 gap-1.5" title="Marca pedidos pagos com impressão pendente como impressos no banco (não toca na bridge).">
+                <Wand2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Limpar órfãos</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Limpar pedidos órfãos?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Todos os pedidos <strong>pagos</strong> que ainda estão com impressão "pendente" ou "imprimindo"
+                  serão marcados como impressos no banco. Útil quando a bridge ficou offline por muito tempo.
+                  <br /><br />
+                  <span className="text-muted-foreground">Não interfere na bridge .exe nem na fila local.</span>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearOrphans}>Limpar órfãos</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {total > 0 && (
             <>
               <Button size="sm" variant="outline" onClick={handleRetry} className="h-8 gap-1.5">
