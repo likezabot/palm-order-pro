@@ -418,6 +418,67 @@ function parseCommand(raw: string): Command {
     return { kind: "STOCK_CRITICAL" };
   }
 
+  // ─── ESTOQUE: movimentações e consulta de saldo ───
+  const STOCK_UNIT_RE = "(?:kg|g|l|ml|un|unidade|unidades)";
+  const parseStockTail = (tail: string, qtyRequired: boolean): { qty: number; unit?: string; itemText: string } | null => {
+    const t = tail.trim();
+    if (!t) return null;
+    const m = t.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?\\s+(.+)$`));
+    if (m) {
+      const qty = parseFloat(m[1].replace(",", "."));
+      if (Number.isFinite(qty) && qty > 0) {
+        return { qty, unit: m[2] || undefined, itemText: m[3].trim() };
+      }
+    }
+    const m2 = t.match(/^(\S+)\s+(.+)$/);
+    if (m2) {
+      const qty = NUM_WORDS_GLOBAL[m2[1]];
+      if (qty !== undefined) return { qty, itemText: m2[2].trim() };
+    }
+    if (!qtyRequired) return { qty: 1, itemText: t };
+    return null;
+  };
+
+  // ENTRADA: "entrada 10 coca", "entrou 5kg picanha", "+ 10 coca", "chegou 20 cerva"
+  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei)\s+(.+)$/) ||
+                   text.match(/^\+\s+(\d.+)$/);
+  if (stockIn) {
+    const parsed = parseStockTail(stockIn[1], true);
+    if (parsed) return { kind: "STOCK_MOVEMENT", type: "in", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
+  }
+
+  // SAÍDA: "saida 2 coca", "usei 1kg picanha", "gastei 3 carvao"
+  // Só gatilhos explícitos (sem `-N` para evitar conflito com REMOVE_NOMESA).
+  const stockOut = text.match(/^(?:saida|saiu|usei|gastei|tirei|consumi|baixa)\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
+  if (stockOut) {
+    const parsed = parseStockTail(stockOut[1], true);
+    if (parsed) return { kind: "STOCK_MOVEMENT", type: "out", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
+  }
+
+  // AJUSTE forma 1: "ajuste coca 50", "setar coca para 50", "atualiza coca = 30"
+  const stockAdj1 = text.match(new RegExp(`^(?:ajuste|ajustar|setar|set|fica(?:r)?\\s+com|atualiza(?:r)?|corrige|corrigir)\\s+(.+?)\\s+(?:para\\s+|=\\s*|com\\s+|em\\s+)?(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?$`));
+  if (stockAdj1) {
+    const qty = parseFloat(stockAdj1[2].replace(",", "."));
+    if (Number.isFinite(qty) && qty >= 0) {
+      return { kind: "STOCK_MOVEMENT", type: "adjustment", qty, itemText: stockAdj1[1].trim(), unit: stockAdj1[3] || undefined };
+    }
+  }
+  // AJUSTE forma 2: "tem 12 coca", "tem 5kg picanha"
+  const stockAdj2 = text.match(new RegExp(`^tem\\s+(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?\\s+(?:de\\s+)?(.+)$`));
+  if (stockAdj2) {
+    const qty = parseFloat(stockAdj2[1].replace(",", "."));
+    if (Number.isFinite(qty) && qty >= 0) {
+      return { kind: "STOCK_MOVEMENT", type: "adjustment", qty, itemText: stockAdj2[3].trim(), unit: stockAdj2[2] || undefined };
+    }
+  }
+
+  // CONSULTA: "estoque coca", "saldo picanha", "quanto tem de coca"
+  const stockQry = text.match(/^(?:estoque|saldo|quanto\s+tem(?:\s+de)?)\s+(.+)$/);
+  if (stockQry) {
+    return { kind: "STOCK_QUERY", itemText: stockQry[1].trim() };
+  }
+
+
   // NOTIFICAÇÕES on/off
   const notifM = text.match(/^(?:notificacoes|notificações|notif|alertas|avisos)\s+(on|off|ligar?|desligar?|ativa(?:r)?|desativa(?:r)?|sim|nao|não)$/);
   if (notifM) {
