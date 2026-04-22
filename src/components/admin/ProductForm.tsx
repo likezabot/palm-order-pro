@@ -3,6 +3,13 @@ import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  PORCO_GROUP_NAMES,
+  PORCO_EXTRA_NAMES_KEY,
+  addPorcoExtraName,
+  useExtraPorcoNames,
+} from "@/lib/porco-group";
 
 interface Props {
   product: Product | null;
@@ -12,13 +19,26 @@ interface Props {
   initialCategory?: string;
 }
 
+const norm = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+const isCanonicalPorcoName = (name: string) =>
+  PORCO_GROUP_NAMES.some((n) => norm(n) === norm(name));
+
 const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   const [name, setName] = useState(product?.name || "");
   const [price, setPrice] = useState(product?.price?.toString() || "");
   const [category, setCategory] = useState(product?.category || initialCategory || "espetos");
   const [active, setActive] = useState(product?.active ?? true);
+  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
+  const initialIsPorcoGroup = product
+    ? isCanonicalPorcoName(product.name) ||
+      extraPorcoNames.some((n) => norm(n) === norm(product.name))
+    : false;
+  const [porcoGroup, setPorcoGroup] = useState(initialIsPorcoGroup);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleSave = async () => {
     if (!name.trim() || !price || saving) return;
@@ -38,6 +58,23 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         await supabase.from("products").insert(data);
       }
 
+      // If user opted into the Porco group and the name is NOT canonical,
+      // register it as an extra name in settings so the popup picks it up.
+      if (
+        porcoGroup &&
+        category === "espetos" &&
+        !isCanonicalPorcoName(data.name)
+      ) {
+        try {
+          await addPorcoExtraName(data.name);
+          await queryClient.invalidateQueries({
+            queryKey: ["settings", PORCO_EXTRA_NAMES_KEY],
+          });
+        } catch (e) {
+          console.error("Failed to register Porco group extra name", e);
+        }
+      }
+
       toast({ title: product ? "Produto atualizado" : "Produto criado" });
       onSaved();
     } catch {
@@ -45,6 +82,8 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
       setSaving(false);
     }
   };
+
+  const showPorcoGroupSelector = category === "espetos";
 
   return (
     <div className="min-h-screen-safe flex flex-col">
@@ -95,6 +134,49 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
             ))}
           </div>
         </div>
+
+        {showPorcoGroupSelector && (
+          <div>
+            <label className="text-sm font-semibold text-muted-foreground mb-1 block">
+              Grupo / Popup (opcional)
+            </label>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => setPorcoGroup(false)}
+                className={`rounded-lg border p-3 text-left text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                  !porcoGroup
+                    ? "border-primary bg-primary/20 text-primary"
+                    : "border-border bg-card text-foreground"
+                }`}
+              >
+                <span className="block">Nenhum</span>
+                <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                  Item normal — aparece direto na grade do PALM.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPorcoGroup(true)}
+                className={`rounded-lg border p-3 text-left text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                  porcoGroup
+                    ? "border-primary bg-primary/20 text-primary"
+                    : "border-border bg-card text-foreground"
+                }`}
+              >
+                <span className="block">🐷 Grupo Porco</span>
+                <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                  Aparece dentro do popup ao tocar em "Porco" no PALM.
+                </span>
+              </button>
+            </div>
+            {porcoGroup && !isCanonicalPorcoName(name) && name.trim() && (
+              <p className="text-[11px] text-primary mt-2">
+                "{name.trim()}" será adicionado como variante extra do popup do Porco.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
           <span className="font-semibold">Ativo no cardápio</span>
