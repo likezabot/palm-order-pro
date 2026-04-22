@@ -16,7 +16,10 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { PorcoGroupBanner } from "./PorcoGroupBanner";
+import { ProductGroupBanner } from "./ProductGroupBanner";
+import { GroupsManager } from "./GroupsManager";
+import { useProductGroups, getGroupsForCategory } from "@/lib/product-groups";
+import { Layers } from "lucide-react";
 
 interface Props {
   productsByCategory: Record<string, Product[]>;
@@ -50,9 +53,15 @@ const ProductsManager = ({
   const [maxPrice, setMaxPrice] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
   const { playFeedback } = useFeedback();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: productGroups = [] } = useProductGroups();
+  const groupsForActiveCategory = useMemo(
+    () => getGroupsForCategory(productGroups, activeCategory),
+    [productGroups, activeCategory],
+  );
 
   const min = parseFloat(minPrice);
   const max = parseFloat(maxPrice);
@@ -327,6 +336,13 @@ const ProductsManager = ({
               </button>
             )}
             <button
+              onClick={() => { playFeedback("click"); setGroupsManagerOpen(true); }}
+              className="flex items-center gap-1.5 rounded-lg bg-card border border-border text-foreground px-3 py-2 text-xs font-bold hover:bg-secondary transition-colors"
+              title="Gerenciar grupos / popups"
+            >
+              <Layers size={14} /> Grupos
+            </button>
+            <button
               onClick={() => onNewProduct(activeCategory)}
               className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-bold hover:bg-primary/90 transition-colors"
             >
@@ -338,9 +354,13 @@ const ProductsManager = ({
 
       {/* Grid */}
       <div className={`px-3 ${selectionMode ? "pb-28" : "pb-10"}`}>
-        {!search && activeCategory === "espetos" && !hasFilters && (
-          <PorcoGroupBanner products={productsByCategory["espetos"] ?? []} />
-        )}
+        {!search && !hasFilters && groupsForActiveCategory.map((g) => (
+          <ProductGroupBanner
+            key={g.id}
+            group={g}
+            products={productsByCategory[activeCategory] ?? []}
+          />
+        ))}
         {search ? (
           // Modo busca: lista todas categorias com header
           allFilteredIds.length === 0 ? (
