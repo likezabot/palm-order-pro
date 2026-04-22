@@ -102,24 +102,34 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
 
   const isSearching = search.trim().length > 0;
 
+  // For search, hide all members of all groups (except triggers) across categories.
+  const allHiddenNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of productGroups) {
+      const triggerNorm = g.trigger_product_name.toLowerCase().trim();
+      for (const m of g.member_names) {
+        if (m.toLowerCase().trim() !== triggerNorm) set.add(m.toLowerCase());
+      }
+    }
+    return set;
+  }, [productGroups]);
+
   // Filtragem: busca global tem prioridade; senão, por categoria.
   const filteredRaw = useMemo(() => {
     if (isSearching) {
       const q = search.trim().toLowerCase();
       return products.filter(
         (p) =>
-          !hiddenEspetoNames.includes(p.name.toLowerCase()) &&
+          !allHiddenNames.has(p.name.toLowerCase()) &&
           p.name.toLowerCase().includes(q)
       );
     }
     return products.filter((p) => {
       if (p.category !== activeCategory) return false;
-      if (activeCategory === "espetos" && hiddenEspetoNames.includes(p.name.toLowerCase())) {
-        return false;
-      }
+      if (hiddenProductNames.includes(p.name.toLowerCase())) return false;
       return true;
     });
-  }, [products, activeCategory, isSearching, search, hiddenEspetoNames]);
+  }, [products, activeCategory, isSearching, search, hiddenProductNames, allHiddenNames]);
 
   const filtered = isSearching
     ? filteredRaw
@@ -139,17 +149,26 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     return counts;
   }, [cart, products]);
 
-  // Variantes reais do grupo Porco (Porco, Panceta suína, Costela suína + extras dinâmicas).
-  const porcoVariants = useMemo(
-    () => getPorcoGroupProducts(products, extraPorcoNames),
-    [products, extraPorcoNames],
+  // Groups in current category with resolved trigger products.
+  const activeGroups = useMemo(() => {
+    if (isSearching) return [];
+    return productGroups
+      .filter((g) => g.category === activeCategory)
+      .map((g) => {
+        const variants = resolveGroupMembers(g, products);
+        const triggerNorm = g.trigger_product_name.toLowerCase().trim();
+        const triggerProduct =
+          variants.find((v) => v.product && v.name.toLowerCase().trim() === triggerNorm)?.product ??
+          variants.find((v) => v.product)?.product ?? null;
+        return { group: g, triggerProduct, variants, variantCount: variants.filter((v) => v.product).length };
+      })
+      .filter((x) => !!x.triggerProduct);
+  }, [productGroups, activeCategory, products, isSearching]);
+
+  const triggerProductIds = useMemo(
+    () => new Set(activeGroups.map((g) => g.triggerProduct!.id)),
+    [activeGroups],
   );
-  const porcoBase =
-    porcoVariants.find((v) => v.name === "porco")?.product ??
-    porcoVariants.find((v) => v.product)?.product ??
-    null;
-  const porcoVariantCount = porcoVariants.filter((v) => v.product).length;
-  const showPorcoCard = !isSearching && activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) =>
     cart.filter((i) => i.product.id === id).reduce((sum, i) => sum + i.quantity, 0);
@@ -163,13 +182,16 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     ? filtered.filter((p) => matchesSubgroup(p, openSubgroup))
     : [];
 
-  // Quantidade total no carrinho de qualquer variante de Porco (badge do card).
-  const porcoVariantIds = new Set(
-    porcoVariants.map((v) => v.product?.id).filter((id): id is string => !!id)
-  );
-  const porcoQty = cart
-    .filter((i) => porcoVariantIds.has(i.product.id))
-    .reduce((sum, i) => sum + i.quantity, 0);
+  const getGroupQty = (g: ProductGroup) => {
+    const memberIds = new Set(
+      resolveGroupMembers(g, products)
+        .map((v) => v.product?.id)
+        .filter((id): id is string => !!id)
+    );
+    return cart
+      .filter((i) => memberIds.has(i.product.id))
+      .reduce((sum, i) => sum + i.quantity, 0);
+  };
 
 
   return (
