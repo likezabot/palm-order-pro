@@ -22,24 +22,53 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
-// Modo turbo: contexto da última mesa por chat (TTL 15min, in-memory, best-effort).
+// Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
 const LAST_TABLE_TTL_MS = 15 * 60_000;
-const lastTableByChat = new Map<number, { table: string; ts: number }>();
-function getLastTable(chatId: number): string | null {
-  const now = Date.now();
-  for (const [k, v] of lastTableByChat) {
-    if (now - v.ts > LAST_TABLE_TTL_MS) lastTableByChat.delete(k);
-  }
-  const entry = lastTableByChat.get(chatId);
-  if (!entry) return null;
-  if (now - entry.ts > LAST_TABLE_TTL_MS) {
-    lastTableByChat.delete(chatId);
+function lastTableSettingsKey(chatId: number): string {
+  return `telegram_last_table:${chatId}`;
+}
+async function getLastTable(chatId: number): Promise<string | null> {
+  const { data, error } = await sb
+    .from("settings")
+    .select("id, value, updated_at")
+    .eq("key", lastTableSettingsKey(chatId))
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.value) return null;
+
+  try {
+    const parsed = JSON.parse(data.value);
+    const table = typeof parsed?.table === "string" ? parsed.table : null;
+    const ts = typeof parsed?.ts === "number"
+      ? parsed.ts
+      : Date.parse(parsed?.ts ?? data.updated_at ?? "");
+    if (!table || !Number.isFinite(ts) || Date.now() - ts > LAST_TABLE_TTL_MS) {
+      return null;
+    }
+    return table;
+  } catch {
     return null;
   }
-  return entry.table;
 }
-function setLastTable(chatId: number, table: string): void {
-  lastTableByChat.set(chatId, { table, ts: Date.now() });
+async function setLastTable(chatId: number, table: string): Promise<void> {
+  const key = lastTableSettingsKey(chatId);
+  const value = JSON.stringify({ table, ts: Date.now() });
+  const { data: existing } = await sb
+    .from("settings")
+    .select("id")
+    .eq("key", key)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.id) {
+    await sb.from("settings").update({ value }).eq("id", existing.id);
+    return;
+  }
+
+  await sb.from("settings").insert({ key, value });
 }
 
 // ─────────────────────────── helpers ───────────────────────────
@@ -256,15 +285,15 @@ function parseCommand(raw: string): Command {
 
 // ─────────────────────────── modo turbo: resolver contexto ───────────────────────────
 
-function resolveWithContext(cmd: Command, chatId: number): Command {
+async function resolveWithContext(cmd: Command, chatId: number): Promise<Command> {
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA") {
-    const table = getLastTable(chatId);
+    const table = await getLastTable(chatId);
     const originalKind = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
     if (!table) return { kind: "NEEDS_TABLE", originalKind };
     return { kind: originalKind, table, qty: cmd.qty, productText: cmd.productText, fromContext: true };
   }
   if (cmd.kind === "VIEW_NOMESA") {
-    const table = getLastTable(chatId);
+    const table = await getLastTable(chatId);
     if (!table) return { kind: "NEEDS_TABLE", originalKind: "VIEW" };
     return { kind: "VIEW", table, fromContext: true };
   }
@@ -874,7 +903,7 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   let ctxNote = "";
   let working: Command = cmd;
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
-    const ctxTable = getLastTable(chatId);
+    const ctxTable = await getLastTable(chatId);
     if (!ctxTable) {
       return `⚠️ (preview) Nenhuma mesa em contexto. Envie a mesa explícita.`;
     }
@@ -928,6 +957,15 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
 
 type HandlerReply = { text: string; keyboard?: InlineButton[][]; successTable?: string };
 
+function isViewSuccess(text: string): boolean {
+  return !text.startsWith("⚠️ Mesa ") || !text.includes("não tem pedido aberto");
+}
+
+function isMutationSuccess(kind: "ADD" | "REMOVE", text: string): boolean {
+  if (kind === "ADD") return text.startsWith("✅ Mesa ");
+  return text.startsWith("➖ Mesa ") || text.startsWith("⚠️ Removidos ");
+}
+
 function ctxPrefix(cmd: { fromContext?: boolean; table?: string }): string {
   return cmd.fromContext && cmd.table ? `📍 (mesa ${cmd.table}, contexto)\n` : "";
 }
@@ -953,7 +991,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   }
   if (cmd.kind === "VIEW") {
     const text = await executeView(cmd.table);
-    return { text: ctxPrefix(cmd) + text, successTable: cmd.table };
+    return { text: ctxPrefix(cmd) + text, successTable: isViewSuccess(text) ? cmd.table : undefined };
   }
 
   // ADD/REMOVE
@@ -1023,7 +1061,7 @@ async function runExecute(
     const text = cmd.kind === "ADD"
       ? await executeAdd(cmd.table, product, cmd.qty, waiter)
       : await executeRemove(cmd.table, product, cmd.qty, waiter);
-    return { text: prefix + text, successTable: cmd.table };
+    return { text: prefix + text, successTable: isMutationSuccess(cmd.kind, text) ? cmd.table : undefined };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes("version_conflict")) {
@@ -1112,14 +1150,16 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     resultText = op === "a"
       ? await executeAdd(table, prod as Product, qty, waiter)
       : await executeRemove(table, prod as Product, qty, waiter);
-    success = true;
+    success = op === "a"
+      ? isMutationSuccess("ADD", resultText)
+      : isMutationSuccess("REMOVE", resultText);
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     resultText = msg.includes("version_conflict")
       ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
       : `❌ Erro ao processar: ${msg}`;
   }
-  if (success) setLastTable(chatId, table);
+  if (success) await setLastTable(chatId, table);
   await editTelegramMessage(chatId, messageId, resultText);
 }
 
@@ -1218,10 +1258,10 @@ Deno.serve(async (req) => {
 
     if (lines.length <= 1) {
       const parsed = parseCommand(lines[0] ?? text);
-      const cmd = resolveWithContext(parsed, chatId);
+      const cmd = await resolveWithContext(parsed, chatId);
       const reply = await handleCommand(cmd, waiter);
       await sendTelegram(chatId, reply.text, reply.keyboard);
-      if (reply.successTable) setLastTable(chatId, reply.successTable);
+      if (reply.successTable) await setLastTable(chatId, reply.successTable);
     } else {
       // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
       const textResults: string[] = [];
@@ -1229,7 +1269,7 @@ Deno.serve(async (req) => {
       for (const line of lines) {
         try {
           const parsed = parseCommand(line);
-          const cmd = resolveWithContext(parsed, chatId);
+          const cmd = await resolveWithContext(parsed, chatId);
           const reply = await handleCommand(cmd, waiter);
           if (reply.keyboard && reply.keyboard.length > 0) {
             pendingChoices.push(reply);
@@ -1238,7 +1278,7 @@ Deno.serve(async (req) => {
             textResults.push(reply.text);
           }
           // Atualiza contexto entre linhas para que a próxima linha possa usar mesa implícita
-          if (reply.successTable) setLastTable(chatId, reply.successTable);
+          if (reply.successTable) await setLastTable(chatId, reply.successTable);
         } catch (e) {
           console.error("line error:", line, e);
           textResults.push(`❌ "${line}": erro inesperado`);
