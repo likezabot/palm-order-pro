@@ -138,6 +138,22 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
         current_stock: parseFloat(initialStock.replace(",", ".")) || 0,
         product_id: productId,
       });
+      // Mirror Porco group flag into settings extras (if linked product is in Espetos
+      // and user opted in with a non-canonical name).
+      if (
+        porcoGroup &&
+        linkedProduct?.category === "espetos" &&
+        !isCanonicalPorcoName(finalName)
+      ) {
+        try {
+          await addPorcoExtraName(finalName);
+          await queryClient.invalidateQueries({
+            queryKey: ["settings", PORCO_EXTRA_NAMES_KEY],
+          });
+        } catch (e) {
+          console.error("Failed to register Porco group extra name", e);
+        }
+      }
       toast({ title: isEdit ? "Item atualizado" : "Item criado" });
       onOpenChange(false);
     } catch (e: any) {
