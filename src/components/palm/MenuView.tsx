@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Pencil, Search, X, ArrowRightLeft } from "lucide-react";
+import { ArrowLeft, Pencil, Search, X, ArrowRightLeft, Minus } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
@@ -20,6 +20,7 @@ import { useProductStockMap, isProductEsgotado } from "@/hooks/use-product-stock
 
 interface Props {
   onAdd: (product: Product) => void;
+  onDecrement: (product: Product) => void;
   cart: CartItem[];
   total: number;
   itemCount: number;
@@ -33,7 +34,7 @@ interface Props {
   onTableMoved?: (newTable: string) => void;
 }
 
-const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
+const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openGroup, setOpenGroup] = useState<ProductGroup | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
