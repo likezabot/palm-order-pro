@@ -266,6 +266,10 @@ function parseCommand(raw: string): Command {
     return { kind: "HELP" };
   }
 
+  // UNDO: "undo", "desfazer", "undo tudo", "desfazer tudo"
+  const undoMatch = text.match(/^(?:undo|desfazer)(?:\s+(tudo|todos|todas|all))?$/);
+  if (undoMatch) return { kind: "UNDO", all: !!undoMatch[1] };
+
   // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
   const setT = text.match(/^mesa\s+(\d+)$/);
   if (setT) return { kind: "SET_TABLE", table: setT[1] };
