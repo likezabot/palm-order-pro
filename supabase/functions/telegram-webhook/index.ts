@@ -2598,7 +2598,7 @@ Deno.serve(async (req) => {
       workingText = remaining.join("\n");
     }
 
-    const lines = workingText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const lines = splitCommands(workingText);
 
     if (isPreview && lines.length === 0) {
       await sendTelegram(
