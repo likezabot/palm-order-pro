@@ -117,7 +117,10 @@ export default function ConnectionStatusBanner({ realtimeStatus, bridgeUrl }: Pr
     },
     bridge_off: {
       title: "IMPRESSORA LOCAL OFFLINE",
-      sub: `A bridge .exe não responde em ${bridgeUrl}. Verifique se a janela está aberta.`,
+      sub:
+        pendingCount > 0
+          ? `${pendingCount} ${pendingCount === 1 ? "cupom aguardando" : "cupons aguardando"}. Bridge .exe não responde em ${bridgeUrl}.`
+          : `A bridge .exe não responde em ${bridgeUrl}. Verifique se a janela está aberta.`,
       Icon: AlertTriangle,
     },
   };
