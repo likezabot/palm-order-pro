@@ -235,6 +235,7 @@ type Command =
   | { kind: "REPORT" }
   | { kind: "STOCK_CRITICAL" }
   | { kind: "NOTIFY_TOGGLE"; on: boolean }
+  | { kind: "TABLE_STATUS"; table: string }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
@@ -292,6 +293,12 @@ function parseCommand(raw: string): Command {
   // NOTIFICAÇÕES on/off
   const notifM = text.match(/^(?:notificacoes|notificações|notif)\s+(on|off|ligar|desligar)$/);
   if (notifM) return { kind: "NOTIFY_TOGGLE", on: notifM[1] === "on" || notifM[1] === "ligar" };
+
+  // STATUS de mesa: "mesa N status", "status mesa N", "status N"
+  const stA = text.match(/^mesa\s+(\d+)\s+status$/);
+  if (stA) return { kind: "TABLE_STATUS", table: stA[1] };
+  const stB = text.match(/^status\s+(?:mesa\s+)?(\d+)$/);
+  if (stB) return { kind: "TABLE_STATUS", table: stB[1] };
 
   // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
   const setT = text.match(/^mesa\s+(\d+)$/);
@@ -1320,6 +1327,7 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   if (cmd.kind === "REPORT") return `📊 (preview) Geraria o relatório do dia.`;
   if (cmd.kind === "STOCK_CRITICAL") return `📦 (preview) Listaria itens em estoque crítico.`;
   if (cmd.kind === "NOTIFY_TOGGLE") return `🔔 (preview) ${cmd.on ? "Ativaria" : "Desativaria"} as notificações.`;
+  if (cmd.kind === "TABLE_STATUS") return `📋 (preview) Mostraria o resumo rápido da mesa ${cmd.table}.`;
   if (cmd.kind === "PARSE_ERROR") {
     return `❓ (preview) Não interpretaria: "${cmd.raw}" — faltou mesa, ação ou produto.`;
   }
@@ -1458,9 +1466,39 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   if (cmd.kind === "NOTIFY_TOGGLE") {
     const newVal = JSON.stringify({
       orders: cmd.on, payments: cmd.on, stock_critical: cmd.on, daily_report: cmd.on,
+      cash_closed: cmd.on, stale_tables: cmd.on,
     });
     await sb.from("settings").upsert({ key: "telegram_notify_config", value: newVal }, { onConflict: "key" });
     return { text: cmd.on ? "🔔 Notificações ATIVADAS." : "🔕 Notificações DESATIVADAS." };
+  }
+  if (cmd.kind === "TABLE_STATUS") {
+    const { data: orders } = await sb
+      .from("orders")
+      .select("id,table_name,waiter_name,status,total,created_at,updated_at")
+      .in("status", ["new", "preparing", "done"])
+      .or(`table_name.eq.${cmd.table},original_table_name.eq.${cmd.table}`)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const order = orders?.[0];
+    if (!order) return { text: `Mesa ${cmd.table} está livre.` };
+    const { data: items } = await sb.from("order_items")
+      .select("product_name,quantity")
+      .eq("order_id", order.id);
+    const now = Date.now();
+    const openedMin = Math.floor((now - new Date(order.created_at).getTime()) / 60000);
+    const idleMin = Math.floor((now - new Date(order.updated_at).getTime()) / 60000);
+    const fmtDur = (m: number) => m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}` : `${m}min`;
+    const itemLines = (items ?? []).map((i: any) => `• ${i.quantity}× ${i.product_name}`).join("\n");
+    const statusLabel = order.status === "new" ? "novo" : order.status === "preparing" ? "preparando" : "pronto";
+    return {
+      text:
+        `📋 *Mesa ${order.table_name}*\n` +
+        `Garçom: ${order.waiter_name || "—"}\n` +
+        `Aberta há ${fmtDur(openedMin)} · último item há ${fmtDur(idleMin)}\n` +
+        (itemLines ? itemLines + "\n" : "") +
+        `Total: *${fmtBRL(Number(order.total || 0))}*\n` +
+        `Status: ${statusLabel}`,
+    };
   }
   if (cmd.kind === "UNDO") {
     cleanupUndos();
