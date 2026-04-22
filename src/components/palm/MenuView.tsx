@@ -352,8 +352,8 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                     }}
                     className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
                   >
-                    <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
-                      {group.icon} Grupo
+                    <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
+                      Grupo
                     </span>
                     <span className="font-semibold text-base text-foreground leading-tight mt-4">
                       {group.name}
