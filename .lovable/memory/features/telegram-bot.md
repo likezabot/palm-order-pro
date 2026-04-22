@@ -24,6 +24,7 @@ Parser também aceita variações naturais: "adiciona 1 bovino na mesa 1", "colo
 - Retry 3× em `version_conflict`.
 - Dedupe por `update_id` em memória (TTL 5min).
 - **Multi-comando:** mensagem é split por `\n`, 1 comando por linha, máx 10 linhas, execução estritamente sequencial. Falha de uma linha não bloqueia as outras (try/catch por linha). 1 linha = comportamento original sem cabeçalho. 2+ linhas = resposta consolidada com header `📊 N comandos processados:`.
+- **Modo preview (dry-run):** se a 1ª linha começa com `preview` (case-insensitive), o bot remove o token, passa cada linha por `previewCommand` e responde como interpretaria SEM mutações. Resolve produto (não_found/ambiguous/found) mas NÃO chama executeAdd/Remove/View. Header `🔍 Preview de N comandos (nada foi executado):`.
 
 **Aliases de inventory_items:**
 - Populados manualmente em `inventory_items.aliases` (TEXT[]) — normalizados (lowercase, sem acento).
