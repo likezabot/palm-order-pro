@@ -1063,7 +1063,7 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   switch (resolution.kind) {
     case "not_found": {
       const sugg = await suggestProducts(working.productText);
-      const tail = sugg.length > 0 ? ` Sugestões: ${sugg.join(", ")}.` : "";
+      const tail = sugg.length > 0 ? ` Sugestões: ${sugg.map((s) => s.name).join(", ")}.` : "";
       return `❓ (preview${ctxNote}) Mesa ${working.table} ${op}${working.qty} "${working.productText}" → produto não encontrado.${tail}`;
     }
     case "ambiguous": {
