@@ -2092,9 +2092,9 @@ Deno.serve(async (req) => {
           await sendTelegram(chatId, `✅ Pronto! Você está identificado como *${picked}*.\n\nAgora pode mandar comandos:\n  • mesa 5 + 2 coca\n  • mesa 5 status\n  • ajuda\n\nPara trocar: \`/trocar\``);
           return testOrPlain();
         }
-        // Não bateu — mostra a lista
+        // Não bateu — mostra a lista clicável
         const names = await listWaiterNames();
-        await sendTelegram(chatId, buildWaiterPickerMessage(names, username));
+        await sendTelegram(chatId, buildWaiterPickerMessage(names, username), buildWaiterPickerKeyboard(names));
         return testOrPlain();
       }
       waiter = bound;
