@@ -1,62 +1,117 @@
 
 
-# Vistoria geral — relatório e melhorias seguras
+# Retenção de dados — apagar pedidos antigos mantendo histórico agregado
 
-## ✅ O que está funcionando
+## Objetivo
+Reduzir tamanho do banco apagando pedidos pagos antigos, **preservando**:
+- Histórico por garçom (vendas, itens, mesas, ticket médio)
+- Histórico por produto (quantidade vendida, receita)
+- Totais diários (faturamento, formas de pagamento)
 
-- **Testes:** 80/80 passam (15 arquivos, 8.4s).
-- **Edge functions:** todas em HTTP 200 (`telegram-webhook`, `notify-telegram`).
-- **Parser Telegram:** entrada em lote funcionou — 6 `stock_in` registrados nas últimas 24h.
-- **Banco:** 38 itens de estoque ativos, 42 produtos ativos, 0 pedidos abertos, 0 itens na fila de notificação.
-- **Sem runtime errors no front.**
-- **Bridge `.exe`:** intacta. Nenhuma alteração proposta toca em `bridge/lp-bridge.js`, ESC/POS, ou contratos `/health` e `/print`.
+E **descartando**:
+- Linhas individuais de `order_items` antigas
+- Registros completos de `orders` antigos
+- `inventory_movements` muito antigos
+- `notification_log` e `notification_queue` processadas
 
-## ⚠️ Problemas encontrados
+## Estratégia
 
-### 1. Pedido travado em `print_status='printing'` (1 caso)
-- ID `5274f48c…` mesa 3, pago, com `print_claimed_at` de 22/04 03:14 — bridge nunca confirmou/falhou. Ficou órfão.
-- **Causa:** sem watchdog para reverter claims antigos.
+Antes de apagar, **agregar para tabelas de histórico** (snapshots diários). Depois disso o `StatsPanel` lê de `orders` (recente) + `daily_*` (histórico).
 
-### 2. 9 pedidos pagos com `print_status='pending'` acumulados
-- Bridge offline quando foram pagos → entraram na fila e ficam tentando reimprimir para sempre.
-- Não atrapalham o uso, mas poluem a `PrintQueuePanel` e geram requests inúteis.
+### 1. Novas tabelas de arquivo (migration)
 
-## 🛠️ Melhorias propostas (sem tocar na bridge)
+**`daily_waiter_stats`** — uma linha por (dia, garçom)
+```
+date date, waiter_name text, orders_count int, items_count int,
+revenue numeric, tables_count int, PRIMARY KEY (date, waiter_name)
+```
 
-### A. Watchdog de impressão (migration SQL — segura)
-Criar função `recover_stuck_prints()` que reverte qualquer pedido em `printing` com `print_claimed_at < now() - interval '2 minutes'` de volta para `pending` com `print_last_error='timeout'`. Agendar via `pg_cron` a cada 1 minuto. **Não muda contrato com a bridge** — só limpa órfãos.
+**`daily_product_stats`** — uma linha por (dia, produto)
+```
+date date, product_id uuid null, product_name text,
+quantity_sold numeric, revenue numeric,
+PRIMARY KEY (date, product_name)
+```
 
-### B. Auto-cancelar prints muito antigos de pedidos pagos
-Se um pedido está `paid` + `pending` há mais de 2 horas, marcar como `printed` automaticamente (via mesma função do watchdog). Evita acúmulo perpétuo. Limpa os 9 órfãos atuais sem ação manual.
+**`daily_sales_summary`** — uma linha por dia
+```
+date date PRIMARY KEY, orders_count int, total_revenue numeric,
+payment_breakdown jsonb -- {dinheiro: 120, pix: 340, cartao: 220}
+```
 
-### C. Botão "Limpar fila órfã" na `PrintQueuePanel`
-Pequeno botão admin em `src/components/print-station/PrintQueuePanel.tsx` que chama RPC para marcar os órfãos como impressos. Útil em dia que a bridge ficou off horas.
+RLS: leitura pública (igual `orders`), escrita só via função `SECURITY DEFINER`.
 
-### D. Cleanup de notification_queue antigas
-Atualmente não há expiração. Adicionar trigger/cron diário que apaga registros `processed_at < now() - 7 days`. Mantém a tabela leve.
+### 2. Função `archive_and_purge_old_data(p_days_keep int default 60)`
 
-### E. Indicador visual de bridge offline mais claro
-`ConnectionStatusBanner` já mostra status, mas sugiro: quando offline + há pedidos pending, exibir contagem (`"Bridge offline · 9 cupons aguardando"`). Pequeno ajuste em `src/components/print-station/ConnectionStatusBanner.tsx` lendo `usePrintQueue`.
+Lógica em uma transação:
+1. Para cada dia com pedidos `paid` **mais antigos que N dias** que ainda não estão em `daily_sales_summary`:
+   - Agrega em `daily_waiter_stats`, `daily_product_stats`, `daily_sales_summary` (UPSERT idempotente).
+2. `DELETE FROM order_items WHERE order_id IN (paid older than N days)`.
+3. `DELETE FROM orders WHERE status='paid' AND created_at < now() - N days`.
+4. `DELETE FROM inventory_movements WHERE created_at < now() - 90 days`.
+5. `DELETE FROM notification_log WHERE sent_at < now() - 30 days`.
+6. `DELETE FROM stock_movements WHERE created_at < now() - 90 days`.
+7. `DELETE FROM cash_movements` órfãos de cash_register fechados há >90d.
+8. Retorna jsonb com contagens.
 
-### F. Index sugerido
-`CREATE INDEX IF NOT EXISTS idx_orders_print_status ON orders(print_status) WHERE print_status IN ('pending','printing');` — acelera as queries do worker e do watchdog.
+### 3. Janela de retenção (defaults sugeridos)
 
-## 🚫 O que **não** vou mexer (preserva a bridge `.exe`)
+| Dado | Mantém em `orders/order_items` | Mantém agregado | 
+|---|---|---|
+| Pedidos pagos | 60 dias | indefinido (daily_*) |
+| Movimentos de estoque | 90 dias | — |
+| notification_log | 30 dias | — |
+| notification_queue processada | 7 dias (já existe no watchdog) | — |
+| cash_movements de caixas fechados | 90 dias | — |
 
-- `bridge/lp-bridge.js`, `bridge/package.json`, `start-bridge.bat`.
-- `src/lib/thermal-printer.ts` (formato ESC/POS, payload base64, endpoints `/health` e `/print`).
-- `src/lib/print-receipt.ts`, `src/lib/print-queue-worker.ts` (lógica de envio).
+Valor configurável via parâmetro da função.
 
-## Arquivos que serão modificados
+### 4. Agendamento (pg_cron)
 
-- `supabase/migrations/<timestamp>_print_watchdog.sql` — nova função + cron + index.
-- `src/components/print-station/PrintQueuePanel.tsx` — botão "Limpar órfãos".
-- `src/components/print-station/ConnectionStatusBanner.tsx` — texto com contagem.
+Job diário às 04:00 (horário de baixo movimento):
+```sql
+cron.schedule('archive_and_purge_daily', '0 4 * * *',
+  $$ SELECT public.archive_and_purge_old_data(60); $$);
+```
 
-## Ordem de execução
+### 5. Backfill inicial
 
-1. Migration do watchdog + index + cleanup de queue.
-2. UI: botão de limpeza + banner com contagem.
-3. Rodar `vitest` para confirmar 80/80 ainda passa.
-4. Verificar que os 10 pedidos órfãos foram resolvidos pelo watchdog.
+Rodar a função uma vez manualmente após criar as tabelas. Como hoje só tem dados de 14/04 a 22/04 (8 dias) e o threshold é 60d, **nada será apagado agora** — só criamos a infra. Quando passar 60 dias dos primeiros pedidos, começa a economizar automaticamente.
+
+### 6. Atualização do `StatsPanel.tsx`
+
+Ler de duas fontes e mesclar:
+- **Período recente** (≤60d): query atual em `orders` + `order_items`.
+- **Período histórico** (>60d, ex: 30d/personalizado caindo na janela arquivada): query em `daily_waiter_stats` / `daily_product_stats` / `daily_sales_summary`.
+
+Mesclagem feita no client (memos `byWaiter`, `byProduct`, `summary`). Para o agregado histórico não há `payment_method` por pedido individual — usamos `payment_breakdown` do `daily_sales_summary` (suficiente para gráfico de pagamentos).
+
+### 7. Botão admin "Arquivar agora"
+
+Em `SystemTab.tsx` adicionar botão "Arquivar e limpar pedidos antigos" que chama `archive_and_purge_old_data(60)` via RPC e mostra toast com o resumo retornado.
+
+## Arquivos modificados
+
+- **nova migration** `supabase/migrations/<ts>_data_retention.sql`
+  - Cria `daily_waiter_stats`, `daily_product_stats`, `daily_sales_summary` + RLS.
+  - Cria função `archive_and_purge_old_data(int)` `SECURITY DEFINER`.
+  - Agenda `pg_cron` diário às 04:00.
+  - Index em `orders(status, created_at)` para acelerar o purge.
+- `src/components/admin/StatsPanel.tsx` — adicionar leitura das tabelas `daily_*` quando o período pedido ultrapassa a janela ao vivo; mesclar com dados de `orders`.
+- `src/components/admin/SystemTab.tsx` — botão "Arquivar pedidos antigos agora".
+- `src/integrations/supabase/types.ts` — auto-regenerado pela migration.
+
+## Não alterado
+
+- Bridge `.exe`, ESC/POS, contratos `/health`, `/print`.
+- Estrutura de `orders` e `order_items` (apenas DELETEs antigos).
+- Fluxos do PDV, Palm, Cashier, Kitchen, Telegram bot.
+- Watchdog de impressão (continua independente).
+- Estoque atual (`inventory_items.current_stock` permanece intacto).
+
+## Resultado esperado
+
+- A partir de 60 dias, pedidos pagos antigos somem de `orders` mas o `StatsPanel` continua mostrando totais diários, ranking de garçons e top produtos para qualquer período histórico.
+- Banco cresce de forma controlada (~3 linhas/dia em `daily_*` vs centenas em `order_items`).
+- Bridge e impressão **não são tocadas** — `.exe` continua funcionando idêntico.
 
