@@ -1,38 +1,71 @@
 
 
-## Liberar mesa instantaneamente ao fechar conta
+## Limpar barra de categorias + badges por categoria
 
-### Problema
-Ao tocar "Fechar mesa", o app chama `pay_order` e volta pra grade, mas **a mesa continua vermelha** por 1–3s até o Realtime entregar o UPDATE de `status='paid'`. Em fluxo intenso, isso atrasa pegar o próximo pedido na mesma mesa.
+### Mudanças em `src/components/palm/MenuView.tsx`
 
-Causa: `CloseOrder` não toca no cache `["active-orders"]` — depende 100% do Realtime. Como agora temos cache persistente + `placeholderData` + `staleTime: 60s`, a UI exibe o estado antigo até o canal entregar o evento.
+**1. Remover Favoritos**
+- Remove o botão "Favoritos" (estrela) da barra.
+- Remove o branch `activeCategory === "favoritos"` em `filteredRaw` e na mensagem de empty state.
+- Remove import `Star` e `useFavoriteProductIds` (e a query `favoriteIds`).
+- Estado inicial continua `"espetos"`.
 
-### Solução: remoção otimista do pedido do cache
+**2. Contador por categoria (dinâmico, escalável)**
+Calculado via `useMemo` sobre `cart`, mapeando cada item à sua categoria:
 
-**`src/components/cashier/CloseOrder.tsx`**
-1. Importar `useQueryClient`.
-2. Em `handleConfirm`, **antes** de chamar o RPC:
-   - Snapshot do cache atual: `queryClient.getQueryData(["active-orders"])`.
-   - Remover o pedido fechado: `setQueryData(["active-orders"], prev => prev.filter(o => o.id !== order.id))`.
-   - Cancelar queries em voo: `queryClient.cancelQueries({ queryKey: ["active-orders"] })`.
-3. Chamar `pay_order`.
-4. Em **sucesso**: invalidar `["active-orders"]` (refetch silencioso confirma o estado) e chamar `onClosed()`.
-5. Em **erro**: restaurar snapshot (`setQueryData` com valor original) + toast de erro.
+```ts
+const categoryCounts = useMemo(() => {
+  const counts: Record<string, number> = {};
+  for (const item of cart) {
+    // Variantes sintéticas de Porco → categoria "espetos"
+    const cat = item.product.id.startsWith("porco-variant::")
+      ? "espetos"
+      : (products.find(p => p.id === item.product.id)?.category ?? item.product.category);
+    if (!cat) continue;
+    counts[cat] = (counts[cat] ?? 0) + item.quantity;
+  }
+  return counts;
+}, [cart, products]);
+```
 
-**Resultado**
-- Toque em "Fechar e imprimir" / "Fechar sem imprimir" → mesa some da grade **no mesmo frame** que o usuário volta pra TableGrid.
-- Se o RPC falhar (raro), a mesa volta a aparecer e mostra o erro.
-- Realtime continua como rede de segurança para sincronizar outros dispositivos.
+- Soma **quantidade total** (não tipos distintos).
+- Atualiza automático em add/remove/update porque `cart` é a fonte.
+- Funciona para qualquer categoria nova adicionada em `CATEGORIES` (escalável).
+- Lida com produtos cuja `category` não veio populada no `CartItem.product` (ex.: itens carregados de pedido existente) usando lookup em `products`.
 
-### Bônus de robustez
-Aplicar o mesmo padrão otimista em **Cashier** (`src/pages/Cashier.tsx`) onde o pagamento via PDV também usa `pay_order` — assim a mesa some instantâneo da grade do Palm em outros tablets via Realtime, e do próprio Cashier sem esperar o roundtrip.
+**3. Barra de categorias repensada**
+
+Layout limpo, mais "tab" do que "pílula":
+
+```text
+┌────────────────────────────────────────────────┐
+│  Espetos ③   Bebidas ②   Refeições   Cervejas │
+│  ━━━━━━━━                                      │  ← underline na ativa
+└────────────────────────────────────────────────┘
+```
+
+- Container: `flex gap-1 overflow-x-auto no-scrollbar border-b border-border`.
+- Cada tab: `relative inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-colors`.
+- Ativa: `text-foreground` + `::after` underline `bg-brand-gradient h-0.5` ancorada na base (via `<span>` absoluto).
+- Inativa: `text-muted-foreground hover:text-foreground`.
+- Badge inline ao lado do label (só aparece se `count > 0`):
+  - `min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold inline-flex items-center justify-center`.
+  - Ativa: `bg-primary-foreground text-primary`.
+  - Inativa: `bg-primary/15 text-primary`.
+- Sem borda em pílula, sem `bg-card` — tira o ruído visual e fica responsivo igual em mobile/desktop (scroll horizontal preservado).
+
+**4. Não mexer**
+- Lógica do carrinho: intacta.
+- Cards de produto, badges de quantidade por item, subgrupos, Porco variant: intactos.
+- `CartFab`, busca, header, dialogs: sem mudança.
 
 ### Arquivos
-- **Editado** `src/components/cashier/CloseOrder.tsx` — atualização otimista + rollback em erro.
-- **Editado** `src/pages/Cashier.tsx` — mesmo padrão otimista no fluxo de pagamento (verificar handler do `pay_order`).
+- **Editado** `src/components/palm/MenuView.tsx` — remoção do Favoritos, novo `categoryCounts`, nova barra de categorias com underline + badges.
 
-### Detalhes técnicos
-- Usar `queryClient.cancelQueries` antes do `setQueryData` para evitar que um refetch em voo sobrescreva o cache otimista.
-- O `["order-items", order.id]` pode ser deixado intacto — não afeta a grade.
-- Não mexemos no RPC nem em RLS — só em cache do cliente.
+### Resumo do contador
+Mapeia `cart[i].product.id → categoria` (com fallback para `products` e tratamento especial das variantes de Porco), soma `quantity` por categoria. Memoizado, depende só de `cart` e `products`. Escala automático para qualquer categoria de `CATEGORIES`.
+
+### Resumo da barra
+- Era: pílulas com borda, fundo, gradiente forte na ativa, ícone de estrela separado.
+- Fica: tabs flat com underline gradiente na ativa, badge numérico inline ao lado do nome, espaçamento uniforme, leitura imediata, sem poluição. Mantém scroll horizontal em telas estreitas.
 
