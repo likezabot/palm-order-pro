@@ -1827,6 +1827,30 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
+  // ─── PICK WAITER: pw|<idx> ───
+  if (data.startsWith("pw|")) {
+    if (typeof userId !== "number") {
+      await answerCallback(cbId, "Sem usuário");
+      return;
+    }
+    const idx = parseInt(data.slice(3), 10);
+    const names = await listWaiterNames();
+    if (!Number.isFinite(idx) || idx < 0 || idx >= names.length) {
+      await answerCallback(cbId, "Opção inválida");
+      await editTelegramMessage(chatId, messageId, "❌ Opção inválida. Mande qualquer mensagem para ver a lista de novo.");
+      return;
+    }
+    const picked = names[idx];
+    await setWaiterBinding(userId, picked, username);
+    await answerCallback(cbId, `Olá, ${picked}!`);
+    await editTelegramMessage(
+      chatId,
+      messageId,
+      `✅ Pronto! Você está identificado como *${picked}*.\n\nAgora pode mandar comandos:\n  • mesa 5 + 2 coca\n  • mesa 5 status\n  • ajuda\n\nPara trocar: /trocar`,
+    );
+    return;
+  }
+
   // ─── UNDO single: u|table|productId|qty|op ───
   if (data.startsWith("u|")) {
     cleanupUndos();
