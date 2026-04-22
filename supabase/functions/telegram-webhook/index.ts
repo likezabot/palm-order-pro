@@ -1958,6 +1958,8 @@ Deno.serve(async (req) => {
     }
   } catch (err) {
     console.error("Erro processando update:", err);
+  } finally {
+    clearTestContext();
   }
 
   return new Response("ok", { status: 200, headers: corsHeaders });
