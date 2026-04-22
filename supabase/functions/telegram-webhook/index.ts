@@ -212,11 +212,12 @@ function sleep(ms: number) {
 type Command =
   | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string; fromContext?: boolean }
   | { kind: "VIEW"; table: string; fromContext?: boolean }
+  | { kind: "SET_TABLE"; table: string }
   | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
   | { kind: "VIEW_NOMESA" }
   | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
   | { kind: "HELP" }
-  | { kind: "PARSE_ERROR"; raw: string };
+  | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_qty" | "generic" };
 
 // Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
 const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
