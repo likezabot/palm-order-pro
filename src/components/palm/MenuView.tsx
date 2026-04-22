@@ -118,29 +118,24 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
 
   const subgroups = !isSearching ? SUBGROUPS[activeCategory] : undefined;
 
-  // Contador por categoria (soma quantidades). Variantes sintéticas de Porco → "espetos".
+  // Contador por categoria (soma quantidades).
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     const productCatById = new Map(products.map((p) => [p.id, p.category]));
     for (const item of cart) {
-      const cat = item.product.id.startsWith("porco-variant::")
-        ? "espetos"
-        : (productCatById.get(item.product.id) ?? item.product.category);
+      const cat = productCatById.get(item.product.id) ?? item.product.category;
       if (!cat) continue;
       counts[cat] = (counts[cat] ?? 0) + item.quantity;
     }
     return counts;
   }, [cart, products]);
 
-  // Produto base "Porco". Preferimos um cadastrado; se não houver, usamos a
-  // Panceta suína como base (mesmo id/preço) para o card sintético funcionar.
-  const porcoReal = products.find(
-    (p) => p.category === "espetos" && p.name.toLowerCase() === "porco"
-  );
-  const porcoFallback = products.find(
-    (p) => p.category === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())
-  );
-  const porcoBase = porcoReal ?? porcoFallback;
+  // Variantes reais do grupo Porco (Porco, Panceta suína, Costela suína).
+  const porcoVariants = useMemo(() => getPorcoGroupProducts(products), [products]);
+  const porcoBase =
+    porcoVariants.find((v) => v.name === "porco")?.product ??
+    porcoVariants.find((v) => v.product)?.product ??
+    null;
   const showPorcoCard = !isSearching && activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) =>
@@ -156,19 +151,13 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     : [];
 
   // Quantidade total no carrinho de qualquer variante de Porco (badge do card).
+  const porcoVariantIds = new Set(
+    porcoVariants.map((v) => v.product?.id).filter((id): id is string => !!id)
+  );
   const porcoQty = cart
-    .filter((i) => i.product.id.startsWith("porco-variant::"))
+    .filter((i) => porcoVariantIds.has(i.product.id))
     .reduce((sum, i) => sum + i.quantity, 0);
 
-  const addPorcoVariant = (variant: string) => {
-    if (!porcoBase) return;
-    const finalName = variant === "Porco" ? "Porco" : `Porco - ${variant}`;
-    // Id sintético por variante para o carrinho agrupar cada uma como linha separada.
-    // Como não é UUID (36 chars), o envio ao backend manda product_id=null e usa product_name.
-    const syntheticId = `porco-variant::${variant}`;
-    onAdd({ ...porcoBase, id: syntheticId, name: finalName });
-    setPorcoOpen(false);
-  };
 
   return (
     <div className="flex h-screen-safe flex-col overflow-hidden">
