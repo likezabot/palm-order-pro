@@ -21,7 +21,7 @@ Parser também aceita variações naturais: "adiciona 1 bovino na mesa 1", "colo
 **Regras v1:**
 - NÃO mexe em estoque (consistência com PDV).
 - Whitelist obrigatória: `settings.telegram_allowed_chats`. Se vazio/ausente, bloqueia tudo.
-- Identificação: `Telegram (@username)` ou `Telegram` se sem username. Sufixos: `[botão]` para escolha, `[undo]` para desfazer.
+- Identificação: vinculação `telegram_user_bindings` (telegram_user_id → waiter_name). Na 1ª DM o bot lista garçons cadastrados em `profiles` (role='waiter') e pede para o usuário escolher. Sem vínculo: em grupo o bot avisa para chamar em DM; em DM mostra a lista. Comandos: `/trocar` remove o vínculo, `/quemsoueu` mostra atual, `/resetar` (só DM) limpa todas as vinculações. Sufixos `[botão]`/`[undo]` só caem como fallback quando não há userId.
 - Bloqueia mesa "BALCÃO".
 - Em ambíguo nunca chuta.
 - Retry 3× em `version_conflict` via `withVersionRetry`.

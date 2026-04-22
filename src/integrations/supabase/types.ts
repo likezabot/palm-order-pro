@@ -479,6 +479,27 @@ export type Database = {
         }
         Relationships: []
       }
+      telegram_user_bindings: {
+        Row: {
+          bound_at: string
+          telegram_user_id: number
+          telegram_username: string | null
+          waiter_name: string
+        }
+        Insert: {
+          bound_at?: string
+          telegram_user_id: number
+          telegram_username?: string | null
+          waiter_name: string
+        }
+        Update: {
+          bound_at?: string
+          telegram_user_id?: number
+          telegram_username?: string | null
+          waiter_name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

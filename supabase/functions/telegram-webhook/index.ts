@@ -24,6 +24,80 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
+// ─────────────────────── vinculação garçom (Telegram → Palm) ───────────────────────
+// Lista garçons cadastrados no Palm (profiles.role = 'waiter').
+async function listWaiterNames(): Promise<string[]> {
+  const { data, error } = await sb
+    .from("profiles")
+    .select("name")
+    .eq("role", "waiter")
+    .order("name", { ascending: true });
+  if (error) { console.warn("listWaiterNames:", error.message); return []; }
+  return (data ?? []).map((r: any) => String(r.name)).filter(Boolean);
+}
+
+async function getWaiterBinding(telegramUserId: number): Promise<string | null> {
+  const { data, error } = await sb
+    .from("telegram_user_bindings")
+    .select("waiter_name")
+    .eq("telegram_user_id", telegramUserId)
+    .maybeSingle();
+  if (error) { console.warn("getWaiterBinding:", error.message); return null; }
+  return data?.waiter_name ?? null;
+}
+
+async function setWaiterBinding(telegramUserId: number, waiterName: string, username?: string): Promise<void> {
+  const { error } = await sb
+    .from("telegram_user_bindings")
+    .upsert({
+      telegram_user_id: telegramUserId,
+      waiter_name: waiterName,
+      telegram_username: username ?? null,
+    }, { onConflict: "telegram_user_id" });
+  if (error) console.warn("setWaiterBinding:", error.message);
+}
+
+async function clearAllWaiterBindings(): Promise<number> {
+  const { data, error } = await sb
+    .from("telegram_user_bindings")
+    .delete()
+    .gte("telegram_user_id", -9223372036854775000)
+    .select("telegram_user_id");
+  if (error) { console.warn("clearAllWaiterBindings:", error.message); return 0; }
+  return data?.length ?? 0;
+}
+
+// Resolve o nome do garçom a partir do user_id Telegram. Retorna null se não vinculado.
+// Tolerante a maiúsculas/acentos/espaços extras na escolha.
+function normalizeWaiterChoice(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+async function tryBindFromText(telegramUserId: number, text: string, username?: string): Promise<string | null> {
+  const wanted = normalizeWaiterChoice(text);
+  if (!wanted) return null;
+  const names = await listWaiterNames();
+  for (const n of names) {
+    if (normalizeWaiterChoice(n) === wanted) {
+      await setWaiterBinding(telegramUserId, n, username);
+      return n;
+    }
+  }
+  return null;
+}
+function buildWaiterPickerMessage(names: string[], username?: string): string {
+  const greet = username ? `Olá, @${username}! ` : "Olá! ";
+  if (names.length === 0) {
+    return greet +
+      "Nenhum garçom cadastrado no Palm ainda.\n" +
+      "Peça ao admin para abrir o módulo *Admin* e criar seu nome em Garçons.";
+  }
+  return greet +
+    "Antes de começar, me diga *qual garçom você é* (precisa estar cadastrado no Palm).\n\n" +
+    "Garçons disponíveis:\n" +
+    names.map((n) => `  • ${n}`).join("\n") +
+    "\n\nResponda apenas com o nome (ex.: `" + names[0] + "`).";
+}
+
 // Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
 const LAST_TABLE_TTL_MS = 15 * 60_000;
 type ChatType = "private" | "group" | "supergroup" | "channel" | undefined;
@@ -1765,7 +1839,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       await answerCallback(cbId, "Já desfeito");
       return;
     }
-    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `Telegram (@${username}) [undo]` : "Telegram [undo]");
     await answerCallback(cbId);
     try {
       const result = await executeUndoOps(table, [{ op: originalOp as "a" | "r", productId, productName: "", qty }], waiter);
@@ -1787,7 +1862,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       await editTelegramMessage(chatId, messageId, "⏱ Desfazer expirado.");
       return;
     }
-    const waiter = username ? `Telegram (@${username}) [undo]` : "Telegram [undo]";
+    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+    const waiter = bound ?? (username ? `Telegram (@${username}) [undo]` : "Telegram [undo]");
     await answerCallback(cbId);
     try {
       const result = await executeUndoOps(entry.table, entry.ops, waiter);
@@ -1830,7 +1906,8 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
-  const waiter = username ? `Telegram (@${username}) [botão]` : "Telegram [botão]";
+  const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
+  const waiter = bound ?? (username ? `Telegram (@${username}) [botão]` : "Telegram [botão]");
   await answerCallback(cbId);
 
   let resultText: string;
@@ -1964,7 +2041,60 @@ Deno.serve(async (req) => {
     // rate limit (Edge Functions multi-isolate invalidam contadores in-memory).
     // Não há proteção real contra flood — a ser tratado em infra dedicada.
 
-    const waiter = username ? `Telegram (@${username})` : "Telegram";
+    // ─── Vinculação Telegram → garçom do Palm ───
+    // /resetar — só admin (chat privado de admin é o primeiro chat_id em telegram_allowed_chats que é positivo, ou liberado pelo dono)
+    const trimmed = text.trim();
+    const trimmedLower = trimmed.toLowerCase();
+    if (typeof userId === "number" && (trimmedLower === "/resetar" || trimmedLower === "resetar garcons" || trimmedLower === "resetar garçons")) {
+      // Apenas em chat privado (DM) — evita reset acidental em grupo.
+      if (isGroupChat(chatType)) {
+        await sendTelegram(chatId, "⚠️ O comando de reset só pode ser usado em conversa privada com o bot.");
+        return testOrPlain();
+      }
+      const removed = await clearAllWaiterBindings();
+      await sendTelegram(chatId, `🧹 Vinculações de garçons resetadas (${removed}).\nCada usuário precisará escolher o nome novamente na próxima mensagem.`);
+      return testOrPlain();
+    }
+
+    // /trocar ou /quemsoueu (whoami)
+    if (typeof userId === "number" && (trimmedLower === "/trocar" || trimmedLower === "trocar garcom" || trimmedLower === "trocar garçom")) {
+      const { error } = await sb.from("telegram_user_bindings").delete().eq("telegram_user_id", userId);
+      if (error) console.warn("trocar:", error.message);
+      const names = await listWaiterNames();
+      await sendTelegram(chatId, "🔄 Vínculo removido.\n\n" + buildWaiterPickerMessage(names, username));
+      return testOrPlain();
+    }
+    if (typeof userId === "number" && (trimmedLower === "/quemsoueu" || trimmedLower === "quem sou eu")) {
+      const w = await getWaiterBinding(userId);
+      await sendTelegram(chatId, w ? `👤 Você está identificado como *${w}*.\nPara trocar: \`/trocar\`` : "❓ Você ainda não escolheu seu nome. Mande qualquer mensagem que eu te mostro a lista.");
+      return testOrPlain();
+    }
+
+    // Resolve garçom: precisa de userId E vinculação. Sem userId, comportamento antigo.
+    let waiter: string;
+    if (typeof userId === "number") {
+      let bound = await getWaiterBinding(userId);
+      if (!bound) {
+        // Em grupo, ignora silenciosamente para não poluir — onboarding é em DM.
+        if (isGroupChat(chatType)) {
+          await sendTelegram(chatId, `⚠️ @${username ?? "usuário"}, você ainda não está vinculado a um garçom.\nMe chame em conversa privada para escolher seu nome.`);
+          return testOrPlain();
+        }
+        // DM: tenta interpretar a mensagem como escolha de nome
+        const picked = await tryBindFromText(userId, text, username);
+        if (picked) {
+          await sendTelegram(chatId, `✅ Pronto! Você está identificado como *${picked}*.\n\nAgora pode mandar comandos:\n  • mesa 5 + 2 coca\n  • mesa 5 status\n  • ajuda\n\nPara trocar: \`/trocar\``);
+          return testOrPlain();
+        }
+        // Não bateu — mostra a lista
+        const names = await listWaiterNames();
+        await sendTelegram(chatId, buildWaiterPickerMessage(names, username));
+        return testOrPlain();
+      }
+      waiter = bound;
+    } else {
+      waiter = username ? `Telegram (@${username})` : "Telegram";
+    }
 
     // Detecta modo preview
     let workingText = text;
