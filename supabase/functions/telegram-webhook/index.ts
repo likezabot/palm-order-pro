@@ -709,9 +709,33 @@ Deno.serve(async (req) => {
     }
 
     const waiter = username ? `Telegram (@${username})` : "Telegram";
-    const cmd = parseCommand(text);
-    const reply = await handleCommand(cmd, waiter);
-    await sendTelegram(chatId, reply);
+
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+    if (lines.length <= 1) {
+      const cmd = parseCommand(lines[0] ?? text);
+      const reply = await handleCommand(cmd, waiter);
+      await sendTelegram(chatId, reply);
+    } else if (lines.length > 10) {
+      await sendTelegram(
+        chatId,
+        `⚠️ Máx. 10 comandos por mensagem. Você enviou ${lines.length}. Divida em mensagens menores.`,
+      );
+    } else {
+      const results: string[] = [];
+      for (const line of lines) {
+        try {
+          const cmd = parseCommand(line);
+          const res = await handleCommand(cmd, waiter);
+          results.push(res);
+        } catch (e: any) {
+          console.error("line error:", line, e);
+          results.push(`❌ "${line}": erro inesperado`);
+        }
+      }
+      const header = `📊 ${lines.length} comandos processados:\n`;
+      await sendTelegram(chatId, header + "\n" + results.join("\n\n"));
+    }
   } catch (err) {
     console.error("Erro processando update:", err);
   }
