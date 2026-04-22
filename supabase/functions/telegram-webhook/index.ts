@@ -613,27 +613,44 @@ const HELP_TEXT =
 async function handleCommand(cmd: Command, waiter: string): Promise<string> {
   if (cmd.kind === "HELP") return HELP_TEXT;
   if (cmd.kind === "PARSE_ERROR") {
-    return `❓ Não entendi "${cmd.raw}".\n\n` + HELP_TEXT;
+    return (
+      `❓ Não consegui interpretar: "${cmd.raw}"\n\n` +
+      `Faltou identificar mesa, ação ou produto. Exemplos:\n` +
+      `  • mesa 3 + 2 coca 350\n` +
+      `  • tira 1 agua da mesa 1\n\n` +
+      `Envie "ajuda" para ver todos os formatos.`
+    );
   }
   if (cmd.kind === "VIEW") return await executeView(cmd.table);
 
   // ADD/REMOVE
   const resolution = await resolveProduct(cmd.productText);
   switch (resolution.kind) {
-    case "not_found":
-      return `❓ Produto "${cmd.productText}" não encontrado. Tente outro nome ou /ajuda.`;
+    case "not_found": {
+      const sugg = await suggestProducts(cmd.productText);
+      const tail = sugg.length > 0
+        ? `Talvez quis dizer: ${sugg.join(", ")}?\nRepita com o nome exato.`
+        : `Verifique o nome no cardápio e tente de novo.`;
+      return `❓ Não achei "${cmd.productText}" no cardápio.\n${tail}`;
+    }
     case "ambiguous": {
       const list = resolution.candidates
-        .map((p, i) => `${i + 1}) ${p.name}`)
+        .map((p, i) => `  ${i + 1}) ${p.name}`)
         .join("\n");
-      return `🤔 Encontrei vários:\n${list}\n\nRepita usando o nome completo.`;
+      return (
+        `🤔 Encontrei várias opções para "${cmd.productText}":\n${list}\n\n` +
+        `Especifique o tamanho/variante e reenvie.`
+      );
     }
     case "is_group_trigger": {
-      const variants = resolution.variants.join(", ");
-      return `📦 "${resolution.group.name}" é um grupo. Variantes: ${variants}.\nRepita com a variante específica.`;
+      const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
+      return (
+        `📦 "${resolution.group.name}" tem variantes:\n${variants}\n\n` +
+        `Reenvie escolhendo uma das opções acima.`
+      );
     }
     case "out_of_stock":
-      return `❌ ${resolution.product.name} está marcado como esgotado.`;
+      return `❌ ${resolution.product.name} está marcado como esgotado.\nTente uma variante alternativa, se houver.`;
     case "no_linked_product":
       return `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`;
     case "found": {
@@ -646,7 +663,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<string> {
       } catch (e: any) {
         const msg = String(e?.message ?? e);
         if (msg.includes("version_conflict")) {
-          return `⏳ Mesa ${cmd.table} está sendo editada por outro usuário, tente de novo.`;
+          return `⏳ Mesa ${cmd.table} está sendo editada agora. Aguarde 5s e reenvie.`;
         }
         console.error("execute error:", e);
         return `❌ Erro ao processar: ${msg}`;
