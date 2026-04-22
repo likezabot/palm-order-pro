@@ -1,150 +1,94 @@
-## Notificações em tempo real no grupo do Telegram
 
-Vou transformar o grupo "Plano B Operacional" em um feed operacional automático. Toda movimentação relevante (pedidos, alterações, pagamentos, estoque) será postada como mensagem. À meia-noite, um relatório diário com ranking de garçons é enviado.
 
-### 1. Liberar o chat atual
+## Fase 3 — Operações inteligentes (3 entregas)
 
-O grupo `-1003464296947` aparece como "não autorizado" no print. Primeiro passo: adicionar esse ID em `settings.telegram_allowed_chats` para o bot poder operar nele.
+Vou implementar na ordem aprovada: **fechamento de caixa → mesa parada → comando status**. Tudo via banco + edge functions, sem mexer no front.
 
-### 2. Eventos que serão notificados no grupo
+### 1. Fechamento de caixa 💰
 
-**Pedidos (mesa/comanda):**
+**Trigger novo:** `queue_cash_closed` em `cash_register` (AFTER UPDATE quando `status` vira `closed`).
 
-- 🆕 Novo pedido — Mesa X · Garçom Y · itens · total
-- ➕ Acréscimo — Mesa X · itens adicionados
-- ➖ Remoção — Mesa X · itens removidos
-- ✅ Pago — Mesa X · método · valor · troco (se houver)
-- 🔁 Mesa renomeada / movida
+Enfileira evento `cash_closed` com payload calculado em SQL:
+- `total_sales` do registro
+- soma de `cash_movements` por tipo (sangria/suprimento) durante a sessão
+- `final_amount` (conferido) vs `initial_amount + vendas - sangrias + suprimentos` (esperado)
+- diferença
 
-**Estoque:**
+Janela de consolidação: **5s** (fechamento é raro, não precisa muito).
 
-- 📦 Entrada — item · quantidade · estoque atual
-- 📤 Saída — item · quantidade · estoque atual
-- ⚠️ Estoque crítico — item atingiu mínimo
-- 🚨 Item zerado / negativo
-
-**Sistema:**
-
-- 🖨️ Falha de impressão (opcional, configurável)
-
-Cada notificação é resumida em 2–4 linhas, sem poluir o chat. Mensagens são throttled (debounce 1s) para não duplicar quando há muitas alterações em sequência.
-
-### 3. Arquitetura
-
-**Edge Function nova:** `notify-telegram`  
-Recebe um payload `{ type, payload }` e formata + envia via gateway Telegram para o(s) chat(s) configurados em `settings.telegram_notify_chats` (lista separada por vírgula; default = `telegram_allowed_chats`).
-
-**Disparo:** triggers SQL nas tabelas `orders`, `order_items`, `inventory_movements` chamam a função via `pg_net.http_post` (assíncrono, não bloqueia transação). Vantagens:
-
-- Funciona mesmo quando pedido vem do PDV, Palm, Telegram ou bridge — qualquer origem dispara
-- Zero código no front-end
-- Tolerante a falhas (HTTP async)
-
-**Tabelas envolvidas:**
-
-- `settings` chave nova `telegram_notify_chats` (lista de chat_ids)
-- `settings` chave nova `telegram_notify_config` (flags: pedidos, estoque, pagamentos, falhas — todas ON por default)
-
-### 4. Relatório diário 00:00
-
-**Edge Function nova:** `daily-waiter-report`
-
-- Agrega `orders` do dia (status `paid`) agrupando por `waiter_name`
-- Calcula: total de pedidos, total faturado, ticket médio, nº de itens
-- Ordena ranking decrescente por faturamento
-- Envia mensagem formatada:
-
-```text
-🏆 Fechamento do dia — 22/04
-1º 🥇 Alice — R$ 1.240,00 (18 pedidos)
-2º 🥈 Bruno — R$ 980,50 (14 pedidos)
-3º 🥉 Carla — R$ 720,00 (11 pedidos)
-
-Parabéns Alice! 🎉👏
-Total da casa: R$ 2.940,50 · 43 pedidos
+**Mensagem:**
+```
+💰 Caixa fechado
+Vendas: R$ 2.940,50
+Sangrias: R$ 200,00
+Suprimentos: R$ 50,00
+Esperado: R$ 2.890,50 · Conferido: R$ 2.880,00
+Diferença: -R$ 10,50 ⚠️
 ```
 
-**Agendamento:** `pg_cron` rodando `0 3 * * *` UTC (= 00:00 BRT). Único job, idempotente (não dispara duas vezes para a mesma data).
+Sem diferença = sem ⚠️.
 
-### 5. Comandos novos no bot (opcionais, sem mudar os existentes)
+### 2. Alerta de mesa parada ⏰
 
-- `notificações on/off` — liga/desliga o feed temporariamente
-- `relatório` — dispara o relatório do dia atual sob demanda
-- `estoque crítico` — lista itens abaixo do mínimo
+**Edge function nova:** `check-stale-tables`
+- Cron a cada **15 min** (`*/15 * * * *`)
+- Busca pedidos:
+  - `status = 'done'` há mais de **30 min** (esperando pagar)
+  - `status IN ('new','preparing')` cujo `updated_at` é mais antigo que **60 min** (sem item novo)
+- Para cada uma, enfileira evento `table_stale` com `consolidate_key = 'table_stale:<order_id>:<bucket_15min>'` para não repetir o alerta da mesma mesa toda hora — só a cada 15min se persistir.
+- Idempotência adicional: só alerta se ainda não houve `notification_log` com mesma `dedupe_key` nas últimas 2h.
 
-### 6. Resumo técnico
+**Mensagem:**
+```
+⏰ Mesa parada
+Mesa 5 · Garçom Alice
+Aberta há 1h20 · Sem item novo há 45min
+Total atual: R$ 180,00
+```
 
+Flag em `telegram_notify_config.stale_tables` (default ON).
 
-| Arquivo                                           | O que faz                                                                                       |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `supabase/migrations/<ts>_telegram_notify.sql`    | Triggers em `orders`, `order_items`, `inventory_movements` + cron job diário + settings default |
-| `supabase/functions/notify-telegram/index.ts`     | Formata e envia notificações via gateway Telegram                                               |
-| `supabase/functions/daily-waiter-report/index.ts` | Agrega vendas do dia e envia ranking                                                            |
-| `supabase/functions/telegram-webhook/index.ts`    | +3 comandos (`notificações`, `relatório`, `estoque crítico`)                                    |
-| `settings` (linhas)                               | `telegram_allowed_chats` += `-1003464296947`, `telegram_notify_chats`, `telegram_notify_config` |
+### 3. Comando `mesa X status` 📋
 
+**Update em `telegram-webhook`:** parser reconhece padrões:
+- `mesa 5 status`
+- `status mesa 5`
+- `status 5`
 
-Sem mudanças no front-end. Sem mudanças nos fluxos de pedido/estoque atuais — apenas observamos o banco e notificamos.
+Handler busca pedido ativo da mesa e responde no mesmo chat:
+```
+📋 Mesa 5
+Garçom: Alice
+Aberta há 35min · último item há 12min
+• 2× Picanha
+• 1× Coca 2L
+• 3× Cerveja Heineken
+Total: R$ 187,00
+Status: preparando
+```
 
-### 7. Validação após implementar
+Se não houver pedido ativo: "Mesa 5 está livre." 
 
-1. Criar pedido no Palm → mensagem "🆕 Mesa X" cai no grupo
-2. Adicionar item → "➕ Acréscimo"
-3. Pagar no Caixa → "✅ Pago"
-4. Lançar saída no estoque → "📤 Saída" + alerta se ficar crítico
-5. Disparar `relatório` no chat → ranking aparece imediatamente
-6. Confirmar cron agendado em `cron.job`
+Não duplica com `ver pedido` (que mostra detalhe completo) — `status` é o resumo curto.
 
-Pronto para produção quando os 6 itens passarem.
+### 4. Resumo técnico
 
-Plano aprovado com ajustes importantes:
+| Arquivo | O que faz |
+|---|---|
+| `supabase/migrations/<ts>_phase3_notifications.sql` | Trigger `queue_cash_closed` + função SQL auxiliar de cálculo |
+| `supabase/functions/check-stale-tables/index.ts` | Cron 15min, varre mesas paradas e enfileira alertas |
+| `supabase/functions/notify-telegram/index.ts` | +3 formatadores: `cash_closed`, `table_stale` |
+| `supabase/functions/telegram-webhook/index.ts` | +1 comando: `mesa X status` |
+| `cron.schedule` (via insert SQL) | Job `check-stale-tables` rodando `*/15 * * * *` |
+| `settings.telegram_notify_config` | Adiciona flags `cash_closed` e `stale_tables` (default true) |
 
-&nbsp;
+### 5. Validação
 
-1. Não quero notificação crua de qualquer trigger em orders/order_items.
+1. Abrir e fechar caixa no PDV → `💰 Caixa fechado` cai no grupo com totais
+2. Deixar mesa em `done` por 31min → `⏰ Mesa parada` aparece no próximo ciclo
+3. Mandar `mesa 1 status` no Telegram → bot responde resumo
+4. Cron `check-stale-tables` listado em `cron.job`
+5. Confirmar que mesma mesa parada não dispara alerta duplicado em <15min
 
-Quero notificação operacional consolidada, evitando duplicidade e spam no grupo.
+Pronto para Fase 4 quando os 5 passarem.
 
-&nbsp;
-
-2. Priorizar estes eventos:
-
-- novo pedido
-
-- acréscimo consolidado
-
-- remoção consolidada
-
-- pagamento
-
-- estoque crítico / zerado
-
-- relatório diário
-
-Os demais ficam opcionais.
-
-&nbsp;
-
-3. Não quero debounce dependente apenas de memória in-memory.
-
-Se houver consolidação, ela precisa ser confiável e previsível.
-
-&nbsp;
-
-&nbsp;
-
-5. Ranking diário deve considerar padronização de waiter_name para evitar nomes duplicados por grafia diferente.
-
-&nbsp;
-
-6. Antes de expandir para tudo, quero primeira fase com:
-
-- pedidos
-
-- pagamentos
-
-- estoque crítico
-
-- relatório diário
-
-Depois avaliamos se vale adicionar mais notificações.
