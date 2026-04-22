@@ -606,7 +606,49 @@ const HELP_TEXT =
   `📌 Consultar:\n` +
   `  • mesa 4 ver pedido\n\n` +
   `💡 Aceita números por extenso (um, dois… até dez) e plural simples (cocas, bovinos, aguas).\n` +
-  `Em caso de dúvida no produto, o bot pede para especificar.`;
+  `Em caso de dúvida no produto, o bot pede para especificar.\n\n` +
+  `🔍 Modo preview:\n` +
+  `Comece a mensagem com "preview" para ver como cada linha seria interpretada SEM executar.\n` +
+  `Ex:\n  preview\n  mesa 1 + 2 coca 350\n  tira 1 agua da mesa 1`;
+
+// ─────────────────────────── preview (dry-run) ───────────────────────────
+
+async function previewCommand(cmd: Command): Promise<string> {
+  if (cmd.kind === "HELP") return `ℹ️ (preview) Mostraria a ajuda.`;
+  if (cmd.kind === "PARSE_ERROR") {
+    return `❓ (preview) Não interpretaria: "${cmd.raw}" — faltou mesa, ação ou produto.`;
+  }
+  if (cmd.kind === "VIEW") {
+    return `📋 (preview) Mostraria o pedido da mesa ${cmd.table}.`;
+  }
+
+  // ADD/REMOVE — resolve produto sem executar mutação
+  const resolution = await resolveProduct(cmd.productText);
+  const op = cmd.kind === "ADD" ? "+" : "-";
+  const verbo = cmd.kind === "ADD" ? "Adicionaria" : "Removeria";
+
+  switch (resolution.kind) {
+    case "not_found": {
+      const sugg = await suggestProducts(cmd.productText);
+      const tail = sugg.length > 0 ? ` Sugestões: ${sugg.join(", ")}.` : "";
+      return `❓ (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → produto não encontrado.${tail}`;
+    }
+    case "ambiguous": {
+      const list = resolution.candidates.map((p) => p.name).join(" | ");
+      return `🤔 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → ambíguo: ${list}.`;
+    }
+    case "is_group_trigger": {
+      const variants = resolution.variants.join(" | ");
+      return `📦 (preview) Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" → grupo "${resolution.group.name}" com variantes: ${variants}.`;
+    }
+    case "out_of_stock":
+      return `❌ (preview) Mesa ${cmd.table} ${op}${cmd.qty} ${resolution.product.name} → esgotado.`;
+    case "no_linked_product":
+      return `⚠️ (preview) "${resolution.itemName}" sem produto vinculado.`;
+    case "found":
+      return `✅ (preview) ${verbo} na Mesa ${cmd.table}: ${op}${cmd.qty} ${resolution.product.name} (${fmtBRL(resolution.product.price)}).`;
+  }
+}
 
 // ─────────────────────────── handler ───────────────────────────
 
