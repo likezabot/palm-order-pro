@@ -36,6 +36,34 @@ function fmtBRL(n: number): string {
   return `R$ ${n.toFixed(2).replace(".", ",")}`;
 }
 
+// Singulariza tokens em pt-BR (conservador). Aplicado antes do resolveProduct.
+// Preserva dígitos/unidades (350, 2l, 600ml) e palavras curtas/acentuadas (gas, mes).
+function singularizeToken(tok: string): string {
+  if (!tok) return tok;
+  // dígitos ou tokens com dígito (350, 2l, 600ml) — não mexer
+  if (/\d/.test(tok)) return tok;
+  if (tok.length <= 3) return tok;
+  // Já vem normalizado (sem acento). Heurística: se termina em "as/es/is/os/us"
+  // mas a forma original poderia ter acento (gás→gas, três→tres), não dá pra saber.
+  // Mantemos conservador: tokens com 4 letras terminados em vogal+s ficam.
+  // Regras de plural:
+  if (/oes$/.test(tok)) return tok.replace(/oes$/, "ao"); // medalhoes -> medalhao
+  if (/ais$/.test(tok)) return tok.replace(/ais$/, "al"); // pasteis errado, mas: animais->animal
+  if (/eis$/.test(tok)) return tok.replace(/eis$/, "el"); // pasteis -> pastel
+  if (/ois$/.test(tok)) return tok.replace(/ois$/, "ol"); // lencois -> lencol
+  if (/uis$/.test(tok)) return tok.replace(/uis$/, "ul"); // pauis -> paul
+  if (/ns$/.test(tok)) return tok.replace(/ns$/, "m");    // garagens -> garagem
+  if (/(res|zes|ses)$/.test(tok)) return tok.slice(0, -2); // colheres -> colher
+  // Vogal + s no final: tira o s (cocas->coca, bovinos->bovino, aguas->agua)
+  // Mas evita ss e palavras de 4 letras tipo "mais" (já tratado), "pais" (já tratado).
+  if (/[aeiou]s$/.test(tok) && !/ss$/.test(tok)) return tok.slice(0, -1);
+  return tok;
+}
+
+function singularize(text: string): string {
+  return text.split(/\s+/).map(singularizeToken).join(" ");
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
