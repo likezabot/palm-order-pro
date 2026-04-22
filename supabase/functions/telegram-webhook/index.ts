@@ -2639,14 +2639,38 @@ async function wzMainMenuV2(chatId: number, messageId?: number, extraInfo?: stri
 
 // ─── Helpers de busca/contexto ───
 
-async function wzListCategoriesWithCount(): Promise<{ name: string; count: number }[]> {
+// Categorias canônicas do cardápio (espelha src/lib/types.ts).
+const MENU_CATEGORIES = ["refeicoes", "espetos", "bebidas", "cervejas"] as const;
+const MENU_CATEGORY_LABELS: Record<string, string> = {
+  refeicoes: "Refeições",
+  espetos: "Espetos",
+  bebidas: "Bebidas",
+  cervejas: "Cervejas",
+};
+function wzCategoryLabel(slug: string): string {
+  return MENU_CATEGORY_LABELS[slug] ?? (slug.charAt(0).toUpperCase() + slug.slice(1));
+}
+
+async function wzListCategoriesWithCount(): Promise<{ name: string; label: string; count: number }[]> {
   const { data } = await sb.from("inventory_items").select("category").eq("is_active", true);
   const counts = new Map<string, number>();
   for (const r of (data ?? []) as any[]) {
     const c = r.category || "outros";
     counts.set(c, (counts.get(c) ?? 0) + 1);
   }
-  return Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  // Sempre mostra as 4 categorias do cardápio na ordem canônica.
+  const result = MENU_CATEGORIES.map((name) => ({
+    name,
+    label: wzCategoryLabel(name),
+    count: counts.get(name) ?? 0,
+  }));
+  // Anexa categorias legacy não canônicas que ainda tenham itens (ex: "outros").
+  for (const [name, count] of counts.entries()) {
+    if (!MENU_CATEGORIES.includes(name as any) && count > 0) {
+      result.push({ name, label: wzCategoryLabel(name), count });
+    }
+  }
+  return result;
 }
 
 async function wzTopMovedItems(action: WzAction, limit = 5): Promise<any[]> {
@@ -2771,7 +2795,7 @@ async function wzShowCategoryPicker(chatId: number, messageId: number | undefine
     for (let j = 0; j < 2 && i + j < cats.length; j++) {
       const c = cats[i + j];
       const enc = encodeURIComponent(c.name).slice(0, 30);
-      row.push({ text: `📂 ${c.name} (${c.count})`, callback_data: action ? `wz|scope|cat|${enc}` : `wz|catview|${enc}` });
+      row.push({ text: `📂 ${c.label} (${c.count})`, callback_data: action ? `wz|scope|cat|${enc}` : `wz|catview|${enc}` });
     }
     rows.push(row);
   }
@@ -2822,7 +2846,7 @@ async function wzAskQty(chatId: number, messageId: number | undefined, action: W
     lines.push("");
     lines.push(action === "adj" ? `Ajustar saldo de todos para qual valor?` : `Quantas unidades em cada item?`);
   } else {
-    lines.push(`${wzActionLabel(action)} → categoria *${scope.category}*`);
+    lines.push(`${wzActionLabel(action)} → categoria *${wzCategoryLabel(scope.category)}*`);
     lines.push("");
     lines.push(action === "adj" ? `Ajustar saldo dos itens para qual valor?` : `Quantas unidades em cada item?`);
   }
@@ -2910,7 +2934,7 @@ async function wzShowMassReview(chatId: number, messageId: number | undefined, a
     return;
   }
   const verb = action === "in" ? "Entrada de +" : action === "out" ? "Saída de -" : "Ajuste para ";
-  const scopeLabel = scope.kind === "all" ? "todos os itens ativos" : `categoria *${(scope as any).category}*`;
+  const scopeLabel = scope.kind === "all" ? "todos os itens ativos" : `categoria *${wzCategoryLabel((scope as any).category)}*`;
   const previewLimit = fullList ? Math.min(items.length, 30) : 5;
 
   const lines: string[] = [];
