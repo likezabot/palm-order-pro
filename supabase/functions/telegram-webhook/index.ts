@@ -2038,7 +2038,60 @@ Deno.serve(async (req) => {
     // rate limit (Edge Functions multi-isolate invalidam contadores in-memory).
     // Não há proteção real contra flood — a ser tratado em infra dedicada.
 
-    const waiter = username ? `Telegram (@${username})` : "Telegram";
+    // ─── Vinculação Telegram → garçom do Palm ───
+    // /resetar — só admin (chat privado de admin é o primeiro chat_id em telegram_allowed_chats que é positivo, ou liberado pelo dono)
+    const trimmed = text.trim();
+    const trimmedLower = trimmed.toLowerCase();
+    if (typeof userId === "number" && (trimmedLower === "/resetar" || trimmedLower === "resetar garcons" || trimmedLower === "resetar garçons")) {
+      // Apenas em chat privado (DM) — evita reset acidental em grupo.
+      if (isGroupChat(chatType)) {
+        await sendTelegram(chatId, "⚠️ O comando de reset só pode ser usado em conversa privada com o bot.");
+        return testOrPlain();
+      }
+      const removed = await clearAllWaiterBindings();
+      await sendTelegram(chatId, `🧹 Vinculações de garçons resetadas (${removed}).\nCada usuário precisará escolher o nome novamente na próxima mensagem.`);
+      return testOrPlain();
+    }
+
+    // /trocar ou /quemsoueu (whoami)
+    if (typeof userId === "number" && (trimmedLower === "/trocar" || trimmedLower === "trocar garcom" || trimmedLower === "trocar garçom")) {
+      const { error } = await sb.from("telegram_user_bindings").delete().eq("telegram_user_id", userId);
+      if (error) console.warn("trocar:", error.message);
+      const names = await listWaiterNames();
+      await sendTelegram(chatId, "🔄 Vínculo removido.\n\n" + buildWaiterPickerMessage(names, username));
+      return testOrPlain();
+    }
+    if (typeof userId === "number" && (trimmedLower === "/quemsoueu" || trimmedLower === "quem sou eu")) {
+      const w = await getWaiterBinding(userId);
+      await sendTelegram(chatId, w ? `👤 Você está identificado como *${w}*.\nPara trocar: \`/trocar\`` : "❓ Você ainda não escolheu seu nome. Mande qualquer mensagem que eu te mostro a lista.");
+      return testOrPlain();
+    }
+
+    // Resolve garçom: precisa de userId E vinculação. Sem userId, comportamento antigo.
+    let waiter: string;
+    if (typeof userId === "number") {
+      let bound = await getWaiterBinding(userId);
+      if (!bound) {
+        // Em grupo, ignora silenciosamente para não poluir — onboarding é em DM.
+        if (isGroupChat(chatType)) {
+          await sendTelegram(chatId, `⚠️ @${username ?? "usuário"}, você ainda não está vinculado a um garçom.\nMe chame em conversa privada para escolher seu nome.`);
+          return testOrPlain();
+        }
+        // DM: tenta interpretar a mensagem como escolha de nome
+        const picked = await tryBindFromText(userId, text, username);
+        if (picked) {
+          await sendTelegram(chatId, `✅ Pronto! Você está identificado como *${picked}*.\n\nAgora pode mandar comandos:\n  • mesa 5 + 2 coca\n  • mesa 5 status\n  • ajuda\n\nPara trocar: \`/trocar\``);
+          return testOrPlain();
+        }
+        // Não bateu — mostra a lista
+        const names = await listWaiterNames();
+        await sendTelegram(chatId, buildWaiterPickerMessage(names, username));
+        return testOrPlain();
+      }
+      waiter = bound;
+    } else {
+      waiter = username ? `Telegram (@${username})` : "Telegram";
+    }
 
     // Detecta modo preview
     let workingText = text;
