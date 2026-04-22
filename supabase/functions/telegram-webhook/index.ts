@@ -2067,7 +2067,7 @@ Deno.serve(async (req) => {
       const { error } = await sb.from("telegram_user_bindings").delete().eq("telegram_user_id", userId);
       if (error) console.warn("trocar:", error.message);
       const names = await listWaiterNames();
-      await sendTelegram(chatId, "🔄 Vínculo removido.\n\n" + buildWaiterPickerMessage(names, username));
+      await sendTelegram(chatId, "🔄 Vínculo removido.\n\n" + buildWaiterPickerMessage(names, username), buildWaiterPickerKeyboard(names));
       return testOrPlain();
     }
     if (typeof userId === "number" && (trimmedLower === "/quemsoueu" || trimmedLower === "quem sou eu")) {
