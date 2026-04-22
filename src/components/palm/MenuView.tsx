@@ -16,7 +16,7 @@ import {
 } from "@/lib/product-groups";
 import { CartFab } from "./CartFab";
 import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
-import { useProductStockMap, isProductEsgotado } from "@/hooks/use-product-stock-map";
+import { useProductStockMap, useProductRecipes, isProductEsgotado } from "@/hooks/use-product-stock-map";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -44,13 +44,14 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
   const [esgotadoPending, setEsgotadoPending] = useState<Product | null>(null);
   const { playFeedback } = useFeedback();
   const { data: stockMap } = useProductStockMap();
+  const { data: recipes } = useProductRecipes();
   const { data: productGroups = [] } = useProductGroups();
   const hiddenProductNames = useMemo(
     () => getHiddenProductNames(productGroups, activeCategory),
     [productGroups, activeCategory],
   );
 
-  const isEsgotado = (id: string) => isProductEsgotado(stockMap, id);
+  const isEsgotado = (id: string) => isProductEsgotado(stockMap, id, recipes);
 
   // Intercepta o add: se o item estiver esgotado (estoque <= 0 e vinculado),
   // abre confirm dialog. Se confirmar, chama onAdd normalmente.

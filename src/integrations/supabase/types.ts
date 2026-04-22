@@ -339,6 +339,27 @@ export type Database = {
         }
         Relationships: []
       }
+      product_recipes: {
+        Row: {
+          created_at: string
+          id: string
+          ingredient_product_id: string
+          product_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ingredient_product_id: string
+          product_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ingredient_product_id?: string
+          product_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           active: boolean

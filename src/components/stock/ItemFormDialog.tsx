@@ -285,11 +285,14 @@ export default function ItemFormDialog({ open, onOpenChange, item }: Props) {
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {STOCK_CATEGORIES.map((c) => (
+                  {STOCK_CATEGORIES.filter((c) => c !== "refeicoes").map((c) => (
                     <SelectItem key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Refeições não usam estoque — vincule por receita no produto.
+              </p>
             </div>
             <div>
               <Label>Unidade</Label>
