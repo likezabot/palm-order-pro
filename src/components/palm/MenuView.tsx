@@ -448,7 +448,6 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         open={!!openGroup}
         onOpenChange={(o) => { if (!o) setOpenGroup(null); }}
         groupName={openGroup?.name ?? ""}
-        groupIcon={openGroup?.icon}
         variants={
           openGroup
             ? resolveGroupMembers(openGroup, products).map((v) => ({
