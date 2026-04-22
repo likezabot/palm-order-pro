@@ -9,9 +9,10 @@ interface Props {
   onClose: () => void;
   onAdd: (product: Product) => void;
   getQty: (id: string) => number;
+  isEsgotado?: (id: string) => boolean;
 }
 
-export const SubgroupDialog = ({ subgroup, products, onClose, onAdd, getQty }: Props) => {
+export const SubgroupDialog = ({ subgroup, products, onClose, onAdd, getQty, isEsgotado }: Props) => {
   const { playFeedback } = useFeedback();
 
   return (
@@ -26,21 +27,29 @@ export const SubgroupDialog = ({ subgroup, products, onClose, onAdd, getQty }: P
           )}
           {products.map((product) => {
             const qty = getQty(product.id);
+            const esgotado = isEsgotado?.(product.id) ?? false;
             return (
               <button
                 key={product.id}
                 onClick={() => onAdd(product)}
-                className="relative flex items-center justify-between rounded-lg bg-card border border-border p-4 text-left transition-all duration-150 active:scale-[0.97] min-h-[64px]"
+                className={`relative flex items-center justify-between rounded-lg border p-4 text-left transition-all duration-150 active:scale-[0.97] min-h-[64px] ${
+                  esgotado ? "bg-card/60 border-destructive/40" : "bg-card border-border"
+                }`}
               >
                 <div className="flex flex-col">
-                  <span className="font-semibold text-base text-foreground leading-tight">
+                  <span className={`font-semibold text-base leading-tight ${esgotado ? "text-muted-foreground" : "text-foreground"}`}>
                     {product.name}
                   </span>
-                  <span className="mt-1 text-sm text-primary font-bold">
+                  <span className={`mt-1 text-sm font-bold ${esgotado ? "text-muted-foreground" : "text-primary"}`}>
                     R$ {product.price.toFixed(2)}
                   </span>
+                  {esgotado && (
+                    <span className="mt-1 inline-flex w-fit items-center rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-destructive border border-destructive/40">
+                      Esgotado
+                    </span>
+                  )}
                 </div>
-                <span className="text-sm font-semibold text-primary">+ ADD</span>
+                <span className={`text-sm font-semibold ${esgotado ? "text-destructive" : "text-primary"}`}>+ ADD</span>
                 {qty > 0 && (
                   <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                     {qty}

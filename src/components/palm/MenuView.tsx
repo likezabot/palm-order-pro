@@ -16,6 +16,8 @@ import { RenameTableDialog } from "./RenameTableDialog";
 import { PorcoVariantDialog } from "./PorcoVariantDialog";
 import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
+import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
+import { useProductStockMap, isProductEsgotado } from "@/hooks/use-product-stock-map";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -40,7 +42,22 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   const [renameValue, setRenameValue] = useState("");
   const [moveOpen, setMoveOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [esgotadoPending, setEsgotadoPending] = useState<Product | null>(null);
   const { playFeedback } = useFeedback();
+  const { data: stockMap } = useProductStockMap();
+
+  const isEsgotado = (id: string) => isProductEsgotado(stockMap, id);
+
+  // Intercepta o add: se o item estiver esgotado (estoque <= 0 e vinculado),
+  // abre confirm dialog. Se confirmar, chama onAdd normalmente.
+  const handleAdd = (product: Product) => {
+    if (isEsgotado(product.id)) {
+      playFeedback("click");
+      setEsgotadoPending(product);
+      return;
+    }
+    onAdd(product);
+  };
 
   const canRename = !!tableName && tableName !== "BALCÃO" && !!onRenameTable;
   const canMove = !!existingOrderId && !!originalTableName && originalTableName !== "BALCÃO" && !!onTableMoved;
@@ -357,20 +374,30 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
               .filter((p) => !(showPorcoCard && porcoReal && p.id === porcoReal.id))
               .map((product) => {
                 const qty = getQty(product.id);
+                const esgotado = isEsgotado(product.id);
                 return (
                   <button
                     key={product.id}
-                    onClick={() => onAdd(product)}
-                    className="relative flex flex-col rounded-2xl bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.94] active:bg-primary/10 hover:border-primary/40 shadow-soft hover:shadow-card"
+                    onClick={() => handleAdd(product)}
+                    className={`relative flex flex-col rounded-2xl border p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card ${
+                      esgotado
+                        ? "bg-card/60 border-destructive/40 hover:border-destructive/60"
+                        : "bg-card border-border active:bg-primary/10 hover:border-primary/40"
+                    }`}
                   >
-                    <span className="font-semibold text-base text-foreground leading-tight">
+                    <span className={`font-semibold text-base leading-tight ${esgotado ? "text-muted-foreground" : "text-foreground"}`}>
                       {product.name}
                     </span>
-                    <span className="mt-1 text-sm font-black brand-gradient-text">
+                    <span className={`mt-1 text-sm font-black ${esgotado ? "text-muted-foreground" : "brand-gradient-text"}`}>
                       R$ {product.price.toFixed(2)}
                     </span>
-                    <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
-                      + ADD
+                    {esgotado && (
+                      <span className="mt-1 inline-flex w-fit items-center rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-destructive border border-destructive/40">
+                        Esgotado
+                      </span>
+                    )}
+                    <span className={`mt-auto pt-2 inline-flex items-center gap-1 text-base font-black ${esgotado ? "text-destructive" : "text-primary"}`}>
+                      {esgotado ? "+ Adicionar" : "+ ADD"}
                     </span>
                     {qty > 0 && (
                       <span
@@ -413,8 +440,19 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         subgroup={openSubgroup}
         products={subgroupProducts}
         onClose={() => setOpenSubgroup(null)}
-        onAdd={onAdd}
+        onAdd={handleAdd}
         getQty={getQty}
+        isEsgotado={isEsgotado}
+      />
+
+      <EsgotadoConfirmDialog
+        open={!!esgotadoPending}
+        productName={esgotadoPending?.name ?? null}
+        onCancel={() => setEsgotadoPending(null)}
+        onConfirm={() => {
+          if (esgotadoPending) onAdd(esgotadoPending);
+          setEsgotadoPending(null);
+        }}
       />
 
       <CartFab itemCount={itemCount} total={total} onClick={onViewCart} />
