@@ -254,6 +254,31 @@ function buildUndoBatchKeyboard(token: string): InlineButton[][] {
   return [[{ text: "↩️ Desfazer (60s)", callback_data: `ub|${token}` }]];
 }
 
+// ─── Stock undo (60s, in-memory) ───
+type StockUndoEntry = {
+  itemId: string;
+  itemName: string;
+  unit: string;
+  type: "in" | "out" | "adjustment";
+  qty: number;
+  previousStock: number; // valor ANTES do movimento (usado em adjustment)
+  ts: number;
+};
+const pendingStockUndos = new Map<string, StockUndoEntry>();
+function cleanupStockUndos() {
+  const now = Date.now();
+  for (const [k, v] of pendingStockUndos) if (now - v.ts > UNDO_TTL_MS) pendingStockUndos.delete(k);
+}
+function registerStockUndo(entry: Omit<StockUndoEntry, "ts">): string {
+  cleanupStockUndos();
+  const token = genUndoToken();
+  pendingStockUndos.set(token, { ...entry, ts: Date.now() });
+  return token;
+}
+function buildStockUndoKeyboard(token: string): InlineButton[][] {
+  return [[{ text: "↩️ Desfazer (60s)", callback_data: `us|${token}` }]];
+}
+
 // ─────────────────────────── helpers ───────────────────────────
 
 function normalize(s: string): string {
