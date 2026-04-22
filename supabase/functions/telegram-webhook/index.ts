@@ -92,10 +92,16 @@ function buildWaiterPickerMessage(names: string[], username?: string): string {
       "Peça ao admin para abrir o módulo *Admin* e criar seu nome em Garçons.";
   }
   return greet +
-    "Antes de começar, me diga *qual garçom você é* (precisa estar cadastrado no Palm).\n\n" +
-    "Garçons disponíveis:\n" +
-    names.map((n) => `  • ${n}`).join("\n") +
-    "\n\nResponda apenas com o nome (ex.: `" + names[0] + "`).";
+    "Antes de começar, toque no seu nome abaixo 👇\n" +
+    "(Você precisa estar cadastrado no Palm. Se não estiver, peça ao admin.)";
+}
+// Botões clicáveis com nomes dos garçons. callback_data: pw|<idx> (idx é a posição em listWaiterNames()).
+function buildWaiterPickerKeyboard(names: string[]): InlineButton[][] {
+  const rows: InlineButton[][] = [];
+  for (let i = 0; i < names.length && i < 24; i++) {
+    rows.push([{ text: `👤 ${names[i]}`, callback_data: `pw|${i}` }]);
+  }
+  return rows;
 }
 
 // Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
