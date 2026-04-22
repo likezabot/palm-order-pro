@@ -2590,7 +2590,7 @@ Deno.serve(async (req) => {
     // Detecta modo preview
     let workingText = text;
     let isPreview = false;
-    const rawLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const rawLines = splitCommands(text);
     if (rawLines.length > 0 && /^preview\b/i.test(rawLines[0])) {
       isPreview = true;
       const firstRest = rawLines[0].replace(/^preview\b[:\s-]*/i, "").trim();
