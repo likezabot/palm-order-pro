@@ -253,7 +253,23 @@ const VIEW_PHRASES = ["como esta", "como ta", "como anda"];
 const NUM_WORDS_GLOBAL: Record<string, number> = {
   um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
   seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+  onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15,
+  dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+  "vinte e um": 21, "vinte e uma": 21, "vinte e dois": 22, "vinte e duas": 22,
+  "vinte e tres": 23, "vinte e quatro": 24, "vinte e cinco": 25,
+  "vinte e seis": 26, "vinte e sete": 27, "vinte e oito": 28, "vinte e nove": 29,
+  trinta: 30,
 };
+
+// Resolve um número de mesa a partir de um trecho de texto (já normalizado).
+// Aceita dígitos ("5"), por extenso ("cinco", "vinte e um").
+function parseTableNumber(s: string): string | null {
+  const t = s.trim();
+  if (!t) return null;
+  if (/^\d+$/.test(t)) return t;
+  const n = NUM_WORDS_GLOBAL[t];
+  return n !== undefined ? String(n) : null;
+}
 function parseQtyToken(token: string): number | null {
   if (/^\d+$/.test(token)) {
     const n = parseInt(token, 10);
