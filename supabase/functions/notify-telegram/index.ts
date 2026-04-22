@@ -126,6 +126,15 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
       text = `⚠️ <b>Estoque crítico</b>\n${p.name}: ${p.current} ${p.unit || ""} (mín ${p.min})`;
     } else if (evt.event_type === "stock_zero" && cfg.stock_critical !== false) {
       text = `🚨 <b>Item zerado</b>\n${p.name}: ${p.current} ${p.unit || ""}`;
+    } else if (evt.event_type === "stock_in" && cfg.stock_in !== false) {
+      const note = p.note ? `\n<i>${p.note}</i>` : "";
+      text = `📦 <b>Entrada de estoque</b>\n${p.name}: +${p.quantity} ${p.unit || ""} (atual ${p.current})${note}`;
+    } else if (evt.event_type === "table_renamed" && cfg.orders !== false) {
+      text = `🔁 <b>Mesa renomeada</b>\n${p.old_name} → <b>${p.new_name}</b>` +
+             (p.waiter_name ? `\nGarçom: ${p.waiter_name}` : "");
+    } else if (evt.event_type === "print_failure" && cfg.print_failure !== false) {
+      const tipo = p.print_type === "bill" ? "conta" : p.print_type === "delta" ? "acréscimo" : "pedido";
+      text = `🖨️ <b>Falha de impressão</b>\nMesa ${p.table_name} (${tipo})\n<i>${p.error}</i>`;
     } else {
       continue;
     }
