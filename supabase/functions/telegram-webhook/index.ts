@@ -465,6 +465,29 @@ function extractQtyProductFromTail(s: string): { qty: number; productText: strin
   return { qty: 1, productText: t };
 }
 
+// Parser solto para linhas de continuação em modo de operação herdada.
+// Aceita "<qty> [unit] <produto>" OU "<produto> <qty> [unit]".
+const STOCK_UNIT_RE_GLOBAL = "(?:kg|g|l|ml|un|unidade|unidades)";
+function parseStockTailLoose(raw: string): { qty: number; unit?: string; itemText: string } | null {
+  const t = normalize(raw);
+  if (!t) return null;
+  const m1 = t.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE_GLOBAL})?\\s+(.+)$`));
+  if (m1) {
+    const qty = parseFloat(m1[1].replace(",", "."));
+    if (Number.isFinite(qty) && qty > 0) {
+      return { qty, unit: m1[2] || undefined, itemText: m1[3].trim() };
+    }
+  }
+  const m2 = t.match(new RegExp(`^(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE_GLOBAL})?$`));
+  if (m2) {
+    const qty = parseFloat(m2[2].replace(",", "."));
+    if (Number.isFinite(qty) && qty > 0) {
+      return { qty, unit: m2[3] || undefined, itemText: m2[1].trim() };
+    }
+  }
+  return null;
+}
+
 function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
