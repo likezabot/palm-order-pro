@@ -32,7 +32,7 @@ export default function ProductRecipesPanel({ productId }: Props) {
         .not("product_id", "is", null);
       if (error) throw error;
       const ids = Array.from(
-        new Set(((data ?? []) as Array<{ product_id: string }>).map((r) => r.product_id)),
+        new Set(((data ?? []) as unknown as Array<{ product_id: string }>).map((r) => r.product_id)),
       );
       if (ids.length === 0) return [] as Array<{ id: string; name: string; category: string }>;
       const { data: prods, error: e2 } = await supabase

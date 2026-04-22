@@ -11,6 +11,7 @@ import {
   norm,
 } from "@/lib/product-groups";
 import { Input } from "@/components/ui/input";
+import ProductRecipesPanel from "./ProductRecipesPanel";
 
 interface Props {
   product: Product | null;
@@ -240,6 +241,10 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
             </div>
           )}
         </div>
+
+        {product && category === "refeicoes" && (
+          <ProductRecipesPanel productId={product.id} />
+        )}
 
         <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
           <span className="font-semibold">Ativo no cardápio</span>
