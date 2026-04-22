@@ -100,6 +100,7 @@ export type Database = {
           is_active: boolean
           min_stock: number
           name: string
+          product_id: string | null
           slug: string
           unit: string
           updated_at: string
@@ -113,6 +114,7 @@ export type Database = {
           is_active?: boolean
           min_stock?: number
           name: string
+          product_id?: string | null
           slug: string
           unit?: string
           updated_at?: string
@@ -126,6 +128,7 @@ export type Database = {
           is_active?: boolean
           min_stock?: number
           name?: string
+          product_id?: string | null
           slug?: string
           unit?: string
           updated_at?: string
@@ -438,6 +441,7 @@ export type Database = {
           is_active: boolean
           min_stock: number
           name: string
+          product_id: string | null
           slug: string
           unit: string
           updated_at: string
