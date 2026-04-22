@@ -425,22 +425,26 @@ function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
 
-  if (/^(?:\/start|\/help|ajuda|help|comandos|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite)$/.test(text)) {
+  if (/^(?:\/start|\/help|ajuda|help|comandos?|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite|\?+|o\s+que\s+(?:faz|voce\s+faz)|como\s+usar|me\s+ajuda|socorro)$/.test(text)) {
     return { kind: "HELP" };
   }
 
-  // UNDO: aceita "undo", "desfazer", "desfaz", "volta", "voltar", "anula", "anular", "cancela ultima"
-  // opcionalmente seguido de "tudo|todos|todas|all|geral"
-  const undoMatch = text.match(/^(?:undo|desfa(?:zer|z|ca)|volta(?:r)?|anula(?:r)?|cancela(?:r)?\s+ultima?)(?:\s+(tudo|todos|todas|all|geral))?$/);
+  // UNDO: aceita "undo", "desfazer", "errei", "oops", "voltar atras", etc.
+  const undoMatch = text.match(/^(?:undo|desfa(?:zer|z|ca)|volta(?:r)?(?:\s+atras|\s+atrás)?|anula(?:r)?|cancela(?:r)?\s+ultima?|reverter|errei|oops|apaga(?:r)?\s+ultim[oa]|tira(?:r)?\s+ultim[oa])(?:\s+(tudo|todos|todas|all|geral))?$/);
   if (undoMatch) return { kind: "UNDO", all: !!undoMatch[1] };
 
   // RELATÓRIO: muitas formas de pedir o resumo do dia
-  if (/^(?:relatorio|relatório|ranking|fechamento|resumo(?:\s+(?:do\s+)?dia)?|fecha(?:r)?\s+dia|balanco|balanço|me\s+(?:da|de)\s+o?\s*relatorio|gera(?:r)?\s+relatorio)$/.test(text)) {
+  if (/^(?:relatorio|relatório|ranking|fechamento|resumo(?:\s+(?:do\s+)?dia)?|fecha(?:r)?\s+dia|balanco|balanço|me\s+(?:da|de)\s+o?\s*relatorio|gera(?:r)?\s+relatorio|report|dia|como\s+foi\s+o\s+dia|vendas\s+hoje|total\s+do\s+dia|caixa)$/.test(text)) {
     return { kind: "REPORT" };
   }
 
+  // ESTOQUE: LISTAR todos (antes de CRÍTICO porque "lista estoque" / "inventario" é mais específico)
+  if (/^(?:lista\s+estoque|listar\s+estoque|estoque\s+(?:completo|todo|tudo|geral)|inventario|inventário|tudo\s+do\s+estoque|todos\s+(?:os\s+)?itens|itens\s+(?:do\s+)?estoque)$/.test(text)) {
+    return { kind: "STOCK_LIST" };
+  }
+
   // ESTOQUE CRÍTICO
-  if (/^(?:estoque(?:\s+(?:critico|crítico|baixo|zerado|acabando|em\s+falta))?|criticos|críticos|o\s+que\s+(?:ta|esta)\s+acabando|falta(?:ndo)?\s+(?:o\s+)?que)$/.test(text)) {
+  if (/^(?:estoque(?:\s+(?:critico|crítico|baixo|zerado|acabando|em\s+falta))?|criticos|críticos|alertas?(?:\s+(?:de\s+)?estoque)?|o\s+que\s+(?:ta|esta)\s+acabando|o\s+que\s+falta|falta(?:ndo)?\s+(?:o\s+)?que|precisa\s+repor|lista\s+critica)$/.test(text)) {
     return { kind: "STOCK_CRITICAL" };
   }
 
