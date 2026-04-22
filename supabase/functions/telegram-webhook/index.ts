@@ -1148,7 +1148,7 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
       : `❌ Erro ao processar: ${msg}`;
   }
-  if (success) setLastTable(chatId, table);
+  if (success) await setLastTable(chatId, table);
   await editTelegramMessage(chatId, messageId, resultText);
 }
 
@@ -1247,10 +1247,10 @@ Deno.serve(async (req) => {
 
     if (lines.length <= 1) {
       const parsed = parseCommand(lines[0] ?? text);
-      const cmd = resolveWithContext(parsed, chatId);
+      const cmd = await resolveWithContext(parsed, chatId);
       const reply = await handleCommand(cmd, waiter);
       await sendTelegram(chatId, reply.text, reply.keyboard);
-      if (reply.successTable) setLastTable(chatId, reply.successTable);
+      if (reply.successTable) await setLastTable(chatId, reply.successTable);
     } else {
       // Multi-comando: separa textuais (consolidado) e ambíguos (1 mensagem cada)
       const textResults: string[] = [];
@@ -1258,7 +1258,7 @@ Deno.serve(async (req) => {
       for (const line of lines) {
         try {
           const parsed = parseCommand(line);
-          const cmd = resolveWithContext(parsed, chatId);
+          const cmd = await resolveWithContext(parsed, chatId);
           const reply = await handleCommand(cmd, waiter);
           if (reply.keyboard && reply.keyboard.length > 0) {
             pendingChoices.push(reply);
@@ -1267,7 +1267,7 @@ Deno.serve(async (req) => {
             textResults.push(reply.text);
           }
           // Atualiza contexto entre linhas para que a próxima linha possa usar mesa implícita
-          if (reply.successTable) setLastTable(chatId, reply.successTable);
+          if (reply.successTable) await setLastTable(chatId, reply.successTable);
         } catch (e) {
           console.error("line error:", line, e);
           textResults.push(`❌ "${line}": erro inesperado`);
