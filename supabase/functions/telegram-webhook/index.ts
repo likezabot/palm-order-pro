@@ -80,33 +80,10 @@ async function setLastTable(chatId: number, table: string, userId?: number, chat
   await sb.from("settings").insert({ key, value });
 }
 
-// ─────────────────────────── rate limit (best-effort, in-memory) ───────────────────────────
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX = 10;
-const rateBuckets = new Map<number, number[]>();
-const rateWarned = new Map<number, number>();
-function checkRateLimit(chatId: number): boolean {
-  const now = Date.now();
-  const arr = (rateBuckets.get(chatId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-  arr.push(now);
-  rateBuckets.set(chatId, arr);
-  // Cleanup periódico
-  if (rateBuckets.size > 200) {
-    for (const [k, v] of rateBuckets) {
-      const cleaned = v.filter((t) => now - t < RATE_WINDOW_MS);
-      if (cleaned.length === 0) rateBuckets.delete(k);
-      else rateBuckets.set(k, cleaned);
-    }
-  }
-  return arr.length <= RATE_MAX;
-}
-function shouldSendRateWarning(chatId: number): boolean {
-  const now = Date.now();
-  const last = rateWarned.get(chatId) ?? 0;
-  if (now - last < 10_000) return false;
-  rateWarned.set(chatId, now);
-  return true;
-}
+// ─────────────────────────── rate limit ───────────────────────────
+// REMOVIDO: rate limit in-memory não é confiável em Edge Functions multi-isolate.
+// O backend não tem primitivos para rate limit persistente ainda. Sem proteção real
+// contra flood até existir infra dedicada.
 
 // ─────────────────────────── undo (60s, in-memory) ───────────────────────────
 const UNDO_TTL_MS = 60_000;
@@ -114,11 +91,19 @@ type UndoOp = { op: "a" | "r"; productId: string; productName: string; qty: numb
 type UndoToken = { chatId: number; table: string; ops: UndoOp[]; ts: number };
 const pendingUndos = new Map<string, UndoToken>();
 const consumedUndos = new Map<string, number>();
+// Stack de tokens de undo por chat — mais recente primeiro. Usado pelo comando textual `undo`.
+const chatUndoStack = new Map<number, string[]>();
 
 function cleanupUndos() {
   const now = Date.now();
   for (const [k, v] of pendingUndos) if (now - v.ts > UNDO_TTL_MS) pendingUndos.delete(k);
   for (const [k, t] of consumedUndos) if (now - t > UNDO_TTL_MS) consumedUndos.delete(k);
+  // Compacta stack por chat removendo tokens já expirados/consumidos.
+  for (const [chat, arr] of chatUndoStack) {
+    const filtered = arr.filter((t) => pendingUndos.has(t));
+    if (filtered.length === 0) chatUndoStack.delete(chat);
+    else chatUndoStack.set(chat, filtered);
+  }
 }
 function genUndoToken(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -128,6 +113,9 @@ function registerBatchUndo(chatId: number, table: string, ops: UndoOp[]): string
   if (ops.length === 0) return "";
   const token = genUndoToken();
   pendingUndos.set(token, { chatId, table, ops, ts: Date.now() });
+  const stack = chatUndoStack.get(chatId) ?? [];
+  stack.push(token);
+  chatUndoStack.set(chatId, stack);
   return token;
 }
 function buildUndoSingleKeyboard(table: string, productId: string, qty: number, op: "a" | "r"): InlineButton[][] {
@@ -146,6 +134,11 @@ function normalize(s: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Garante espaço ao redor de operadores +/- colados a dígitos/letras.
+    // Ex.: "+2 coca" -> "+ 2 coca"; "mesa 5+2 coca" -> "mesa 5 + 2 coca".
+    .replace(/([+\-])(?=\S)/g, "$1 ")
+    .replace(/(\S)(?=[+\-]\s)/g, "$1 ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -216,6 +209,7 @@ type Command =
   | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
   | { kind: "VIEW_NOMESA" }
   | { kind: "NEEDS_TABLE"; originalKind: "ADD" | "REMOVE" | "VIEW" }
+  | { kind: "UNDO"; all: boolean }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
@@ -259,6 +253,10 @@ function parseCommand(raw: string): Command {
   if (text === "/start" || text === "/help" || text === "ajuda" || text === "help") {
     return { kind: "HELP" };
   }
+
+  // UNDO: "undo", "desfazer", "undo tudo", "desfazer tudo"
+  const undoMatch = text.match(/^(?:undo|desfazer)(?:\s+(tudo|todos|todas|all))?$/);
+  if (undoMatch) return { kind: "UNDO", all: !!undoMatch[1] };
 
   // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
   const setT = text.match(/^mesa\s+(\d+)$/);
@@ -1389,6 +1387,32 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       successTable: cmd.table,
     };
   }
+  if (cmd.kind === "UNDO") {
+    cleanupUndos();
+    const chatId = _undoChatId();
+    const stack = chatUndoStack.get(chatId) ?? [];
+    if (stack.length === 0) return { text: "↩️ Nada para desfazer." };
+    const tokensToProcess = cmd.all ? [...stack] : [stack[stack.length - 1]];
+    const results: string[] = [];
+    for (const token of tokensToProcess) {
+      const entry = pendingUndos.get(token);
+      if (!entry) continue;
+      try {
+        const r = await executeUndoOps(entry.table, entry.ops, waiter);
+        results.push(r);
+      } catch (e: any) {
+        results.push(`❌ Falha ao desfazer mesa ${entry.table}: ${String(e?.message ?? e)}`);
+      }
+      pendingUndos.delete(token);
+      consumedUndos.set(token, Date.now());
+    }
+    // Remove tokens consumidos do stack
+    const remaining = (chatUndoStack.get(chatId) ?? []).filter((t) => !tokensToProcess.includes(t));
+    if (remaining.length === 0) chatUndoStack.delete(chatId);
+    else chatUndoStack.set(chatId, remaining);
+    if (results.length === 0) return { text: "↩️ Nada para desfazer." };
+    return { text: results.join("\n") };
+  }
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
     // Não deveria chegar aqui (resolveWithContext converte antes), defensivo:
     return { text: NEEDS_TABLE_TEXT };
@@ -1480,6 +1504,8 @@ async function runExecute(
     if (success) {
       const op = cmd.kind === "ADD" ? "a" : "r";
       keyboard = buildUndoSingleKeyboard(cmd.table, product.id, cmd.qty, op);
+      // Também registra no stack textual de undo do chat (para `undo` por mensagem).
+      registerBatchUndo(_undoChatId(), cmd.table, [{ op, productId: product.id, productName: product.name, qty: cmd.qty }]);
     }
     return {
       text: prefix + text + extras,
@@ -1495,6 +1521,11 @@ async function runExecute(
     return { text: prefix + `❌ Erro ao processar: ${msg}` };
   }
 }
+
+// Contexto de chatId para registrar undo no stack textual a partir de funções que não recebem chatId.
+let _undoCurrentChatId = 0;
+function _undoChatId(): number { return _undoCurrentChatId; }
+function setUndoChatContext(chatId: number) { _undoCurrentChatId = chatId; }
 
 // Lê print_status atual da mesa para feedback "🖨️ enviado / ⚠️ aguardando".
 async function formatPrintStatus(table: string): Promise<string> {
@@ -1682,7 +1713,7 @@ function testOrPlain(): Response {
     });
   }
   clearTestContext();
-  return testOrPlain();
+  return new Response("ok", { status: 200, headers: corsHeaders });
 }
 
 Deno.serve(async (req) => {
@@ -1753,6 +1784,7 @@ Deno.serve(async (req) => {
       return testOrPlain();
     }
     setTestContext(chatId);
+    setUndoChatContext(chatId);
     if (typeof updateId === "number" && isDuplicate(updateId)) {
       return testOrPlain();
     }
@@ -1768,13 +1800,9 @@ Deno.serve(async (req) => {
       return testOrPlain();
     }
 
-    // Rate limit (best-effort, in-memory). Não bloqueia callbacks.
-    if (!checkRateLimit(chatId)) {
-      if (shouldSendRateWarning(chatId)) {
-        await sendTelegram(chatId, `⚠️ Muitas ações seguidas. Aguarde alguns segundos.`);
-      }
-      return testOrPlain();
-    }
+    // NOTE: Rate limiting removido. O backend não tem primitivos confiáveis de
+    // rate limit (Edge Functions multi-isolate invalidam contadores in-memory).
+    // Não há proteção real contra flood — a ser tratado em infra dedicada.
 
     const waiter = username ? `Telegram (@${username})` : "Telegram";
 
