@@ -469,24 +469,23 @@ function parseCommand(raw: string): Command {
     return null;
   };
 
-  // ENTRADA: "entrada 10 coca", "entrou 5kg picanha", "+ 10 coca", "chegou 20 cerva"
-  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei)\s+(.+)$/) ||
+  // ENTRADA: "entrada 10 coca", "entrou 5kg picanha", "+ 10 coca", "chegou 20 cerva", "repor 10 coca", "abasteci 5 coca"
+  const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)\s+(.+)$/) ||
                    text.match(/^\+\s+(\d.+)$/);
   if (stockIn) {
     const parsed = parseStockTail(stockIn[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "in", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
   }
 
-  // SAÍDA: "saida 2 coca", "usei 1kg picanha", "gastei 3 carvao"
-  // Só gatilhos explícitos (sem `-N` para evitar conflito com REMOVE_NOMESA).
-  const stockOut = text.match(/^(?:saida|saiu|usei|gastei|tirei|consumi|baixa)\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
+  // SAÍDA: "saida 2 coca", "usei 1kg picanha", "vendi 3 coca", "acabou 2 coca", "quebrou 1 prato"
+  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
   if (stockOut) {
     const parsed = parseStockTail(stockOut[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "out", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
   }
 
-  // AJUSTE forma 1: "ajuste coca 50", "setar coca para 50", "atualiza coca = 30"
-  const stockAdj1 = text.match(new RegExp(`^(?:ajuste|ajustar|setar|set|fica(?:r)?\\s+com|atualiza(?:r)?|corrige|corrigir)\\s+(.+?)\\s+(?:para\\s+|=\\s*|com\\s+|em\\s+)?(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?$`));
+  // AJUSTE forma 1: "ajuste coca 50", "setar coca para 50", "atualiza coca = 30", "contei coca 50", "marca coca 50"
+  const stockAdj1 = text.match(new RegExp(`^(?:ajuste|ajustar|setar|set|fica(?:r)?\\s+com|atualiza(?:r)?|corrige|corrigir|contei|contar|marca(?:r)?|inventario|inventário)\\s+(.+?)\\s+(?:para\\s+|=\\s*|com\\s+|em\\s+)?(\\d+(?:[.,]\\d+)?)\\s*(${STOCK_UNIT_RE})?$`));
   if (stockAdj1) {
     const qty = parseFloat(stockAdj1[2].replace(",", "."));
     if (Number.isFinite(qty) && qty >= 0) {
@@ -502,10 +501,17 @@ function parseCommand(raw: string): Command {
     }
   }
 
-  // CONSULTA: "estoque coca", "saldo picanha", "quanto tem de coca"
-  const stockQry = text.match(/^(?:estoque|saldo|quanto\s+tem(?:\s+de)?)\s+(.+)$/);
+  // CONSULTA: "estoque coca", "saldo picanha", "quanto tem de coca", "quanta coca tem", "tem coca?", "qtd coca", "ver estoque coca"
+  const stockQry = text.match(/^(?:estoque|saldo|quanto\s+tem(?:\s+de)?|quanta?\s+(.+?)\s+tem\??$|qtd|quantidade(?:\s+de)?|ver\s+estoque|consulta(?:r)?\s+estoque)\s+(.+?)\??$/);
   if (stockQry) {
-    return { kind: "STOCK_QUERY", itemText: stockQry[1].trim() };
+    // Suporta "quanta X tem?" — captura no grupo 1; "estoque X" no grupo 2
+    const itemText = (stockQry[1] || stockQry[2] || "").trim();
+    if (itemText) return { kind: "STOCK_QUERY", itemText };
+  }
+  // "tem coca?" sozinho (só com ponto de interrogação)
+  const stockQry2 = text.match(/^tem\s+(.+?)\?$/);
+  if (stockQry2) {
+    return { kind: "STOCK_QUERY", itemText: stockQry2[1].trim() };
   }
 
 
