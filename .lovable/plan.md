@@ -1,60 +1,42 @@
 
 
-# Refinar design do cardápio (PDV)
+# Alinhar `GroupVariantDialog` ao novo design do cardápio
 
-Refatorar `src/components/palm/MenuView.tsx` para uma aparência mais profissional, compacta e operacionalmente rápida. Sem mexer em lógica de pedido, backend, fluxo de variações ou estrutura de categorias.
+O dialog que abre ao tocar em "Ver opções" ainda usa o design antigo (badge vermelho "ESGOTADO", "+ ADD" agressivo, ícone de emoji no título, botão inteiro como ação). Refatorar para o mesmo padrão limpo do `MenuView`.
 
-## 1. Remover badge "GRUPO"
-- Apagar o `<span>Grupo</span>` absoluto no card de grupo.
-- Trocar o "Toque para escolher" pelo subtítulo discreto **"Ver opções · {N} {tamanho|opção}"** abaixo do nome (texto small, `text-muted-foreground`).
-- Card continua clicável e abre `GroupVariantDialog` igual hoje.
+## Mudanças em `src/components/palm/GroupVariantDialog.tsx`
 
-## 2. Esgotados — visual neutro, não competitivo
-- Trocar `border-destructive/40` + `bg-card/60` por `bg-muted/30 border-border` com **`opacity-60`** no card todo.
-- Remover o badge vermelho "ESGOTADO". Substituir por texto pequeno `text-muted-foreground italic` → **"Indisponível"**.
-- Botão de ação fica **desabilitado** (cinza, `cursor-not-allowed`, sem `onClick` no esgotado — remove o fluxo `EsgotadoConfirmDialog` desse caminho? **Manter** o dialog existente porque às vezes garçom força adicionar; mas visual desabilitado por padrão. Clicar mostra o confirm como hoje).
-  - Nota: para preservar comportamento, mantemos `onClick={handleAdd}` mas estilo "desabilitado" — o confirm dialog continua sendo o gate.
+### 1. Título sem emoji
+- Remover `{groupIcon}` do `DialogTitle`. Ficar apenas **"Escolha — {groupName}"**.
+- Remover a prop `groupIcon` (e atualizar o uso em `MenuView.tsx` para não passar mais).
 
-## 3. Reordenação automática
-- Após `sortByPersistedOrder`, aplicar `sort estável`: `available` primeiro, `esgotado` no fim.
-- Esgotados de grupos ficam no final junto com produtos esgotados.
+### 2. Item esgotado — visual neutro
+- Trocar `bg-card/60 border-destructive/40` por `bg-muted/30 border-border opacity-60`.
+- Remover badge vermelho "Esgotado". Substituir por texto pequeno `text-muted-foreground italic` → **"Indisponível"** ao lado do nome.
 
-## 4. Botão "Adicionar" forte
-- Substituir o `+ ADD` / `+ Adicionar` por um botão real no rodapé do card:
-  - Largura 100%, altura confortável (`py-2`), `bg-primary text-primary-foreground font-bold rounded-lg`.
-  - Texto: **"Adicionar"**.
-  - Esgotado: `bg-muted text-muted-foreground cursor-not-allowed` com texto **"Indisponível"**.
-- Card vira `<div>` (não mais `<button>` externo). Apenas o botão é clicável (mais previsível). O `−` continua no canto superior esquerdo quando `qty > 0`.
-- Para **grupos**, botão vira **"Ver opções"** com mesmo estilo primary.
+### 3. Reordenação automática
+- `available` primeiro, `esgotado` no fim (sort estável). Variantes não cadastradas (`product == null`) vão para o fim também.
 
-## 5. Hierarquia visual
+### 4. Botão "Adicionar" forte (igual MenuView)
+- Cada variante vira um `div` (não mais `<button>` externo).
+- Rodapé com botão full-width:
+  - Disponível: `bg-primary text-primary-foreground font-bold rounded-lg py-2 active:scale-95` → **"Adicionar"**.
+  - Esgotado: `bg-muted text-muted-foreground cursor-not-allowed` → **"Indisponível"**. Mantém `onClick` para preservar o gate do `EsgotadoConfirmDialog` (igual MenuView).
+- Variante não cadastrada permanece como hoje (sem botão, texto "Não cadastrado no admin").
+
+### 5. Hierarquia visual
 - Nome: `font-bold text-base text-foreground`.
-- Preço: `text-base font-extrabold text-primary` (cor laranja sólida em vez de gradiente, mais limpo).
-- Botão como ação principal abaixo.
-- Espaçamento consistente: `gap-1.5` interno, `p-2.5`.
+- Preço: `text-base font-extrabold text-primary` (cor sólida, sem gradiente).
+- Espaçamento `gap-1.5`, padding `p-2.5`.
+- Badge de quantidade (`animate-badge-pop`) mantido no canto.
 
-## 6. Cards mais compactos
-- Reduzir grid `minmax(150px,1fr)` → `minmax(140px,1fr)` e `gap-2` → `gap-1.5`.
-- Padding do card `p-3` → `p-2.5`.
-- Remover `mt-auto pt-2` desnecessários.
-
-## 7. Aba ativa mais clara
-- Aba ativa: underline mais grosso (`h-[3px]` → `h-[4px]`), `bg-primary/5` no fundo da aba ativa.
-- Inativa: `text-muted-foreground/70`, hover `text-foreground`.
-
-## 8. Texto de variações
-- Já tratado no item 1: substituir "Toque para escolher" por **"Ver opções"** (no botão) e contagem no subtítulo.
-
-## 9. Feedback ao adicionar
-- Manter o badge de quantidade com `animate-badge-pop` (já existe).
-- Adicionar uma classe `active:scale-95` no botão Adicionar para microfeedback tátil.
-
-## 10. Compatibilidade tema claro/escuro
-- Usar tokens semânticos (`bg-muted`, `text-muted-foreground`, `border-border`, `bg-primary`) — sem hex hardcoded. Tudo já vem do `index.css`.
-
-## Arquivos modificados
-- `src/components/palm/MenuView.tsx` — única mudança. Refatora cards de produto e cards de grupo, abas, e ordenação.
+### 6. Atualização em `MenuView.tsx`
+- Remover a prop `groupIcon={group.icon}` na chamada do `GroupVariantDialog` (ou deixar opcional/ignorada).
 
 ## Não alterado
-- `GroupVariantDialog`, `EsgotadoConfirmDialog`, `CartFab`, hooks de estoque/receitas, lógica de busca, fluxo de pedido, backend.
+- Lógica `onPick`, `isEsgotado`, `getQty`, fluxo de `EsgotadoConfirmDialog`, backend, hooks de estoque/receitas.
+
+## Arquivos modificados
+- `src/components/palm/GroupVariantDialog.tsx` — refatoração completa do visual.
+- `src/components/palm/MenuView.tsx` — remover passagem de `groupIcon`.
 
