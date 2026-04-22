@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Inbox, RefreshCw, Trash2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Inbox, RefreshCw, Trash2, ChevronDown, ChevronUp, AlertTriangle, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,6 +9,7 @@ import {
 import { usePrintQueue } from "@/hooks/use-print-queue";
 import { clearPrintQueue, PRINT_QUEUE_MAX_ATTEMPTS } from "@/lib/print-queue";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const TYPE_LABEL: Record<string, string> = {
   full: "Comanda completa",
