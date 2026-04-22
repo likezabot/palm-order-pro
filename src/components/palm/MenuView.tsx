@@ -49,6 +49,11 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
   const [esgotadoPending, setEsgotadoPending] = useState<Product | null>(null);
   const { playFeedback } = useFeedback();
   const { data: stockMap } = useProductStockMap();
+  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
+  const hiddenEspetoNames = useMemo(
+    () => getHiddenEspetoNames(extraPorcoNames),
+    [extraPorcoNames],
+  );
 
   const isEsgotado = (id: string) => isProductEsgotado(stockMap, id);
 
@@ -102,18 +107,18 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       const q = search.trim().toLowerCase();
       return products.filter(
         (p) =>
-          !HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase()) &&
+          !hiddenEspetoNames.includes(p.name.toLowerCase()) &&
           p.name.toLowerCase().includes(q)
       );
     }
     return products.filter((p) => {
       if (p.category !== activeCategory) return false;
-      if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
+      if (activeCategory === "espetos" && hiddenEspetoNames.includes(p.name.toLowerCase())) {
         return false;
       }
       return true;
     });
-  }, [products, activeCategory, isSearching, search]);
+  }, [products, activeCategory, isSearching, search, hiddenEspetoNames]);
 
   const filtered = isSearching
     ? filteredRaw
@@ -133,12 +138,16 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     return counts;
   }, [cart, products]);
 
-  // Variantes reais do grupo Porco (Porco, Panceta suína, Costela suína).
-  const porcoVariants = useMemo(() => getPorcoGroupProducts(products), [products]);
+  // Variantes reais do grupo Porco (Porco, Panceta suína, Costela suína + extras dinâmicas).
+  const porcoVariants = useMemo(
+    () => getPorcoGroupProducts(products, extraPorcoNames),
+    [products, extraPorcoNames],
+  );
   const porcoBase =
     porcoVariants.find((v) => v.name === "porco")?.product ??
     porcoVariants.find((v) => v.product)?.product ??
     null;
+  const porcoVariantCount = porcoVariants.filter((v) => v.product).length;
   const showPorcoCard = !isSearching && activeCategory === "espetos" && !!porcoBase;
 
   const getQty = (id: string) =>
@@ -347,17 +356,25 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
                   playFeedback("click");
                   setPorcoOpen(true);
                 }}
-                className="relative flex flex-col rounded-lg bg-card border border-border p-3 text-left transition-all duration-150 active:scale-[0.96]"
+                className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
               >
-                <span className="font-semibold text-base text-foreground leading-tight">
+                <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
+                  🐷 Grupo
+                </span>
+                <span className="font-semibold text-base text-foreground leading-tight mt-4">
                   Porco
                 </span>
-                <span className="mt-1 text-sm text-primary font-bold">
+                <span className="mt-1 text-sm font-black brand-gradient-text">
                   R$ {porcoBase!.price.toFixed(2)}
                 </span>
-                <span className="mt-2 text-sm font-semibold text-primary">Escolher tipo</span>
+                <span className="mt-0.5 text-[10px] text-muted-foreground">
+                  {porcoVariantCount} variante{porcoVariantCount === 1 ? "" : "s"}
+                </span>
+                <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
+                  Toque para escolher
+                </span>
                 {porcoQty > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
                     {porcoQty}
                   </span>
                 )}
