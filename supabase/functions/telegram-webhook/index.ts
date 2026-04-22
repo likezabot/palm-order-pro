@@ -579,17 +579,146 @@ async function executeView(table: string): Promise<string> {
 
 // ─────────────────────────── telegram ───────────────────────────
 
-async function sendTelegram(chatId: number, text: string) {
+type InlineButton = { text: string; callback_data: string };
+
+async function sendTelegram(chatId: number, text: string, keyboard?: InlineButton[][]) {
   try {
+    const body: any = { chat_id: chatId, text };
+    if (keyboard && keyboard.length > 0) {
+      body.reply_markup = { inline_keyboard: keyboard };
+    }
     const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) console.error("sendMessage falhou:", res.status, await res.text());
   } catch (e) {
     console.error("sendTelegram erro:", e);
   }
+}
+
+async function answerCallback(callbackId: string, text?: string) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackId, text: text ?? "" }),
+    });
+  } catch (e) {
+    console.error("answerCallback erro:", e);
+  }
+}
+
+async function editTelegramMessage(chatId: number, messageId: number, text: string) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        reply_markup: { inline_keyboard: [] },
+      }),
+    });
+  } catch (e) {
+    console.error("editTelegramMessage erro:", e);
+  }
+}
+
+// ─────────────────────────── auto-pick determinístico ───────────────────────────
+
+const SIZE_TOKENS = ["350", "473", "269", "600", "1l", "2l", "1.5l", "473ml", "600ml", "350ml"];
+const MOD_TOKENS = ["zero", "diet", "light", "lata", "long", "longneck", "gelada"];
+
+function tokensFromText(text: string): string[] {
+  const norm = singularize(normalize(text));
+  return norm.split(/\s+/).filter(Boolean);
+}
+
+function scoreCandidate(userTokens: string[], candidateName: string): number {
+  const cand = normalize(candidateName);
+  const candTokens = cand.split(/\s+/);
+  let score = 0;
+
+  // Tamanho mencionado pelo usuário precisa estar no candidato
+  const userSizes = userTokens.filter((t) => SIZE_TOKENS.includes(t));
+  for (const sz of userSizes) {
+    if (cand.includes(sz)) score += 10;
+    else score -= 10;
+  }
+
+  // Modificadores
+  const userMods = userTokens.filter((t) => MOD_TOKENS.includes(t));
+  const candHasZero = /\bzero\b/.test(cand);
+  const candHasDiet = /\bdiet\b/.test(cand);
+  const candHasLight = /\blight\b/.test(cand);
+
+  for (const m of userMods) {
+    if (candTokens.includes(m)) score += 5;
+    else score -= 5;
+  }
+  if (!userMods.includes("zero") && candHasZero) score -= 5;
+  if (!userMods.includes("diet") && candHasDiet) score -= 5;
+  if (!userMods.includes("light") && candHasLight) score -= 5;
+
+  // Bônus por tokens livres ≥3 letras que casam
+  const free = userTokens.filter(
+    (t) => t.length >= 3 && !SIZE_TOKENS.includes(t) && !MOD_TOKENS.includes(t),
+  );
+  for (const t of free) {
+    if (cand.includes(t)) score += 1;
+  }
+
+  return score;
+}
+
+function autoPickFromCandidates<T extends { name: string }>(
+  productText: string,
+  candidates: T[],
+): T | null {
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  const tokens = tokensFromText(productText);
+  if (tokens.length === 0) return null;
+
+  const scored = candidates
+    .map((c) => ({ cand: c, score: scoreCandidate(tokens, c.name) }))
+    .sort((a, b) => b.score - a.score);
+
+  if (scored[0].score <= 0) return null;
+  if (scored[0].score - scored[1].score < 5) return null;
+  return scored[0].cand;
+}
+
+async function fetchProductsByNames(names: string[]): Promise<Product[]> {
+  if (names.length === 0) return [];
+  const { data } = await sb
+    .from("products")
+    .select("id, name, price, active, category")
+    .eq("active", true);
+  const all = (data ?? []) as Product[];
+  const set = new Set(names.map((n) => normalize(n)));
+  return all.filter((p) => set.has(normalize(p.name)));
+}
+
+// callback_data: "a|<table>|<product_id>|<qty>" | "r|..." | "x"
+function buildChoiceKeyboard(
+  kind: "ADD" | "REMOVE",
+  table: string,
+  qty: number,
+  candidates: Product[],
+): InlineButton[][] {
+  const op = kind === "ADD" ? "a" : "r";
+  const rows: InlineButton[][] = candidates.slice(0, 8).map((p) => [
+    {
+      text: `${qty}× ${p.name} — ${fmtBRL(p.price * qty)}`,
+      callback_data: `${op}|${table}|${p.id}|${qty}`,
+    },
+  ]);
+  rows.push([{ text: "❌ Cancelar", callback_data: "x" }]);
+  return rows;
 }
 
 const HELP_TEXT =
