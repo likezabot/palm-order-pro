@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Pencil, Search, X, Star, ArrowRightLeft } from "lucide-react";
+import { ArrowLeft, Pencil, Search, X, ArrowRightLeft } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
-import { useFavoriteProductIds } from "@/hooks/use-favorite-products";
 import MoveTableDialog from "./MoveTableDialog";
 import {
   SUBGROUPS,
@@ -74,12 +73,9 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
     staleTime: 30_000,
   });
 
-  // Top vendidos nos últimos 30 dias para a categoria "Favoritos"
-  const { data: favoriteIds = [] } = useFavoriteProductIds(12, 30);
-
   const isSearching = search.trim().length > 0;
 
-  // Filtragem: busca global tem prioridade; senão, por categoria (Favoritos é virtual).
+  // Filtragem: busca global tem prioridade; senão, por categoria.
   const filteredRaw = useMemo(() => {
     if (isSearching) {
       const q = search.trim().toLowerCase();
@@ -89,12 +85,6 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           p.name.toLowerCase().includes(q)
       );
     }
-    if (activeCategory === "favoritos") {
-      const idx = new Map(favoriteIds.map((id, i) => [id, i]));
-      return products
-        .filter((p) => idx.has(p.id))
-        .sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
-    }
     return products.filter((p) => {
       if (p.category !== activeCategory) return false;
       if (activeCategory === "espetos" && HIDDEN_ESPETO_NAMES.includes(p.name.toLowerCase())) {
@@ -102,13 +92,27 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
       }
       return true;
     });
-  }, [products, activeCategory, favoriteIds, isSearching, search]);
+  }, [products, activeCategory, isSearching, search]);
 
-  const filtered = isSearching || activeCategory === "favoritos"
+  const filtered = isSearching
     ? filteredRaw
     : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
 
-  const subgroups = !isSearching && activeCategory !== "favoritos" ? SUBGROUPS[activeCategory] : undefined;
+  const subgroups = !isSearching ? SUBGROUPS[activeCategory] : undefined;
+
+  // Contador por categoria (soma quantidades). Variantes sintéticas de Porco → "espetos".
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const productCatById = new Map(products.map((p) => [p.id, p.category]));
+    for (const item of cart) {
+      const cat = item.product.id.startsWith("porco-variant::")
+        ? "espetos"
+        : (productCatById.get(item.product.id) ?? item.product.category);
+      if (!cat) continue;
+      counts[cat] = (counts[cat] ?? 0) + item.quantity;
+    }
+    return counts;
+  }, [cart, products]);
 
   // Produto base "Porco". Preferimos um cadastrado; se não houver, usamos a
   // Panceta suína como base (mesmo id/preço) para o card sintético funcionar.
@@ -222,37 +226,39 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
 
         {/* Category tabs */}
         {!isSearching && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            <button
-              key="favoritos"
-              onClick={() => {
-                playFeedback("click");
-                setActiveCategory("favoritos");
-              }}
-              className={`flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
-                activeCategory === "favoritos"
-                  ? "bg-brand-gradient text-primary-foreground shadow-soft"
-                  : "bg-card text-muted-foreground border border-border hover:border-primary/40"
-              }`}
-            >
-              <Star size={16} className="fill-current" aria-label="Favoritos" />
-            </button>
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => {
-                  playFeedback("click");
-                  setActiveCategory(cat);
-                }}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-95 ${
-                  activeCategory === cat
-                    ? "bg-brand-gradient text-primary-foreground shadow-soft"
-                    : "bg-card text-muted-foreground border border-border hover:border-primary/40"
-                }`}
-              >
-                {CATEGORY_LABELS[cat]}
-              </button>
-            ))}
+          <div className="flex gap-1 overflow-x-auto no-scrollbar border-b border-border -mx-2.5 px-2.5">
+            {CATEGORIES.map((cat) => {
+              const isActive = activeCategory === cat;
+              const count = categoryCounts[cat] ?? 0;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    playFeedback("click");
+                    setActiveCategory(cat);
+                  }}
+                  className={`relative inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2.5 text-sm font-semibold transition-colors ${
+                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>{CATEGORY_LABELS[cat]}</span>
+                  {count > 0 && (
+                    <span
+                      className={`min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-primary/15 text-primary"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                  {isActive && (
+                    <span className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full bg-brand-gradient" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -290,9 +296,7 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           <p className="p-8 text-center text-sm text-muted-foreground">
             {isSearching
               ? `Nenhum item encontrado para "${search}".`
-              : activeCategory === "favoritos"
-                ? "Ainda não há favoritos. Eles aparecem após os primeiros pedidos."
-                : "Nenhum item nesta categoria."}
+              : "Nenhum item nesta categoria."}
           </p>
         )}
 
