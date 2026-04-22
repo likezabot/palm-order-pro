@@ -54,6 +54,14 @@ export function useInventoryMovements(itemId: string | null) {
   });
 }
 
+export type ApplyMovementResult = {
+  new_stock: number;
+  previous_stock: number;
+  item_name: string | null;
+  linked_product_id: string | null;
+  linked_product_active: boolean | null;
+};
+
 export function useApplyMovement() {
   const qc = useQueryClient();
   return useMutation({
@@ -72,7 +80,7 @@ export function useApplyMovement() {
         p_source: vars.source ?? "manual",
       });
       if (error) throw error;
-      return data as { new_stock: number; previous_stock: number };
+      return data as unknown as ApplyMovementResult;
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["inventory-items"] });
@@ -84,7 +92,9 @@ export function useApplyMovement() {
 export function useUpsertInventoryItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (item: Partial<InventoryItem> & { name: string; slug: string; category: string; unit: string }) => {
+    mutationFn: async (
+      item: Partial<InventoryItem> & { name: string; slug: string; category: string; unit: string }
+    ) => {
       const payload: any = {
         name: item.name,
         slug: item.slug,
@@ -93,6 +103,7 @@ export function useUpsertInventoryItem() {
         aliases: item.aliases ?? [],
         min_stock: item.min_stock ?? 0,
         is_active: item.is_active ?? true,
+        product_id: item.product_id ?? null,
       };
       if (item.id) {
         const { data, error } = await supabase
@@ -114,7 +125,10 @@ export function useUpsertInventoryItem() {
         return data;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory-items"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory-items"] });
+      qc.invalidateQueries({ queryKey: ["menu-products-for-stock"] });
+    },
   });
 }
 
@@ -129,5 +143,56 @@ export function useDeactivateItem() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory-items"] }),
+  });
+}
+
+/**
+ * Toggles `active` on a menu product. Used by the out-of-stock confirm dialog
+ * (set active=false) and by the "Reactivate in menu" button (set active=true).
+ */
+export function useToggleProductActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { product_id: string; active: boolean }) => {
+      const { error } = await supabase
+        .from("products")
+        .update({ active: vars.active })
+        .eq("id", vars.product_id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["menu-products-for-stock"] });
+    },
+  });
+}
+
+export function useBulkImportFromMenu() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      products: Array<{ id: string; name: string; category: string }>
+    ) => {
+      const { slugify, mapMenuCategoryToStock } = await import("@/lib/inventory");
+      const rows = products.map((p) => ({
+        name: p.name,
+        slug: slugify(p.name) || p.id,
+        category: mapMenuCategoryToStock(p.category),
+        unit: "unidade",
+        aliases: [] as string[],
+        current_stock: 0,
+        min_stock: 0,
+        is_active: true,
+        product_id: p.id,
+      }));
+      if (rows.length === 0) return { inserted: 0 };
+      const { error } = await supabase.from("inventory_items" as any).insert(rows);
+      if (error) throw error;
+      return { inserted: rows.length };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory-items"] });
+      qc.invalidateQueries({ queryKey: ["menu-products-for-stock"] });
+    },
   });
 }

@@ -8,6 +8,7 @@ export type InventoryItem = {
   current_stock: number;
   min_stock: number;
   is_active: boolean;
+  product_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -51,9 +52,10 @@ export function slugify(input: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export type StockStatus = "zero" | "low" | "ok";
+export type StockStatus = "negative" | "zero" | "low" | "ok";
 
 export function getStockStatus(item: Pick<InventoryItem, "current_stock" | "min_stock">): StockStatus {
+  if (item.current_stock < 0) return "negative";
   if (item.current_stock <= 0) return "zero";
   if (item.current_stock <= item.min_stock) return "low";
   return "ok";
@@ -76,3 +78,21 @@ export const TYPE_LABEL: Record<InventoryMovement["movement_type"], string> = {
   out: "Saída",
   adjustment: "Ajuste",
 };
+
+// Maps a menu category (products.category) to a stock category
+export function mapMenuCategoryToStock(menuCategory: string): string {
+  const c = (menuCategory || "").toLowerCase();
+  if (c.includes("beb") || c.includes("cerve") || c.includes("refri")) return "bebidas";
+  if (c.includes("espeto") || c.includes("carne") || c.includes("refeic") || c.includes("refeição")) return "carnes";
+  return "outros";
+}
+
+// Critical margin: how close item is to running out (lower = worse).
+// Negative items first; then zero; then by gap = current - min.
+export function criticalScore(item: Pick<InventoryItem, "current_stock" | "min_stock">): number {
+  return item.current_stock - item.min_stock;
+}
+
+export function sortByCriticality<T extends Pick<InventoryItem, "current_stock" | "min_stock">>(items: T[]): T[] {
+  return [...items].sort((a, b) => criticalScore(a) - criticalScore(b));
+}
