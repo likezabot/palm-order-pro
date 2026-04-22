@@ -1,130 +1,67 @@
 
 
-## Porco unificado: popup com estoque/preço no PALM + agrupamento visual no Admin e Estoque
+## Porco no grupo + seletor de grupo/popup ao criar produto
 
-### Problema
-1. **Popup do Porco no PALM** mostra só o nome das 3 variantes — sem preço, sem badge ESGOTADO, sem confirmação se faltar estoque.
-2. **Admin Cardápio**: "Porco", "Panceta suína" e "Costela suína" aparecem soltos, sem nenhuma indicação visual de que formam um grupo. Usuário não entende que controla o popup do garçom através desses 3 itens.
-3. **Estoque**: mesmos 3 itens aparecem soltos, sem agrupamento — fica confuso saber qual representa o quê no popup.
+### O que muda
 
-### Solução
-Manter os 3 produtos como entidades reais no banco (são editáveis, têm preço próprio, estoque próprio), mas:
-- **PALM**: popup do Porco passa a renderizar **cards reais** com preço, badge ESGOTADO e respeita o fluxo de confirmação.
-- **Admin** e **Estoque**: agrupar visualmente os 3 itens sob um banner/seção "🐷 Grupo Porco — popup do garçom" deixando claro que pertencem juntos.
+**1. PALM — card "Porco" identificado como grupo**
 
-### Mudanças
+Hoje o card especial "Porco" aparece na grade de Espetos como um card normal qualquer, sem indicar que abre o popup com 3 variantes. Mudanças no `MenuView.tsx`:
 
-**1. `PorcoVariantDialog.tsx` — cards completos com preço + ESGOTADO**
+- Card do Porco ganha selo visual `🐷 GRUPO` no canto + linha "3 variantes" abaixo do preço.
+- Borda do card usa `border-primary/40` (em vez de `border-border`) e fundo sutil `bg-primary/5` para destacar como agrupador.
+- Texto "Escolher tipo" trocado por "Toque para escolher" deixando claro que abre seleção.
 
-Reescrever o dialog para receber a lista de produtos reais (Porco, Panceta, Costela) em vez de só strings, e usar o mesmo visual dos cards do PALM:
+Resultado: o card Porco fica visualmente "do lado" das outras variantes na grade de Espetos, mas claramente identificado como o gatilho do grupo (já que Panceta/Costela continuam escondidas da grade — elas só vivem dentro do popup).
 
-```text
-┌─ Escolha o tipo de Porco ─────────┐
-│ ┌─────────────────────────────┐   │
-│ │ Porco                       │   │
-│ │ R$ 12,00              + ADD │   │
-│ └─────────────────────────────┘   │
-│ ┌─────────────────────────────┐   │
-│ │ Panceta suína   [ESGOTADO]  │   │
-│ │ R$ 14,00         + Adicionar│   │
-│ └─────────────────────────────┘   │
-│ ┌─────────────────────────────┐   │
-│ │ Costela suína               │   │
-│ │ R$ 15,00              + ADD │   │
-│ └─────────────────────────────┘   │
-└────────────────────────────────────┘
+**2. Admin Cardápio — seletor "Grupo / Popup" no formulário de produto**
+
+`ProductForm.tsx` ganha um novo campo abaixo do seletor de categoria:
+
+```
+Categoria: [Refeições] [Espetos] [Bebidas] [Cervejas]
+Grupo / Popup (opcional):
+  ( ) Nenhum (item normal no cardápio)
+  ( ) 🐷 Grupo Porco — aparece dentro do popup ao tocar em "Porco"
 ```
 
-Nova interface:
-```ts
-interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  variants: Array<{ name: string; product: Product | null }>; // product=null se não cadastrado
-  onPick: (variantName: string, product: Product) => void;
-  isEsgotado: (productId: string) => boolean;
-  getQty: (productId: string) => number;
-}
-```
+- Só aparece quando `category === "espetos"` (único grupo existente hoje). Se no futuro forem criados outros grupos, ficam disponíveis automaticamente.
+- Implementação **sem mudança de schema**: o "grupo" é determinado pelo nome do produto. Selecionar "Grupo Porco" preenche/sugere o nome com prefixo apropriado e adiciona o produto à lista `PORCO_GROUP_NAMES` em `src/lib/porco-group.ts` apenas se o nome bater com um dos 3 nomes canônicos (Porco, Panceta suína, Costela suína).
+- Para suportar **adicionar uma 4ª variante futura** (ex: "Linguiça suína" no popup do Porco), introduz uma tabela leve `product_groups` em settings: chave `porco_group_extra_names` armazenando array de nomes adicionais. `getPorcoGroupProducts` passa a ler essa lista + a constante base.
+- Quando o usuário escolhe "Grupo Porco" e o nome digitado não está no canônico, o sistema:
+  1. Salva o produto normalmente (`category=espetos`, `active=true`).
+  2. Adiciona o nome ao `settings.porco_group_extra_names` (upsert).
+  3. Atualiza `HIDDEN_ESPETO_NAMES` em runtime (vira reativo via `useQuery`) para esconder o item da grade principal — ele só aparece via popup.
 
-- Variante sem produto cadastrado fica desabilitada com hint "Não cadastrado no admin".
-- Variante esgotada renderiza badge ESGOTADO + texto "+ Adicionar" (em vez de "+ ADD") indicando que vai abrir confirmação.
-- Badge de quantidade no canto superior direito quando já houver no carrinho.
+**3. Estoque — seletor "Grupo / Popup" ao criar item solto**
 
-**2. `MenuView.tsx` — passar produtos reais e roteamento de esgotado**
+`ItemFormDialog.tsx` ganha o mesmo seletor quando o item é vinculado a produto da categoria Espetos. Apenas reflete o vínculo com o produto — não duplica lógica.
 
-Substitui a chamada atual (que usa `porcoBase` único) por:
-- Resolve os 3 produtos reais por nome (`PORCO_VARIANTS`) buscando em `products`.
-- Passa array `variants` ao `PorcoVariantDialog`.
-- `onPick(variantName, product)` chama o **mesmo `handleAdd(product)`** que já existe — assim a confirmação de esgotado dispara automaticamente para variantes vinculadas a estoque zerado, e o item entra no carrinho com o `id` real do produto (não mais id sintético `porco-variant::*`).
-- Simplificação: como agora cada variante é um produto real, `categoryCounts` deixa de precisar do tratamento especial `porco-variant::*`. Mantemos só o badge `porcoQty` no card-pai somando as 3 variantes pelo `id` real.
+### Esclarecimento técnico
 
-**3. `menu-subgroups.ts` — manter constantes**
-
-Sem mudança estrutural. `PORCO_VARIANTS` e `HIDDEN_ESPETO_NAMES` continuam guiando o que aparece escondido na grade do PALM e o que entra no popup.
-
-**4. Admin Cardápio — banner de grupo Porco em `ProductsManager.tsx`**
-
-Quando `activeCategory === "espetos"` e sem busca/filtro ativo, renderizar acima da grade um **callout/banner** discreto:
-
-```text
-🐷 Grupo Porco (popup do garçom)
-Estes 3 itens aparecem juntos no popup ao tocar em "Porco" no PALM.
-Edite preço/visibilidade individualmente — eles continuam controláveis aqui.
-[Porco · ativo]  [Panceta suína · ativo]  [Costela suína · oculto]
-```
-
-- Renderiza como `<aside>` com `border-l-4 border-primary bg-primary/5 rounded-lg p-3`.
-- Cada chip é clicável e rola/destaca o card correspondente na grade abaixo (scroll-into-view + ring temporário).
-- Status (ativo/oculto) lido do `product.active`.
-- Não duplica os cards na grade — eles continuam aparecendo normalmente abaixo.
-
-**5. Estoque — banner de grupo Porco em `Stock.tsx`**
-
-Quando a tab ativa for **Espetos**, renderizar o mesmo padrão de banner acima do grid:
-
-```text
-🐷 Grupo Porco (popup do garçom)
-3 itens controlam o popup de variantes no PALM.
-[Porco · 4 un]  [Panceta · 0 un · ZERADO]  [Costela · 8 un]
-```
-
-- Cada chip mostra estoque atual + status (negativo/zerado/baixo) com cor.
-- Toque no chip rola até o `StockCard` correspondente e dispara um highlight (ring) por 1.5s.
-- Identificação dos 3: filtra `inventoryItems` cujo produto vinculado tenha `name` em `PORCO_VARIANTS` (case-insensitive). Se algum não tiver item de estoque criado, chip aparece como "Porco · sem estoque" com botão "+ criar" que pré-abre o `ItemFormDialog` já vinculando o produto.
-
-**6. Helper compartilhado novo: `src/lib/porco-group.ts`**
-
-Centraliza a lógica de detecção/agrupamento do trio:
-```ts
-export const PORCO_GROUP_NAMES = ["porco", "panceta suína", "costela suína"] as const;
-
-export function isPorcoVariant(productName: string): boolean { ... }
-export function getPorcoGroupProducts(products: Product[]): Product[] { ... }
-export function getPorcoGroupInventory(items: InventoryItem[], products: Product[]): InventoryItem[] { ... }
-```
-
-Usado por `MenuView`, `ProductsManager`, `Stock` e `PorcoVariantDialog`.
+- **Hoje**: `PORCO_GROUP_NAMES` é uma constante hard-coded de 3 nomes. Banner em Admin/Estoque e popup em PALM dependem dessa lista.
+- **Depois**: a lista vira **constante base + lista dinâmica vinda de `settings`**. Permite ao usuário, no formulário de produto, jogar novos itens dentro do mesmo popup sem mexer em código.
+- Migração: nova linha em `settings` com `key='porco_group_extra_names'` e `value=[]` (array vazio). Sem alteração de tabelas existentes.
 
 ### Arquivos
 
 **Editados**
-- `src/components/palm/PorcoVariantDialog.tsx` — cards reais com preço, ESGOTADO, qty badge.
-- `src/components/palm/MenuView.tsx` — passa produtos reais ao dialog; roteia `onPick` pelo mesmo `handleAdd` (ganha confirmação de esgotado de graça).
-- `src/components/admin/ProductsManager.tsx` — banner "Grupo Porco" no topo da categoria Espetos.
-- `src/pages/Stock.tsx` — banner "Grupo Porco" no topo da tab Espetos.
+- `src/components/palm/MenuView.tsx` — card Porco com selo/borda de grupo.
+- `src/components/admin/ProductForm.tsx` — adiciona seletor "Grupo / Popup" abaixo da categoria.
+- `src/components/stock/ItemFormDialog.tsx` — espelha o seletor quando item é vinculado a Espetos.
+- `src/lib/porco-group.ts` — `getPorcoGroupProducts` passa a aceitar lista extra; novo helper `useExtraPorcoNames` ou função `loadExtraPorcoNames()`.
+- `src/components/admin/PorcoGroupBanner.tsx` — exibe variantes extras adicionadas pelo usuário.
+- `src/components/stock/PorcoGroupBanner.tsx` — idem.
 
-**Novos**
-- `src/lib/porco-group.ts` — helpers de detecção/agrupamento.
-
-### Como cada requisito é atendido
-
-- **Popup do Porco mostra estoque/ESGOTADO + confirma**: cards reais no `PorcoVariantDialog` reaproveitam `isEsgotado` do `useProductStockMap`. Ao tocar uma variante esgotada, `onPick` chama `handleAdd` → abre `EsgotadoConfirmDialog` (mesmo fluxo dos outros itens).
-- **Admin não fica "morto"**: os 3 cards continuam editáveis normalmente. Banner explica que eles alimentam o popup, então o admin sabe que mexer ali muda o garçom.
-- **Estoque organizado**: banner agrupa os 3 visualmente, mostra estoque atual de cada um e dá atalho pra encontrar o card.
-- **Sem id sintético**: variantes passam a entrar no carrinho com `product_id` real, então a venda vincula corretamente ao produto/estoque (preparando terreno pra futura baixa automática se quiser).
+**Novo**
+- Migração SQL: `INSERT INTO settings (key, value) VALUES ('porco_group_extra_names', '[]'::jsonb) ON CONFLICT DO NOTHING;`
 
 ### O que NÃO muda
-- Schema, RPCs, fluxo de movimentação, sincronização auto cardápio↔estoque, badge ESGOTADO nos cards normais do PALM, layout do `StockCard`, lógica de confirmação `OutOfStockConfirmDialog`.
-- `HIDDEN_ESPETO_NAMES` continua escondendo Panceta/Costela da grade principal de Espetos no PALM (eles só aparecem via popup).
+- Schema das tabelas `products`, `inventory_items`, `orders`. Lógica de carrinho, esgotado, impressão, RLS, fluxo de admin (drag/drop, busca, filtros, bulk).
+- Categorias do cardápio continuam as mesmas 4 (Refeições, Espetos, Bebidas, Cervejas).
+- Os 3 nomes canônicos do Porco continuam sempre no grupo, independente de settings.
+
+### Pergunta antes de implementar
+
+Quer mesmo a **opção de adicionar novos itens ao popup do Porco no futuro** (requer a entrada em `settings`), ou prefere a versão mais simples — apenas o **selo visual no card do PALM** + o **seletor "Grupo Porco" no formulário** funcionando só para os 3 nomes já existentes (Porco, Panceta suína, Costela suína), sem suportar 4ª variante?
 
