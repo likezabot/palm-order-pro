@@ -810,7 +810,7 @@ async function executeAdd(
           p_waiter_name: waiter,
           p_total: product.price * qty,
           p_items: [item],
-          p_should_print: true,
+          p_should_print: shouldPrint(true),
         });
         return `✅ Mesa ${table} criada com ${qty}× ${product.name} — ${fmtBRL(product.price * qty)}`;
       } catch (e: any) {
@@ -848,7 +848,7 @@ async function executeAdd(
       p_delta_items: delta.length > 0 ? delta : null,
       p_print_type: "extra",
       p_expected_version: order.version,
-      p_should_print: true,
+      p_should_print: shouldPrint(true),
     });
 
     const itemCount = after.reduce((s, i) => s + i.quantity, 0);
@@ -895,7 +895,7 @@ async function executeRemove(
       p_delta_items: null,
       p_print_type: null,
       p_expected_version: order.version,
-      p_should_print: false,
+      p_should_print: shouldPrint(false),
     });
 
     const itemCount = after.reduce((s, i) => s + i.quantity, 0);
