@@ -30,6 +30,7 @@ export default function Stock() {
   const [searchParams] = useSearchParams();
   const { data: items = [], isLoading } = useInventoryItems();
   const { data: menuProducts = [] } = useMenuProductsForStock();
+  const { data: productGroups = [] } = useProductGroups();
   const bulkImport = useBulkImportFromMenu();
   useAutoSyncMenuToStock();
 
