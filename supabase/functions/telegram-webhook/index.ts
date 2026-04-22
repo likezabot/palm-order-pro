@@ -305,19 +305,28 @@ function singularizeToken(tok: string): string {
   // dígitos ou tokens com dígito (350, 2l, 600ml) — não mexer
   if (/\d/.test(tok)) return tok;
   if (tok.length <= 3) return tok;
-  // Já vem normalizado (sem acento). Heurística: se termina em "as/es/is/os/us"
-  // mas a forma original poderia ter acento (gás→gas, três→tres), não dá pra saber.
-  // Mantemos conservador: tokens com 4 letras terminados em vogal+s ficam.
+  // Whitelist: palavras curtas críticas que NÃO devem virar outra coisa.
+  // "bois" (plural de boi) cairia em "bol" pela regra ois→ol e quebraria
+  // o match com aliases curtos como "boi".
+  const SHORT_WHITELIST = new Set(["bois", "pois", "dois", "sois", "vois"]);
+  if (SHORT_WHITELIST.has(tok)) {
+    if (tok === "bois") return "boi";
+    return tok;
+  }
   // Regras de plural:
   if (/oes$/.test(tok)) return tok.replace(/oes$/, "ao"); // medalhoes -> medalhao
-  if (/ais$/.test(tok)) return tok.replace(/ais$/, "al"); // pasteis errado, mas: animais->animal
+  if (/ais$/.test(tok)) return tok.replace(/ais$/, "al"); // animais->animal
   if (/eis$/.test(tok)) return tok.replace(/eis$/, "el"); // pasteis -> pastel
-  if (/ois$/.test(tok)) return tok.replace(/ois$/, "ol"); // lencois -> lencol
+  if (/ois$/.test(tok)) {
+    // Palavras ≤4 letras terminadas em "ois" (bois, dois, sois) singularizam
+    // tirando só o "s". A regra ois→ol vale para palavras maiores
+    // (lencois→lencol, anzois→anzol, caracois→caracol).
+    if (tok.length <= 4) return tok.slice(0, -1);
+    return tok.replace(/ois$/, "ol");
+  }
   if (/uis$/.test(tok)) return tok.replace(/uis$/, "ul"); // pauis -> paul
   if (/ns$/.test(tok)) return tok.replace(/ns$/, "m");    // garagens -> garagem
   if (/(res|zes|ses)$/.test(tok)) return tok.slice(0, -2); // colheres -> colher
-  // Vogal + s no final: tira o s (cocas->coca, bovinos->bovino, aguas->agua)
-  // Mas evita ss e palavras de 4 letras tipo "mais" (já tratado), "pais" (já tratado).
   if (/[aeiou]s$/.test(tok) && !/ss$/.test(tok)) return tok.slice(0, -1);
   return tok;
 }
