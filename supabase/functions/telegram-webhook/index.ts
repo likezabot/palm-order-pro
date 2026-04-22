@@ -285,15 +285,15 @@ function parseCommand(raw: string): Command {
 
 // ─────────────────────────── modo turbo: resolver contexto ───────────────────────────
 
-function resolveWithContext(cmd: Command, chatId: number): Command {
+async function resolveWithContext(cmd: Command, chatId: number): Promise<Command> {
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA") {
-    const table = getLastTable(chatId);
+    const table = await getLastTable(chatId);
     const originalKind = cmd.kind === "ADD_NOMESA" ? "ADD" : "REMOVE";
     if (!table) return { kind: "NEEDS_TABLE", originalKind };
     return { kind: originalKind, table, qty: cmd.qty, productText: cmd.productText, fromContext: true };
   }
   if (cmd.kind === "VIEW_NOMESA") {
-    const table = getLastTable(chatId);
+    const table = await getLastTable(chatId);
     if (!table) return { kind: "NEEDS_TABLE", originalKind: "VIEW" };
     return { kind: "VIEW", table, fromContext: true };
   }
@@ -903,7 +903,7 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   let ctxNote = "";
   let working: Command = cmd;
   if (cmd.kind === "ADD_NOMESA" || cmd.kind === "REMOVE_NOMESA" || cmd.kind === "VIEW_NOMESA") {
-    const ctxTable = getLastTable(chatId);
+    const ctxTable = await getLastTable(chatId);
     if (!ctxTable) {
       return `⚠️ (preview) Nenhuma mesa em contexto. Envie a mesa explícita.`;
     }
