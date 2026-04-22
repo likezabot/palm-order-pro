@@ -26,7 +26,7 @@ async function getNotifyChats(): Promise<number[]> {
 
 async function getNotifyConfig(): Promise<Record<string, boolean>> {
   const { data } = await sb.from("settings").select("value").eq("key", "telegram_notify_config").maybeSingle();
-  if (!data?.value) return { orders: true, payments: true, stock_critical: true, daily_report: true };
+  if (!data?.value) return { orders: true, payments: true, stock_critical: true, daily_report: true, cash_closed: true, stale_tables: true };
   try { return JSON.parse(data.value); } catch { return {}; }
 }
 
