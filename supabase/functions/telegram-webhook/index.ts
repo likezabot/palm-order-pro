@@ -465,26 +465,96 @@ const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false },
 });
 
+// ─────────────────────────── TEST MODE ───────────────────────────
+// Ativado por env TEST_MODE=true + TEST_CHAT_ID=<id>.
+// Quando o chat atual é o de teste:
+//  - bypass de whitelist
+//  - sendTelegram/answerCallback/editTelegramMessage NÃO chamam Telegram (capturam em buffer)
+//  - p_should_print sempre false (não enfileira impressão)
+//  - mesa de teste isolada: prefixo "T-" → cleanup deleta apenas estas
+const TEST_MODE = (Deno.env.get("TEST_MODE") ?? "").toLowerCase() === "true";
+const TEST_CHAT_ID_RAW = Deno.env.get("TEST_CHAT_ID");
+const TEST_CHAT_ID = TEST_CHAT_ID_RAW ? Number(TEST_CHAT_ID_RAW) : null;
+const TEST_TABLE_PREFIX = "T-";
+
+type CapturedMessage = { chatId: number; text: string; keyboard?: InlineButton[][]; kind: "send" | "edit" | "answer"; messageId?: number };
+let testCaptureBuffer: CapturedMessage[] = [];
+let currentChatIsTest = false;
+
+function isTestChat(chatId: number | undefined | null): boolean {
+  return TEST_MODE && TEST_CHAT_ID !== null && chatId === TEST_CHAT_ID;
+}
+
+function setTestContext(chatId: number | undefined | null) {
+  currentChatIsTest = isTestChat(chatId);
+}
+
+function clearTestContext() {
+  currentChatIsTest = false;
+}
+
+// shouldPrint(): chamado pelas RPCs. Em test mode, força false.
+function shouldPrint(defaultValue = true): boolean {
+  return currentChatIsTest ? false : defaultValue;
+}
+
+function drainTestBuffer(): CapturedMessage[] {
+  const out = testCaptureBuffer;
+  testCaptureBuffer = [];
+  return out;
+}
+
+async function cleanupTestData(): Promise<{ orders_deleted: number; items_deleted: number; settings_deleted: number }> {
+  // Deleta pedidos da mesa de teste (qualquer table_name começando com T-).
+  const { data: testOrders } = await sb
+    .from("orders")
+    .select("id")
+    .or(`table_name.ilike.${TEST_TABLE_PREFIX}%,original_table_name.ilike.${TEST_TABLE_PREFIX}%`);
+  const ids = (testOrders ?? []).map((o: any) => o.id);
+  let itemsDeleted = 0;
+  if (ids.length > 0) {
+    const { count } = await sb.from("order_items").delete({ count: "exact" }).in("order_id", ids);
+    itemsDeleted = count ?? 0;
+    await sb.from("orders").delete().in("id", ids);
+  }
+  // Limpa contexto de mesa do chat de teste
+  let settingsDeleted = 0;
+  if (TEST_CHAT_ID !== null) {
+    const { count } = await sb
+      .from("settings")
+      .delete({ count: "exact" })
+      .like("key", `telegram_last_table:${TEST_CHAT_ID}%`);
+    settingsDeleted = count ?? 0;
+  }
+  return { orders_deleted: ids.length, items_deleted: itemsDeleted, settings_deleted: settingsDeleted };
+}
+
 async function getAllowedChats(): Promise<Set<number> | null> {
   const { data } = await sb
     .from("settings")
     .select("value")
     .eq("key", "telegram_allowed_chats")
     .maybeSingle();
-  if (!data?.value) return null; // null = whitelist não configurada (bloqueia tudo)
-  try {
-    const arr = JSON.parse(data.value);
-    if (Array.isArray(arr)) return new Set(arr.map((x) => Number(x)));
-  } catch {
-    // CSV fallback
-    return new Set(
-      String(data.value)
-        .split(",")
-        .map((s) => Number(s.trim()))
-        .filter((n) => !Number.isNaN(n)),
-    );
+  let baseSet: Set<number> | null = null;
+  if (data?.value) {
+    try {
+      const arr = JSON.parse(data.value);
+      if (Array.isArray(arr)) baseSet = new Set(arr.map((x) => Number(x)));
+    } catch {
+      baseSet = new Set(
+        String(data.value)
+          .split(",")
+          .map((s) => Number(s.trim()))
+          .filter((n) => !Number.isNaN(n)),
+      );
+    }
   }
-  return null;
+  // Em TEST_MODE, garante que o chat de teste é sempre permitido (sem mexer no settings real).
+  if (TEST_MODE && TEST_CHAT_ID !== null) {
+    if (!baseSet) baseSet = new Set();
+    baseSet.add(TEST_CHAT_ID);
+  }
+  return baseSet;
 }
 
 async function getProductGroups(): Promise<ProductGroup[]> {
