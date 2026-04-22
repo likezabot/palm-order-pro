@@ -526,6 +526,32 @@ async function resolveProduct(text: string): Promise<ProductResolution> {
     const matches = all.filter((p) => normalize(p.name).includes(norm));
 
     if (matches.length === 0) {
+      // Fuzzy match (Levenshtein ≤2) sobre products antes de cair em inventory_items.
+      const userTokens = norm.split(/\s+/).filter((t) => t.length > 3 && !/\d/.test(t));
+      if (userTokens.length > 0) {
+        const fuzzyHits: Product[] = [];
+        for (const p of all) {
+          const candTokens = normalize(p.name).split(/\s+/).filter((t) => t.length > 2);
+          let hit = false;
+          for (const ut of userTokens) {
+            for (const ct of candTokens) {
+              if (Math.abs(ut.length - ct.length) > 2) continue;
+              if (levenshtein(ut, ct) <= 2) { hit = true; break; }
+            }
+            if (hit) break;
+          }
+          if (hit) fuzzyHits.push(p);
+        }
+        if (fuzzyHits.length === 1) {
+          const r = await checkGroupOrReturn(fuzzyHits[0]);
+          if (r.kind === "found") return { ...r, fuzzyFrom: text.trim() };
+          return r;
+        }
+        if (fuzzyHits.length >= 2 && fuzzyHits.length <= 5) {
+          return { kind: "ambiguous", candidates: fuzzyHits };
+        }
+      }
+
       // Tenta também inventory_items por nome
       const { data: invFuzzy } = await sb
         .from("inventory_items")
