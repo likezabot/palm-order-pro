@@ -465,26 +465,96 @@ const sb = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false },
 });
 
+// ─────────────────────────── TEST MODE ───────────────────────────
+// Ativado por env TEST_MODE=true + TEST_CHAT_ID=<id>.
+// Quando o chat atual é o de teste:
+//  - bypass de whitelist
+//  - sendTelegram/answerCallback/editTelegramMessage NÃO chamam Telegram (capturam em buffer)
+//  - p_should_print sempre false (não enfileira impressão)
+//  - mesa de teste isolada: prefixo "T-" → cleanup deleta apenas estas
+const TEST_MODE = (Deno.env.get("TEST_MODE") ?? "").toLowerCase() === "true";
+const TEST_CHAT_ID_RAW = Deno.env.get("TEST_CHAT_ID");
+const TEST_CHAT_ID = TEST_CHAT_ID_RAW ? Number(TEST_CHAT_ID_RAW) : null;
+const TEST_TABLE_PREFIX = "T-";
+
+type CapturedMessage = { chatId: number; text: string; keyboard?: InlineButton[][]; kind: "send" | "edit" | "answer"; messageId?: number };
+let testCaptureBuffer: CapturedMessage[] = [];
+let currentChatIsTest = false;
+
+function isTestChat(chatId: number | undefined | null): boolean {
+  return TEST_MODE && TEST_CHAT_ID !== null && chatId === TEST_CHAT_ID;
+}
+
+function setTestContext(chatId: number | undefined | null) {
+  currentChatIsTest = isTestChat(chatId);
+}
+
+function clearTestContext() {
+  currentChatIsTest = false;
+}
+
+// shouldPrint(): chamado pelas RPCs. Em test mode, força false.
+function shouldPrint(defaultValue = true): boolean {
+  return currentChatIsTest ? false : defaultValue;
+}
+
+function drainTestBuffer(): CapturedMessage[] {
+  const out = testCaptureBuffer;
+  testCaptureBuffer = [];
+  return out;
+}
+
+async function cleanupTestData(): Promise<{ orders_deleted: number; items_deleted: number; settings_deleted: number }> {
+  // Deleta pedidos da mesa de teste (qualquer table_name começando com T-).
+  const { data: testOrders } = await sb
+    .from("orders")
+    .select("id")
+    .or(`table_name.ilike.${TEST_TABLE_PREFIX}%,original_table_name.ilike.${TEST_TABLE_PREFIX}%`);
+  const ids = (testOrders ?? []).map((o: any) => o.id);
+  let itemsDeleted = 0;
+  if (ids.length > 0) {
+    const { count } = await sb.from("order_items").delete({ count: "exact" }).in("order_id", ids);
+    itemsDeleted = count ?? 0;
+    await sb.from("orders").delete().in("id", ids);
+  }
+  // Limpa contexto de mesa do chat de teste
+  let settingsDeleted = 0;
+  if (TEST_CHAT_ID !== null) {
+    const { count } = await sb
+      .from("settings")
+      .delete({ count: "exact" })
+      .like("key", `telegram_last_table:${TEST_CHAT_ID}%`);
+    settingsDeleted = count ?? 0;
+  }
+  return { orders_deleted: ids.length, items_deleted: itemsDeleted, settings_deleted: settingsDeleted };
+}
+
 async function getAllowedChats(): Promise<Set<number> | null> {
   const { data } = await sb
     .from("settings")
     .select("value")
     .eq("key", "telegram_allowed_chats")
     .maybeSingle();
-  if (!data?.value) return null; // null = whitelist não configurada (bloqueia tudo)
-  try {
-    const arr = JSON.parse(data.value);
-    if (Array.isArray(arr)) return new Set(arr.map((x) => Number(x)));
-  } catch {
-    // CSV fallback
-    return new Set(
-      String(data.value)
-        .split(",")
-        .map((s) => Number(s.trim()))
-        .filter((n) => !Number.isNaN(n)),
-    );
+  let baseSet: Set<number> | null = null;
+  if (data?.value) {
+    try {
+      const arr = JSON.parse(data.value);
+      if (Array.isArray(arr)) baseSet = new Set(arr.map((x) => Number(x)));
+    } catch {
+      baseSet = new Set(
+        String(data.value)
+          .split(",")
+          .map((s) => Number(s.trim()))
+          .filter((n) => !Number.isNaN(n)),
+      );
+    }
   }
-  return null;
+  // Em TEST_MODE, garante que o chat de teste é sempre permitido (sem mexer no settings real).
+  if (TEST_MODE && TEST_CHAT_ID !== null) {
+    if (!baseSet) baseSet = new Set();
+    baseSet.add(TEST_CHAT_ID);
+  }
+  return baseSet;
 }
 
 async function getProductGroups(): Promise<ProductGroup[]> {
@@ -740,7 +810,7 @@ async function executeAdd(
           p_waiter_name: waiter,
           p_total: product.price * qty,
           p_items: [item],
-          p_should_print: true,
+          p_should_print: shouldPrint(true),
         });
         return `✅ Mesa ${table} criada com ${qty}× ${product.name} — ${fmtBRL(product.price * qty)}`;
       } catch (e: any) {
@@ -778,7 +848,7 @@ async function executeAdd(
       p_delta_items: delta.length > 0 ? delta : null,
       p_print_type: "extra",
       p_expected_version: order.version,
-      p_should_print: true,
+      p_should_print: shouldPrint(true),
     });
 
     const itemCount = after.reduce((s, i) => s + i.quantity, 0);
@@ -825,7 +895,7 @@ async function executeRemove(
       p_delta_items: null,
       p_print_type: null,
       p_expected_version: order.version,
-      p_should_print: false,
+      p_should_print: shouldPrint(false),
     });
 
     const itemCount = after.reduce((s, i) => s + i.quantity, 0);
@@ -877,7 +947,7 @@ async function executeBatchForTable(
   table: string,
   ops: BatchOp[],
   waiter: string,
-  shouldPrint: boolean,
+  printEnabled: boolean,
 ): Promise<BatchOutcome> {
   return await withVersionRetry(async () => {
     const order = await resolveTable(table);
@@ -917,7 +987,7 @@ async function executeBatchForTable(
             note: i.note,
             subtotal: i.subtotal,
           })),
-          p_should_print: shouldPrint,
+          p_should_print: shouldPrint(printEnabled),
         });
       } catch (e: any) {
         const msg = String(e?.message ?? e);
@@ -981,10 +1051,10 @@ async function executeBatchForTable(
         subtotal: i.subtotal,
         waiter_name: waiter,
       })),
-      p_delta_items: shouldPrint && delta.length > 0 ? delta : null,
-      p_print_type: shouldPrint && delta.length > 0 ? "extra" : null,
+      p_delta_items: printEnabled && delta.length > 0 ? delta : null,
+      p_print_type: printEnabled && delta.length > 0 ? "extra" : null,
       p_expected_version: order.version,
-      p_should_print: shouldPrint && delta.length > 0,
+      p_should_print: shouldPrint(printEnabled && delta.length > 0),
     });
 
     return {
@@ -1014,7 +1084,7 @@ async function executeUndoOps(table: string, ops: UndoOp[], waiter: string): Pro
     });
   }
   if (inverseOps.length === 0) return "↩️ Nada para desfazer.";
-  const result = await executeBatchForTable(table, inverseOps, waiter, /*shouldPrint*/ false);
+  const result = await executeBatchForTable(table, inverseOps, waiter, /*printEnabled*/ false);
   if (!result.ok) return `↩️ Falha ao desfazer: ${result.text}`;
   return `↩️ Operação desfeita (mesa ${table}). Total atual: ${fmtBRL(result.total)}.`;
 }
@@ -1031,6 +1101,10 @@ async function fetchProductsByIds(ids: string[]): Promise<Product[]> {
 // ─────────────────────────── telegram ───────────────────────────
 
 async function sendTelegram(chatId: number, text: string, keyboard?: InlineButton[][]) {
+  if (isTestChat(chatId)) {
+    testCaptureBuffer.push({ chatId, text, keyboard, kind: "send" });
+    return;
+  }
   try {
     const body: any = { chat_id: chatId, text };
     if (keyboard && keyboard.length > 0) {
@@ -1048,6 +1122,10 @@ async function sendTelegram(chatId: number, text: string, keyboard?: InlineButto
 }
 
 async function answerCallback(callbackId: string, text?: string) {
+  if (currentChatIsTest) {
+    testCaptureBuffer.push({ chatId: TEST_CHAT_ID ?? 0, text: text ?? "", kind: "answer" });
+    return;
+  }
   try {
     await fetch(`https://api.telegram.org/bot${TOKEN}/answerCallbackQuery`, {
       method: "POST",
@@ -1060,6 +1138,10 @@ async function answerCallback(callbackId: string, text?: string) {
 }
 
 async function editTelegramMessage(chatId: number, messageId: number, text: string) {
+  if (isTestChat(chatId)) {
+    testCaptureBuffer.push({ chatId, text, kind: "edit", messageId });
+    return;
+  }
   try {
     await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
       method: "POST",
@@ -1592,6 +1674,29 @@ async function handleCallbackQuery(cb: any): Promise<void> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // ── TEST MODE endpoints (GET) ──
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const op = url.searchParams.get("test");
+    if (op) {
+      if (!TEST_MODE) {
+        return new Response(JSON.stringify({ error: "TEST_MODE disabled" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (op === "ping") {
+        return new Response(JSON.stringify({ test_mode: true, test_chat_id: TEST_CHAT_ID }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (op === "cleanup") {
+        const r = await cleanupTestData();
+        return new Response(JSON.stringify({ ok: true, ...r }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (op === "drain") {
+        return new Response(JSON.stringify({ buffer: drainTestBuffer() }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "unknown op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   if (!TOKEN) {
     console.error("TELEGRAM_BOT_TOKEN not configured");
     return new Response("ok", { status: 200, headers: corsHeaders });
@@ -1603,7 +1708,13 @@ Deno.serve(async (req) => {
 
     // Callback de botão inline
     if (update?.callback_query) {
-      await handleCallbackQuery(update.callback_query);
+      const cbChatId: number | undefined = update.callback_query?.message?.chat?.id;
+      setTestContext(cbChatId);
+      try {
+        await handleCallbackQuery(update.callback_query);
+      } finally {
+        clearTestContext();
+      }
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
@@ -1619,7 +1730,9 @@ Deno.serve(async (req) => {
     if (fromBot || !chatId || !text) {
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
+    setTestContext(chatId);
     if (typeof updateId === "number" && isDuplicate(updateId)) {
+      clearTestContext();
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
@@ -1845,6 +1958,8 @@ Deno.serve(async (req) => {
     }
   } catch (err) {
     console.error("Erro processando update:", err);
+  } finally {
+    clearTestContext();
   }
 
   return new Response("ok", { status: 200, headers: corsHeaders });
