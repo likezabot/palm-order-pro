@@ -600,6 +600,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      force_clear_orphan_prints: { Args: never; Returns: Json }
       merge_table_duplicates: { Args: { p_table_name: string }; Returns: Json }
       move_order_to_table: {
         Args: { p_order_id: string; p_target_table: string }
@@ -615,6 +616,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      recover_stuck_prints: { Args: never; Returns: Json }
       rename_order_table: {
         Args: { p_new_name: string; p_order_id: string }
         Returns: undefined
