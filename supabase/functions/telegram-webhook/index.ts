@@ -59,8 +59,8 @@ async function getLastTable(chatId: number, userId?: number, chatType?: ChatType
     return null;
   }
 }
-async function setLastTable(chatId: number, table: string): Promise<void> {
-  const key = lastTableSettingsKey(chatId);
+async function setLastTable(chatId: number, table: string, userId?: number, chatType?: ChatType): Promise<void> {
+  const key = lastTableSettingsKey(chatId, userId, chatType);
   const value = JSON.stringify({ table, ts: Date.now() });
   const { data: existing } = await sb
     .from("settings")
@@ -76,6 +76,65 @@ async function setLastTable(chatId: number, table: string): Promise<void> {
   }
 
   await sb.from("settings").insert({ key, value });
+}
+
+// ─────────────────────────── rate limit (best-effort, in-memory) ───────────────────────────
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 10;
+const rateBuckets = new Map<number, number[]>();
+const rateWarned = new Map<number, number>();
+function checkRateLimit(chatId: number): boolean {
+  const now = Date.now();
+  const arr = (rateBuckets.get(chatId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  arr.push(now);
+  rateBuckets.set(chatId, arr);
+  // Cleanup periódico
+  if (rateBuckets.size > 200) {
+    for (const [k, v] of rateBuckets) {
+      const cleaned = v.filter((t) => now - t < RATE_WINDOW_MS);
+      if (cleaned.length === 0) rateBuckets.delete(k);
+      else rateBuckets.set(k, cleaned);
+    }
+  }
+  return arr.length <= RATE_MAX;
+}
+function shouldSendRateWarning(chatId: number): boolean {
+  const now = Date.now();
+  const last = rateWarned.get(chatId) ?? 0;
+  if (now - last < 10_000) return false;
+  rateWarned.set(chatId, now);
+  return true;
+}
+
+// ─────────────────────────── undo (60s, in-memory) ───────────────────────────
+const UNDO_TTL_MS = 60_000;
+type UndoOp = { op: "a" | "r"; productId: string; productName: string; qty: number };
+type UndoToken = { chatId: number; table: string; ops: UndoOp[]; ts: number };
+const pendingUndos = new Map<string, UndoToken>();
+const consumedUndos = new Map<string, number>();
+
+function cleanupUndos() {
+  const now = Date.now();
+  for (const [k, v] of pendingUndos) if (now - v.ts > UNDO_TTL_MS) pendingUndos.delete(k);
+  for (const [k, t] of consumedUndos) if (now - t > UNDO_TTL_MS) consumedUndos.delete(k);
+}
+function genUndoToken(): string {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+function registerBatchUndo(chatId: number, table: string, ops: UndoOp[]): string {
+  cleanupUndos();
+  if (ops.length === 0) return "";
+  const token = genUndoToken();
+  pendingUndos.set(token, { chatId, table, ops, ts: Date.now() });
+  return token;
+}
+function buildUndoSingleKeyboard(table: string, productId: string, qty: number, op: "a" | "r"): InlineButton[][] {
+  // op = ação original ("a" → ADD foi feito → undo é REMOVE)
+  return [[{ text: "↩️ Desfazer (60s)", callback_data: `u|${table}|${productId}|${qty}|${op}` }]];
+}
+function buildUndoBatchKeyboard(token: string): InlineButton[][] {
+  if (!token) return [];
+  return [[{ text: "↩️ Desfazer (60s)", callback_data: `ub|${token}` }]];
 }
 
 // ─────────────────────────── helpers ───────────────────────────
