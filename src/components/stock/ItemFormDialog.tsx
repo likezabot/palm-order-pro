@@ -30,17 +30,12 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  PORCO_GROUP_NAMES,
-  PORCO_EXTRA_NAMES_KEY,
-  addPorcoExtraName,
-  useExtraPorcoNames,
-} from "@/lib/porco-group";
-
-const normName = (s: string) =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-
-const isCanonicalPorcoName = (name: string) =>
-  PORCO_GROUP_NAMES.some((n) => normName(n) === normName(name));
+  useProductGroups,
+  addProductToGroup,
+  findGroupForProduct,
+  PRODUCT_GROUPS_KEY,
+  norm as normName,
+} from "@/lib/product-groups";
 
 type Props = {
   open: boolean;
