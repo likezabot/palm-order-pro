@@ -6,11 +6,6 @@ import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
 import MoveTableDialog from "./MoveTableDialog";
-import {
-  SUBGROUPS,
-  matchesSubgroup,
-  type Subgroup,
-} from "./menu-subgroups";
 import { RenameTableDialog } from "./RenameTableDialog";
 import { GroupVariantDialog } from "./GroupVariantDialog";
 import {
@@ -19,7 +14,6 @@ import {
   resolveGroupMembers,
   type ProductGroup,
 } from "@/lib/product-groups";
-import { SubgroupDialog } from "./SubgroupDialog";
 import { CartFab } from "./CartFab";
 import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
 import { useProductStockMap, isProductEsgotado } from "@/hooks/use-product-stock-map";
@@ -41,7 +35,6 @@ interface Props {
 
 const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
-  const [openSubgroup, setOpenSubgroup] = useState<Subgroup | null>(null);
   const [openGroup, setOpenGroup] = useState<ProductGroup | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
