@@ -284,14 +284,16 @@ export default function Stock() {
           </div>
         ) : (
           <>
-            {tab === "espetos" && !search && (
-              <PorcoGroupBanner
+            {!search && getGroupsForCategory(productGroups, tab).map((g) => (
+              <ProductGroupBanner
+                key={g.id}
+                group={g}
                 items={active}
                 onCreateForProduct={(p) =>
                   createInventoryForProduct({ id: p.id, name: p.name, category: p.category })
                 }
               />
-            )}
+            ))}
             <StockList
               items={visibleItems}
               onMovement={openMovement}

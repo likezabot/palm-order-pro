@@ -393,6 +393,12 @@ const ProductsManager = ({
           onCancel={exitSelection}
         />
       )}
+
+      <GroupsManager
+        open={groupsManagerOpen}
+        onOpenChange={setGroupsManagerOpen}
+        productsByCategory={productsByCategory}
+      />
     </div>
   );
 };
