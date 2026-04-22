@@ -79,6 +79,43 @@ export const TYPE_LABEL: Record<InventoryMovement["movement_type"], string> = {
   adjustment: "Ajuste",
 };
 
+// Display categories used in the Stock screen — mirror the PALM menu tabs
+// (refeicoes/espetos/bebidas/cervejas) plus "insumos" for unlinked supplies.
+export const DISPLAY_CATEGORIES = [
+  "refeicoes",
+  "espetos",
+  "bebidas",
+  "cervejas",
+  "insumos",
+] as const;
+export type DisplayCategory = (typeof DISPLAY_CATEGORIES)[number];
+
+export const DISPLAY_CATEGORY_LABELS: Record<string, string> = {
+  refeicoes: "Refeições",
+  espetos: "Espetos",
+  bebidas: "Bebidas",
+  cervejas: "Cervejas",
+  insumos: "Insumos",
+};
+
+/**
+ * Resolve the display category for a stock item:
+ * - linked items use their menu product's category (refeicoes/espetos/bebidas/cervejas)
+ * - unlinked items fall back to "insumos"
+ */
+export function getDisplayCategory(
+  item: Pick<InventoryItem, "product_id">,
+  productCategoryById: Map<string, string>,
+): DisplayCategory {
+  if (item.product_id) {
+    const cat = productCategoryById.get(item.product_id);
+    if (cat === "refeicoes" || cat === "espetos" || cat === "bebidas" || cat === "cervejas") {
+      return cat;
+    }
+  }
+  return "insumos";
+}
+
 // Maps a menu category (products.category) to a stock category
 export function mapMenuCategoryToStock(menuCategory: string): string {
   const c = (menuCategory || "").toLowerCase();
