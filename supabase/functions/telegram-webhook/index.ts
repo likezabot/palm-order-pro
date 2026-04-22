@@ -24,6 +24,80 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
+// ─────────────────────── vinculação garçom (Telegram → Palm) ───────────────────────
+// Lista garçons cadastrados no Palm (profiles.role = 'waiter').
+async function listWaiterNames(): Promise<string[]> {
+  const { data, error } = await sb
+    .from("profiles")
+    .select("name")
+    .eq("role", "waiter")
+    .order("name", { ascending: true });
+  if (error) { console.warn("listWaiterNames:", error.message); return []; }
+  return (data ?? []).map((r: any) => String(r.name)).filter(Boolean);
+}
+
+async function getWaiterBinding(telegramUserId: number): Promise<string | null> {
+  const { data, error } = await sb
+    .from("telegram_user_bindings")
+    .select("waiter_name")
+    .eq("telegram_user_id", telegramUserId)
+    .maybeSingle();
+  if (error) { console.warn("getWaiterBinding:", error.message); return null; }
+  return data?.waiter_name ?? null;
+}
+
+async function setWaiterBinding(telegramUserId: number, waiterName: string, username?: string): Promise<void> {
+  const { error } = await sb
+    .from("telegram_user_bindings")
+    .upsert({
+      telegram_user_id: telegramUserId,
+      waiter_name: waiterName,
+      telegram_username: username ?? null,
+    }, { onConflict: "telegram_user_id" });
+  if (error) console.warn("setWaiterBinding:", error.message);
+}
+
+async function clearAllWaiterBindings(): Promise<number> {
+  const { data, error } = await sb
+    .from("telegram_user_bindings")
+    .delete()
+    .gte("telegram_user_id", -9223372036854775000)
+    .select("telegram_user_id");
+  if (error) { console.warn("clearAllWaiterBindings:", error.message); return 0; }
+  return data?.length ?? 0;
+}
+
+// Resolve o nome do garçom a partir do user_id Telegram. Retorna null se não vinculado.
+// Tolerante a maiúsculas/acentos/espaços extras na escolha.
+function normalizeWaiterChoice(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+async function tryBindFromText(telegramUserId: number, text: string, username?: string): Promise<string | null> {
+  const wanted = normalizeWaiterChoice(text);
+  if (!wanted) return null;
+  const names = await listWaiterNames();
+  for (const n of names) {
+    if (normalizeWaiterChoice(n) === wanted) {
+      await setWaiterBinding(telegramUserId, n, username);
+      return n;
+    }
+  }
+  return null;
+}
+function buildWaiterPickerMessage(names: string[], username?: string): string {
+  const greet = username ? `Olá, @${username}! ` : "Olá! ";
+  if (names.length === 0) {
+    return greet +
+      "Nenhum garçom cadastrado no Palm ainda.\n" +
+      "Peça ao admin para abrir o módulo *Admin* e criar seu nome em Garçons.";
+  }
+  return greet +
+    "Antes de começar, me diga *qual garçom você é* (precisa estar cadastrado no Palm).\n\n" +
+    "Garçons disponíveis:\n" +
+    names.map((n) => `  • ${n}`).join("\n") +
+    "\n\nResponda apenas com o nome (ex.: `" + names[0] + "`).";
+}
+
 // Modo turbo: contexto da última mesa por chat (TTL 15min, persistido em settings).
 const LAST_TABLE_TTL_MS = 15 * 60_000;
 type ChatType = "private" | "group" | "supergroup" | "channel" | undefined;
