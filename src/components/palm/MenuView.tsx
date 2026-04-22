@@ -248,30 +248,30 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         </div>
 
         {/* Search field */}
-        <div className="relative mb-1.5 group">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 group-focus-within:text-primary transition-colors" />
+        <div className="relative mb-2 group">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 transition-colors" />
           <input
             type="text"
             inputMode="search"
-            placeholder="Buscar item no cardápio..."
+            placeholder="Buscar no cardápio"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-2xl border border-border/50 bg-card/60 pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
+            className="w-full rounded-xl border border-transparent bg-secondary/40 pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/15 focus:bg-secondary/60 transition-all"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
               aria-label="Limpar busca"
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary"
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-secondary"
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           )}
         </div>
 
         {/* Category tabs */}
         {!isSearching && (
-          <div className="flex gap-0 overflow-x-auto no-scrollbar border-b border-border/60 -mx-2.5 px-2.5">
+          <div className="flex gap-0 overflow-x-auto no-scrollbar border-b border-border/30 -mx-2.5 px-2.5">
             {CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat;
               const count = categoryCounts[cat] ?? 0;
@@ -282,23 +282,23 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                     playFeedback("click");
                     setActiveCategory(cat);
                   }}
-                  className={`relative inline-flex min-w-[80px] items-center justify-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-sm tracking-wide transition-colors ${
+                  className={`relative inline-flex min-w-[72px] items-center justify-center gap-1.5 whitespace-nowrap px-4 py-3 text-[13px] tracking-tight transition-colors ${
                     isActive
-                      ? "text-foreground font-semibold"
-                      : "text-muted-foreground/70 font-medium hover:text-foreground"
+                      ? "text-foreground font-medium"
+                      : "text-muted-foreground/60 font-normal hover:text-foreground/80"
                   }`}
                 >
                   <span>{CATEGORY_LABELS[cat]}</span>
                   {count > 0 && (
                     <span
                       key={count}
-                      className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none bg-foreground/10 text-foreground/80 animate-badge-pop"
+                      className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-medium leading-none bg-foreground/8 text-foreground/70 animate-badge-pop tabular-nums"
                     >
                       {count}
                     </span>
                   )}
                   {isActive && (
-                    <span className="absolute left-3 right-3 bottom-0 h-[2px] rounded-full bg-brand-gradient" />
+                    <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[2px] w-5 rounded-full bg-foreground" />
                   )}
                 </button>
               );
