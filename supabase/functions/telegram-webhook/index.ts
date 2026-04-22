@@ -3875,9 +3875,32 @@ Deno.serve(async (req) => {
 
       const slots: Slot[] = [];
 
+      // Modo "operação herdada": se a 1ª linha estabelece um STOCK_MOVEMENT,
+      // linhas seguintes que sozinhas não casam com nenhum verbo são tratadas
+      // como continuação (mesma operação in/out/adjustment).
+      let inheritedStockType: "in" | "out" | "adjustment" | null = null;
+
       for (const line of lines) {
         try {
-          const parsed = parseCommand(line);
+          let parsed = parseCommand(line);
+
+          if (parsed.kind === "PARSE_ERROR" && inheritedStockType) {
+            const tail = parseStockTailLoose(line);
+            if (tail) {
+              parsed = {
+                kind: "STOCK_MOVEMENT",
+                type: inheritedStockType,
+                qty: tail.qty,
+                itemText: tail.itemText,
+                unit: tail.unit,
+              };
+            }
+          }
+
+          if (parsed.kind === "STOCK_MOVEMENT") {
+            inheritedStockType = parsed.type;
+          }
+
           const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
 
           if (cmd.kind === "ADD" || cmd.kind === "REMOVE") {
