@@ -1101,6 +1101,10 @@ async function fetchProductsByIds(ids: string[]): Promise<Product[]> {
 // ─────────────────────────── telegram ───────────────────────────
 
 async function sendTelegram(chatId: number, text: string, keyboard?: InlineButton[][]) {
+  if (isTestChat(chatId)) {
+    testCaptureBuffer.push({ chatId, text, keyboard, kind: "send" });
+    return;
+  }
   try {
     const body: any = { chat_id: chatId, text };
     if (keyboard && keyboard.length > 0) {
@@ -1118,6 +1122,10 @@ async function sendTelegram(chatId: number, text: string, keyboard?: InlineButto
 }
 
 async function answerCallback(callbackId: string, text?: string) {
+  if (currentChatIsTest) {
+    testCaptureBuffer.push({ chatId: TEST_CHAT_ID ?? 0, text: text ?? "", kind: "answer" });
+    return;
+  }
   try {
     await fetch(`https://api.telegram.org/bot${TOKEN}/answerCallbackQuery`, {
       method: "POST",
@@ -1130,6 +1138,10 @@ async function answerCallback(callbackId: string, text?: string) {
 }
 
 async function editTelegramMessage(chatId: number, messageId: number, text: string) {
+  if (isTestChat(chatId)) {
+    testCaptureBuffer.push({ chatId, text, kind: "edit", messageId });
+    return;
+  }
   try {
     await fetch(`https://api.telegram.org/bot${TOKEN}/editMessageText`, {
       method: "POST",
