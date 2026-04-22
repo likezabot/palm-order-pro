@@ -58,89 +58,31 @@ const PrintStation = () => {
 
   useEffect(() => {
     fetchOrders();
-    console.log("[PrintStation] Inscrevendo canal Realtime...");
+    console.log("[PrintStation] Inscrevendo canal Realtime (somente UI)...");
 
+    // NOTA: a autoimpressão foi movida para `src/lib/global-order-runtime.ts`,
+    // que escuta orders globalmente independente desta tela estar aberta.
+    // Aqui só mantemos a lista visual + status para o operador.
     const channel = supabase
-      .channel(`print-station-${crypto.randomUUID()}`)
+      .channel(`print-station-ui-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "orders" },
-        async (payload) => {
+        (payload) => {
           const newOrder = payload.new as Order;
           setOrders((prev) => [newOrder, ...prev.slice(0, 19)]);
-
-          if (printingRef.current.has(newOrder.id)) return;
-
-          if (autoPrintRef.current) {
-            printingRef.current.add(newOrder.id);
-            try {
-              console.log(`[PrintStation] INSERT recebido: ${newOrder.id} — Mesa ${newOrder.table_name}`);
-
-              // Delay para itens chegarem ao banco
-              await new Promise((r) => setTimeout(r, 2000));
-
-              const result = await autoPrintOrder(newOrder);
-
-              if (result.printed) {
-                setPrintedIds((prev) => new Set(prev).add(newOrder.id));
-                console.log(`[PrintStation] Impresso com sucesso — Mesa ${newOrder.table_name}`);
-                toastRef.current({
-                  title: "Pedido impresso!",
-                  description: `Mesa ${newOrder.table_name} — impressão automática.`,
-                });
-              } else if (result.reason === "already_printed") {
-                setPrintedIds((prev) => new Set(prev).add(newOrder.id));
-                console.log(`[PrintStation] Já impresso por outra instância: ${newOrder.id}`);
-              } else {
-                console.warn(`[PrintStation] Não imprimiu: ${result.reason}`);
-              }
-            } catch (error) {
-              console.error("[PrintStation] Falha na autoimpressão de pedido novo:", error);
-            } finally {
-              printingRef.current.delete(newOrder.id);
-            }
-          } else {
-            toastRef.current({
-              title: "Novo pedido recebido!",
-              description: `Mesa ${newOrder.table_name} — impressão automática desligada.`,
-            });
-          }
-        }
+        },
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "orders" },
-        async (payload) => {
+        (payload) => {
           const updated = payload.new as Order;
-          const old = payload.old as Partial<Order>;
-          
-          // Atualizar lista local
-          setOrders((prev) => prev.map(o => o.id === updated.id ? updated : o));
-
-          // Re-imprimir se print_status voltou para pending (indica edição)
-          const printReset = (updated as any).print_status === 'pending' && (old as any).print_status !== 'pending';
-          const totalChanged = updated.total !== old.total;
-
-          if (autoPrintRef.current && (printReset || totalChanged)) {
-            if (printingRef.current.has(updated.id)) return;
-            printingRef.current.add(updated.id);
-            try {
-              console.log(`[PrintStation] UPDATE relevante: ${updated.id} — Mesa ${updated.table_name}`);
-              
-              await new Promise((r) => setTimeout(r, 2000));
-              const result = await autoPrintDelta(updated);
-              
-              if (result.printed) {
-                setPrintedIds((prev) => new Set(prev).add(updated.id));
-                toastRef.current({ title: `Reimpresso — Mesa ${updated.table_name}` });
-              }
-            } catch (error) {
-              console.error("[PrintStation] Falha na autoimpressão de atualização:", error);
-            } finally {
-              printingRef.current.delete(updated.id);
-            }
+          setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+          if ((updated as any).print_status === "printed") {
+            setPrintedIds((prev) => new Set(prev).add(updated.id));
           }
-        }
+        },
       )
       .subscribe((s) => {
         console.log(`[PrintStation] Realtime status: ${s}`);
@@ -150,7 +92,7 @@ const PrintStation = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchOrders]); // Apenas fetchOrders — estável
+  }, [fetchOrders]);
 
   return (
     <div className="min-h-screen-safe bg-slate-50">
@@ -188,16 +130,11 @@ const PrintStation = () => {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-4 bg-slate-100 px-4 py-2 rounded-xl">
-                <Switch
-                  id="auto-print"
-                  checked={autoPrint}
-                  onCheckedChange={setAutoPrint}
-                  className="data-[state=checked]:bg-emerald-500"
-                />
-                <Label htmlFor="auto-print" className="font-bold text-slate-700 cursor-pointer">
-                  Auto-print: {autoPrint ? "LIGADA" : "DESLIGADA"}
-                </Label>
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                  Auto-print global ativa
+                </span>
               </div>
             </div>
           </CardHeader>
