@@ -5,6 +5,8 @@ import "./index.css";
 import { startPrintQueueWorker } from "./lib/print-queue-worker";
 import { debugLog } from "./lib/debug-logger";
 import { startConnectivityMonitor } from "./lib/connectivity-monitor";
+import { startGlobalOrderRuntime } from "./lib/global-order-runtime";
+import { queryClient } from "./lib/query-client";
 
 // Anti-flash: aplica tema salvo antes do React montar.
 // Default = dark (preserva visual atual).
@@ -36,6 +38,11 @@ startPrintQueueWorker();
 // Monitor de conectividade (internet + realtime + backend).
 // Não toca em backend: só observa e expõe estado pra UI.
 startConnectivityMonitor();
+
+// Runtime global de pedidos/impressão — independente de tela aberta.
+// Escuta realtime de orders, faz bootstrap de pendentes, watchdog de stuck jobs.
+// Pedidos do Palm e do Telegram caem todos aqui.
+startGlobalOrderRuntime(queryClient);
 
 // --- PWA Service Worker ---
 const isInIframe = (() => {
