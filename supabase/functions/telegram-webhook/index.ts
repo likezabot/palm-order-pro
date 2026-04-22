@@ -80,33 +80,10 @@ async function setLastTable(chatId: number, table: string, userId?: number, chat
   await sb.from("settings").insert({ key, value });
 }
 
-// ─────────────────────────── rate limit (best-effort, in-memory) ───────────────────────────
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX = 10;
-const rateBuckets = new Map<number, number[]>();
-const rateWarned = new Map<number, number>();
-function checkRateLimit(chatId: number): boolean {
-  const now = Date.now();
-  const arr = (rateBuckets.get(chatId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-  arr.push(now);
-  rateBuckets.set(chatId, arr);
-  // Cleanup periódico
-  if (rateBuckets.size > 200) {
-    for (const [k, v] of rateBuckets) {
-      const cleaned = v.filter((t) => now - t < RATE_WINDOW_MS);
-      if (cleaned.length === 0) rateBuckets.delete(k);
-      else rateBuckets.set(k, cleaned);
-    }
-  }
-  return arr.length <= RATE_MAX;
-}
-function shouldSendRateWarning(chatId: number): boolean {
-  const now = Date.now();
-  const last = rateWarned.get(chatId) ?? 0;
-  if (now - last < 10_000) return false;
-  rateWarned.set(chatId, now);
-  return true;
-}
+// ─────────────────────────── rate limit ───────────────────────────
+// REMOVIDO: rate limit in-memory não é confiável em Edge Functions multi-isolate.
+// O backend não tem primitivos para rate limit persistente ainda. Sem proteção real
+// contra flood até existir infra dedicada.
 
 // ─────────────────────────── undo (60s, in-memory) ───────────────────────────
 const UNDO_TTL_MS = 60_000;
