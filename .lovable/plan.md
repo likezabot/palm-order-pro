@@ -1,102 +1,51 @@
 
 
-## Aliases inteligentes para reconhecimento no Telegram
+## Parser do Telegram: linguagem natural
 
-### O que será feito
+### Diagnóstico do parser atual
 
-Popular a coluna `aliases` (TEXT[]) de cada `inventory_items` ativo com sinônimos curtos e naturais. O `find_inventory_item_by_text` já normaliza (lowercase + remove acentos) e bate exato em `slug` OU em qualquer entrada de `aliases`, então basta inserir variações **normalizadas, em minúsculas, sem acento**.
+O parser já cobre 4 dos 5 exemplos pedidos via Formas 1/2/3 e os dicionários `ADD_OPS`/`REM_OPS`. Único caso que falha hoje:
 
-### Regras dos aliases
+- **"mesa 1 mais um bovino"** — falta o operador `mais` e o número por extenso `um`.
 
-- Sempre normalizado: lowercase, sem acento, sem caractere especial além de espaço, dígito e hífen.
-- **Sem aliases ambíguos**: se duas variantes existirem (ex: Coca 350 e Coca 600), o termo curto "coca" **não** entra em nenhuma — força o usuário a especificar. Idem "fanta", "guarana", "sprite" se tiverem mais de um tamanho.
-- Aliases ÚNICOS no sistema inteiro: se "agua" só puder ser "Água sem gás" (decisão de produto), liberamos; senão, fica fora.
-- Sempre incluir versão sem hífen do nome (ex: "coca cola 350", "coca cola zero 350") além do slug.
+Os outros exemplos já funcionam (testados mentalmente contra os regexes existentes). O plano abaixo fecha esse gap sem mexer no fluxo de execução.
 
-### Mapa proposto (apenas itens onde há ganho real)
+### Mudanças no `parseCommand` (arquivo único: `supabase/functions/telegram-webhook/index.ts`)
 
-**Carnes / espetos** (sem ambiguidade — atribuímos termos curtos):
-| Item | Aliases |
-|---|---|
-| Bovino | `boi`, `carne`, `espeto bovino`, `espeto de boi` |
-| Porco | `suino`, `espeto de porco`, `espeto suino` |
-| Coração de frango | `coracao`, `coracaozinho`, `espeto de coracao` |
-| Costela de boi (borboleta) | `costela`, `costela boi`, `borboleta` |
-| Costela suína | `costelinha`, `costela porco`, `costela suina` |
-| Linguiça toscana | `linguica`, `toscana`, `espeto de linguica` |
-| Medalhão de Frango | `medalhao`, `frango`, `espeto de frango` |
-| Panceta suína | `panceta`, `barriga de porco` |
-| Pão de alho | `pao alho`, `paodealho` |
-| Queijo coalho | `queijo`, `coalho`, `espeto de queijo` |
-| Tulipa (meio da asa) | `tulipa`, `asa`, `asinha`, `meio da asa` |
-| Janta de costela bovina | `janta de costela`, `janta costela`, `janta` |
-| Jantinha | `janta pequena` |
-| Arroz (200g) | `arroz`, `arroz 200`, `arroz porcao` |
-| Salada Un | `salada` |
+**1. Expandir dicionários de operadores**
+- `ADD_OPS` ganha: `mais`, `soma`, `somar`, `inclui`, `incluir`, `acrescenta`, `acrescentar`
+- `REM_OPS` ganha: `menos`, `subtrai`, `subtrair`, `exclui`, `excluir`, `desconta`, `descontar`
 
-**Bebidas** (cuidado com ambiguidade entre tamanhos):
-| Item | Aliases |
-|---|---|
-| Água sem gás | `agua`, `agua sem gas`, `agua mineral` |
-| Água com gás | `agua com gas`, `agua gas` |
-| Coca-Cola 220ml | `coca 220`, `coca-cola 220`, `coca cola 220`, `mini coca`, `mini coca 220` |
-| Coca-Cola 350ml | `coca 350`, `coca cola 350`, `coca lata`, `lata de coca` |
-| Coca-Cola 600ml | `coca 600`, `coca cola 600` |
-| Coca-Cola 2L | `coca 2l`, `coca 2 litros`, `coca cola 2l` |
-| Coca-Cola 1L vidro (somente local) | `coca 1l`, `coca vidro`, `coca cola 1l` |
-| Coca-Cola Zero 220ml | `coca zero 220`, `mini coca zero` |
-| Coca-Cola Zero 350ml | `coca zero 350`, `coca zero lata`, `zero lata` |
-| Coca-Cola Zero 600ml | `coca zero 600` |
-| Coca-Cola Zero 2L | `coca zero 2l`, `coca zero 2 litros` |
-| Fanta-laranja 220ml | `fanta laranja`, `fanta`, `laranja` |
-| Fanta-uva 220ml | `fanta uva`, `uva` |
-| Guaraná 220ml | `guarana 220`, `mini guarana`, `guaraninha` |
-| Guaraná 1L | `guarana 1l`, `guarana 1 litro` |
-| Sprite 220ml | `sprite`, `sprite 220`, `mini sprite` |
-| Suco Del Valle Maracujá 290ml | `suco maracuja`, `del valle maracuja`, `maracuja` |
-| Suco Del Valle Pêssego 290ml | `suco pessego`, `del valle pessego`, `pessego` |
-| Suco Del Valle Uva 290ml | `suco uva`, `del valle uva`, `suco de uva` |
-| KS Coca-Cola Normal 290ml | `ks coca`, `ks 290`, `coca ks` |
-| KS Coca-Cola Zero 290ml | `ks coca zero`, `ks zero` |
-| Tubaina 600ml | `tubaina`, `tubaina 600` |
-| Skol 269ml | `skol lata`, `skol 269`, `lata skol` |
-| Skol 600ml | `skol 600`, `skolzao` |
-| Original 600ml | `original`, `cerveja original`, `original 600` |
-| Antarctica Boa | `antarctica`, `boa`, `antartica boa` |
-| Outra cerveja | `outra cerveja` |
+**2. Suporte a números por extenso (1–10)**
+- Novo helper `parseQty(token)` que aceita dígito (`"2"`) ou palavra (`um`, `uma`, `dois`, `duas`, `tres`, `quatro`, `cinco`, `seis`, `sete`, `oito`, `nove`, `dez`).
+- Usado dentro de `extractQtyProduct`: se o primeiro token for dígito OU palavra-número, vira `qty` e o resto vira `productText`. Senão, `qty=1` e tudo é produto (comportamento atual).
 
-**Decisão sobre termos curtos ambíguos**:
-- `coca` (sozinho) → **não vira alias** de nenhuma. Quando o usuário mandar só "coca", o parser cai no fuzzy fallback (`ILIKE '%coca%'`), retorna 5+ matches e o bot responde "vários encontrados, especifique o tamanho". Mantém a regra "nunca chuta".
-- `guarana`, `sprite`, `fanta` → idem se houver múltiplas variantes; onde só existe uma (ex: Sprite 220ml é único hoje), liberamos o termo curto.
-- `frango` aparece tanto em "Medalhão de Frango" quanto em "Coração de frango" — atribuído **só** ao Medalhão (item principal). "Coração" sempre exige a palavra coracao.
+**3. Sem novas regex de forma**
+- As 3 formas existentes (canônica, com preposição, sem preposição) continuam idênticas. A expansão dos dicionários e do `extractQtyProduct` é suficiente para cobrir todos os exemplos.
 
-### Como será aplicado
+### Validação dos casos pedidos após mudança
 
-Um único bloco `UPDATE` por item (executado via insert tool, não migration — é dado, não schema). Exemplo:
-```sql
-UPDATE inventory_items SET aliases = ARRAY['boi','carne','espeto bovino','espeto de boi']
-WHERE slug = 'bovino';
-```
-Total: ~40 updates, um por item da tabela acima.
+| Entrada | Forma | Resultado |
+|---|---|---|
+| `mesa 1 + 1 bovino` | F1 | ADD mesa=1 qty=1 bovino ✅ (regressão) |
+| `mesa 1 mais um bovino` | F1 | ADD mesa=1 qty=1 bovino ✅ (novo) |
+| `adiciona 1 bovino na mesa 1` | F2 | ADD mesa=1 qty=1 bovino ✅ |
+| `mesa 1 coloca 2 coca 350` | F1 | ADD mesa=1 qty=2 "coca 350" ✅ |
+| `tira 1 agua da mesa 2` | F2 | REMOVE mesa=2 qty=1 agua ✅ |
+| `remove 1 tulipa mesa 3` | F3 | REMOVE mesa=3 qty=1 tulipa ✅ |
 
-### Validação pós-aplicação
+### Garantias mantidas
 
-Após popular, rodar consulta de sanidade que detecta colisões:
-```sql
-SELECT alias, array_agg(name) AS items
-FROM inventory_items, unnest(aliases) AS alias
-WHERE is_active
-GROUP BY alias HAVING count(*) > 1;
-```
-Resultado esperado: **0 linhas**. Se algum alias colidir, removemos antes de fechar.
+- **Compatibilidade total**: nenhuma regra antiga removida; apenas adições.
+- **Mesmo fluxo de execução**: `executeAdd`/`executeRemove`/`resolveProduct` intocados.
+- **Sem ambiguidade silenciosa**: `resolveProduct` continua devolvendo `ambiguous` → bot pede para especificar. Aliases curtos ambíguos (coca, fanta…) seguem fora do dicionário.
+- **Um comando por mensagem**: parser já trata a mensagem como expressão única (sem split por `;` ou `\n`); nada muda.
+- **Sem chute de produto**: a tradução natural→canônico acontece só no parser (operador + qty); a resolução do produto não é afetada.
 
-### Memória do projeto
+### O que NÃO entra nesta etapa
 
-Atualizar `mem://features/telegram-bot.md` com a regra: "Aliases curtos ambíguos não entram — força o fuzzy a perguntar variante".
-
-### O que NÃO faz parte
-
-- Mexer no parser ou na função `find_inventory_item_by_text` (já funcionam).
-- Aliases para itens inativos ou sem `product_id` (não vão pro pedido mesmo).
-- Auto-geração de aliases por IA — lista é curada manualmente para garantir zero ambiguidade.
+- Múltiplos comandos numa mesma mensagem.
+- Plurais/concordância no nome do produto (delegado ao fuzzy de `resolveProduct`).
+- Números acima de 10 por extenso (raro em pedido de mesa; dígito segue funcionando).
+- Mudanças em testes/memória (alteração é mínima e contida no parser).
 
