@@ -1,49 +1,59 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import {
-  PORCO_GROUP_NAMES,
-  PORCO_EXTRA_NAMES_KEY,
-  addPorcoExtraName,
-  useExtraPorcoNames,
-} from "@/lib/porco-group";
+  useProductGroups,
+  useInvalidateProductGroups,
+  addProductToGroup,
+  createGroup,
+  norm,
+} from "@/lib/product-groups";
+import { Input } from "@/components/ui/input";
 
 interface Props {
   product: Product | null;
   onBack: () => void;
   onSaved: () => void;
-  /** Categoria pré-selecionada ao criar novo produto (usado pelo botão contextual da seção). */
+  /** Categoria pré-selecionada ao criar novo produto. */
   initialCategory?: string;
 }
-
-const norm = (s: string) =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-
-const isCanonicalPorcoName = (name: string) =>
-  PORCO_GROUP_NAMES.some((n) => norm(n) === norm(name));
 
 const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   const [name, setName] = useState(product?.name || "");
   const [price, setPrice] = useState(product?.price?.toString() || "");
   const [category, setCategory] = useState(product?.category || initialCategory || "espetos");
   const [active, setActive] = useState(product?.active ?? true);
-  const { data: extraPorcoNames = [] } = useExtraPorcoNames();
-  const initialIsPorcoGroup = product
-    ? isCanonicalPorcoName(product.name) ||
-      extraPorcoNames.some((n) => norm(n) === norm(product.name))
-    : false;
-  const [porcoGroup, setPorcoGroup] = useState(initialIsPorcoGroup);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+
+  const { data: groups = [] } = useProductGroups();
+  const invalidateGroups = useInvalidateProductGroups();
+
+  // Group selection: '' = none, '__new__' = create, otherwise group id
+  const initialGroupId = useMemo(() => {
+    if (!product) return "";
+    const g = groups.find(
+      (g) =>
+        g.category === product.category &&
+        g.member_names.some((m) => norm(m) === norm(product.name))
+    );
+    return g?.id ?? "";
+  }, [product, groups]);
+  const [groupId, setGroupId] = useState<string>(initialGroupId);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupIcon, setNewGroupIcon] = useState("📦");
+  const [newGroupIsTrigger, setNewGroupIsTrigger] = useState(true);
+
+  // Sync groupId once data loads (initialGroupId is memoized)
+  useMemo(() => setGroupId(initialGroupId), [initialGroupId]);
+
+  const groupsInCategory = groups.filter((g) => g.category === category);
 
   const handleSave = async () => {
     if (!name.trim() || !price || saving) return;
     setSaving(true);
-
     try {
       const data = {
         name: name.trim(),
@@ -58,32 +68,29 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         await supabase.from("products").insert(data);
       }
 
-      // If user opted into the Porco group and the name is NOT canonical,
-      // register it as an extra name in settings so the popup picks it up.
-      if (
-        porcoGroup &&
-        category === "espetos" &&
-        !isCanonicalPorcoName(data.name)
-      ) {
-        try {
-          await addPorcoExtraName(data.name);
-          await queryClient.invalidateQueries({
-            queryKey: ["settings", PORCO_EXTRA_NAMES_KEY],
-          });
-        } catch (e) {
-          console.error("Failed to register Porco group extra name", e);
-        }
+      // Group handling
+      if (groupId === "__new__" && newGroupName.trim()) {
+        const triggerName = newGroupIsTrigger ? data.name : data.name;
+        await createGroup({
+          name: newGroupName.trim(),
+          icon: newGroupIcon.trim() || "📦",
+          category,
+          trigger_product_name: triggerName,
+          member_names: [data.name],
+        });
+        await invalidateGroups();
+      } else if (groupId && groupId !== "__new__") {
+        await addProductToGroup(groupId, data.name);
+        await invalidateGroups();
       }
 
       toast({ title: product ? "Produto atualizado" : "Produto criado" });
       onSaved();
-    } catch {
-      toast({ title: "Erro ao salvar", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Erro ao salvar", description: e?.message, variant: "destructive" });
       setSaving(false);
     }
   };
-
-  const showPorcoGroupSelector = category === "espetos";
 
   return (
     <div className="min-h-screen-safe flex flex-col">
@@ -122,7 +129,12 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
-                onClick={() => setCategory(cat)}
+                onClick={() => {
+                  setCategory(cat);
+                  // Reset group if it doesn't belong to new category
+                  const g = groups.find((g) => g.id === groupId);
+                  if (g && g.category !== cat) setGroupId("");
+                }}
                 className={`rounded-lg border p-3 text-sm font-semibold transition-all duration-150 active:scale-95 ${
                   category === cat
                     ? "border-primary bg-primary/20 text-primary"
@@ -135,48 +147,99 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           </div>
         </div>
 
-        {showPorcoGroupSelector && (
-          <div>
-            <label className="text-sm font-semibold text-muted-foreground mb-1 block">
-              Grupo / Popup (opcional)
-            </label>
-            <div className="grid grid-cols-1 gap-2">
+        <div>
+          <label className="text-sm font-semibold text-muted-foreground mb-1 block">
+            Grupo / Popup (opcional)
+          </label>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              type="button"
+              onClick={() => setGroupId("")}
+              className={`rounded-lg border p-3 text-left text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                groupId === ""
+                  ? "border-primary bg-primary/20 text-primary"
+                  : "border-border bg-card text-foreground"
+              }`}
+            >
+              <span className="block">Nenhum</span>
+              <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                Item normal — aparece direto na grade do PALM.
+              </span>
+            </button>
+
+            {groupsInCategory.map((g) => (
               <button
+                key={g.id}
                 type="button"
-                onClick={() => setPorcoGroup(false)}
+                onClick={() => setGroupId(g.id)}
                 className={`rounded-lg border p-3 text-left text-sm font-semibold transition-all duration-150 active:scale-95 ${
-                  !porcoGroup
+                  groupId === g.id
                     ? "border-primary bg-primary/20 text-primary"
                     : "border-border bg-card text-foreground"
                 }`}
               >
-                <span className="block">Nenhum</span>
+                <span className="block">
+                  {g.icon} {g.name}
+                </span>
                 <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
-                  Item normal — aparece direto na grade do PALM.
+                  Aparece dentro do popup ao tocar em "{g.trigger_product_name}".
                 </span>
               </button>
-              <button
-                type="button"
-                onClick={() => setPorcoGroup(true)}
-                className={`rounded-lg border p-3 text-left text-sm font-semibold transition-all duration-150 active:scale-95 ${
-                  porcoGroup
-                    ? "border-primary bg-primary/20 text-primary"
-                    : "border-border bg-card text-foreground"
-                }`}
-              >
-                <span className="block">🐷 Grupo Porco</span>
-                <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
-                  Aparece dentro do popup ao tocar em "Porco" no PALM.
-                </span>
-              </button>
-            </div>
-            {porcoGroup && !isCanonicalPorcoName(name) && name.trim() && (
-              <p className="text-[11px] text-primary mt-2">
-                "{name.trim()}" será adicionado como variante extra do popup do Porco.
-              </p>
-            )}
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setGroupId("__new__")}
+              className={`rounded-lg border border-dashed p-3 text-left text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                groupId === "__new__"
+                  ? "border-primary bg-primary/20 text-primary"
+                  : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              <span className="block">➕ Criar novo grupo…</span>
+              <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                Cria um grupo novo nesta categoria com este produto como primeiro membro.
+              </span>
+            </button>
           </div>
-        )}
+
+          {groupId === "__new__" && (
+            <div className="mt-3 space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <div className="grid grid-cols-[70px_1fr] gap-2">
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                    Ícone
+                  </label>
+                  <Input
+                    value={newGroupIcon}
+                    onChange={(e) => setNewGroupIcon(e.target.value)}
+                    maxLength={4}
+                    className="text-center text-lg"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                    Nome do grupo
+                  </label>
+                  <Input
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    placeholder="Ex: Refri 350ml"
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={newGroupIsTrigger}
+                  onChange={(e) => setNewGroupIsTrigger(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                Este produto é o gatilho do grupo (aparece no card do PALM)
+              </label>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
           <span className="font-semibold">Ativo no cardápio</span>
