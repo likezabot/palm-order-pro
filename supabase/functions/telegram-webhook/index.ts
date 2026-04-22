@@ -253,7 +253,23 @@ const VIEW_PHRASES = ["como esta", "como ta", "como anda"];
 const NUM_WORDS_GLOBAL: Record<string, number> = {
   um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
   seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+  onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15,
+  dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+  "vinte e um": 21, "vinte e uma": 21, "vinte e dois": 22, "vinte e duas": 22,
+  "vinte e tres": 23, "vinte e quatro": 24, "vinte e cinco": 25,
+  "vinte e seis": 26, "vinte e sete": 27, "vinte e oito": 28, "vinte e nove": 29,
+  trinta: 30,
 };
+
+// Resolve um número de mesa a partir de um trecho de texto (já normalizado).
+// Aceita dígitos ("5"), por extenso ("cinco", "vinte e um").
+function parseTableNumber(s: string): string | null {
+  const t = s.trim();
+  if (!t) return null;
+  if (/^\d+$/.test(t)) return t;
+  const n = NUM_WORDS_GLOBAL[t];
+  return n !== undefined ? String(n) : null;
+}
 function parseQtyToken(token: string): number | null {
   if (/^\d+$/.test(token)) {
     const n = parseInt(token, 10);
@@ -276,42 +292,72 @@ function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
 
-  if (text === "/start" || text === "/help" || text === "ajuda" || text === "help") {
+  if (/^(?:\/start|\/help|ajuda|help|comandos|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite)$/.test(text)) {
     return { kind: "HELP" };
   }
 
-  // UNDO: "undo", "desfazer", "undo tudo", "desfazer tudo"
-  const undoMatch = text.match(/^(?:undo|desfazer)(?:\s+(tudo|todos|todas|all))?$/);
+  // UNDO: aceita "undo", "desfazer", "desfaz", "volta", "voltar", "anula", "anular", "cancela ultima"
+  // opcionalmente seguido de "tudo|todos|todas|all|geral"
+  const undoMatch = text.match(/^(?:undo|desfa(?:zer|z|ca)|volta(?:r)?|anula(?:r)?|cancela(?:r)?\s+ultima?)(?:\s+(tudo|todos|todas|all|geral))?$/);
   if (undoMatch) return { kind: "UNDO", all: !!undoMatch[1] };
 
-  // RELATÓRIO: "relatorio", "relatório", "ranking", "fechamento"
-  if (/^(?:relatorio|relatório|ranking|fechamento)$/.test(text)) return { kind: "REPORT" };
+  // RELATÓRIO: muitas formas de pedir o resumo do dia
+  if (/^(?:relatorio|relatório|ranking|fechamento|resumo(?:\s+(?:do\s+)?dia)?|fecha(?:r)?\s+dia|balanco|balanço|me\s+(?:da|de)\s+o?\s*relatorio|gera(?:r)?\s+relatorio)$/.test(text)) {
+    return { kind: "REPORT" };
+  }
 
   // ESTOQUE CRÍTICO
-  if (/^(?:estoque\s+critico|estoque\s+crítico|estoque\s+baixo|criticos|críticos)$/.test(text)) return { kind: "STOCK_CRITICAL" };
+  if (/^(?:estoque(?:\s+(?:critico|crítico|baixo|zerado|acabando|em\s+falta))?|criticos|críticos|o\s+que\s+(?:ta|esta)\s+acabando|falta(?:ndo)?\s+(?:o\s+)?que)$/.test(text)) {
+    return { kind: "STOCK_CRITICAL" };
+  }
 
   // NOTIFICAÇÕES on/off
-  const notifM = text.match(/^(?:notificacoes|notificações|notif)\s+(on|off|ligar|desligar)$/);
-  if (notifM) return { kind: "NOTIFY_TOGGLE", on: notifM[1] === "on" || notifM[1] === "ligar" };
+  const notifM = text.match(/^(?:notificacoes|notificações|notif|alertas|avisos)\s+(on|off|ligar?|desligar?|ativa(?:r)?|desativa(?:r)?|sim|nao|não)$/);
+  if (notifM) {
+    const v = notifM[1];
+    const on = ["on", "ligar", "liga", "ativar", "ativa", "sim"].includes(v);
+    return { kind: "NOTIFY_TOGGLE", on };
+  }
 
-  // STATUS de mesa: "mesa N status", "status mesa N", "status N"
-  const stA = text.match(/^mesa\s+(\d+)\s+status$/);
-  if (stA) return { kind: "TABLE_STATUS", table: stA[1] };
-  const stB = text.match(/^status\s+(?:mesa\s+)?(\d+)$/);
-  if (stB) return { kind: "TABLE_STATUS", table: stB[1] };
+  // STATUS de mesa — bem permissivo:
+  //   "mesa 5 status", "status mesa 5", "status 5", "status da mesa cinco",
+  //   "situacao mesa 3", "como ta a mesa 4 status", "info mesa 2"
+  // Aceita dígitos OU número por extenso (até 30, incluindo "vinte e um").
+  const STATUS_WORDS = "(?:status|situacao|situação|info|informacao|informação|estado)";
+  const NUM_WORD_RE = "(?:\\d+|vinte\\s+e\\s+(?:um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove)|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta)";
+  const stPatterns = [
+    new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+${STATUS_WORDS}$`),
+    new RegExp(`^${STATUS_WORDS}\\s+(?:da\\s+|do\\s+|na\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`),
+    new RegExp(`^${STATUS_WORDS}\\s+(${NUM_WORD_RE})$`),
+  ];
+  for (const re of stPatterns) {
+    const m = text.match(re);
+    if (m) {
+      const t = parseTableNumber(m[1]);
+      if (t) return { kind: "TABLE_STATUS", table: t };
+    }
+  }
 
-  // SET_TABLE: "mesa N" sozinho — fixa contexto sem executar.
-  const setT = text.match(/^mesa\s+(\d+)$/);
-  if (setT) return { kind: "SET_TABLE", table: setT[1] };
+  // SET_TABLE: "mesa N" sozinho — aceita extenso também.
+  const setT = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})$`));
+  if (setT) {
+    const t = parseTableNumber(setT[1]);
+    if (t) return { kind: "SET_TABLE", table: t };
+  }
 
   // VIEW: "mesa N ver pedido" / "mesa N ver" / "mesa N pedido" / "ver [pedido] [da/na] mesa N"
-  const viewA = text.match(/^mesa\s+(\d+)\s+(?:ver(?:\s+pedido)?|pedido)$/);
-  if (viewA) return { kind: "VIEW", table: viewA[1] };
-  const viewB = text.match(/^(?:ver(?:\s+pedido)?|pedido)\s+(?:da\s+|na\s+|do\s+|no\s+)?mesa\s+(\d+)$/);
-  if (viewB) return { kind: "VIEW", table: viewB[1] };
+  const viewA = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?)$`));
+  if (viewA) {
+    const t = parseTableNumber(viewA[1]);
+    if (t) return { kind: "VIEW", table: t };
+  }
+  const viewB = text.match(new RegExp(`^(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?)\\s+(?:da\\s+|na\\s+|do\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})$`));
+  if (viewB) {
+    const t = parseTableNumber(viewB[1]);
+    if (t) return { kind: "VIEW", table: t };
+  }
 
-  // VIEW natural: "mesa N <gatilho>", "<gatilho> mesa N", "como esta a mesa N", "quanto deu a mesa N" etc.
-  // Só dispara se NÃO houver operador ADD/REMOVE nem padrão "<qty> <produto>".
+  // VIEW natural (mantém regex original com dígitos — heurística, não vale a pena complicar com extenso aqui).
   {
     const tableMatch = text.match(/\bmesa\s+(\d+)\b/);
     if (tableMatch) {
@@ -319,7 +365,6 @@ function parseCommand(raw: string): Command {
       const hasViewToken = tokens.some((t) => VIEW_TOKENS.includes(t));
       const hasViewPhrase = VIEW_PHRASES.some((p) => text.includes(p));
       const hasOp = tokens.some((t) => ALL_OPS.includes(t)) || /[+\-]/.test(text);
-      // qty <produto>: número (ou número por extenso) seguido de palavra que não seja "mesa"
       const qtyProductRe = /\b(\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\s+(?!mesa\b)[a-z]/;
       const stripped = text.replace(/\bmesa\s+\d+\b/g, " ");
       const hasQtyProduct = qtyProductRe.test(stripped);
