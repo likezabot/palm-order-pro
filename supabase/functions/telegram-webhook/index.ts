@@ -1412,24 +1412,26 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   if (cmd.kind === "UNDO") {
     cleanupUndos();
     const chatId = _undoChatId();
-    const stack = chatUndoStack.get(chatId) ?? [];
-    if (stack.length === 0) return { text: "↩️ Nada para desfazer." };
-    const tokensToProcess = cmd.all ? [...stack] : [stack[stack.length - 1]];
+    // Carrega stack persistido (multi-isolate safe). Inclui tokens criados em outros isolates.
+    const dbStack = await loadChatUndoStackFromDb(chatId);
+    if (dbStack.length === 0) return { text: "↩️ Nada para desfazer." };
+    const toProcess = cmd.all ? dbStack : [dbStack[dbStack.length - 1]];
     const results: string[] = [];
-    for (const token of tokensToProcess) {
-      const entry = pendingUndos.get(token);
-      if (!entry) continue;
+    const consumedTokens: string[] = [];
+    for (const entry of toProcess) {
       try {
         const r = await executeUndoOps(entry.table, entry.ops, waiter);
         results.push(r);
       } catch (e: any) {
         results.push(`❌ Falha ao desfazer mesa ${entry.table}: ${String(e?.message ?? e)}`);
       }
-      pendingUndos.delete(token);
-      consumedUndos.set(token, Date.now());
+      consumedTokens.push(entry.token);
+      pendingUndos.delete(entry.token);
+      consumedUndos.set(entry.token, Date.now());
     }
-    // Remove tokens consumidos do stack
-    const remaining = (chatUndoStack.get(chatId) ?? []).filter((t) => !tokensToProcess.includes(t));
+    await deleteUndoTokensFromDb(consumedTokens);
+    // Limpa stack in-memory desses tokens.
+    const remaining = (chatUndoStack.get(chatId) ?? []).filter((t) => !consumedTokens.includes(t));
     if (remaining.length === 0) chatUndoStack.delete(chatId);
     else chatUndoStack.set(chatId, remaining);
     if (results.length === 0) return { text: "↩️ Nada para desfazer." };
