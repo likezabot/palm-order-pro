@@ -3,19 +3,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
-import { autoPrintOrder, autoPrintDelta } from "@/lib/print-service";
 import { debugLog } from "@/lib/debug-logger";
 import { reportRealtime, markRealtimeHeartbeat, subscribeConnectivity } from "@/lib/connectivity-store";
 import type { Order } from "@/lib/types";
 
 /**
- * Hook que gerencia a subscription Realtime do PDV.
+ * Hook que gerencia a subscription Realtime do PDV — APENAS UI.
  *
- * Mantém comportamento idêntico ao original em Pdv.tsx:
- * - Subscription estável (depende só de queryClient)
- * - Refs para idempotência (printedEventsRef, printingNowRef)
- * - Auto-print com guarda anti-duplicação
- * - Toast em INSERT, invalidate em UPDATE de order_items
+ * IMPORTANTE: a autoimpressão foi movida para `src/lib/global-order-runtime.ts`,
+ * que roda independente de tela aberta. Aqui só:
+ * - mantém status do realtime para o badge ONLINE/OFFLINE
+ * - invalida queries da UI (toast + atualização visual)
+ * - emite som/feedback para o operador do PDV
  */
 export function usePdvRealtime() {
   const queryClient = useQueryClient();
@@ -23,55 +22,15 @@ export function usePdvRealtime() {
   const { playFeedback } = useFeedback();
   const [realtimeStatus, setRealtimeStatus] = useState<"online" | "offline">("offline");
 
-  const printedEventsRef = useRef<Set<string>>(new Set());
-  const printingNowRef = useRef<Set<string>>(new Set());
   const toastRef = useRef(toast);
   const playFeedbackRef = useRef(playFeedback);
 
   useEffect(() => { toastRef.current = toast; }, [toast]);
   useEffect(() => { playFeedbackRef.current = playFeedback; }, [playFeedback]);
 
-  const tryAutoPrintRef = useRef(async (order: Order, eventKey: string, isUpdate: boolean) => {
-    if (printedEventsRef.current.has(eventKey)) return;
-    if (printingNowRef.current.has(order.id)) return;
-
-    printedEventsRef.current.add(eventKey);
-    printingNowRef.current.add(order.id);
-
-    console.log(`[PDV AutoPrint] Aguardando itens do pedido ${order.id} (Mesa ${order.table_name})...`);
-    await new Promise((r) => setTimeout(r, 2000));
-
-    try {
-      const result = isUpdate
-        ? await autoPrintDelta(order)
-        : await autoPrintOrder(order);
-
-      if (result.printed) {
-        const msg = result.reason === "delta_success"
-          ? `Acréscimo impresso — Mesa ${order.table_name}`
-          : `Impresso automaticamente — Mesa ${order.table_name}`;
-        console.log(`[PDV AutoPrint] ${msg}`);
-        toastRef.current({ title: msg });
-      } else if (result.reason === "bridge_offline_queued") {
-        console.warn(`[PDV AutoPrint] Bridge offline — Mesa ${order.table_name} enfileirada.`);
-        toastRef.current({
-          title: `Bridge offline — Mesa ${order.table_name}`,
-          description: "Pedido enfileirado. Será reimpresso automaticamente quando o bridge voltar.",
-          variant: "destructive",
-        });
-      } else {
-        console.warn(`[PDV AutoPrint] Não imprimiu: ${result.reason}`);
-      }
-    } catch (error) {
-      console.error("[PDV AutoPrint] Falha na autoimpressão:", error);
-    } finally {
-      printingNowRef.current.delete(order.id);
-    }
-  });
-
   useEffect(() => {
-    const channelName = `pdv-realtime-${crypto.randomUUID()}`;
-    debugLog.info("realtime", `→ inscrevendo canal ${channelName}`);
+    const channelName = `pdv-ui-${crypto.randomUUID()}`;
+    debugLog.info("realtime", `→ inscrevendo canal UI ${channelName}`);
 
     const channel = supabase
       .channel(channelName)
@@ -83,24 +42,10 @@ export function usePdvRealtime() {
         debugLog.info("realtime", `[${channelName}] INSERT orders`, { id: newOrder.id, table: newOrder.table_name });
         playFeedbackRef.current("notification");
         toastRef.current({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
-        const eventKey = `${newOrder.id}:insert`;
-        tryAutoPrintRef.current(newOrder, eventKey, false);
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, () => {
         markRealtimeHeartbeat();
         queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
-        const updated = payload.new as Order;
-        const old = payload.old as Partial<Order>;
-        const totalChanged = updated.total !== old.total;
-        const printReset = updated.print_status === 'pending' && (old as Partial<Order>).print_status !== 'pending';
-
-        if (totalChanged || printReset) {
-          debugLog.info("realtime", `[${channelName}] UPDATE relevante`, {
-            id: updated.id, table: updated.table_name, totalChanged, printReset, printStatus: updated.print_status,
-          });
-          const eventKey = `${updated.id}:upd:${updated.updated_at}`;
-          tryAutoPrintRef.current(updated, eventKey, true);
-        }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
         markRealtimeHeartbeat();
@@ -113,7 +58,7 @@ export function usePdvRealtime() {
         reportRealtime(status);
       });
 
-    // Fallback polling: quando realtime estiver degradado/offline, recarrega a cada 10s.
+    // Fallback polling: quando realtime degradado/offline, recarrega a cada 10s.
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     const unsubConn = subscribeConnectivity((s) => {
       const needsPoll = s.realtime === "degraded" || s.realtime === "offline";

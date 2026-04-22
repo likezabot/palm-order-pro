@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { queryPersister, shouldPersistQuery } from "@/lib/query-persister";
+import { queryClient } from "@/lib/query-client";
 import { getAppVersionAsync } from "@/lib/version-check";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -20,19 +20,6 @@ import ForceUpdate from "./pages/ForceUpdate";
 import InstallPalm from "./pages/InstallPalm";
 import InstallKitchen from "./pages/InstallKitchen";
 import NotFound from "./pages/NotFound";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Cache offline parcial: mantém última versão visível mesmo sem rede.
-      networkMode: "offlineFirst",
-      staleTime: 60_000,
-      gcTime: 30 * 60_000,
-      retry: 2,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
 
 const AnimatedRoutes = () => {
   const location = useLocation();
