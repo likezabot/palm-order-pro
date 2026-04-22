@@ -1107,16 +1107,19 @@ async function handleCallbackQuery(cb: any): Promise<void> {
   await answerCallback(cbId);
 
   let resultText: string;
+  let success = false;
   try {
     resultText = op === "a"
       ? await executeAdd(table, prod as Product, qty, waiter)
       : await executeRemove(table, prod as Product, qty, waiter);
+    success = true;
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     resultText = msg.includes("version_conflict")
       ? `⏳ Mesa ${table} está sendo editada agora. Tente novamente.`
       : `❌ Erro ao processar: ${msg}`;
   }
+  if (success) setLastTable(chatId, table);
   await editTelegramMessage(chatId, messageId, resultText);
 }
 
