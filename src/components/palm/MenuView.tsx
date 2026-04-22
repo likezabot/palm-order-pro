@@ -371,40 +371,43 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-2">
-            {/* Card especial "Porco" — abre popup com 3 variantes */}
-            {showPorcoCard && (
-              <button
-                key="__porco_card__"
-                onClick={() => {
-                  playFeedback("click");
-                  setPorcoOpen(true);
-                }}
-                className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
-              >
-                <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
-                  🐷 Grupo
-                </span>
-                <span className="font-semibold text-base text-foreground leading-tight mt-4">
-                  Porco
-                </span>
-                <span className="mt-1 text-sm font-black brand-gradient-text">
-                  R$ {porcoBase!.price.toFixed(2)}
-                </span>
-                <span className="mt-0.5 text-[10px] text-muted-foreground">
-                  {porcoVariantCount} variante{porcoVariantCount === 1 ? "" : "s"}
-                </span>
-                <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
-                  Toque para escolher
-                </span>
-                {porcoQty > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
-                    {porcoQty}
+            {/* Cards de grupos (popups) */}
+            {activeGroups.map(({ group, triggerProduct, variantCount }) => {
+              const groupQty = getGroupQty(group);
+              return (
+                <button
+                  key={`__group__${group.id}`}
+                  onClick={() => {
+                    playFeedback("click");
+                    setOpenGroup(group);
+                  }}
+                  className="relative flex flex-col rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 text-left transition-all duration-150 active:scale-[0.94] shadow-soft hover:shadow-card hover:border-primary/60"
+                >
+                  <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary border border-primary/30">
+                    {group.icon} Grupo
                   </span>
-                )}
-              </button>
-            )}
+                  <span className="font-semibold text-base text-foreground leading-tight mt-4">
+                    {triggerProduct!.name}
+                  </span>
+                  <span className="mt-1 text-sm font-black brand-gradient-text">
+                    R$ {triggerProduct!.price.toFixed(2)}
+                  </span>
+                  <span className="mt-0.5 text-[10px] text-muted-foreground">
+                    {variantCount} variante{variantCount === 1 ? "" : "s"}
+                  </span>
+                  <span className="mt-auto pt-2 inline-flex items-center gap-1 text-base font-black text-primary">
+                    Toque para escolher
+                  </span>
+                  {groupQty > 0 && (
+                    <span className="absolute -top-2 -right-2 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-brand-gradient text-sm font-black text-primary-foreground border-2 border-background px-1.5 shadow-glow animate-badge-pop">
+                      {groupQty}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             {filtered
-              .filter((p) => !(showPorcoCard && porcoBase && p.id === porcoBase.id))
+              .filter((p) => !triggerProductIds.has(p.id))
               .map((product) => {
                 const qty = getQty(product.id);
                 const esgotado = isEsgotado(product.id);
@@ -447,24 +450,23 @@ const MenuView = ({ onAdd, cart, total, itemCount, onViewCart, onBack, tableName
         ))}
       </div>
 
-      <PorcoVariantDialog
-        open={porcoOpen}
-        onOpenChange={setPorcoOpen}
-        variants={porcoVariants.map((v) => {
-          const display =
-            v.name === "porco"
-              ? "Porco"
-              : v.name === "panceta suína"
-              ? "Panceta suína"
-              : v.name === "costela suína"
-              ? "Costela suína"
-              : v.product?.name ?? v.name;
-          return { name: display, product: v.product };
-        })}
+      <GroupVariantDialog
+        open={!!openGroup}
+        onOpenChange={(o) => { if (!o) setOpenGroup(null); }}
+        groupName={openGroup?.name ?? ""}
+        groupIcon={openGroup?.icon}
+        variants={
+          openGroup
+            ? resolveGroupMembers(openGroup, products).map((v) => ({
+                name: v.product?.name ?? v.name,
+                product: v.product,
+              }))
+            : []
+        }
         isEsgotado={isEsgotado}
         getQty={getQty}
         onPick={(_name, product) => {
-          setPorcoOpen(false);
+          setOpenGroup(null);
           handleAdd(product);
         }}
       />
