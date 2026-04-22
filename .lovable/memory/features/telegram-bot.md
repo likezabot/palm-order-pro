@@ -1,6 +1,6 @@
 ---
 name: Telegram bot
-description: Bot do Telegram edita pedidos por texto (mesa N + qty produto), CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque/lista estoque) e suporta múltiplos comandos numa só mensagem (separadores \n, ;, |, //). Whitelist em settings.telegram_allowed_chats. Suporta batch consolidado, undo 60s, fuzzy match, contexto por usuário em grupos, SET_TABLE, sugestões clicáveis, status de impressão e amplos aliases naturais.
+description: Bot do Telegram edita pedidos por texto (mesa N + qty produto), CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque/lista estoque) E em modo CONVERSACIONAL (wizard guiado com botões e perguntas, estado em telegram_chat_state, TTL 5min) e suporta múltiplos comandos numa só mensagem (separadores \n, ;, |, //). Whitelist em settings.telegram_allowed_chats.
 type: feature
 ---
 Edge function `telegram-webhook` permite editar pedidos via texto:
@@ -54,8 +54,24 @@ Parser também aceita variações naturais para pedidos: "adiciona 1 bovino na m
 - `r|<table>|<product_id>|<qty>` — confirmar REMOVE em pedido
 - `u|<table>|<product_id>|<qty>|<op>` — undo single de pedido
 - `ub|<token>` — undo batch de pedido
-- `s|<in|out|adj>|<itemId>|<qty>` — confirmar movimento de estoque (NOVO)
-- `us|<token>` — undo de movimento de estoque (NOVO)
+- `s|<in|out|adj>|<itemId>|<qty>` — confirmar movimento de estoque
+- `us|<token>` — undo de movimento de estoque
+- `wz|act|<in|out|adj|list|crit>` — wizard: escolher ação (NOVO)
+- `wz|scope|<all|cat|search>[|<cat>]` — wizard: escolher escopo (NOVO)
+- `wz|pickitem|<itemId>` — wizard: selecionar item buscado (NOVO)
+- `wz|qty|<n|other>` — wizard: escolher quantidade sugerida ou pedir digitação (NOVO)
+- `wz|confirm` — wizard: confirmar operação em massa (NOVO)
+- `wz|cancel` — wizard: cancelar e limpar estado (NOVO)
 - `x` — cancelar
+
+**Wizard de Estoque (NOVO):**
+- Gatilhos: `gerenciar estoque`, `menu estoque`, `controle estoque`, `wizard estoque`, `gerenciar`. Comandos completos como `entrada 10 coca` continuam funcionando direto SEM passar pelo wizard.
+- Tabela `telegram_chat_state` (chat_id PK, step, data jsonb, expires_at, RLS service-only). TTL 5min, auto-limpeza best-effort a cada chamada.
+- Steps: `awaiting_action` → `awaiting_scope` → (`awaiting_item_search` se busca) → `awaiting_qty` → (`awaiting_confirm` se escopo amplo) → executa.
+- Quantidades sugeridas inteligentes: query nas últimas 60 movimentações filtradas por tipo (e item se single), agrupa, pega top 4 + defaults se faltar.
+- Escopo: `single` (item específico via search/pick), `all` (todos itens ativos, max 100), `category` (filtro por inventory_items.category).
+- Operações em massa SEMPRE pedem confirmação extra (`awaiting_confirm`). Single executa direto.
+- Texto livre durante step processado por `wzHandleTextInput`: nome do item (awaiting_item_search) ou número (awaiting_qty).
+- Resposta com até 15 itens detalhados, falhas listadas até 5.
 
 **Para liberar um chat:** inserir/atualizar `settings` com `key='telegram_allowed_chats'` e `value='[123456789]'`.
