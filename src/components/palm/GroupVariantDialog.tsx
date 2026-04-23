@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Minus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 
 export type GroupVariantEntry = {
   name: string;
