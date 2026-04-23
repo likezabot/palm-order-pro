@@ -2002,7 +2002,7 @@ async function executeStockQuery(item: StockItem): Promise<string> {
 
 // ─────────────────────────── visibilidade de produtos ───────────────────────────
 
-type ProductRow = { id: string; name: string; category: string; active: boolean };
+export type ProductRow = { id: string; name: string; category: string; active: boolean };
 
 export function fuzzyFindProducts(query: string, all: ProductRow[]): ProductRow[] {
   const q = singularize(normalize(query));
