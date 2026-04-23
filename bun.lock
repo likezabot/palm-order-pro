@@ -88,6 +88,9 @@
       },
     },
   },
+  "overrides": {
+    "@tanstack/query-core": "5.99.2",
+  },
   "packages": {
     "@adobe/css-tools": ["@adobe/css-tools@4.4.4", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@adobe/css-tools/-/css-tools-4.4.4.tgz", {}, "sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg=="],
 
