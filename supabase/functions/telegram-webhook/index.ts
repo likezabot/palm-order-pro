@@ -4356,8 +4356,9 @@ export async function webhookHandler(req: Request): Promise<Response> {
     // ── ADMIN: diagnóstico + auto-reparo do webhook ──
     // Protegido pelo mesmo WEBHOOK_SECRET. Não depende de TEST_MODE.
     // Uso:
-    //   GET ?admin=info        → getWebhookInfo
+    //   GET ?admin=info        → getWebhookInfo cru
     //   GET ?admin=fix-webhook → setWebhook (re-registra URL atual + secret atual)
+    //   GET ?admin=health      → diagnóstico estruturado: compara estado x esperado
     const adminOp = url.searchParams.get("admin");
     if (adminOp) {
       const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
@@ -4397,6 +4398,61 @@ export async function webhookHandler(req: Request): Promise<Response> {
             secret_configured: !!WEBHOOK_SECRET,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (adminOp === "health") {
+        const selfUrl = `${url.origin}${url.pathname}`;
+        let infoJson: any = null;
+        let fetchError: string | null = null;
+        try {
+          const r = await fetch(`${tgBase}/getWebhookInfo`);
+          infoJson = await r.json();
+        } catch (e) {
+          fetchError = String((e as Error)?.message ?? e);
+        }
+        const result = infoJson?.result ?? null;
+        const currentUrl: string = result?.url ?? "";
+        const pendingUpdates: number = result?.pending_update_count ?? 0;
+        const lastErrorMessage: string | null = result?.last_error_message ?? null;
+        const lastErrorDate: number | null = result?.last_error_date ?? null;
+        const hasCustomCert: boolean = !!result?.has_custom_certificate;
+        const ipAddress: string | null = result?.ip_address ?? null;
+        const allowedUpdates: string[] = result?.allowed_updates ?? [];
+
+        const checks = {
+          telegram_reachable: { ok: !!infoJson?.ok, detail: fetchError ?? infoJson?.description ?? null },
+          token_configured: { ok: !!TOKEN, detail: TOKEN ? null : "TELEGRAM_BOT_TOKEN ausente" },
+          secret_configured: { ok: !!WEBHOOK_SECRET, detail: WEBHOOK_SECRET ? null : "WEBHOOK_SECRET ausente" },
+          url_matches: {
+            ok: !!currentUrl && currentUrl === selfUrl,
+            detail: currentUrl ? (currentUrl === selfUrl ? null : `registrado=${currentUrl} esperado=${selfUrl}`) : "nenhuma URL registrada",
+          },
+          no_recent_errors: {
+            ok: !lastErrorMessage || (lastErrorDate ? (Date.now() / 1000 - lastErrorDate) > 300 : true),
+            detail: lastErrorMessage ? `${lastErrorMessage} (date=${lastErrorDate})` : null,
+          },
+          no_pending_backlog: {
+            ok: pendingUpdates < 50,
+            detail: pendingUpdates > 0 ? `${pendingUpdates} updates pendentes` : null,
+          },
+        };
+        const allOk = Object.values(checks).every((c) => c.ok);
+        return new Response(
+          JSON.stringify({
+            healthy: allOk,
+            expected_url: selfUrl,
+            registered_url: currentUrl,
+            secret_configured: !!WEBHOOK_SECRET,
+            pending_update_count: pendingUpdates,
+            last_error_message: lastErrorMessage,
+            last_error_date: lastErrorDate,
+            has_custom_certificate: hasCustomCert,
+            ip_address: ipAddress,
+            allowed_updates: allowedUpdates,
+            checks,
+            hint: allOk ? null : "Chame GET ?admin=fix-webhook com o header X-Telegram-Bot-Api-Secret-Token para reparar.",
+          }, null, 2),
+          { status: allOk ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       return new Response(JSON.stringify({ error: "unknown admin op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
