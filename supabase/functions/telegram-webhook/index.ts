@@ -4500,11 +4500,11 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     // ─── VOZ: gate de confiança ANTES da execução ───
     // Resolve mesa de contexto + produto (sem mutação) para detectar incertezas
     // específicas de ADD/REMOVE: produto não encontrado, ambíguo, mesa herdada com qty alta.
+    const previewParts: string[] = []; // escopo externo p/ uso nos blocos de execução
     if (voiceTranscript) {
       const tag = `[voice ${voiceTraceId ?? "----"}]`;
       console.log(`${tag} split lines=${lines.length}`);
       const enriched: VoiceParsedSig[] = [];
-      const previewParts: string[] = [];
       for (let i = 0; i < lines.length; i++) {
         const ln = lines[i];
         console.log(`${tag} line[${i}] raw="${ln}"`);
