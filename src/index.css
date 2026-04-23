@@ -183,6 +183,10 @@
     animation: mesa-pulse 2s infinite ease-in-out;
   }
 
+  .animate-pulse-live {
+    animation: dot-live 1.6s infinite ease-in-out;
+  }
+
   .glass-card {
     @apply backdrop-blur-md bg-background/75 border-b border-border/60;
   }
@@ -225,8 +229,20 @@
   }
 }
 
+@keyframes dot-live {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse-active,
+  .animate-pulse-live,
   .animate-print-bounce,
   .animate-print-feed,
   .animate-fade-in-up,

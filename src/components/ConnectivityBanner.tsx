@@ -87,6 +87,8 @@ export default function ConnectivityBanner() {
     setTimeout(() => setReconnecting(false), 1200);
   };
 
+  const allOk = !conn.isOffline && conn.realtime !== "offline" && conn.realtime !== "degraded" && conn.backend !== "offline";
+
   return (
     <button
       type="button"
@@ -98,7 +100,15 @@ export default function ConnectivityBanner() {
       {reconnecting ? (
         <Loader2 className={`h-3.5 w-3.5 animate-spin ${tone}`} />
       ) : (
-        <Icon className={`h-3.5 w-3.5 ${tone}`} />
+        <>
+          <Icon className={`h-3.5 w-3.5 ${tone}`} />
+          {allOk && (
+            <span
+              className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-success animate-pulse-live"
+              aria-hidden="true"
+            />
+          )}
+        </>
       )}
     </button>
   );
