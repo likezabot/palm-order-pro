@@ -604,6 +604,42 @@ function parseCommand(raw: string): Command {
     return { kind: "REPORT" };
   }
 
+  // ─── PRODUTOS: visibilidade (ocultar/mostrar/listar) ───
+  // Listas (antes do match com argumento, são frases inteiras)
+  if (/^(?:lista(?:r)?|ver|mostra(?:r)?)\s+(?:produtos?\s+)?(?:ocultos?|escondidos?|desativados?|inativos?|invisiv\w*)$/.test(text)) {
+    return { kind: "PRODUCT_LIST", mode: "hidden" };
+  }
+  if (/^(?:lista(?:r)?|ver)\s+(?:produtos?\s+)?(?:visiveis|ativos|cardapio|menu|todos(?:\s+(?:os\s+)?produtos)?)$/.test(text) ||
+      /^(?:lista(?:r)?\s+cardapio|ver\s+cardapio|ver\s+menu)$/.test(text)) {
+    return { kind: "PRODUCT_LIST", mode: "visible" };
+  }
+
+  // PICK numérico (1-9): só faz sentido com state product_pick — resolvido em handleCommand.
+  // Aqui só capturamos a intenção; resolveProductPickContext valida o estado real depois.
+  const pickM = text.match(/^([1-9])$/);
+  if (pickM) {
+    return { kind: "PRODUCT_PICK", choice: parseInt(pickM[1], 10) };
+  }
+
+  // OCULTAR: "ocultar X", "esconder X", "desativar X", "tirar X do cardapio", "tira X do cardapio"
+  const hideM = text.match(/^(?:ocultar|oculta|esconder|esconde|desativar|desativa|desabilita(?:r)?|inativa(?:r)?)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)(?:\s+(?:do|no|de)\s+cardapio)?$/) ||
+                text.match(/^(?:tirar|tira|remove(?:r)?|removar)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)\s+(?:do|de)\s+cardapio$/);
+  if (hideM) {
+    const q = hideM[1].trim();
+    if (q && !/^\d/.test(q)) return { kind: "PRODUCT_HIDE", query: q };
+  }
+
+  // MOSTRAR: "mostrar X", "ativar X", "exibir X", "voltar X", "colocar X no cardapio", "libera X"
+  const showM = text.match(/^(?:mostrar|mostra|ativar|ativa|exibir|exibe|habilita(?:r)?|reativa(?:r)?|libera(?:r)?)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)(?:\s+(?:no|para o|pro|de\s+volta\s+ao?|ao)\s+cardapio)?$/) ||
+                text.match(/^(?:colocar|coloca|por|botar|bota|voltar|volta|por\s+de\s+volta)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)\s+(?:no|para o|pro|de\s+volta\s+ao?|ao)\s+cardapio$/);
+  if (showM) {
+    const q = showM[1].trim();
+    // Evita capturar "voltar avisos", "ativar avisos", "ativar notificacoes" — já tratados acima/abaixo
+    if (q && !/^\d/.test(q) && !/^(?:avisos?|notificac\w*|alertas?|estoque)$/.test(q)) {
+      return { kind: "PRODUCT_SHOW", query: q };
+    }
+  }
+
   // ESTOQUE: LISTAR todos (antes de CRÍTICO porque "lista estoque" / "inventario" é mais específico)
   if (/^(?:lista\s+estoque|listar\s+estoque|estoque\s+(?:completo|todo|tudo|geral)|inventario|inventário|tudo\s+do\s+estoque|todos\s+(?:os\s+)?itens|itens\s+(?:do\s+)?estoque)$/.test(text)) {
     return { kind: "STOCK_LIST" };
