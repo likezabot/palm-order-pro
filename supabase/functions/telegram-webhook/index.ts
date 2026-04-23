@@ -4362,7 +4362,12 @@ export async function webhookHandler(req: Request): Promise<Response> {
     const adminOp = url.searchParams.get("admin");
     if (adminOp) {
       const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
-      if (!WEBHOOK_SECRET || !safeEqual(provided, WEBHOOK_SECRET)) {
+      const authHeader = req.headers.get("authorization") ?? "";
+      const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7) : "";
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const okSecret = !!WEBHOOK_SECRET && safeEqual(provided, WEBHOOK_SECRET);
+      const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
+      if (!okSecret && !okService) {
         return unauthorized("missing_or_invalid_secret_for_admin_endpoint");
       }
       if (!TOKEN) {
