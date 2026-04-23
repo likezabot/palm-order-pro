@@ -2361,6 +2361,57 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     if (handled) return;
   }
 
+  // ─── VOICE CONFIRM (vc|ok|<token> | vc|no|<token>) ───
+  if (data.startsWith("vc|")) {
+    const [, op, token] = data.split("|");
+    if (!token) {
+      await answerCallback(cbId, "Inválido");
+      return;
+    }
+    // Carrega state
+    const { data: stateRow } = await sb
+      .from("telegram_chat_state")
+      .select("step, data, expires_at")
+      .eq("chat_id", chatId)
+      .maybeSingle();
+    if (!stateRow || stateRow.step !== "voice_confirm" || (stateRow.data as any)?.token !== token) {
+      await answerCallback(cbId, "Expirado");
+      await editTelegramMessage(chatId, messageId, "⏱ Confirmação expirada.");
+      return;
+    }
+    if (new Date(stateRow.expires_at).getTime() < Date.now()) {
+      await sb.from("telegram_chat_state").delete().eq("chat_id", chatId);
+      await answerCallback(cbId, "Expirado");
+      await editTelegramMessage(chatId, messageId, "⏱ Confirmação expirada.");
+      return;
+    }
+    // Limpa state imediatamente
+    await sb.from("telegram_chat_state").delete().eq("chat_id", chatId);
+
+    if (op === "no") {
+      await answerCallback(cbId, "Cancelado");
+      await editTelegramMessage(chatId, messageId, `🎤 Ouvi: "${(stateRow.data as any).transcript}"\n\n❌ Cancelado.`);
+      return;
+    }
+    if (op === "ok") {
+      const line: string = (stateRow.data as any).line;
+      const transcript: string = (stateRow.data as any).transcript;
+      const waiter: string = (stateRow.data as any).waiter ?? (username ? `Telegram (@${username})` : "Telegram");
+      await answerCallback(cbId, "Executando…");
+      try {
+        const parsed = parseCommand(line);
+        const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+        const reply = await handleCommand(cmd, waiter);
+        await editTelegramMessage(chatId, messageId, `🎤 Ouvi: "${transcript}"\n\n${reply.text}`, reply.keyboard);
+      } catch (e: any) {
+        await editTelegramMessage(chatId, messageId, `🎤 Ouvi: "${transcript}"\n\n❌ Erro: ${String(e?.message ?? e)}`);
+      }
+      return;
+    }
+    await answerCallback(cbId, "Op desconhecida");
+    return;
+  }
+
   if (data === "x") {
     await answerCallback(cbId, "Cancelado");
     await editTelegramMessage(chatId, messageId, "❌ Cancelado.");
