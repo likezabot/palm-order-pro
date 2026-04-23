@@ -4925,19 +4925,37 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
 
       if (voiceTranscript) {
-        // VOZ: resumo curto, com verbo de ação por linha. Suprime undos verbosos.
-        // Reparseamos cada linha pra escolher o verbo certo (enriched está em escopo do bloco anterior).
+        // VOZ: bullets refletem o RESULTADO real (não o preview). Verbo por
+        // tipo de comando original. Botões de undo + picker consolidados na
+        // própria mensagem (sem mensagens extras).
         const lineKinds: string[] = lines.map((ln) => {
           try { return parseCommand(ln).kind; } catch { return "PARSE_ERROR"; }
         });
-        const bullets = (typeof previewParts !== "undefined" && previewParts.length > 0)
-          ? previewParts.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`)
-          : textBlocks.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`);
-        await voiceReply(`✅ Pronto:\n${bullets.join("\n")}`);
-        // Mostra apenas erros standalone (produto ambíguo / não encontrado).
-        for (const choice of pendingChoices) {
-          await sendTelegram(chatId, choice.text, choice.keyboard);
+        const firstLineOf = (s: string) => String(s || "").split("\n")[0];
+        const isErrLine = (s: string) => /^[❌❓🤔⚠️🚨]/.test(firstLineOf(s));
+        const bullets: string[] = textBlocks.map((blk, i) => {
+          const head = firstLineOf(blk);
+          if (isErrLine(head)) return `• ${head}`;
+          return `• ${voiceVerb(lineKinds[i])}: ${head}`;
+        });
+        const consolidatedKb: InlineButton[][] = [];
+        for (const [, res] of batchResults) {
+          if (res.keyboard) for (const row of res.keyboard) consolidatedKb.push(row);
         }
+        for (const choice of pendingChoices) {
+          if (choice.keyboard) for (const row of choice.keyboard) consolidatedKb.push(row);
+        }
+        const hasPending = pendingChoices.length > 0;
+        const hasError = bullets.some((b) => isErrLine(b.replace(/^•\s*/, "")));
+        const header = hasPending
+          ? `🤔 Quase pronto — preciso de ${pendingChoices.length === 1 ? "1 escolha" : "algumas escolhas"}:`
+          : hasError
+            ? `⚠️ Parcial:`
+            : `✅ Pronto:`;
+        await voiceReply(
+          `🎤 Ouvi: "${voiceTranscript}"\n\n${header}\n${bullets.join("\n")}`,
+          consolidatedKb.length > 0 ? consolidatedKb : undefined,
+        );
       } else {
         const header = `📊 ${lines.length} comandos processados:\n`;
         await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
