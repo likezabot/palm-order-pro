@@ -4372,7 +4372,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
       const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
       // auto-heal e smoke-test são restritos (idempotente / restrito a TEST_CHAT_ID) —
       // aceita anon p/ permitir invocação via pg_net e validações automatizadas.
-      const anonAllowedOps = new Set(["auto-heal", "smoke-test"]);
+      const anonAllowedOps = new Set(["auto-heal", "smoke-test", "ensure-healthy"]);
       const okAnonForOp = anonAllowedOps.has(adminOp) && !!bearer && safeEqual(bearer, ANON_KEY_PUBLIC);
       if (!okSecret && !okService && !okAnonForOp) {
         console.log("[admin-auth] denied", JSON.stringify({
