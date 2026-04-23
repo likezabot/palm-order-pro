@@ -4455,6 +4455,82 @@ export async function webhookHandler(req: Request): Promise<Response> {
           { status: allOk ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
+      if (adminOp === "auto-heal") {
+        // Idempotente. Roda diagnóstico e SÓ executa setWebhook se detectar
+        // divergência (URL errada, erro recente de secret/auth, ou cert custom).
+        // Seguro pra chamar via cron a cada poucos minutos.
+        const selfUrl = `${url.origin}${url.pathname}`;
+        let infoJson: any = null;
+        try {
+          const r = await fetch(`${tgBase}/getWebhookInfo`);
+          infoJson = await r.json();
+        } catch (e) {
+          return new Response(
+            JSON.stringify({ ok: false, action: "none", error: `getWebhookInfo failed: ${(e as Error)?.message ?? e}` }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        const result = infoJson?.result ?? {};
+        const currentUrl: string = result?.url ?? "";
+        const lastErr: string = result?.last_error_message ?? "";
+        const lastErrDate: number = result?.last_error_date ?? 0;
+        const pending: number = result?.pending_update_count ?? 0;
+        const hasCustomCert = !!result?.has_custom_certificate;
+        const recentErr = lastErrDate > 0 && (Date.now() / 1000 - lastErrDate) < 600;
+
+        const reasons: string[] = [];
+        if (currentUrl !== selfUrl) reasons.push(`url_mismatch (registered=${currentUrl || "<none>"})`);
+        if (recentErr && /secret|unauthor|401|wrong/i.test(lastErr)) reasons.push(`auth_error: ${lastErr}`);
+        if (hasCustomCert) reasons.push("unexpected_custom_certificate");
+        if (pending > 100) reasons.push(`pending_backlog=${pending}`);
+
+        if (reasons.length === 0) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              action: "none",
+              healthy: true,
+              registered_url: currentUrl,
+              expected_url: selfUrl,
+              pending_update_count: pending,
+              last_error_message: lastErr || null,
+            }, null, 2),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Repara: setWebhook com URL atual + secret atual.
+        const setRes = await fetch(`${tgBase}/setWebhook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: selfUrl,
+            secret_token: WEBHOOK_SECRET,
+            allowed_updates: ["message", "edited_message", "callback_query"],
+            drop_pending_updates: false,
+          }),
+        });
+        const setJson = await setRes.json().catch(() => ({}));
+        console.log("[auto-heal] repaired webhook", JSON.stringify({ reasons, set_ok: setJson?.ok, desc: setJson?.description }));
+
+        // Re-valida.
+        const verifyRes = await fetch(`${tgBase}/getWebhookInfo`);
+        const verifyJson = await verifyRes.json().catch(() => ({}));
+        const verifiedUrl: string = verifyJson?.result?.url ?? "";
+        const verified = verifiedUrl === selfUrl && setJson?.ok === true;
+
+        return new Response(
+          JSON.stringify({
+            ok: verified,
+            action: "set_webhook",
+            reasons,
+            set_result: setJson,
+            verified_url: verifiedUrl,
+            expected_url: selfUrl,
+          }, null, 2),
+          { status: verified ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       return new Response(JSON.stringify({ error: "unknown admin op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
