@@ -4013,11 +4013,31 @@ Deno.serve(async (req) => {
 
     if (lines.length <= 1) {
       const parsed = parseCommand(lines[0] ?? text);
-      const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
-      const reply = await handleCommand(cmd, waiter);
-      await sendTelegram(chatId, reply.text, reply.keyboard);
-      if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
-    } else {
+
+      // Híbrido por confiança: se veio de áudio E é op de estoque (escrita), pede confirmação.
+      if (voiceTranscript && parsed.kind === "STOCK_MOVEMENT") {
+        const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+        await sb.from("telegram_chat_state").upsert({
+          chat_id: chatId,
+          step: "voice_confirm",
+          data: { token, line: lines[0] ?? text, transcript: voiceTranscript, waiter },
+          expires_at: new Date(Date.now() + 2 * 60_000).toISOString(),
+        });
+        const verb = parsed.type === "in" ? "Entrada" : parsed.type === "out" ? "Saída" : "Ajuste";
+        const previewTxt =
+          `🎤 Ouvi: "${voiceTranscript}"\n\n` +
+          `🧾 Vou executar:\n• ${verb} de ${parsed.qty}${parsed.unit ? ` ${parsed.unit}` : ""} ${parsed.itemText}\n\nConfirmar?`;
+        await sendTelegram(chatId, previewTxt, [[
+          { text: "✅ Executar", callback_data: `vc|ok|${token}` },
+          { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
+        ]]);
+      } else {
+        const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+        const reply = await handleCommand(cmd, waiter);
+        const prefix = voiceTranscript ? `🎤 Ouvi: "${voiceTranscript}"\n\n` : "";
+        await sendTelegram(chatId, prefix + reply.text, reply.keyboard);
+        if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
+      }
       // Multi-comando: tenta consolidar ADD/REMOVE da mesma mesa em UMA impressão.
       // 1ª passada: parse + resolveContext + resolveProduct (sem mutação) por linha.
       type Slot =
