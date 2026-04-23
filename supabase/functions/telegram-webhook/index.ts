@@ -126,6 +126,8 @@ async function transcribeTelegramVoice(fileId: string, traceId = "----"): Promis
               "Em dúvida entre 'lança' e 'entrada', escolha SEMPRE 'lança'. " +
               "PRESERVE LITERALMENTE perguntas/consultas: 'qual o valor', 'quanto deu', 'quanto ficou', 'quanto custa', 'conta da mesa', 'total da mesa', 'fechamento', 'o que tem na mesa'. NUNCA reescreva uma pergunta como comando de pedido (ADD/REMOVE). " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
+              "PRESERVE qualificadores de produto: tamanho (1l, 600ml, 350ml, 290ml), embalagem (vidro, lata, pet, long neck), variante (zero, diet, tradicional, gelada). NÃO normalize para o nome genérico. " +
+              "Se o usuário falar uma instrução entre parênteses (ex: 'somente local', 'sem gelo'), MANTENHA entre parênteses no texto transcrito — não remova. " +
               "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
               "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
               vocabHint +
