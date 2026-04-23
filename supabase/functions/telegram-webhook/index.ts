@@ -4396,12 +4396,12 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
 
     // Helper: quando origem é voz, edita a mensagem "🎤 Ouvindo…" em vez de mandar nova.
     // Após a 1ª edição, marcamos como consumida; chamadas seguintes caem no sendTelegram normal.
-    const voiceReply = async (txt: string): Promise<void> => {
+    const voiceReply = async (txt: string, keyboard?: InlineButton[][]): Promise<void> => {
       if (voiceStatusMsgId && chatId) {
-        await editTelegramMessage(chatId, voiceStatusMsgId, txt);
+        await editTelegramMessage(chatId, voiceStatusMsgId, txt, keyboard);
         voiceStatusMsgId = null;
       } else if (chatId) {
-        await sendTelegram(chatId, txt);
+        await sendTelegram(chatId, txt, keyboard);
       }
     };
 
