@@ -1,60 +1,57 @@
 
 
-# UX simples de retorno por voz (sem despejar resumo de estoque)
+# Retorno mais natural + entender pergunta de valor da mesa
 
-## O problema real
-No áudio "lança o medalhão na mesa 2", o Gemini reescreveu como **"entrada medalhão de frango na mesa 2"** — a palavra "lança" ficou parecida com "entrada" e o transcritor "ajudou" demais. Aí o parser caiu em STOCK_MOVEMENT (entrada de estoque) em vez de criar um pedido na mesa 2. Por isso você vê saldo subindo de 2→4 unidades em vez de o medalhão ir pra mesa.
+## Mudanças em `supabase/functions/telegram-webhook/index.ts`
 
-Além disso, hoje o bot manda **muita coisa de estoque** depois de cada comando (Saldo, "comandos processados", botão Desfazer, etc.). Você quer só uma confirmação curta tipo *"Entendi: lançar 1 medalhão na mesa 2"*.
+### 1. Trocar "Entendi" por verbo de ação conforme o resultado
+Hoje toda confirmação de voz começa com `🎤 Entendi: ...`. Vou diferenciar pelo tipo de ação executada:
 
-## Mudanças
+- **Lançar pedido (ADD)** → `🍽️ Lancei: mesa 2 +1 Medalhão de Frango ✅`
+- **Remover do pedido (REMOVE)** → `🗑️ Removi: mesa 2 −1 Coca ✅`
+- **Estoque entrada/saída/ajuste** → `📦 Atualizei estoque: +5 Coca (saldo 12) ✅`
+- **Consulta (ver pedido / valor da mesa / estoque)** → `👀 Consulta: ...` seguido do resultado
+- **Múltiplos comandos** → cabeçalho `✅ Pronto:` com bullets por linha (cada bullet usa o verbo certo).
+- **Confirmação pendente** → continua `🤔 Ouvi: "..."` (porque ainda não fez nada).
 
-### 1. Não deixar "lança/lançar/joga" virar "entrada" na transcrição
-No prompt do Gemini em `transcribeVoice` (`supabase/functions/telegram-webhook/index.ts` linhas 119-128), adicionar instrução explícita:
-> "PRESERVE LITERALMENTE verbos de pedido: 'lança', 'lançar', 'joga', 'manda', 'marca', 'anota', 'pede'. NUNCA troque por 'entrada' ou 'saída'. 'entrada' e 'saída' só quando o usuário falar literalmente essas palavras."
+A escolha do verbo vem do `cmd.kind` resolvido — adiciono um helper `voiceVerb(kind)` chamado em ambos os caminhos (single-line ~linha 4602 e multi-line ~linha 4767).
 
-### 2. Indicador "🎤 Ouvindo…" enquanto processa
-Antes de chamar a transcrição, mandar uma mensagem curta `🎤 Ouvindo…` e guardar o `message_id`. Quando terminar de processar (sucesso, erro, ou pedindo confirmação), **editar essa mesma mensagem** com o resultado final usando `editMessageText`. Sem poluir o chat com mensagens novas.
+### 2. "Qual o valor da mesa 2?" e variações conversacionais
+Hoje "qual o valor da mesa 2" cai em PARSE_ERROR porque o parser exige verbo de operação. Vou adicionar um novo `kind: "TABLE_VALUE"` (variação do VIEW que mostra só o total) e expandir o `parseCommand` com regex para perguntas de consulta:
 
-### 3. Confirmação curta "Entendi: ..."
-No caminho de áudio com confiança alta (auto-executa), trocar o atual `🎤 *Ouvi:* "..."` + bloco verboso por uma linha só:
-> `🎤 Entendi: lançar 1× Medalhão de Frango na mesa 2 ✅`
+- **Valor/conta da mesa**: `qual (o )?valor da mesa N`, `quanto (deu|ta|esta|ficou) (a|na) mesa N`, `conta da mesa N`, `total (da )?mesa N`, `fechamento (da )?mesa N` → `TABLE_VALUE` que responde `💰 Mesa N: R$ XX,XX (Y itens)`.
+- **Ver pedido** (já existe `mesa N ver pedido`): adicionar `o que tem na mesa N`, `o que pediram na mesa N`, `lista da mesa N`, `pedido da mesa N` → mesma rota VIEW existente.
 
-Para múltiplos comandos:
-> `🎤 Entendi:`  
-> `• mesa 2 + 1× Medalhão de Frango ✅`  
-> `• mesa 5 + 2× Coca ✅`
+Implementação: 3-4 regex novas no início de `parseCommand` (antes dos blocos f1/f2/f3 atuais), que extraem `table` e retornam `{ kind: "TABLE_VALUE", table }` ou reutilizam `VIEW`. Handler novo para TABLE_VALUE que usa a mesma query do VIEW mas formata curto (só total + contagem).
 
-### 4. Esconder ruído de estoque no fluxo de voz
-Quando o comando vier de áudio, **suprimir** as mensagens automáticas de:
-- Saldo atualizado de estoque (📥 Entrada / Saldo: X unidade)
-- Botão "↩️ Desfazer (60s)" individual
-- "📊 N comandos processados"
+### 3. Reforço no prompt do Gemini
+Acrescentar uma linha curta ao prompt de transcrição: *"Perguntas como 'qual o valor', 'quanto deu', 'quanto ficou', 'conta da mesa' devem ser preservadas literalmente — NÃO reescreva como comando de pedido."* Evita que o Gemini "ajude demais" e transforme uma pergunta em ADD/REMOVE.
 
-Manter apenas erros (produto não encontrado, mesa ocupada) e a linha curta de "Entendi". Isso é controlado passando uma flag `silent: true` para os handlers de execução quando a origem é voz.
-
-### 5. Balanço de estoque no relatório do fim do dia
-Adicionar ao `daily-waiter-report` (edge function que já manda o ranking diário às 23h59) uma seção:
+### 4. Mensagem de fallback mais útil
+Quando mesmo assim não reconhecer, em vez de só `Ex.: mesa 2 mais 1 medalhão`, mostrar 3 exemplos cobrindo lançar/consultar/estoque:
 ```
-📦 Movimentação de estoque hoje
-  • Medalhão de Frango: +4 entradas, −1 saída → saldo 5
-  • Coca: −12 saídas → saldo 8
-  ⚠️ Críticos: Cerveja (saldo 2, mín 5)
+🎤 Ouvi: "..."
+⚠️ Não consegui transformar em comando.
+Tente:
+• "mesa 2 mais 1 medalhão" (lançar)
+• "qual o valor da mesa 2" (consultar)
+• "entrada 5 coca" (estoque)
 ```
-Consulta `inventory_movements` agrupado por item no dia + `inventory_items.current_stock`/`min_stock`. Sem mexer em pedidos nem alertas em tempo real (alertas críticos imediatos seguem funcionando como hoje).
 
 ## O que NÃO muda
-- Parser de texto, fluxo de pedidos, impressão, kanban da cozinha, cardápio, apelidos.
-- Comandos de estoque por texto (`entrada 10 coca`) continuam respondendo normalmente — o silenciamento é só para origem voz.
-- Alertas de estoque crítico/zerado em tempo real seguem ativos (esses são importantes na hora).
-- Wizard de estoque, gerenciamento manual no Admin.
+- Fluxo de impressão, kanban, pagamento, cardápio, apelidos.
+- Comandos por texto continuam funcionando idênticos (apenas ganham as novas frases de consulta).
+- Confiança/gate de confirmação ✅/❌ permanece.
+- Indicador "🎤 Ouvindo..." e edição da mensagem permanecem.
+- Suprimir ruído de estoque por voz (já implementado) permanece.
 
 ## Arquivos afetados
-- `supabase/functions/telegram-webhook/index.ts` — prompt, "Ouvindo…", edit final, flag silent nos handlers de voz.
-- `supabase/functions/daily-waiter-report/index.ts` — nova seção de movimentação de estoque do dia.
+- `supabase/functions/telegram-webhook/index.ts` — novo `TABLE_VALUE`, regex de consulta, helper `voiceVerb`, prompt do Gemini, fallback expandido.
+- `supabase/functions/telegram-webhook/parser_test.ts` — testes para as novas frases de consulta e TABLE_VALUE.
 
 ## Critério de sucesso
-1. Áudio "lança um medalhão na mesa 2" → bot mostra `🎤 Ouvindo…` → edita para `🎤 Entendi: lançar 1× Medalhão de Frango na mesa 2 ✅` → o pedido aparece na mesa 2.
-2. Áudio "entrada 5 coca" → ainda funciona como reposição de estoque, mas com retorno enxuto (`🎤 Entendi: entrada de 5× Coca ✅`), sem o bloco de Saldo + botão Desfazer.
-3. Às 23h59 chega o relatório diário com a nova seção de movimentação de estoque + críticos.
+1. Áudio "lança um medalhão na mesa 2" → `🍽️ Lancei: mesa 2 +1 Medalhão de Frango ✅`
+2. Áudio "qual o valor da mesa 2" → `💰 Mesa 2: R$ 45,00 (3 itens)`
+3. Áudio "entrada 5 coca" → `📦 Atualizei estoque: +5 Coca (saldo 12) ✅`
+4. Áudio inválido → fallback com 3 exemplos.
 
