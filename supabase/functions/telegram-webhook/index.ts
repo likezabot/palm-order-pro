@@ -4546,6 +4546,105 @@ export async function webhookHandler(req: Request): Promise<Response> {
           { status: verified ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
+      if (adminOp === "smoke-test") {
+        // Roda updates simulados pelo próprio handler usando TEST_MODE + TEST_CHAT_ID.
+        // Não chama o Telegram externo: as respostas são capturadas no testBuffer
+        // via sendTelegramMessage() que detecta currentChatIsTest.
+        if (!TEST_MODE || TEST_CHAT_ID === null) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "TEST_MODE_disabled",
+              hint: "Defina TEST_MODE=true e TEST_CHAT_ID=<id> nos secrets pra rodar smoke tests.",
+              test_mode: TEST_MODE,
+              test_chat_id: TEST_CHAT_ID,
+            }, null, 2),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Drena buffer pra começar limpo.
+        drainTestBuffer();
+        clearTestContext();
+
+        const baseChat = { id: TEST_CHAT_ID, type: "private" };
+        const baseFrom = { id: TEST_CHAT_ID, is_bot: false, first_name: "SmokeTest", username: "smoketest" };
+        const now = Math.floor(Date.now() / 1000);
+        const cases: Array<{ name: string; update: any }> = [
+          {
+            name: "text_simple",
+            update: {
+              update_id: now,
+              message: { message_id: 1001, from: baseFrom, chat: baseChat, date: now, text: "ping smoke test" },
+            },
+          },
+          {
+            name: "command_start",
+            update: {
+              update_id: now + 1,
+              message: { message_id: 1002, from: baseFrom, chat: baseChat, date: now, text: "/start", entities: [{ type: "bot_command", offset: 0, length: 6 }] },
+            },
+          },
+          {
+            name: "command_help",
+            update: {
+              update_id: now + 2,
+              message: { message_id: 1003, from: baseFrom, chat: baseChat, date: now, text: "/help", entities: [{ type: "bot_command", offset: 0, length: 5 }] },
+            },
+          },
+        ];
+
+        const results: Array<{ name: string; status: number; response: any; captured: any[] }> = [];
+        const startedAt = Date.now();
+
+        for (const c of cases) {
+          const innerReq = new Request(`${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Telegram-Bot-Api-Secret-Token": WEBHOOK_SECRET ?? "",
+            },
+            body: JSON.stringify(c.update),
+          });
+          let status = 0;
+          let response: any = null;
+          let capturedFromBody: any[] = [];
+          try {
+            const res = await webhookHandler(innerReq);
+            status = res.status;
+            const txt = await res.text();
+            try { response = JSON.parse(txt); } catch { response = txt; }
+            // Quando handler reconhece chat de teste, ele já devolve { ok, captured } e dreva.
+            if (response && Array.isArray(response.captured)) {
+              capturedFromBody = response.captured;
+            }
+          } catch (e) {
+            response = { error: String((e as Error)?.message ?? e) };
+          }
+          // Drena qualquer coisa restante.
+          const remaining = drainTestBuffer();
+          clearTestContext();
+          results.push({
+            name: c.name,
+            status,
+            response,
+            captured: [...capturedFromBody, ...remaining],
+          });
+        }
+
+        const allOk = results.every((r) => r.status === 200);
+        const anyCaptured = results.some((r) => r.captured.length > 0);
+        return new Response(
+          JSON.stringify({
+            ok: allOk && anyCaptured,
+            handler_responded: allOk,
+            captured_any_message: anyCaptured,
+            duration_ms: Date.now() - startedAt,
+            cases: results,
+          }, null, 2),
+          { status: allOk && anyCaptured ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       return new Response(JSON.stringify({ error: "unknown admin op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
