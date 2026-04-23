@@ -4365,10 +4365,9 @@ export async function webhookHandler(req: Request): Promise<Response> {
       const authHeader = req.headers.get("authorization") ?? "";
       const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7) : "";
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-      // Anon key é público (publishable). Hardcoded como fallback p/ permitir cron via pg_net
-      // sem depender de env vars que o runtime pode não expor.
+      // Anon key é público (publishable). Hardcoded para garantir match — o env var
+      // que o runtime expõe pode não ser o mesmo do projeto.
       const ANON_KEY_PUBLIC = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdicGNqanR4cXR6cW90bWtmeHJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNTE0OTIsImV4cCI6MjA5MTcyNzQ5Mn0.K82zsqXu_airg_b3GYtKQ2vk7r5hYj_nYrt3AcmurD8";
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? ANON_KEY_PUBLIC;
       const okSecret = !!WEBHOOK_SECRET && safeEqual(provided, WEBHOOK_SECRET);
       const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
       // auto-heal é idempotente e não expõe dados — aceita anon p/ permitir cron via pg_net.
