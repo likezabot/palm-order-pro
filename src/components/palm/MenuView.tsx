@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Pencil, Search, X, ArrowRightLeft, Minus } from "lucide-react";
+import { ArrowLeft, Pencil, Search, X, ArrowRightLeft, Minus, Plus } from "lucide-react";
 import { CartItem, Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { fetchAllOrders, sortByPersistedOrder } from "@/lib/product-order";
@@ -360,7 +360,7 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                       setOpenGroup(group);
                     }}
                     aria-label={`Abrir opções de ${group.name}`}
-                    className={`relative flex flex-col items-start text-left rounded-2xl border bg-card p-4 min-h-[112px] transition-all active:scale-[0.99] overflow-hidden ${
+                    className={`relative flex flex-col items-stretch text-left rounded-2xl border bg-card p-4 pb-3 min-h-[140px] gap-2 transition-all active:scale-[0.99] overflow-hidden ${
                       groupQty > 0
                         ? "border-foreground/20"
                         : "border-border/40"
@@ -369,35 +369,48 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                     {groupQty > 0 && (
                       <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/60" />
                     )}
-                    <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground pr-7">
+                    <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground">
                       {group.name}
                     </span>
-                    <span className="mt-auto pt-2 text-[13px] font-normal text-muted-foreground/80 tabular-nums">
+                    <span className="text-[13px] font-normal text-muted-foreground/80 tabular-nums">
                       R$ {triggerProduct.price.toFixed(2)}
                     </span>
-                    <span className="absolute bottom-2.5 right-3 text-muted-foreground/30 text-sm leading-none">
-                      ›
-                    </span>
-                    {groupQty > 0 && (
-                      <span
-                        key={groupQty}
-                        className="absolute top-2 right-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background px-1.5 animate-badge-pop tabular-nums"
-                      >
-                        {groupQty}
+                    <span className="mt-auto pt-2 border-t border-border/30 flex items-center justify-between text-[12px] text-muted-foreground/80">
+                      <span className="tabular-nums">
+                        {groupQty > 0 ? `${groupQty} no carrinho` : "Ver opções"}
                       </span>
-                    )}
+                      <span className="text-muted-foreground/40 leading-none">›</span>
+                    </span>
                   </button>
                 );
               }
               const qty = getQty(product.id);
               const esgotado = isEsgotado(product.id);
+              const showStepper = qty > 0 && !esgotado;
               return (
-                <button
-                  type="button"
+                <div
                   key={product.id}
-                  onClick={() => handleAdd(product)}
-                  aria-label={`Adicionar ${product.name} — R$ ${product.price.toFixed(2)}`}
-                  className={`relative flex flex-col items-start text-left rounded-2xl border bg-card p-4 min-h-[112px] transition-all active:scale-[0.99] overflow-hidden ${
+                  onClick={showStepper ? undefined : () => handleAdd(product)}
+                  role={showStepper ? undefined : "button"}
+                  tabIndex={showStepper ? undefined : 0}
+                  onKeyDown={
+                    showStepper
+                      ? undefined
+                      : (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleAdd(product);
+                          }
+                        }
+                  }
+                  aria-label={
+                    showStepper
+                      ? undefined
+                      : `Adicionar ${product.name} — R$ ${product.price.toFixed(2)}`
+                  }
+                  className={`relative flex flex-col items-stretch text-left rounded-2xl border bg-card p-4 pb-3 min-h-[140px] gap-2 transition-all overflow-hidden ${
+                    showStepper ? "" : "active:scale-[0.99] cursor-pointer"
+                  } ${
                     esgotado
                       ? "border-border/30 opacity-50 cursor-not-allowed"
                       : qty > 0
@@ -408,44 +421,56 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                   {qty > 0 && !esgotado && (
                     <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/60" />
                   )}
-                  <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground pr-7">
+                  <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground">
                     {product.name}
                   </span>
-                  <span className="mt-auto pt-2 text-[13px] font-normal text-muted-foreground/80 tabular-nums">
+                  <span className="text-[13px] font-normal text-muted-foreground/80 tabular-nums">
                     R$ {product.price.toFixed(2)}
                   </span>
-                  {qty > 0 && (
-                    <span
-                      key={qty}
-                      className="absolute top-2 right-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background px-1.5 animate-badge-pop tabular-nums"
-                    >
-                      {qty}
-                    </span>
-                  )}
-                  {qty > 0 && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playFeedback("click");
-                        onDecrement(product);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          playFeedback("click");
-                          onDecrement(product);
-                        }
-                      }}
-                      aria-label={`Diminuir ${product.name}`}
-                      className="absolute top-2 left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm text-muted-foreground active:scale-90 hover:text-foreground transition-all"
-                    >
-                      <Minus size={12} strokeWidth={2.5} />
-                    </span>
-                  )}
-                </button>
+                  <div className="mt-auto pt-2 border-t border-border/30">
+                    {esgotado ? (
+                      <span className="text-[12px] text-muted-foreground">Esgotado</span>
+                    ) : showStepper ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playFeedback("click");
+                            onDecrement(product);
+                          }}
+                          aria-label={`Diminuir ${product.name}`}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground hover:text-foreground active:scale-90 transition-all"
+                        >
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span
+                          key={qty}
+                          aria-label={`Quantidade: ${qty}`}
+                          className="text-sm font-semibold tabular-nums text-foreground min-w-[24px] text-center animate-badge-pop"
+                        >
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAdd(product);
+                          }}
+                          aria-label={`Adicionar mais um ${product.name}`}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg bg-foreground text-background active:scale-90 transition-all"
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="flex items-center justify-between text-[12px] text-muted-foreground/80">
+                        <span>Adicionar</span>
+                        <Plus size={14} strokeWidth={2.5} className="text-muted-foreground/60" />
+                      </span>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
