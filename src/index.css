@@ -183,6 +183,10 @@
     animation: mesa-pulse 2s infinite ease-in-out;
   }
 
+  .animate-pulse-live {
+    animation: dot-live 1.6s infinite ease-in-out;
+  }
+
   .glass-card {
     @apply backdrop-blur-md bg-background/75 border-b border-border/60;
   }
