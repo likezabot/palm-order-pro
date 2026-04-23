@@ -97,9 +97,22 @@ export class EscPosBuilder {
 // Bridge status / send
 // ============================================================
 
+// Cache curto (5s) para reduzir o número de fetches a /health.
+// Indexado por URL — se o usuário trocar a ponte, o cache não vaza.
+const _bridgeStatusCache = new Map<
+  string,
+  { at: number; result: { online: boolean; printer_connected: boolean; error?: string } }
+>();
+const BRIDGE_STATUS_TTL_MS = 5_000;
+
 export async function checkBridgeStatus(
   url: string
 ): Promise<{ online: boolean; printer_connected: boolean; error?: string }> {
+  const cached = _bridgeStatusCache.get(url);
+  if (cached && Date.now() - cached.at < BRIDGE_STATUS_TTL_MS) {
+    return cached.result;
+  }
+
   const healthUrl = url.replace(/\/print$/, "/health");
   const t0 = performance.now();
   try {
