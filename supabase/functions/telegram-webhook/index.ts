@@ -121,6 +121,9 @@ async function transcribeTelegramVoice(fileId: string, traceId = "----"): Promis
               "Devolva APENAS o texto falado, em minúsculas, sem pontuação, sem comentários, sem aspas. " +
               "Converta números por extenso para dígitos (ex: 'duas cocas' → '2 coca'; 'mesa cinco mais três cervejas' → 'mesa 5 + 3 cerveja'). " +
               "Mantenha verbos de comando como 'mais', 'menos', 'entrada', 'saída', 'ajuste', 'estoque', 'ver pedido', 'mesa N'. " +
+              "PRESERVE LITERALMENTE verbos de PEDIDO: 'lança', 'lançar', 'lance', 'joga', 'jogar', 'manda', 'mandar', 'marca', 'marcar', 'anota', 'anotar', 'pede', 'pedir', 'bota', 'botar', 'coloca', 'colocar'. " +
+              "NUNCA troque esses verbos por 'entrada' ou 'saída'. As palavras 'entrada' e 'saída' SÓ devem aparecer se o usuário falar literalmente 'entrada' ou 'saída'/'saida' (ex: 'entrada de 10 coca'). " +
+              "Em dúvida entre 'lança' e 'entrada', escolha SEMPRE 'lança'. " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
               "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
               "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
@@ -1742,6 +1745,30 @@ async function sendTelegram(chatId: number, text: string, keyboard?: InlineButto
     if (!res.ok) console.error("sendMessage falhou:", res.status, await res.text());
   } catch (e) {
     console.error("sendTelegram erro:", e);
+  }
+}
+
+// Variante que retorna message_id — útil pra editar a mensagem depois (ex: "Ouvindo…" → "Entendi…").
+async function sendTelegramReturningId(chatId: number, text: string): Promise<number | null> {
+  if (isTestChat(chatId)) {
+    testCaptureBuffer.push({ chatId, text, kind: "send" });
+    return null;
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    if (!res.ok) {
+      console.error("sendMessage falhou:", res.status, await res.text());
+      return null;
+    }
+    const j = await res.json().catch(() => null);
+    return j?.result?.message_id ?? null;
+  } catch (e) {
+    console.error("sendTelegramReturningId erro:", e);
+    return null;
   }
 }
 
@@ -4265,6 +4292,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     // Voice (microfone) → transcreve com Lovable AI e segue como texto.
     let voiceTranscript: string | null = null;
     let voiceTraceId: string | null = null;
+    let voiceStatusMsgId: number | null = null; // mensagem "🎤 Ouvindo…" que será editada com o resultado
     const voiceFileId: string | undefined = message?.voice?.file_id;
     if (!fromBot && chatId && !text && voiceFileId) {
       voiceTraceId = Math.random().toString(36).slice(2, 8);
@@ -4282,14 +4310,15 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         return testOrPlain();
       }
       setTestContext(chatId);
+      // Mensagem-status que vamos editar quando processarmos
+      voiceStatusMsgId = await sendTelegramReturningId(chatId, "🎤 Ouvindo…");
       try {
         const transcribed = await transcribeTelegramVoice(voiceFileId, voiceTraceId);
         if (!transcribed) {
           console.warn(`[voice ${voiceTraceId}] action=failed reason=no_transcript`);
-          await sendTelegram(
-            chatId,
-            "🎤 Não consegui entender o áudio.\n\nTente falar mais perto do microfone, em ambiente silencioso, ou envie por texto.\nEx.: `mesa 5 +2 coca`",
-          );
+          const failMsg = "🎤 ❌ Não entendi o áudio. Tente falar mais perto do microfone ou envie por texto.\nEx.: mesa 5 +2 coca";
+          if (voiceStatusMsgId) await editTelegramMessage(chatId, voiceStatusMsgId, failMsg);
+          else await sendTelegram(chatId, failMsg);
           clearTestContext();
           return testOrPlain();
         }
@@ -4297,14 +4326,24 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         text = transcribed;
       } catch (e) {
         console.error(`[voice ${voiceTraceId}] action=failed reason=exception`, e);
-        await sendTelegram(
-          chatId,
-          "🎤 ❌ Erro ao processar o áudio. Tente novamente ou envie por texto.",
-        );
+        const errMsg = "🎤 ❌ Erro ao processar o áudio. Tente novamente ou envie por texto.";
+        if (voiceStatusMsgId) await editTelegramMessage(chatId, voiceStatusMsgId, errMsg);
+        else await sendTelegram(chatId, errMsg);
         clearTestContext();
         return testOrPlain();
       }
     }
+
+    // Helper: quando origem é voz, edita a mensagem "🎤 Ouvindo…" em vez de mandar nova.
+    // Após a 1ª edição, marcamos como consumida; chamadas seguintes caem no sendTelegram normal.
+    const voiceReply = async (txt: string): Promise<void> => {
+      if (voiceStatusMsgId && chatId) {
+        await editTelegramMessage(chatId, voiceStatusMsgId, txt);
+        voiceStatusMsgId = null;
+      } else if (chatId) {
+        await sendTelegram(chatId, txt);
+      }
+    };
 
     if (fromBot || !chatId || !text) {
       if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_no_text fromBot=${fromBot} hasText=${!!text}`);
@@ -4461,11 +4500,11 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     // ─── VOZ: gate de confiança ANTES da execução ───
     // Resolve mesa de contexto + produto (sem mutação) para detectar incertezas
     // específicas de ADD/REMOVE: produto não encontrado, ambíguo, mesa herdada com qty alta.
+    const previewParts: string[] = []; // escopo externo p/ uso nos blocos de execução
     if (voiceTranscript) {
       const tag = `[voice ${voiceTraceId ?? "----"}]`;
       console.log(`${tag} split lines=${lines.length}`);
       const enriched: VoiceParsedSig[] = [];
-      const previewParts: string[] = [];
       for (let i = 0; i < lines.length; i++) {
         const ln = lines[i];
         console.log(`${tag} line[${i}] raw="${ln}"`);
@@ -4512,9 +4551,8 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       const allErrors = enriched.length === 0 || enriched.every((s) => s.kind === "PARSE_ERROR");
       if (allErrors) {
         console.warn(`${tag} action=failed reason=no_commands_parsed`);
-        await sendTelegram(
-          chatId,
-          `🎤 *Ouvi:* "${voiceTranscript}"\n\n⚠️ Não consegui transformar isso em comando.\nTente: \`mesa N + qty produto\`\nEx.: \`mesa 2 mais 1 medalhão\`.`,
+        await voiceReply(
+          `🎤 Ouvi: "${voiceTranscript}"\n⚠️ Não consegui transformar isso em comando.\nEx.: mesa 2 mais 1 medalhão`,
         );
         return testOrPlain();
       }
@@ -4532,16 +4570,19 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         const previewBlock = previewParts.length > 0
           ? previewParts.map((l, i) => `${i + 1}. ${l}`).join("\n")
           : "(nada reconhecido)";
-        const reasonTxt = conf.reason ? ` _(motivo: ${conf.reason})_` : "";
+        const reasonTxt = conf.reason ? ` (${conf.reason})` : "";
         console.log(`${tag} action=ask_confirm token=${token}`);
-        await sendTelegram(
-          chatId,
-          `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewBlock}\n\nConfirmar?`,
-          [[
-            { text: "✅ Executar", callback_data: `vc|ok|${token}` },
-            { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
-          ]],
-        );
+        const confirmKb: InlineButton[][] = [[
+          { text: "✅ Executar", callback_data: `vc|ok|${token}` },
+          { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
+        ]];
+        const confirmText = `🎤 Ouvi: "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewBlock}\n\nConfirmar?`;
+        if (voiceStatusMsgId && chatId) {
+          await editTelegramMessage(chatId, voiceStatusMsgId, confirmText, confirmKb);
+          voiceStatusMsgId = null;
+        } else {
+          await sendTelegram(chatId, confirmText, confirmKb);
+        }
         return testOrPlain();
       }
       console.log(`${tag} action=executed (confident)`);
@@ -4551,9 +4592,22 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       const parsed = parseCommand(lines[0] ?? text);
       const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
       const reply = await handleCommand(cmd, waiter);
-      const prefix = voiceTranscript ? `🎤 *Ouvi:* "${voiceTranscript}"\n\n` : "";
-      await sendTelegram(chatId, prefix + reply.text, reply.keyboard);
+      if (voiceTranscript) {
+        const replyTxt = String(reply.text || "");
+        const isError = /^[❌❓🤔⚠️🚨]/.test(replyTxt) || /erro|Erro/.test(replyTxt);
+        if (isError) {
+          await voiceReply(`🎤 Ouvi: "${voiceTranscript}"\n\n${replyTxt}`);
+        } else {
+          const summary = (typeof previewParts !== "undefined" && previewParts[0]) ? previewParts[0] : voiceTranscript;
+          await voiceReply(`🎤 Entendi: ${summary} ✅`);
+        }
+      } else {
+        await sendTelegram(chatId, reply.text, reply.keyboard);
+      }
       if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
+      return testOrPlain();
+    }
+    {
       // Multi-comando: tenta consolidar ADD/REMOVE da mesma mesa em UMA impressão.
       // 1ª passada: parse + resolveContext + resolveProduct (sem mutação) por linha.
       type Slot =
@@ -4705,22 +4759,29 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         }
       }
 
-      const voicePrefix = voiceTranscript && lines.length > 1
-        ? `🎤 *Ouvi:* "${voiceTranscript}"\n\n`
-        : "";
-      const header = `📊 ${lines.length} comandos processados:\n`;
-      await sendTelegram(chatId, voicePrefix + header + "\n" + textBlocks.join("\n\n"));
-
-      // Botões de undo (1 por mesa batched) em mensagens separadas.
-      for (const [, res] of batchResults) {
-        if (res.keyboard) {
-          await sendTelegram(chatId, `↩️ Desfazer mesa?`, res.keyboard);
+      if (voiceTranscript) {
+        // VOZ: resumo curto + suprime undos / escolhas verbosas.
+        const summaryLines = (typeof previewParts !== "undefined" && previewParts.length > 0)
+          ? previewParts.map((l) => `• ${l}`).join("\n")
+          : textBlocks.join("\n");
+        await voiceReply(`🎤 Entendi:\n${summaryLines}\n✅`);
+        // Mostra apenas erros standalone (produto ambíguo / não encontrado).
+        for (const choice of pendingChoices) {
+          await sendTelegram(chatId, choice.text, choice.keyboard);
         }
-      }
-
-      // Mensagens separadas com botões de escolha.
-      for (const choice of pendingChoices) {
-        await sendTelegram(chatId, choice.text, choice.keyboard);
+      } else {
+        const header = `📊 ${lines.length} comandos processados:\n`;
+        await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
+        // Botões de undo (1 por mesa batched) em mensagens separadas.
+        for (const [, res] of batchResults) {
+          if (res.keyboard) {
+            await sendTelegram(chatId, `↩️ Desfazer mesa?`, res.keyboard);
+          }
+        }
+        // Mensagens separadas com botões de escolha.
+        for (const choice of pendingChoices) {
+          await sendTelegram(chatId, choice.text, choice.keyboard);
+        }
       }
     }
   } catch (err) {
