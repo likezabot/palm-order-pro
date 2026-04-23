@@ -4570,16 +4570,19 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         const previewBlock = previewParts.length > 0
           ? previewParts.map((l, i) => `${i + 1}. ${l}`).join("\n")
           : "(nada reconhecido)";
-        const reasonTxt = conf.reason ? ` _(motivo: ${conf.reason})_` : "";
+        const reasonTxt = conf.reason ? ` (${conf.reason})` : "";
         console.log(`${tag} action=ask_confirm token=${token}`);
-        await sendTelegram(
-          chatId,
-          `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewBlock}\n\nConfirmar?`,
-          [[
-            { text: "✅ Executar", callback_data: `vc|ok|${token}` },
-            { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
-          ]],
-        );
+        const confirmKb: InlineButton[][] = [[
+          { text: "✅ Executar", callback_data: `vc|ok|${token}` },
+          { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
+        ]];
+        const confirmText = `🎤 Ouvi: "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewBlock}\n\nConfirmar?`;
+        if (voiceStatusMsgId && chatId) {
+          await editTelegramMessage(chatId, voiceStatusMsgId, confirmText, confirmKb);
+          voiceStatusMsgId = null;
+        } else {
+          await sendTelegram(chatId, confirmText, confirmKb);
+        }
         return testOrPlain();
       }
       console.log(`${tag} action=executed (confident)`);
