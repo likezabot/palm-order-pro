@@ -40,15 +40,13 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
   const [moveOpen, setMoveOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { playFeedback } = useFeedback();
-  const { data: stockMap } = useProductStockMap();
-  const { data: recipes } = useProductRecipes();
   const { data: productGroups = [] } = useProductGroups();
   const hiddenProductNames = useMemo(
     () => getHiddenProductNames(productGroups, activeCategory),
     [productGroups, activeCategory],
   );
 
-  const isEsgotado = (id: string) => isProductEsgotado(stockMap, id, recipes);
+  const isEsgotado = (_id: string) => false;
 
   // Adicionar item segue direto, mesmo se esgotado — a tarja visual continua aparecendo
   // pra informar, mas não bloqueia mais o fluxo.
