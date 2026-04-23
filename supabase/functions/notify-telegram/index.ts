@@ -192,7 +192,7 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
              (p.waiter_name ? `\nGarçom: ${p.waiter_name}` : "");
     } else if (evt.event_type === "print_failure" && cfg.print_failure !== false) {
       const tipo = p.print_type === "bill" ? "conta" : p.print_type === "delta" ? "acréscimo" : "pedido";
-      text = `🖨️ <b>Falha de impressão</b>\nMesa ${p.table_name} (${tipo})\n<i>${p.error}</i>`;
+      text = `🖨️ <b>Pedido não impresso</b>\nMesa ${p.table_name} (${tipo}) não foi impresso.\nMotivo: <i>${p.error}</i>`;
     } else if (evt.event_type === "cash_closed" && cfg.cash_closed !== false) {
       const sangrias = Number(p.sangrias || 0);
       const suprimentos = Number(p.suprimentos || 0);
