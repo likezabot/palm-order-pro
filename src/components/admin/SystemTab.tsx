@@ -21,9 +21,11 @@ type RetentionLog = {
 export const SystemTab = () => {
   const { playFeedback } = useFeedback();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [archiving, setArchiving] = useState(false);
   const [logs, setLogs] = useState<RetentionLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const loadLogs = async () => {
     setLoadingLogs(true);
