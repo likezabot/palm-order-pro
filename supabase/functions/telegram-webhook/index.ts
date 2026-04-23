@@ -4497,6 +4497,32 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       return testOrPlain();
     }
 
+    // Helper: resume uma linha previewParts em formato "lançar 1× X na mesa N"
+    // (usa o previewParts já calculado pelo gate de confiança, mas reformatado).
+    const summarizeVoiceLine = (parsed: any, previewLine: string): string => {
+      // previewLine já vem no formato "mesa N (+|−)qty produto" — bom o suficiente.
+      // Para STOCK_MOVEMENT/QUERY/LIST etc, mostramos o tipo.
+      if (!parsed) return previewLine;
+      const k = parsed.kind;
+      if (k === "STOCK_MOVEMENT") {
+        const verb = parsed.type === "in" ? "entrada" : parsed.type === "out" ? "saída" : "ajuste";
+        return `${verb} de ${parsed.qty}× ${parsed.itemText}`;
+      }
+      if (k === "STOCK_QUERY") return `consultar estoque de ${parsed.itemText}`;
+      if (k === "STOCK_OUT_NOW") return `marcar ${parsed.itemText} como esgotado`;
+      if (k === "STOCK_LIST") return `listar estoque`;
+      if (k === "STOCK_CRITICAL") return `ver itens críticos`;
+      if (k === "VIEW" || k === "VIEW_NOMESA") return `ver pedido${parsed.table ? ` da mesa ${parsed.table}` : ""}`;
+      if (k === "TABLE_STATUS") return `status da mesa ${parsed.table}`;
+      if (k === "PRODUCT_HIDE") return `ocultar ${parsed.query}`;
+      if (k === "PRODUCT_SHOW") return `mostrar ${parsed.query}`;
+      if (k === "REPORT") return `relatório do dia`;
+      if (k === "HELP") return `ajuda`;
+      if (k === "UNDO") return `desfazer`;
+      // ADD/REMOVE: o previewLine já está formatado.
+      return previewLine;
+    };
+
     // ─── VOZ: gate de confiança ANTES da execução ───
     // Resolve mesa de contexto + produto (sem mutação) para detectar incertezas
     // específicas de ADD/REMOVE: produto não encontrado, ambíguo, mesa herdada com qty alta.
