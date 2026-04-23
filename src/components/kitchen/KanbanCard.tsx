@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Order, OrderItem } from "@/lib/types";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { Clock, Flame, UtensilsCrossed } from "lucide-react";
@@ -107,4 +108,17 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
   );
 };
 
-export default KanbanCard;
+export default memo(KanbanCard, (prev, next) => {
+  // Re-render só quando o pedido ou seus itens realmente mudaram.
+  return (
+    prev.order.id === next.order.id &&
+    prev.order.updated_at === next.order.updated_at &&
+    prev.order.status === next.order.status &&
+    prev.order.served_at === next.order.served_at &&
+    prev.items.length === next.items.length &&
+    prev.actionLabel === next.actionLabel &&
+    prev.actionColor === next.actionColor &&
+    prev.pulse === next.pulse &&
+    prev.onAction === next.onAction
+  );
+});

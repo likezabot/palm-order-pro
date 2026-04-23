@@ -5,8 +5,6 @@ import fs from "fs";
 import { componentTagger } from "lovable-tagger";
 
 // Inject a unique build stamp into the service worker on every build.
-// Without this, sw.js byte-content stays identical between deploys and
-// browsers never detect a new version → users get stuck on old bundles.
 const stampServiceWorker = () => {
   const stamp = Date.now().toString();
   return {
@@ -39,5 +37,25 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Chunks separados → cache mais estável entre deploys.
+        // Bibliotecas grandes ficam isoladas; alterações na app não invalidam o chunk delas.
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+          "vendor-query": [
+            "@tanstack/react-query",
+            "@tanstack/react-query-persist-client",
+            "@tanstack/query-async-storage-persister",
+          ],
+          "vendor-supabase": ["@supabase/supabase-js"],
+          "vendor-charts": ["recharts"],
+          "vendor-dnd": ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
+          "vendor-icons": ["lucide-react"],
+        },
+      },
+    },
   },
 }));
