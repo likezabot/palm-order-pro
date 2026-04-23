@@ -1,41 +1,43 @@
 
 
-# Plano: limpeza segura de código morto (sem refatoração estrutural)
+# Plano: destravar `telegram-webhook` (401 no gateway)
 
-## Escopo
+## Diagnóstico
 
-Remover **apenas** linhas comprovadamente não utilizadas, sem tocar em:
-- Animações (`animate-fade-in`, transitions, keyframes)
-- Layout, estilos, tokens de tema
-- Lógica de impressão, PDV, Palm, Kitchen, bridge, Telegram, Supabase
-- `AdminErrorBoundary` e fluxo de recuperação do Admin
+Logs do edge runtime confirmam:
+- Você mandou comando agora há pouco → Telegram fez `POST /functions/v1/telegram-webhook` → **resposta 401** (`status_code:401` em `1.776968026927e+15`).
+- Antes desse 401, **só** existem chamadas a `notify-telegram` (saídas, status 200). Nenhuma entrada do Telegram chegou ao handler nas últimas horas.
+- A função `telegram-webhook` está bootando normalmente (logs `booted (time: 29ms)`), ou seja, o código está OK. O 401 vem **antes** do handler — é o gateway de Edge Functions exigindo JWT.
+- `supabase/config.toml` já tem `[functions.telegram-webhook] verify_jwt = false`, mas o último deploy não aplicou esse flag no gateway (acontece quando o deploy é parcial ou quando outra mudança no projeto rodou antes do config virar efetivo).
 
-## O que será removido
+Conclusão: nada foi “quebrado” no código da limpeza anterior (mexi só em `App.tsx` e `main.tsx`, fora do escopo do bot). O que precisa é **forçar um redeploy da `telegram-webhook`** para o gateway reler o `verify_jwt = false`.
 
-### 1. `src/App.tsx`
-- **`lazyWithRetry`**: helper que envolvia `lazy()` com retry de 600ms. Hoje o `AdminErrorBoundary` já faz hard reload da rota com guard de sessão, então o retry interno virou código morto. Vou trocar `Admin = lazyWithRetry(...)` por `Admin = lazy(...)` direto e apagar a função `lazyWithRetry` inteira.
-- Sem mudança em nenhuma outra rota, Suspense, BrowserRouter ou animação.
+## Correção (1 ação, 0 mudança de código)
 
-### 2. `src/main.tsx`
-- **Bloco "One-time SW + caches purge" (`SW_RESET_KEY = "sw-reset-2026-04-23"`)**: já rodou uma vez por dispositivo e ficou inerte. Mantém apenas peso visual no arquivo. Vou remover o bloco inteiro (try/catch + lógica de unregister + reload).
-- Mantém intactos: anti-flash de tema, alto contraste, `debugLog`, `checkAndUpdateVersion`, `createRoot`, `startPrintQueueWorker`, `startConnectivityMonitor`, `startGlobalOrderRuntime`, registro de SW para produção.
+### Passo único — Redeploy forçado de `telegram-webhook`
+
+Usar `supabase--deploy_edge_functions` com `function_names: ["telegram-webhook"]`.
+
+Isso:
+- Republica a função com o `config.toml` atual (que já tem `verify_jwt = false`).
+- O gateway passa a aceitar o POST do Telegram sem JWT.
+- O bot volta a responder a comandos de texto e voz imediatamente.
+
+## Validação pós-deploy
+
+1. Mandar de novo um comando simples no Telegram (ex.: `mesa 1`).
+2. Reler os logs com `analytics_query` filtrando `pathname like '%telegram-webhook%'` — esperado `status_code: 200`.
+3. Se ainda vier 401, abrir `edge_function_logs` da `telegram-webhook` e olhar mensagens de erro pós-boot.
 
 ## O que NÃO será mexido
 
-- `AdminErrorBoundary.tsx` — fica como está (é o que está segurando o Admin hoje).
-- `pages/Admin.tsx` e qualquer componente do admin.
-- `public/sw.js`, `lib/version-check.ts`, `lib/print-*`, `lib/global-order-runtime.ts`.
-- Qualquer hook, util ou componente de Palm/Kitchen/PDV/Stock.
-- Animações: `animate-fade-in` no wrapper de rotas continua.
+- `supabase/functions/telegram-webhook/index.ts` (5069 linhas — está íntegro).
+- `supabase/config.toml` (já correto).
+- Frontend (`App.tsx`, `main.tsx`, `AdminErrorBoundary.tsx`).
+- Qualquer outra função (`notify-telegram` está respondendo 200, sem ação).
+- Whitelist `telegram_allowed_chats`, bindings de usuário, vocabulário do menu — nada disso muda.
 
-## Arquivos editados
+## Resultado esperado
 
-- `src/App.tsx` — remover `lazyWithRetry`, usar `lazy` direto no Admin.
-- `src/main.tsx` — remover bloco de purge de SW one-time.
-
-## Resultado
-
-- Menos ~25 linhas de código morto.
-- Zero mudança de comportamento visível: Admin continua lazy + protegido pelo ErrorBoundary, animações intactas, SW de produção intacto.
-- Bundle ligeiramente menor.
+Bot volta a responder em <1s após o redeploy. Sem perda de estado, sem mudança de comportamento, sem risco para PDV/Palm/Kitchen/impressão.
 
