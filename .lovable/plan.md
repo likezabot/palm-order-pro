@@ -1,66 +1,55 @@
 
 
-# Apelidos de produtos para reconhecimento por voz/texto no Telegram
+# Logging detalhado de voz + fallback quando nada funciona
 
 ## Objetivo
-Adicionar uma camada de **apelidos** (aliases) por produto, editáveis no Admin, que alimenta:
-1. O **dicionário** enviado ao Gemini na transcrição de voz
-2. O **fuzzy matching** do parser de comandos no `telegram-webhook`
+Quando chega um áudio no Telegram, deixar rastro completo nos logs (`voz → transcrição → parse → resolução → ação`) e garantir que o usuário SEMPRE recebe uma resposta — seja confirmação, execução, ou um aviso claro de "não entendi".
 
-Sem mexer em pedidos, impressão, pagamento, layout do cupom ou cozinha.
+## Mudanças em `supabase/functions/telegram-webhook/index.ts`
 
-## Mudanças
+### 1. Logs estruturados de voz
+Inserir uma série de `console.log` com prefixo `[voice]` e um `traceId` curto (gerado no início do handler de voz) para rastrear toda a cadeia em uma única busca de logs:
 
-### 1. Banco — nova coluna em `products`
-Migration:
-```sql
-ALTER TABLE public.products
-  ADD COLUMN IF NOT EXISTS aliases text[] NOT NULL DEFAULT '{}';
+- `[voice <id>] received` — duration, mime, file_size do voice/audio Telegram
+- `[voice <id>] download ok bytes=...` (já existe parcial em `transcribeVoice`, padronizar)
+- `[voice <id>] transcript: "..."` (já existe, ajustar formato)
+- `[voice <id>] split lines=N` — quantas linhas Gemini retornou
+- Para cada linha:
+  - `[voice <id>] line[i] raw="..."` 
+  - `[voice <id>] line[i] parsed kind=ADD table=5 qty=2 productText="medalhao"`
+  - `[voice <id>] line[i] context table=5 fromContext=true`
+  - `[voice <id>] line[i] product resolution=found id=... name="Medalhão" score=0.92` (ou `ambiguous candidates=3` / `not_found`)
+- `[voice <id>] confidence confident=false reason="produto ambíguo"` (ou `true`)
+- `[voice <id>] action=ask_confirm` / `action=executed` / `action=failed reason=...`
 
-CREATE INDEX IF NOT EXISTS idx_products_aliases_gin
-  ON public.products USING GIN (aliases);
-```
+Sem dados sensíveis (token, chat_id já existe nos logs do framework).
 
-Sem trigger, sem default complexo. `inventory_items` já tem `aliases` — mesma convenção.
+### 2. Fallback "não entendi" — sempre responder
+Hoje há um caminho onde, se `transcribeVoice` retorna `null`, o fluxo só loga e segue. Garantir mensagem ao usuário em 3 cenários:
 
-### 2. Admin — editor de apelidos
-**`src/components/admin/ProductForm.tsx`**: novo campo "Apelidos / variações" (chips estilo tag input).
-- Input de texto + botão "+" / Enter adiciona; X remove.
-- Normaliza no submit: lowercase, trim, sem acento, dedup, ignora vazios e o próprio nome.
-- Exibe abaixo: dica curta — "Como o garçom pode chamar este item por voz/Telegram. Ex.: coca zero, zero, ks zero".
+a) **Falha na transcrição** (`transcribeVoice` retornou null): enviar  
+   `🎤 Não consegui entender o áudio. Tente falar mais perto do microfone, em ambiente silencioso, ou envie por texto. (Ex.: "mesa 5 +2 coca")`
 
-**`src/components/admin/SortableProductCard.tsx`**: mostra contador discreto `🏷️ 3 apelidos` quando > 0 (somente leitura, edição via form).
+b) **Transcreveu mas parser não achou nada útil** (todas as linhas `PARSE_ERROR` ou vazio após split): enviar  
+   `🎤 Ouvi: "..."\n\n⚠️ Não consegui transformar isso em comando. Tente: "mesa N + qty produto" (ex.: "mesa 2 mais 1 medalhão").`
 
-### 3. Telegram webhook — usar apelidos
-Em `supabase/functions/telegram-webhook/index.ts`:
+c) **Erro inesperado** no pipeline de voz (catch geral): enviar  
+   `🎤 Ouvi: "..."\n\n❌ Erro ao processar. Tente novamente ou envie por texto.`
 
-- **`getMenuVocabulary()`**: além do `name`, concatena `aliases` no formato `Coca-Cola Zero (coca zero, zero, ks zero)` no prompt do Gemini. Cache 60s mantém.
-- **`fuzzyFindProducts(query, products)`**: estende ranking para também testar `query` contra cada alias (mesmo pipeline: exact > startsWith > includes > tokens > Levenshtein). Match por alias entra com peso igual ao por nome.
-- **`ProductRow` type**: adicionar `aliases?: string[]`.
-- **Query de produtos**: incluir `aliases` no `select`.
+Gate de confiança existente (caso b parcial) já mostra preview + botões — manter, só adicionar log `action=ask_confirm`.
 
-### 4. Testes
-**`supabase/functions/telegram-webhook/parser_test.ts`**: +6 casos cobrindo:
-- "coca zero" resolve para "Coca-Cola Zero" via alias
-- Apelido com acento/sem acento
-- Apelido + plural ("zeros")
-- Conflito alias vs nome de outro produto (nome vence)
-- Alias ambíguo (2 produtos com mesmo apelido) → `ambiguous`
-- Sem apelidos cadastrados, fluxo atual continua igual
-
-### 5. Memory
-Atualizar `.lovable/memory/features/telegram-bot.md` documentando que `products.aliases` alimenta vocabulário e fuzzy.
+### 3. Pequena melhoria no gate
+Quando `enriched` está totalmente vazio (nenhum comando reconhecido), em vez de mostrar `(nada reconhecido)` no preview e botão "✅ Executar" inútil, mandar a mensagem (b) acima e NÃO oferecer botões.
 
 ## Detalhes técnicos
-
-- **Normalização de aliases**: aplicada no Admin (escrita) E no fuzzy (leitura), via `normalize()` já existente — sem migrations de dados.
-- **Vocabulário no prompt**: limitado a ~150 produtos ativos, com até 5 apelidos por item para não explodir tokens. Cache 60s.
-- **Sem breaking changes**: coluna default `'{}'`, todos os fluxos atuais continuam idênticos quando aliases vazio.
-- **Realtime**: `products` já está em `supabase_realtime` — Admin/Palm refletem mudança em apelidos automaticamente, mas como o vocab tem cache de 60s no edge, o bot pega novos apelidos em até 1 min (suficiente).
+- `traceId`: `Math.random().toString(36).slice(2, 8)` no início do bloco que processa `message.voice` ou `message.audio`.
+- Passar `traceId` como parâmetro opcional para `transcribeVoice(fileId, traceId)` para correlacionar os logs internos.
+- Nenhuma mudança de schema, nenhum novo secret, nenhuma mudança em fluxos de texto/estoque/cardápio.
+- Os testes de parser existentes seguem passando — só adicionamos logs e um caminho de erro ao usuário.
 
 ## Critério de sucesso
-1. No Admin, edito o produto "Coca-Cola Zero" e adiciono apelidos "coca zero, zero, ks zero".
-2. Mando "mesa 5 + 2 coca zero" no Telegram → reconhece direto, sem ambiguidade.
-3. Mando áudio "duas zero pra mesa cinco" → Gemini transcreve com mais precisão e resolve.
-4. Pedidos, impressão, cozinha continuam funcionando idênticos.
+1. Mando áudio "lança um medalhão na mesa 2" → vejo nos logs do edge function a cadeia completa com o mesmo `traceId`.
+2. Mando áudio inaudível → recebo no Telegram a mensagem (a) ao invés de silêncio.
+3. Mando áudio que transcreve mas não vira comando → recebo mensagem (b) com a transcrição visível.
+4. Áudio bom continua executando direto, áudio com baixa confiança continua pedindo ✅/❌.
 
