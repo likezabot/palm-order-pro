@@ -5115,5 +5115,67 @@ export async function webhookHandler(req: Request): Promise<Response> {
 
 // Skip Deno.serve quando importado por testes (TELEGRAM_TEST_IMPORT=1).
 if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") {
+  // Bootstrap de auto-cura: ao subir, garante que o webhook do Telegram está
+  // registrado para ESTA função e com o secret_token bate com WEBHOOK_SECRET.
+  // Roda em background para não bloquear o boot. Default-deny preservado: se
+  // WEBHOOK_SECRET ou TOKEN não existem, não faz nada (já recusa requests).
+  (async () => {
+    try {
+      if (!TOKEN || !WEBHOOK_SECRET) {
+        console.warn("[bootstrap] skip auto-fix: TOKEN or WEBHOOK_SECRET missing");
+        return;
+      }
+      const tgBase = `https://api.telegram.org/bot${TOKEN}`;
+      const projectRef = (SUPABASE_URL.match(/^https:\/\/([^.]+)\.supabase\.co/) || [])[1];
+      if (!projectRef) {
+        console.warn("[bootstrap] cannot derive project ref from SUPABASE_URL");
+        return;
+      }
+      const expectedUrl = `https://${projectRef}.supabase.co/functions/v1/telegram-webhook`;
+      const infoRes = await fetch(`${tgBase}/getWebhookInfo`);
+      const info = await infoRes.json().catch(() => ({}));
+      const currentUrl = info?.result?.url ?? "";
+      const hasCustomCert = !!info?.result?.has_custom_certificate;
+      // Telegram não devolve o secret_token, mas devolve `pending_update_count` e o
+      // `last_error_message`. Critério de reparo: URL diferente OU last_error fala
+      // de unauthorized/secret OU pending_update_count alto persistente.
+      const lastErr: string = info?.result?.last_error_message ?? "";
+      const needsFix =
+        currentUrl !== expectedUrl ||
+        /secret|unauthor|401|wrong/i.test(lastErr) ||
+        hasCustomCert;
+      console.log("[bootstrap] webhook info", JSON.stringify({
+        currentUrl, expectedUrl, lastErr, pending: info?.result?.pending_update_count, needsFix,
+      }));
+      if (!needsFix && currentUrl === expectedUrl) {
+        // Mesmo se URL bate, garantimos secret reaplicando 1x para casos em que
+        // o secret foi rotacionado e o Telegram ainda guarda o antigo.
+        // Mas só re-aplica se houver erro recente — evita flood.
+        if (lastErr) {
+          await reapplyWebhook(tgBase, expectedUrl);
+        }
+        return;
+      }
+      await reapplyWebhook(tgBase, expectedUrl);
+    } catch (e) {
+      console.error("[bootstrap] auto-fix failed:", (e as Error)?.message ?? e);
+    }
+  })();
+
   Deno.serve(webhookHandler);
+}
+
+async function reapplyWebhook(tgBase: string, expectedUrl: string): Promise<void> {
+  const setRes = await fetch(`${tgBase}/setWebhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: expectedUrl,
+      secret_token: WEBHOOK_SECRET,
+      allowed_updates: ["message", "edited_message", "callback_query"],
+      drop_pending_updates: false,
+    }),
+  });
+  const body = await setRes.json().catch(() => ({}));
+  console.log("[bootstrap] setWebhook result", JSON.stringify({ ok: body?.ok, description: body?.description, url: expectedUrl }));
 }
