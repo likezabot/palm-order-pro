@@ -185,7 +185,7 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
   }
 
   // ===== Eventos restantes (falhas reais + tudo o mais) =====
-  for (const evt of [...realFailures, ...otherEvents]) {
+  for (const evt of [...realFailures, ...remainingOther]) {
     const dedupeKey = `${evt.event_type}:${evt.entity_id}:${evt.created_at}`;
     // Idempotência
     const { data: existing } = await sb.from("notification_log")
