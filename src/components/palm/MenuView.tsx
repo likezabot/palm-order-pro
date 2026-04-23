@@ -33,6 +33,7 @@ interface Props {
 }
 
 const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBack, tableName, originalTableName, onRenameTable, existingOrderId, onTableMoved }: Props) => {
+  const queryClient = useQueryClient();
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
   const [openGroup, setOpenGroup] = useState<ProductGroup | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -40,6 +41,18 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
   const [moveOpen, setMoveOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { playFeedback } = useFeedback();
+
+  // Realtime: refresh do cardápio quando o bot do Telegram alterna visibilidade.
+  useEffect(() => {
+    const ch = supabase
+      .channel("palm-products-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["products"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [queryClient]);
+
   const { data: productGroups = [] } = useProductGroups();
   const hiddenProductNames = useMemo(
     () => getHiddenProductNames(productGroups, activeCategory),
