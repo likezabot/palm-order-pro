@@ -121,6 +121,9 @@ async function transcribeTelegramVoice(fileId: string, traceId = "----"): Promis
               "Devolva APENAS o texto falado, em minúsculas, sem pontuação, sem comentários, sem aspas. " +
               "Converta números por extenso para dígitos (ex: 'duas cocas' → '2 coca'; 'mesa cinco mais três cervejas' → 'mesa 5 + 3 cerveja'). " +
               "Mantenha verbos de comando como 'mais', 'menos', 'entrada', 'saída', 'ajuste', 'estoque', 'ver pedido', 'mesa N'. " +
+              "PRESERVE LITERALMENTE verbos de PEDIDO: 'lança', 'lançar', 'lance', 'joga', 'jogar', 'manda', 'mandar', 'marca', 'marcar', 'anota', 'anotar', 'pede', 'pedir', 'bota', 'botar', 'coloca', 'colocar'. " +
+              "NUNCA troque esses verbos por 'entrada' ou 'saída'. As palavras 'entrada' e 'saída' SÓ devem aparecer se o usuário falar literalmente 'entrada' ou 'saída'/'saida' (ex: 'entrada de 10 coca'). " +
+              "Em dúvida entre 'lança' e 'entrada', escolha SEMPRE 'lança'. " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
               "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
               "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
