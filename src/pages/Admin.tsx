@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3, Activity } from "lucide-react";
+import { ShoppingBag, Printer, Wrench, BarChart3 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
@@ -23,7 +23,6 @@ import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import AdminHeader from "@/components/admin/AdminHeader";
 import OrdersTab from "@/components/admin/OrdersTab";
 import SystemTab from "@/components/admin/SystemTab";
-import NetworkTab from "@/components/admin/NetworkTab";
 import { manualPrintOrder } from "@/lib/print-service";
 
 const Admin = () => {
@@ -44,7 +43,7 @@ const Admin = () => {
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
-    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network")) {
+    if (staffMode && (activeTab === "stats" || activeTab === "system")) {
       setActiveTab("products");
     }
   }, [staffMode, activeTab]);
@@ -180,7 +179,7 @@ const Admin = () => {
   }
 
   return (
-    <div className={`min-h-screen-safe flex flex-col bg-background ${staffMode ? "staff-mode" : ""}`}>
+    <div className={`min-h-screen-safe flex flex-col bg-slate-50/50 ${staffMode ? "staff-mode" : ""}`}>
       <AdminHeader
         staffMode={staffMode}
         onToggleStaffMode={() => setStaffMode((v) => !v)}
@@ -194,43 +193,37 @@ const Admin = () => {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <div className="bg-card border-b border-border px-2 sm:px-4 overflow-x-auto">
-          <TabsList className="bg-transparent h-12 gap-1 sm:gap-2 w-max p-0">
+        <div className="bg-white border-b border-border px-2 sm:px-4 overflow-x-auto">
+          <TabsList className="bg-transparent h-14 gap-3 sm:gap-6 w-max">
             <TabsTrigger
               value="products"
-              className="font-medium text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-3 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 whitespace-nowrap"
             >
               Cardápio
             </TabsTrigger>
             <TabsTrigger
               value="orders"
-              className="font-medium text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-3 flex gap-1.5 sm:gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
               <ShoppingBag className="w-4 h-4" /> <span className="hidden sm:inline">Editor de </span>Pedidos
             </TabsTrigger>
             <TabsTrigger
               value="print"
-              className="font-medium text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-3 flex gap-1.5 sm:gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
               <Printer className="w-4 h-4" /> Impressão
             </TabsTrigger>
             <TabsTrigger
               value="stats"
-              className="admin-only font-medium text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-3 flex gap-1.5 sm:gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
               <BarChart3 className="w-4 h-4" /> <span className="hidden sm:inline">Estatísticas</span><span className="sm:hidden">Stats</span>
             </TabsTrigger>
             <TabsTrigger
               value="system"
-              className="admin-only font-medium text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-3 flex gap-1.5 sm:gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
               <Wrench className="w-4 h-4" /> Sistema
-            </TabsTrigger>
-            <TabsTrigger
-              value="network"
-              className="admin-only font-medium text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-3 flex gap-1.5 sm:gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Activity className="w-4 h-4" /> Rede
             </TabsTrigger>
           </TabsList>
         </div>
@@ -254,34 +247,22 @@ const Admin = () => {
           />
         </TabsContent>
 
-        <TabsContent value="orders" className="flex-1 mt-0">
-          <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6">
-            <OrdersTab orders={activeOrders} onPrint={handlePrintOrder} onEdit={handleEditOrder} />
-          </div>
+        <TabsContent value="orders" className="flex-1 p-4 space-y-3 mt-0">
+          <OrdersTab orders={activeOrders} onPrint={handlePrintOrder} onEdit={handleEditOrder} />
         </TabsContent>
 
-        <TabsContent value="print" className="flex-1 mt-0">
-          <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6">
+        <TabsContent value="print" className="flex-1 p-4 mt-0 bg-white border-t">
+          <div className="max-w-2xl mx-auto py-4">
             <PrintConfigPanel />
           </div>
         </TabsContent>
 
-        <TabsContent value="stats" className="flex-1 mt-0 admin-only">
-          <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6">
-            <StatsPanel />
-          </div>
+        <TabsContent value="stats" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
+          <StatsPanel />
         </TabsContent>
 
-        <TabsContent value="system" className="flex-1 mt-0 admin-only">
-          <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6">
-            <SystemTab />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="network" className="flex-1 mt-0 admin-only">
-          <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6">
-            <NetworkTab />
-          </div>
+        <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
+          <SystemTab />
         </TabsContent>
       </Tabs>
     </div>

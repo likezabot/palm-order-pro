@@ -1,87 +1,68 @@
 
 
-# Plano: alinhar últimas inconsistências do Admin ao padrão "Rede"
+# Plano: alerta único de impressora offline + alerta de "voltou ao ar"
 
-## Diagnóstico
+## O que muda
 
-A maior parte do Admin já segue o padrão Premium da aba Rede (Card shadcn + ícone em círculo `bg-primary/10` + tokens semânticos + botões `h-10/11`). Faltam **3 ajustes pontuais** que ainda destoam:
+Hoje o sistema manda **1 alerta a cada 10 minutos** enquanto a ponte de impressão está offline. Você quer:
 
-### 1. `ProductsManager.tsx` (Cardápio) — principal ofensor
-- `<button>` cru com `font-bold uppercase`, pílulas custom em vez de `Button`/`ToggleGroup` shadcn.
-- Toolbar sticky sem header de seção (ícone em círculo + título + descrição).
-- Empty state com `border-2 border-dashed` (padrão antigo).
-- Tabs de categoria (Espetos / Bebidas …) como pílulas custom — destoam do resto do Admin.
-- Botões "A-Z / Grupos / Novo" usando classes manuais em vez de `Button variant="outline"` / `default`.
+1. **1 único alerta** quando a impressora cair (após 10 min offline contínuo, pra evitar piscadas de rede curtas).
+2. **Silêncio total** enquanto continuar offline — sem repetir.
+3. **1 alerta de "voltou ao ar"** quando a ponte reconectar e imprimir com sucesso.
 
-### 2. `OrdersTab.tsx` — refinamento mínimo
-- Ícone do header está em `p-2` (8px). Outros tabs usam `p-2.5` para um pouco mais de presença. Padronizar.
+## Como vai funcionar
 
-### 3. `StatsPanel.tsx` — header de seção ausente
-- Não tem o header padrão "ícone em círculo + título + descrição" no topo.
-- Adicionar um `SectionHeader` com `BarChart3` + "Estatísticas" + descrição curta antes dos KPIs.
+### Estado persistido em `settings`
 
-## Mudanças por arquivo
+Crio uma chave `printer_bridge_state` com o formato:
+```json
+{ "status": "online" | "offline", "since": "2026-04-23T11:30:00Z", "alerted": true|false }
+```
 
-### `src/components/admin/ProductsManager.tsx` (refactor visual)
+Isso permite a função saber **o estado anterior** e só agir nas transições.
 
-**Toolbar (sticky)**
-- Wrap dentro de um `Card` com `SectionHeader` (ícone `Package` em `bg-primary/10` + título "Cardápio" + descrição "Gerencie produtos, preços e visibilidade").
-- Trocar fundo `bg-background border-b` por `bg-card/50 backdrop-blur` mantendo sticky.
+### Lógica nova no `notify-telegram`
 
-**Filtros de status (Todos/Visíveis/Ocultos)**
-- Trocar `<div>` + `<button>` custom por componente `ToggleGroup` shadcn (`type="single"`).
-- Sem `font-bold` — usar `font-medium`.
+Substituo o bloco atual de "alerta a cada 10 min" por uma máquina de estados:
 
-**Tabs de categoria**
-- Trocar pílulas custom por `Button variant={active ? "default" : "outline"} size="sm"` em flex horizontal. Mantém scroll horizontal.
-- Contador como `Badge` ao lado do nome.
+```text
+Estado atual    | Sinal recebido           | Ação
+----------------|--------------------------|------------------------------------------
+online          | falha de ponte           | marca offline (since=agora, alerted=false)
+offline (<10m)  | falha de ponte           | nada (aguardando confirmar 10min)
+offline (≥10m)  | falha de ponte, !alerted | envia "🔌 Impressora offline há 10min"
+                |                          | marca alerted=true
+offline         | impressão bem-sucedida   | envia "✅ Impressora voltou ao ar"
+                |                          | marca online
+online          | impressão bem-sucedida   | nada
+```
 
-**Botões da toolbar da categoria (A-Z / Grupos / Novo / Selecionar / Limpar)**
-- Todos viram `Button` shadcn:
-  - Selecionar → `variant="outline"` (ou `"default"` quando ativo).
-  - A-Z → `variant="secondary" size="sm"`.
-  - Grupos → `variant="outline" size="sm"`.
-  - Novo → `variant="default" size="sm"` (já é a ação primária).
-  - Limpar → `variant="ghost" size="sm"`.
-- Altura uniforme `h-9`, ícones 16px, sem `font-bold uppercase`.
+### Detectando "voltou ao ar"
 
-**Empty state**
-- Trocar `border-2 border-dashed` por `Card` shadcn com:
-  - Ícone grande em círculo `bg-muted p-4`.
-  - Texto em `text-sm text-muted-foreground`.
-  - Mesmo padrão do empty state do `OrdersTab`.
+Adiciono um **novo trigger no banco** `queue_print_recovered` em `orders`: quando `print_status` muda de `pending`/`printing` para `printed` e o estado salvo é `offline`, enfileira evento `print_recovered`.
 
-**Header de busca (quando ativo)**
-- Trocar `text-xs font-black uppercase` por `text-sm font-semibold text-foreground` + contador como `Badge variant="secondary"`.
+A função `notify-telegram` processa esse evento, envia a mensagem de recuperação e marca o estado como `online`.
 
-### `src/components/admin/OrdersTab.tsx`
-- Trocar `<div className="rounded-full bg-primary/10 p-2">` por `p-2.5` (alinhar ao SystemTab/PrintConfig que usam `p-2`, na verdade já estão consistentes — manter `p-2`, só padronizar o **tamanho do ícone interno** para `w-5 h-5` se SectionHeader usar isso). Conferir e padronizar para `p-2 + w-4 h-4` em **todos** (já é o caso, mudança mínima de uma linha se necessário).
+### Mensagens
 
-### `src/components/admin/StatsPanel.tsx`
-- Adicionar no topo do componente (antes dos seletores de período) o mesmo `SectionHeader`:
-  ```tsx
-  <div className="flex items-start gap-3 mb-6">
-    <div className="rounded-full bg-primary/10 p-2 shrink-0">
-      <BarChart3 className="w-4 h-4 text-primary" />
-    </div>
-    <div>
-      <h2 className="text-base font-semibold tracking-tight text-foreground">Estatísticas</h2>
-      <p className="text-xs text-muted-foreground">Vendas, garçons e produtos no período</p>
-    </div>
-  </div>
-  ```
+- **Cai (após 10 min):** `🔌 Impressora offline há 10 minutos. Pedidos estão na fila e imprimem quando voltar.`
+- **Volta:** `✅ Impressora voltou ao ar! Pedidos pendentes serão impressos automaticamente.`
 
-## Princípios reforçados (DNA "Rede")
+## Arquivos afetados
 
-- Toda seção começa com **ícone em círculo `bg-primary/10` + título `text-base font-semibold` + descrição `text-xs text-muted-foreground`**.
-- Sem `font-black uppercase`, sem `<button>` cru — sempre `Button` shadcn.
-- Empty state sempre como `Card` com ícone em círculo `bg-muted`.
-- Tokens semânticos exclusivamente.
+**Edge Function** `supabase/functions/notify-telegram/index.ts`:
+- Remove o loop de "1 a cada 10 min".
+- Adiciona leitura/escrita de `printer_bridge_state` em `settings`.
+- Implementa máquina de estados (offline/online) com transições.
+- Processa novo evento `print_recovered`.
+
+**Migração SQL** (nova):
+- Trigger `queue_print_recovered` em `orders` que detecta transição `pending|printing → printed` e enfileira evento na `notification_queue`.
+- Insert inicial em `settings` com `printer_bridge_state = {"status":"online"}`.
 
 ## Resultado prático
 
-- A aba **Cardápio** deixa de ser a "estranha" do Admin — alinha com Pedidos/Impressão/Sistema/Rede.
-- **Estatísticas** ganha header consistente.
-- Toolbar de produtos com hierarquia clara: Card → SectionHeader → busca/filtros → tabs categoria → ações.
-- Visualmente, navegar entre abas vira uma experiência fluida sem quebra de estilo.
+- Internet do PC oscila por 2-3 min → **nenhum aviso** (não atinge os 10 min).
+- Impressora fica desligada de manhã inteira → **1 aviso** quando passa dos 10 min, depois silêncio.
+- Você liga a impressora de novo → **1 aviso** "voltou ao ar" assim que o primeiro pedido imprimir.
 
