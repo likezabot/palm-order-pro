@@ -14,6 +14,92 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 type InlineButton = { text: string; callback_data: string };
 
+// ─────────────── Voice (Telegram voice → Lovable AI transcribe) ───────────────
+// Baixa o arquivo de voz pelo Bot API e transcreve via Lovable AI Gateway
+// (Gemini suporta áudio nativo). Retorna o texto transcrito ou null em erro.
+async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    console.error("transcribeVoice: LOVABLE_API_KEY ausente");
+    return null;
+  }
+  try {
+    // 1) getFile
+    const gfRes = await fetch(`https://api.telegram.org/bot${TOKEN}/getFile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_id: fileId }),
+    });
+    const gfJson = await gfRes.json();
+    const filePath: string | undefined = gfJson?.result?.file_path;
+    if (!gfRes.ok || !filePath) {
+      console.error("transcribeVoice getFile falhou:", gfRes.status, gfJson);
+      return null;
+    }
+    // 2) download bytes
+    const dlRes = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${filePath}`);
+    if (!dlRes.ok) {
+      console.error("transcribeVoice download falhou:", dlRes.status);
+      return null;
+    }
+    const buf = new Uint8Array(await dlRes.arrayBuffer());
+    // 3) base64 (chunked p/ evitar stack overflow)
+    let bin = "";
+    const CHUNK = 0x8000;
+    for (let i = 0; i < buf.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + CHUNK)));
+    }
+    const b64 = btoa(bin);
+    // Telegram voice é OGG/Opus
+    const mime = "audio/ogg";
+
+    // 4) transcrição via Lovable AI (Gemini 2.5 Flash, áudio nativo)
+    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Você é um transcritor literal pt-BR de comandos de voz curtos para um sistema de PDV de bar/restaurante. " +
+              "Devolva APENAS o texto falado, em minúsculas, sem pontuação, sem comentários, sem aspas. " +
+              "Converta números por extenso para dígitos (ex: 'duas cocas' → '2 coca'; 'mesa cinco mais três cervejas' → 'mesa 5 + 3 cerveja'). " +
+              "Mantenha verbos de comando como 'mais', 'menos', 'entrada', 'saída', 'ajuste', 'estoque', 'ver pedido', 'mesa N'. " +
+              "Se não houver fala clara, devolva uma única palavra: vazio.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Transcreva este áudio:" },
+              { type: "input_audio", input_audio: { data: b64, format: "ogg" } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!aiRes.ok) {
+      const errTxt = await aiRes.text().catch(() => "");
+      console.error("transcribeVoice Lovable AI falhou:", aiRes.status, errTxt.slice(0, 300));
+      return null;
+    }
+    const aiJson = await aiRes.json();
+    const raw: string = aiJson?.choices?.[0]?.message?.content ?? "";
+    const txt = String(raw).trim().replace(/^["'`]+|["'`]+$/g, "").trim();
+    if (!txt || txt.toLowerCase() === "vazio") return null;
+    return txt;
+  } catch (e) {
+    console.error("transcribeVoice erro:", e);
+    return null;
+  }
+}
+
+// Dedupe (TTL 5min) para retries do Telegram.
+
 // Dedupe (TTL 5min) para retries do Telegram.
 const seenUpdates = new Map<number, number>();
 function isDuplicate(updateId: number): boolean {
