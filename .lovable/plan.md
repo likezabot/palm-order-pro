@@ -1,66 +1,60 @@
 
 
-# Reposicionar controles (−)/(+)/badge no popup de grupos
+# Manter estoque, remover só "trava de esgotado" + adicionar comando de voz "acabou X"
 
-## Problema
+## Decisão
 
-Hoje, quando `qty > 0`, o lado direito da linha vira uma sequência apertada: `R$ 6,00  (−) ③`. Três elementos com tamanhos e pesos diferentes brigando no mesmo eixo. Visualmente sujo e mobile-hostil — especialmente em alto contraste.
+Não removo mais nada do sistema de estoque. Mantenho:
+- Página `/estoque`, card no Home, comandos do bot (entrada/saída/ajuste/consulta), wizard, voz pra estoque, tabelas no banco.
 
-## Nova estrutura visual
+Removo só a **fricção visual/trava** de "esgotado" no PALM **e adiciono um atalho de voz natural** pra marcar item como esgotado.
 
-Trocar o aglomerado direito por um **stepper coeso e isolado**, alinhado à direita, com o preço passando a viver "encostado" no nome:
+## O que muda
 
-```
-┌──────────────────────────────────────────────────────┐
-│ Água sem gás                                          │
-│ R$ 6,00                              [ −   3   + ]   │
-└──────────────────────────────────────────────────────┘
-```
+### 1. PALM — sem trava de esgotado
 
-Quando `qty === 0`:
-```
-┌──────────────────────────────────────────────────────┐
-│ Água sem gás                                R$ 6,00  │
-└──────────────────────────────────────────────────────┘
-```
+- `MenuView.tsx`: tirar o `EsgotadoConfirmDialog` do fluxo. Adicionar segue direto, sem popup. **Mantém** a tarja visual "ESGOTADO" no card (badge/overlay) pra informar — só não bloqueia mais.
+- `GroupVariantDialog.tsx`: linhas esgotadas continuam mostrando a tarja, mas ficam **clicáveis** (sem `disabled`, sem bloquear o stepper).
+- `EsgotadoConfirmDialog.tsx`: **apagar** (não usado em mais lugar nenhum).
+- `useProductStockMap` + `useProductRecipes` + `isProductEsgotado`: **mantidos** — continuam alimentando a tarja visual.
 
-### Detalhes
+### 2. Bot Telegram — comando natural "acabou X"
 
-- **Lado esquerdo** vira coluna: nome em cima (`text-[15px]`), preço em baixo (`text-[12px] text-muted-foreground/60 tabular-nums`) — só quando `qty > 0`. Quando `qty === 0`, preço fica à direita como hoje (linha limpa).
-- **Lado direito** (apenas quando `qty > 0`): um **stepper pill** unificado:
-  - Container: `inline-flex items-center rounded-full border border-border/50 bg-muted/30 h-9 px-1`
-  - Botão (−): `h-7 w-7 rounded-full hover:bg-background flex items-center justify-center text-muted-foreground hover:text-foreground`
-  - Número: `min-w-[28px] text-center text-[14px] font-medium tabular-nums px-1` (sem círculo preto — agora vive dentro do stepper)
-  - Botão (+): mesmo estilo do (−), com ícone `Plus` size 14
-- A área de tap principal da linha (`<button>` envolvente) continua somando +1 ao tocar no nome/área vazia, **mas** com `qty > 0` o (+) explícito do stepper já cobre isso de forma mais clara. `e.stopPropagation()` em ambos os botões do stepper.
-- Animação: o número anima com `animate-badge-pop` na key change (já existe).
+Adicionar no parser de texto e voz uma intent nova `STOCK_OUT_NOW` que:
+- Detecta padrões: `acabou <item>`, `acabou o <item>`, `acabou a <item>`, `não tem mais <item>`, `terminou <item>`, `zerou <item>`, `sem <item>`.
+- Resolve o item via `find_inventory_item_by_text` (RPC já existente, faz match por slug/aliases sem acento).
+- Chama `apply_inventory_movement(item_id, 'adjustment', 0, 'Marcado como esgotado via bot', 'telegram')` — força `current_stock = 0`.
+- Responde: `✅ Marquei "<nome>" como esgotado (estoque = 0). PALM já mostra a tarja.`
+- Se não achar o item: `❓ Não achei "<termo>" no estoque. Tente "lista estoque" pra ver os nomes.`
 
-### Mudanças de código
+### 3. Confiança da voz (híbrido)
 
-**`src/components/palm/GroupVariantDialog.tsx`**:
-- Importar `Plus` além de `Minus`.
-- Reestruturar o JSX da linha conforme acima:
-  - Esquerda: `<div className="flex flex-col flex-1 min-w-0">` com nome + preço condicional.
-  - Direita: se `qty > 0`, renderizar o stepper; senão, renderizar só o preço como hoje.
-- Botão (+) chama `onPick(name, product)`, botão (−) chama `onPickDecrement(name, product)`, ambos com `stopPropagation`.
-- Esgotado: continua mostrando "indisponível" à direita, sem stepper.
+`STOCK_OUT_NOW` é **baixo risco** (zera 1 item, reversível com "entrada"), então **executa direto** via voz, sem botão de confirmar. Continua confirmando só `STOCK_MOVEMENT` (entrada/saída/ajuste com quantidade explícita).
 
-### O que NÃO muda
+### 4. System prompt da transcrição
 
-- `MenuView.tsx` — props já estão prontas (`onPick`, `onPickDecrement`).
-- Lógica de adição/remoção, esgotado-confirm, ordenação, header do popup, divisores.
-- Cards simples da grade, FAB, runtime, impressão, Telegram.
+Pequeno ajuste no prompt do `transcribeTelegramVoice` pra preservar verbos no passado ("acabou", "terminou", "zerou") em vez de normalizar pra infinitivo.
 
-### Validação
+## Arquivos editados
 
-1. `qty === 0`: nome à esquerda, preço à direita (uma linha só, limpa).
-2. Primeiro tap (na área da linha): aparece o stepper `[− 1 +]` à direita; preço migra para baixo do nome.
-3. Tocar (+) no stepper: vira `[− 2 +]`, número anima.
-4. Tocar (−): decrementa; em 0, stepper some e preço volta para a direita.
-5. Esgotado: linha esmaecida, "indisponível", sem stepper.
-6. Popup permanece aberto em todas as interações.
+- `src/components/palm/MenuView.tsx` — remove dialog/state de esgotadoPending, adiciona direto.
+- `src/components/palm/GroupVariantDialog.tsx` — destrava linha esgotada.
+- `src/components/palm/EsgotadoConfirmDialog.tsx` — **deletar**.
+- `supabase/functions/telegram-webhook/index.ts` — nova intent `STOCK_OUT_NOW`, parser regex, handler, ajuste no prompt da voz.
+- `.lovable/memory/features/telegram-bot.md` — documentar comando "acabou X".
 
-## Resultado
+## O que NÃO muda
 
-Controles agrupados num único pill arredondado, com hierarquia clara: nome domina, preço sussurra, stepper isolado e tactile. Acaba o aglomerado `R$ X (−) ③` e dá ar de app premium.
+- Tarja visual ESGOTADO nos cards/linhas (continua aparecendo, baseada no stockMap + recipes).
+- Página /estoque, hooks de inventory, todos os outros comandos do bot, tabelas, RPCs, triggers.
+- Lógica de pedidos.
+
+## Validação
+
+1. PALM: produto com estoque 0 mostra tarja vermelha "ESGOTADO", mas tap adiciona ao carrinho normalmente (sem popup).
+2. Bot texto: enviar `acabou medalhão` → responde `✅ Marquei "Medalhão" como esgotado`. Estoque vai pra 0.
+3. Bot voz: falar "acabou o medalhão" → mesma resposta direta, sem botão de confirmar.
+4. Bot: enviar `acabou xpto inexistente` → resposta de "não achei".
+5. PALM atualiza tarja em segundos (via realtime do stockMap query).
+6. `entrada 5 medalhão` continua funcionando e tira da condição esgotada.
 
