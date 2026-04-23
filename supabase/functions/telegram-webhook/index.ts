@@ -143,6 +143,7 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
     const aiJson = await aiRes.json();
     const raw: string = aiJson?.choices?.[0]?.message?.content ?? "";
     const txt = String(raw).trim().replace(/^["'`]+|["'`]+$/g, "").trim();
+    console.log(`[transcribeVoice] result: "${txt}" (raw len=${raw.length})`);
     if (!txt || txt.toLowerCase() === "vazio") return null;
     return txt;
   } catch (e) {
