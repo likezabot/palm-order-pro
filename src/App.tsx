@@ -14,7 +14,7 @@ import AdminErrorBoundary from "@/components/admin/AdminErrorBoundary";
 import Index from "./pages/Index";
 import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
-import Admin from "./pages/Admin";
+
 
 // Retry helper: tenta o import dinâmico até 2x antes de propagar o erro
 // (cobre falhas transitórias de rede / chunk velho após deploy).
@@ -42,6 +42,7 @@ const ForceUpdate = lazy(() => import("./pages/ForceUpdate"));
 const InstallPalm = lazy(() => import("./pages/InstallPalm"));
 const InstallKitchen = lazy(() => import("./pages/InstallKitchen"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">
