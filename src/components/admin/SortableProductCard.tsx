@@ -107,6 +107,11 @@ const SortableProductCard = ({
         <span className="mt-1 block text-sm text-primary font-bold">
           R$ {product.price.toFixed(2)}
         </span>
+        {Array.isArray(product.aliases) && product.aliases.length > 0 && (
+          <span className="mt-1 block text-[11px] text-muted-foreground">
+            🏷️ {product.aliases.length} {product.aliases.length === 1 ? "apelido" : "apelidos"}
+          </span>
+        )}
       </div>
 
       <button
