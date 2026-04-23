@@ -1,62 +1,29 @@
 /**
- * Cache do PIN de gerente em sessionStorage (limpa ao fechar aba).
- * Usado por todas as operações administrativas que chamam RPCs SECURITY DEFINER.
+ * PIN de gerente DESABILITADO.
+ * As funções continuam exportadas para compatibilidade com o código existente,
+ * mas nunca pedem PIN ao usuário e enviam string vazia para o servidor
+ * (as RPCs no banco aceitam qualquer valor agora).
  */
-const KEY = "manager_pin";
 
 export function getManagerPin(): string | null {
-  try {
-    return sessionStorage.getItem(KEY);
-  } catch {
-    return null;
-  }
+  return "";
 }
 
-export function setManagerPin(pin: string) {
-  try {
-    sessionStorage.setItem(KEY, pin);
-  } catch { /* noop */ }
+export function setManagerPin(_pin: string) {
+  /* noop */
 }
 
 export function clearManagerPin() {
-  try {
-    sessionStorage.removeItem(KEY);
-  } catch { /* noop */ }
+  /* noop */
 }
 
-/**
- * Solicita o PIN ao gerente (prompt nativo). Retorna null se cancelar.
- * Cacheia em sessionStorage para o resto da sessão.
- */
-export async function requireManagerPin(reason = "Operação administrativa"): Promise<string | null> {
-  const cached = getManagerPin();
-  if (cached) return cached;
-  const pin = window.prompt(`${reason}\n\nDigite o PIN de gerente:`);
-  if (!pin) return null;
-  setManagerPin(pin.trim());
-  return pin.trim();
+export async function requireManagerPin(_reason = "Operação administrativa"): Promise<string | null> {
+  return "";
 }
 
-/**
- * Wrapper para RPC que precisa de PIN. Se o PIN estiver errado, limpa o cache
- * e tenta novamente uma vez.
- */
 export async function withPin<T>(
   fn: (pin: string) => Promise<T>,
-  reason?: string,
+  _reason?: string,
 ): Promise<T | null> {
-  const pin = await requireManagerPin(reason);
-  if (!pin) return null;
-  try {
-    return await fn(pin);
-  } catch (err: any) {
-    const msg = String(err?.message || err || "");
-    if (msg.includes("invalid_pin") || msg.includes("pin") || msg.includes("PIN")) {
-      clearManagerPin();
-      const retry = await requireManagerPin(`${reason ?? ""} — PIN incorreto, tente novamente`);
-      if (!retry) return null;
-      return await fn(retry);
-    }
-    throw err;
-  }
+  return await fn("");
 }
