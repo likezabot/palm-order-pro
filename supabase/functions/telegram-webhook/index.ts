@@ -1748,6 +1748,30 @@ async function sendTelegram(chatId: number, text: string, keyboard?: InlineButto
   }
 }
 
+// Variante que retorna message_id — útil pra editar a mensagem depois (ex: "Ouvindo…" → "Entendi…").
+async function sendTelegramReturningId(chatId: number, text: string): Promise<number | null> {
+  if (isTestChat(chatId)) {
+    testCaptureBuffer.push({ chatId, text, kind: "send" });
+    return null;
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    if (!res.ok) {
+      console.error("sendMessage falhou:", res.status, await res.text());
+      return null;
+    }
+    const j = await res.json().catch(() => null);
+    return j?.result?.message_id ?? null;
+  } catch (e) {
+    console.error("sendTelegramReturningId erro:", e);
+    return null;
+  }
+}
+
 async function answerCallback(callbackId: string, text?: string) {
   if (currentChatIsTest) {
     testCaptureBuffer.push({ chatId: TEST_CHAT_ID ?? 0, text: text ?? "", kind: "answer" });
