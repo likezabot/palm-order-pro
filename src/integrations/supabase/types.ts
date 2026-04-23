@@ -465,6 +465,27 @@ export type Database = {
         }
         Relationships: []
       }
+      pin_attempt_log: {
+        Row: {
+          attempted_at: string
+          client_fingerprint: string
+          id: number
+          success: boolean
+        }
+        Insert: {
+          attempted_at?: string
+          client_fingerprint: string
+          id?: number
+          success: boolean
+        }
+        Update: {
+          attempted_at?: string
+          client_fingerprint?: string
+          id?: number
+          success?: boolean
+        }
+        Relationships: []
+      }
       product_recipes: {
         Row: {
           created_at: string
@@ -527,21 +548,21 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
-          pin: string | null
+          pin_hash: string | null
           role: string
         }
         Insert: {
           created_at?: string | null
           id?: string
           name: string
-          pin?: string | null
+          pin_hash?: string | null
           role: string
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
-          pin?: string | null
+          pin_hash?: string | null
           role?: string
         }
         Relationships: []
@@ -632,6 +653,7 @@ export type Database = {
       telegram_undo_stack: {
         Row: {
           chat_id: number
+          consumed_at: string | null
           created_at: string
           ops: Json
           table_name: string
@@ -639,6 +661,7 @@ export type Database = {
         }
         Insert: {
           chat_id: number
+          consumed_at?: string | null
           created_at?: string
           ops: Json
           table_name: string
@@ -646,6 +669,7 @@ export type Database = {
         }
         Update: {
           chat_id?: number
+          consumed_at?: string | null
           created_at?: string
           ops?: Json
           table_name?: string
@@ -679,6 +703,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _require_manager_pin: { Args: { p_pin: string }; Returns: undefined }
+      admin_delete_product: {
+        Args: { p_id: string; p_pin: string }
+        Returns: undefined
+      }
+      admin_set_setting: {
+        Args: { p_key: string; p_pin: string; p_value: string }
+        Returns: undefined
+      }
+      admin_upsert_product: {
+        Args: {
+          p_active?: boolean
+          p_aliases?: string[]
+          p_category: string
+          p_id: string
+          p_name: string
+          p_pin: string
+          p_price: number
+          p_unit?: string
+        }
+        Returns: string
+      }
       apply_inventory_movement: {
         Args: {
           p_item_id: string
@@ -692,8 +738,30 @@ export type Database = {
       archive_and_purge_old_data:
         | { Args: { p_days_keep?: number }; Returns: Json }
         | { Args: { p_days_keep?: number; p_source?: string }; Returns: Json }
+      cash_close: {
+        Args: { p_final_amount: number; p_pin: string; p_register_id: string }
+        Returns: undefined
+      }
+      cash_movement_add: {
+        Args: {
+          p_amount: number
+          p_pin: string
+          p_reason?: string
+          p_register_id: string
+          p_type: string
+        }
+        Returns: string
+      }
+      cash_open: {
+        Args: { p_initial_amount: number; p_pin: string }
+        Returns: string
+      }
       claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
       complete_order_print: { Args: { p_order_id: string }; Returns: undefined }
+      consume_undo_token: {
+        Args: { p_chat_id: number; p_token: string }
+        Returns: Json
+      }
       create_order: {
         Args: {
           p_items: Json
@@ -769,6 +837,10 @@ export type Database = {
       update_order_status: {
         Args: { p_order_id: string; p_status: string }
         Returns: undefined
+      }
+      verify_manager_pin: {
+        Args: { p_fingerprint?: string; p_pin: string }
+        Returns: boolean
       }
     }
     Enums: {
