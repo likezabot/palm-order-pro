@@ -1,72 +1,48 @@
 
 
-# Plano: aba "Rede" no Admin com status de conectividade
+# Plano: eliminar erro de lazy load do Admin no preview Lovable
 
-## O que vai aparecer
+## Problema confirmado
 
-Uma nova aba **"Rede"** no Admin (após "Sistema"), que mostra em tempo real **3 cards de status**:
+- O `npx vite build` (produção) **passa sem erros** — o código do Admin está íntegro.
+- No preview Lovable, o Vite dev-server invalida módulos com `?t=<timestamp>` a cada HMR. O `lazy(() => import("./pages/Admin"))` tenta buscar uma URL com timestamp **antigo** que já não existe mais → `TypeError: Failed to fetch dynamically imported module`.
+- O `AdminErrorBoundary` + `lazyWithRetry` já tentam recuperar, mas o retry usa o **mesmo factory cacheado** do `lazy()`, que continua apontando para o timestamp invalidado → loop até desistir → tela de erro.
 
-### 1. Impressora (ponte local)
-- Status: 🟢 Online / 🔴 Offline
-- Latência (ms) do `GET http://localhost:9100/health`
-- Impressora USB detectada: sim/não + quantidade
-- Última verificação (timestamp)
+## Solução cirúrgica (1 arquivo, ~3 linhas)
 
-### 2. Servidor (Lovable Cloud)
-- Status: 🟢 Online / 🔴 Offline / 🟡 Degradado
-- Latência (ms) do ping `GET /rest/v1/settings?limit=1`
-- Status do Realtime: SUBSCRIBED / TIMED_OUT / CLOSED
-- Tempo desde o último heartbeat do Realtime
+**Trocar o lazy load do Admin por import estático em `src/App.tsx`.**
 
-### 3. Internet (do PC/tablet)
-- Status: 🟢 Online / 🔴 Offline
-- Latência (ms) do ping externo `https://www.google.com/generate_204`
-- `navigator.onLine` (sinal nativo do navegador)
-- Tipo de conexão (4G/Wi-Fi/etc) via `navigator.connection.effectiveType`
+Justificativa:
+- Admin é a rota onde o erro acontece de forma reproduzível.
+- Import estático elimina 100% do problema de chunk fantasma (não há fetch dinâmico, o módulo entra no bundle inicial).
+- Custo: o bundle inicial cresce ~206 kB (tamanho do chunk Admin atual). Aceitável — é uma rota de admin usada com frequência e o ganho de estabilidade compensa.
+- Mantém `AdminErrorBoundary` no lugar (continua útil para erros de runtime dentro do Admin).
+- Mantém lazy load nas outras rotas (Pdv, PrintStation, Stock, ForceUpdate, InstallPalm, InstallKitchen, NotFound) — elas não apresentam o problema.
 
-## Como vai funcionar
+## Mudança exata em `src/App.tsx`
 
-- **Auto-refresh a cada 5 segundos** enquanto a aba estiver aberta (pausa quando troca de aba para não gastar bateria/dados).
-- Cada card mostra um **gráfico mini** das últimas 20 medições de latência (sparkline simples em SVG), pra você ver se a rede está estável ou oscilando.
-- Botão **"Testar agora"** em cada card pra forçar uma medição imediata.
-- Cores semânticas:
-  - 🟢 verde: latência < 200ms
-  - 🟡 amarelo: 200-800ms
-  - 🔴 vermelho: > 800ms ou offline
-
-## Arquivos a criar/editar
-
-**Novo**: `src/components/admin/NetworkTab.tsx`
-- Componente principal com 3 cards.
-- Hook interno `useNetworkPings` que mede latência das 3 fontes a cada 5s.
-- Histórico em memória (array de últimas 20 medições por fonte).
-- Sparkline SVG inline pra cada card.
-
-**Editar**: `src/pages/Admin.tsx`
-- Adicionar aba "Rede" no `TabsList` (ícone `Activity` do lucide-react).
-- Adicionar `<TabsContent value="network">` chamando `<NetworkTab />`.
-- Aba marcada como `admin-only` (oculta em modo Garçom).
-
-## Detalhes técnicos
-
-**Medição de latência** (3 endpoints independentes):
+**Remover:**
 ```ts
-// Ponte local
-const t0 = performance.now();
-await fetch('http://localhost:9100/health', { signal: AbortSignal.timeout(3000) });
-const latency = performance.now() - t0;
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
 ```
 
-**Realtime status**: lê do `connectivity-store` já existente (`src/lib/connectivity-store.ts`) via `useConnectivity()` (hook já presente em `src/hooks/use-connectivity.ts`).
+**Adicionar no topo, junto aos outros imports diretos:**
+```ts
+import Admin from "./pages/Admin";
+```
 
-**Sparkline**: SVG `<polyline>` com `points` calculado a partir do array de medições, normalizado para o `<svg viewBox="0 0 100 30">`. Sem libs externas.
+Resto do arquivo intacto (Suspense, AdminErrorBoundary, rota `/admin`, demais lazy imports).
 
-**Pausar quando aba escondida**: usa `document.visibilityState` no `useEffect` do hook.
+## Arquivos NÃO tocados
+
+- `src/pages/Admin.tsx`
+- `src/components/admin/AdminErrorBoundary.tsx`
+- `src/components/admin/NetworkTab.tsx`
+- Qualquer coisa de impressão, PDV, Palm, Kitchen, bridge, Telegram, Supabase.
 
 ## Resultado prático
 
-- Você abre Admin → aba "Rede".
-- Vê na hora se a impressora caiu, se a internet do PC tá lenta, ou se o servidor tá demorando.
-- O sparkline mostra picos de latência ao longo do tempo (ex.: internet caiu por 30s e voltou).
-- Sem precisar abrir DevTools nem pingar manualmente.
+- Preview Lovable: Admin abre instantaneamente, sem erro de chunk dinâmico, mesmo após edições/HMR.
+- Produção: continua funcionando (era o que já funcionava).
+- Bundle inicial fica ~206 kB maior — sem impacto perceptível em conexões normais.
 
