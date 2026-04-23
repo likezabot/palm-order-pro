@@ -1,88 +1,117 @@
 
-# Plano: consertar o bot do Telegram com validação + auto-correção antes de te devolver
 
-## Problema confirmado
+# Plano: Botão "Resetar Dia de Testes" no Admin
 
-O áudio nem entra no fluxo de voz do bot:
-- os requests mais recentes para `telegram-webhook` continuam voltando **401**
-- não existem logs `[voice ...]`, então o código de “🎤 Ouvindo…” nem está sendo alcançado
-- o `telegram-webhook` hoje exige o header `X-Telegram-Bot-Api-Secret-Token` bater com `WEBHOOK_SECRET`
+## Objetivo
 
-Conclusão: o problema real agora não é Palm/Admin/preview. O webhook do Telegram está registrado **sem o secret atual** ou com **secret diferente** do que a função espera. Por isso o update é barrado antes de processar texto/voz.
+Adicionar um botão no Admin → System que apaga **todos os dados operacionais do dia** (pedidos, itens, caixa, movimentos de estoque, estado do Telegram), deixando só o cadastro (produtos, inventário, settings, recipes, bindings) intacto. Para usar quando o dia foi só testes.
 
-## O que vou implementar
+## Onde fica
 
-### 1. Diagnóstico programático do webhook
-Adicionar no backend do bot um bloco de diagnóstico que consulte o Telegram com `getWebhookInfo` e compare:
-- URL atual registrada
-- se existe erro pendente no Telegram
-- se o endpoint esperado é o `telegram-webhook` atual
-- se o projeto tem `WEBHOOK_SECRET` configurado
+Aba **Sistema** (`SystemTab.tsx`), em um card novo no topo, em vermelho, separado dos outros (arquivar / forçar update). Título: **"Limpar dados de teste"**.
 
-Resultado: consigo saber exatamente se o problema é:
-- URL errada
-- secret ausente
-- secret divergente
-- webhook quebrado no Telegram
+Comportamento do botão:
+1. Confirmação dupla (digitar `APAGAR` no prompt).
+2. Mostra preview do que vai ser apagado (contagem por tabela).
+3. Após confirmar, chama uma RPC `reset_operational_data()` e mostra resumo.
 
-### 2. Auto-correção do webhook
-Adicionar uma rotina de reparo que faça `setWebhook` com:
-- a URL correta do `telegram-webhook`
-- o `secret_token` igual ao `WEBHOOK_SECRET` atual
+## O que será apagado
 
-Isso corrige o cenário em que o bot foi redeployado, mas o Telegram ficou apontando para configuração antiga.
+| Tabela | Ação |
+|---|---|
+| `order_items` | DELETE all |
+| `orders` | DELETE all |
+| `cash_movements` | DELETE all |
+| `cash_register` | DELETE all (fecha tudo, abertos e fechados) |
+| `inventory_movements` | DELETE all |
+| `stock_movements` | DELETE all |
+| `notification_queue` | DELETE all |
+| `notification_log` | DELETE all |
+| `telegram_chat_state` | DELETE all |
+| `telegram_undo_stack` | DELETE all |
+| `data_retention_log` | DELETE all |
+| `pin_attempt_log` | DELETE all |
+| `inventory_items.current_stock` | RESET para 0 |
 
-### 3. Método fechado de validação e reteste
-Vou criar um fluxo obrigatório de validação, para não te entregar “talvez funcionando”:
+## O que NÃO será apagado
 
-```text
-validar estado atual
-→ se inválido: reparar webhook
-→ validar novamente
-→ rodar smoke test interno
-→ validar logs HTTP
-→ só então considerar corrigido
+- `products` (cardápio)
+- `inventory_items` (só zera o estoque, mantém o cadastro)
+- `product_recipes`
+- `settings`
+- `profiles`
+- `telegram_user_bindings` (vínculos garçom↔Telegram)
+
+## Implementação técnica
+
+### 1. Migration: nova função RPC
+
+```sql
+CREATE OR REPLACE FUNCTION public.reset_operational_data()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_result jsonb := '{}'::jsonb;
+  v_count int;
+BEGIN
+  DELETE FROM order_items; GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_result := v_result || jsonb_build_object('order_items', v_count);
+
+  DELETE FROM orders; GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_result := v_result || jsonb_build_object('orders', v_count);
+
+  DELETE FROM cash_movements; GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_result := v_result || jsonb_build_object('cash_movements', v_count);
+
+  DELETE FROM cash_register; GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_result := v_result || jsonb_build_object('cash_register', v_count);
+
+  DELETE FROM inventory_movements; GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_result := v_result || jsonb_build_object('inventory_movements', v_count);
+
+  DELETE FROM stock_movements; GET DIAGNOSTICS v_count = ROW_COUNT;
+  v_result := v_result || jsonb_build_object('stock_movements', v_count);
+
+  DELETE FROM notification_queue;
+  DELETE FROM notification_log;
+  DELETE FROM telegram_chat_state;
+  DELETE FROM telegram_undo_stack;
+  DELETE FROM data_retention_log;
+  DELETE FROM pin_attempt_log;
+
+  UPDATE inventory_items SET current_stock = 0, updated_at = now();
+
+  RETURN v_result || jsonb_build_object('reset_at', now());
+END;
+$$;
 ```
 
-Se qualquer etapa falhar:
-- o processo volta para a etapa de reparo
-- refaço o teste
-- não considero concluído até passar
+E uma função auxiliar `preview_operational_data()` que só faz `SELECT count(*)` de cada tabela (sem apagar) para alimentar o preview.
 
-### 4. Smoke test interno no próprio bot
-Aproveitar o `TEST_MODE` que já existe no `telegram-webhook` para criar/verificar testes de fumaça controlados:
-- texto simples
-- comando com mesa
-- fluxo de voz simulado
-- captura da resposta do bot sem imprimir e sem depender do app
+### 2. UI: novo card em `SystemTab.tsx`
 
-Objetivo: provar no backend que o handler responde corretamente antes do teste real no Telegram.
+- Card vermelho (`border-destructive`), ícone `Trash2`.
+- Botão chama `preview_operational_data()` → mostra modal com contagens.
+- Modal pede para digitar `APAGAR`.
+- Ao confirmar, chama `reset_operational_data()` → toast com resumo.
+- Invalida caches do React Query (`orders`, `cash_register`, `inventory`).
 
-### 5. Critério de aceite real
-Só vou considerar resolvido quando os 3 sinais baterem juntos:
-1. requests do `telegram-webhook` pararem de retornar **401**
-2. logs passarem a mostrar entrada real no fluxo de voz (`[voice ...] received`)
-3. um áudio/comando real voltar com resposta do bot (`🎤 Ouvindo…`, confirmação ou execução)
+### 3. Arquivos tocados
 
-## Arquivos que entram no ajuste
-
-- `supabase/functions/telegram-webhook/index.ts`
-- `supabase/functions/telegram-webhook/security_test.ts`
-- possivelmente um teste novo para saúde/reparo do webhook no diretório `supabase/functions/telegram-webhook/`
+- `supabase/migrations/<timestamp>_reset_operational_data.sql` (novo)
+- `src/components/admin/SystemTab.tsx` (adiciona card)
 
 ## O que NÃO vou mexer
 
-- frontend React
-- Admin / Palm / Kitchen / PDV
-- animações
-- impressão
-- bridge local
-- telas do app
+- Telegram webhook
+- Frontend Palm/Kitchen/PDV/Cashier
+- Cardápio, recipes, settings
+- Bridge de impressão
 
 ## Resultado esperado
 
-Depois da correção:
-- o Telegram volta a entregar updates ao bot
-- áudio volta a mostrar resposta imediata
-- o sistema passa a ter um processo repetível de **validar → corrigir → validar de novo**
-- se a correção não passar no teste, eu volto e refaço antes de te devolver
+Um botão único no Admin que devolve o sistema ao estado "zero operacional" em <2s, mantendo todo o cadastro. Seguro contra clique acidental (confirmação dupla + texto "APAGAR").
+
