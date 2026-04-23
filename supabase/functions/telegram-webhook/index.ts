@@ -4356,8 +4356,9 @@ export async function webhookHandler(req: Request): Promise<Response> {
     // ── ADMIN: diagnóstico + auto-reparo do webhook ──
     // Protegido pelo mesmo WEBHOOK_SECRET. Não depende de TEST_MODE.
     // Uso:
-    //   GET ?admin=info        → getWebhookInfo
+    //   GET ?admin=info        → getWebhookInfo cru
     //   GET ?admin=fix-webhook → setWebhook (re-registra URL atual + secret atual)
+    //   GET ?admin=health      → diagnóstico estruturado: compara estado x esperado
     const adminOp = url.searchParams.get("admin");
     if (adminOp) {
       const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
