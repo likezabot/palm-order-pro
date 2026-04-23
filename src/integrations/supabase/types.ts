@@ -704,13 +704,53 @@ export type Database = {
     }
     Functions: {
       _require_manager_pin: { Args: { p_pin: string }; Returns: undefined }
+      admin_bulk_import_inventory: {
+        Args: { p_items: Json; p_pin: string }
+        Returns: number
+      }
+      admin_bulk_set_active: {
+        Args: { p_active: boolean; p_ids: string[]; p_pin: string }
+        Returns: number
+      }
+      admin_bulk_set_price: {
+        Args: { p_pin: string; p_updates: Json }
+        Returns: number
+      }
       admin_delete_product: {
         Args: { p_id: string; p_pin: string }
         Returns: undefined
       }
+      admin_delete_recipe: {
+        Args: { p_id: string; p_pin: string }
+        Returns: undefined
+      }
+      admin_set_recipe: {
+        Args: {
+          p_ingredient_product_id: string
+          p_pin: string
+          p_product_id: string
+        }
+        Returns: string
+      }
       admin_set_setting: {
         Args: { p_key: string; p_pin: string; p_value: string }
         Returns: undefined
+      }
+      admin_upsert_inventory_item: {
+        Args: {
+          p_aliases?: string[]
+          p_category: string
+          p_current_stock?: number
+          p_id: string
+          p_is_active?: boolean
+          p_min_stock?: number
+          p_name: string
+          p_pin: string
+          p_product_id?: string
+          p_slug: string
+          p_unit: string
+        }
+        Returns: string
       }
       admin_upsert_product: {
         Args: {
@@ -822,6 +862,10 @@ export type Database = {
         Returns: undefined
       }
       requeue_stuck_print_jobs: { Args: { p_seconds?: number }; Returns: Json }
+      toggle_product_active: {
+        Args: { p_active: boolean; p_id: string }
+        Returns: undefined
+      }
       update_order_items: {
         Args: {
           p_delta_items?: Json

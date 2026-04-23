@@ -101,17 +101,23 @@ const Admin = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este produto?")) return;
     playFeedback("heavy");
-    await supabase.from("products").delete().eq("id", id);
+    const { withPin } = await import("@/lib/manager-pin");
+    const ok = await withPin(async (pin) => {
+      const { error } = await supabase.rpc("admin_delete_product", { p_pin: pin, p_id: id });
+      if (error) throw error;
+      return true;
+    }, "Excluir produto");
+    if (!ok) return;
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
     toast({ title: "Produto excluído" });
   };
 
   const handleToggleActive = async (id: string, current: boolean) => {
     playFeedback("click");
-    const { error } = await supabase
-      .from("products")
-      .update({ active: !current })
-      .eq("id", id);
+    const { error } = await supabase.rpc("toggle_product_active", {
+      p_id: id,
+      p_active: !current,
+    });
 
     if (error) {
       playFeedback("error");

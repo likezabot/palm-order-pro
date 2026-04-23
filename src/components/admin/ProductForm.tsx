@@ -115,11 +115,21 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         aliases: cleanAliases,
       };
 
-      if (product) {
-        await supabase.from("products").update(data).eq("id", product.id);
-      } else {
-        await supabase.from("products").insert(data);
-      }
+      const { withPin } = await import("@/lib/manager-pin");
+      const result = await withPin(async (pin) => {
+        const { error } = await supabase.rpc("admin_upsert_product", {
+          p_pin: pin,
+          p_id: product?.id ?? null,
+          p_name: data.name,
+          p_price: data.price,
+          p_category: data.category,
+          p_active: data.active,
+          p_aliases: data.aliases,
+          p_unit: "unidade",
+        });
+        if (error) throw error;
+      }, product ? "Editar produto" : "Criar produto");
+      if (result === null) { setSaving(false); return; }
 
       // Group handling
       if (groupId === "__new__" && newGroupName.trim()) {

@@ -120,9 +120,18 @@ const ProductsManager = ({
     const ids = [...selectedIds];
     if (ids.length === 0) return;
     playFeedback("click");
-    const { error } = await supabase.from("products").update({ active }).in("id", ids);
-    if (error) {
-      toast({ variant: "destructive", title: "Erro ao atualizar", description: error.message });
+    const { withPin } = await import("@/lib/manager-pin");
+    const ok = await withPin(async (pin) => {
+      const { error } = await supabase.rpc("admin_bulk_set_active", {
+        p_pin: pin,
+        p_ids: ids,
+        p_active: active,
+      });
+      if (error) throw error;
+      return true;
+    }, active ? "Ativar produtos em lote" : "Ocultar produtos em lote");
+    if (!ok) {
+      toast({ variant: "destructive", title: "Erro ao atualizar" });
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
@@ -135,35 +144,35 @@ const ProductsManager = ({
     if (ids.length === 0) return;
     playFeedback("click");
 
+    let updates: Array<{ id: string; price: number }>;
     if (mode === "fixed") {
-      const { error } = await supabase
-        .from("products")
-        .update({ price: Number(value.toFixed(2)) })
-        .in("id", ids);
-      if (error) {
-        toast({ variant: "destructive", title: "Erro", description: error.message });
-        return;
-      }
+      updates = ids.map((id) => ({ id, price: Number(value.toFixed(2)) }));
     } else {
-      // % adjustment — fetch current prices and update one by one
       const all = Object.values(productsByCategory).flat();
       const factor = 1 + value / 100;
-      const updates = ids
+      updates = ids
         .map((id) => all.find((p) => p.id === id))
         .filter((p): p is Product => !!p)
         .map((p) => ({
           id: p.id,
-          newPrice: Math.max(0, Number((p.price * factor).toFixed(2))),
+          price: Math.max(0, Number((p.price * factor).toFixed(2))),
         }));
-
-      for (const u of updates) {
-        const { error } = await supabase.from("products").update({ price: u.newPrice }).eq("id", u.id);
-        if (error) {
-          toast({ variant: "destructive", title: "Erro", description: error.message });
-          return;
-        }
-      }
     }
+
+    const { withPin } = await import("@/lib/manager-pin");
+    const ok = await withPin(async (pin) => {
+      const { error } = await supabase.rpc("admin_bulk_set_price", {
+        p_pin: pin,
+        p_updates: updates,
+      });
+      if (error) throw error;
+      return true;
+    }, "Ajustar preços em lote");
+    if (!ok) {
+      toast({ variant: "destructive", title: "Erro" });
+      return;
+    }
+
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
     toast({ title: `Preços atualizados em ${ids.length} itens` });
     exitSelection();
