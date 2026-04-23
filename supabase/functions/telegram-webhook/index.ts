@@ -1928,6 +1928,150 @@ async function executeStockQuery(item: StockItem): Promise<string> {
   return `${icon} *${item.name}*: ${fmtStockQty(cur, item.unit)}${minLine}`;
 }
 
+// ─────────────────────────── visibilidade de produtos ───────────────────────────
+
+type ProductRow = { id: string; name: string; category: string; active: boolean };
+
+function fuzzyFindProducts(query: string, all: ProductRow[]): ProductRow[] {
+  const q = singularize(normalize(query));
+  if (!q) return [];
+  const tokens = q.split(/\s+/).filter(Boolean);
+  type Scored = { p: ProductRow; score: number };
+  const scored: Scored[] = [];
+  for (const p of all) {
+    const n = singularize(normalize(p.name));
+    if (!n) continue;
+    let score = -1;
+    if (n === q) score = 100;
+    else if (n.startsWith(q)) score = 80;
+    else if (n.includes(q)) score = 60;
+    else {
+      const allMatch = tokens.every((t) => n.includes(t));
+      if (allMatch) score = 40;
+      else {
+        const nt = n.split(/\s+/);
+        const close = tokens.every((t) =>
+          nt.some((w) => Math.abs(w.length - t.length) <= 3 && levenshtein(w, t) <= Math.max(1, Math.floor(t.length / 4)))
+        );
+        if (close) score = 20;
+      }
+    }
+    if (score >= 0) scored.push({ p, score });
+  }
+  scored.sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name));
+  const seen = new Set<string>();
+  const out: ProductRow[] = [];
+  for (const s of scored) {
+    if (seen.has(s.p.id)) continue;
+    seen.add(s.p.id);
+    out.push(s.p);
+    if (out.length >= 9) break;
+  }
+  return out;
+}
+
+async function fetchAllProducts(): Promise<ProductRow[]> {
+  const { data, error } = await sb.from("products").select("id, name, category, active");
+  if (error) {
+    console.error("[telegram-product] fetch error:", error.message);
+    return [];
+  }
+  return (data ?? []) as ProductRow[];
+}
+
+const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
+  refeicoes: "Refeições",
+  espetos: "Espetos",
+  bebidas: "Bebidas",
+  cervejas: "Cervejas",
+};
+function productCategoryLabel(slug: string): string {
+  return PRODUCT_CATEGORY_LABELS[slug] ?? (slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : "Outros");
+}
+
+async function handleProductVisibility(
+  cmd: Extract<Command, { kind: "PRODUCT_HIDE" | "PRODUCT_SHOW" }>,
+  chatId: number,
+): Promise<HandlerReply> {
+  const desired = cmd.kind === "PRODUCT_SHOW";
+  const all = await fetchAllProducts();
+  const matches = fuzzyFindProducts(cmd.query, all);
+  console.log("[telegram-product]", cmd.kind, "query:", cmd.query, "matches:", matches.length);
+  if (matches.length === 0) {
+    return { text: `❓ Não encontrei produto parecido com: "${cmd.query}".\nUse \`listar visiveis\` ou \`listar ocultos\` para ver os nomes.` };
+  }
+  if (matches.length === 1) {
+    const p = matches[0];
+    if (p.active === desired) {
+      return { text: `ℹ️ "${p.name}" já está ${desired ? "ativo" : "oculto"}.` };
+    }
+    const { error } = await sb.from("products").update({ active: desired }).eq("id", p.id);
+    if (error) {
+      console.error("[telegram-product] update error:", error.message);
+      return { text: `❌ Erro ao atualizar: ${error.message}` };
+    }
+    console.log("[telegram-product] updated", p.id, "active=", desired);
+    return { text: `${desired ? "✅ Ativado no cardápio" : "🚫 Ocultado do cardápio"}: *${p.name}*` };
+  }
+  const candidates = matches.map((p) => ({ id: p.id, name: p.name, active: p.active }));
+  await wzSet(chatId, "product_pick" as any, { product_pick: { action: cmd.kind, candidates } } as any);
+  const verb = desired ? "ativar" : "ocultar";
+  const list = matches
+    .map((p, i) => `${i + 1}. ${p.name}${p.active ? "" : " _(oculto)_"}`)
+    .join("\n");
+  return {
+    text: `🤔 Encontrei ${matches.length} produtos para ${verb}. Responda com o número (1-${matches.length}):\n\n${list}\n\n_(válido por 5 min)_`,
+  };
+}
+
+async function handleProductPick(choice: number, chatId: number): Promise<HandlerReply> {
+  const state = await wzGet(chatId);
+  const pickData = (state?.data as any)?.product_pick;
+  if (!state || state.step !== ("product_pick" as any) || !pickData) {
+    return { text: `❓ Não sei o que fazer com "${choice}". Envie \`ajuda\` para ver os comandos.` };
+  }
+  const idx = choice - 1;
+  const pick = pickData.candidates?.[idx];
+  if (!pick) {
+    return { text: `❓ Número ${choice} fora da lista (1-${pickData.candidates?.length ?? 0}).` };
+  }
+  const desired = pickData.action === "PRODUCT_SHOW";
+  const { error } = await sb.from("products").update({ active: desired }).eq("id", pick.id);
+  await wzClear(chatId);
+  if (error) {
+    return { text: `❌ Erro ao atualizar: ${error.message}` };
+  }
+  console.log("[telegram-product] picked", pick.id, "active=", desired);
+  return { text: `${desired ? "✅ Ativado no cardápio" : "🚫 Ocultado do cardápio"}: *${pick.name}*` };
+}
+
+async function handleProductList(mode: "hidden" | "visible" | "all"): Promise<HandlerReply> {
+  let q = sb.from("products").select("name, category, active").order("category").order("name");
+  if (mode === "hidden") q = q.eq("active", false);
+  else if (mode === "visible") q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) return { text: `❌ Erro ao listar: ${error.message}` };
+  const rows = (data ?? []) as ProductRow[];
+  if (rows.length === 0) {
+    return { text: mode === "hidden" ? "✅ Nenhum produto oculto." : "📋 Nenhum produto cadastrado." };
+  }
+  const byCat = new Map<string, ProductRow[]>();
+  for (const r of rows) {
+    const k = r.category || "outros";
+    if (!byCat.has(k)) byCat.set(k, []);
+    byCat.get(k)!.push(r);
+  }
+  const header = mode === "hidden"
+    ? `🚫 *Produtos ocultos (${rows.length})*`
+    : mode === "visible"
+    ? `📋 *Produtos visíveis (${rows.length})*`
+    : `📋 *Todos os produtos (${rows.length})*`;
+  const body = Array.from(byCat.entries())
+    .map(([cat, ps]) => `*${productCategoryLabel(cat)}* (${ps.length})\n` + ps.map((p) => `• ${p.name}${mode === "all" && !p.active ? " _(oculto)_" : ""}`).join("\n"))
+    .join("\n\n");
+  return { text: `${header}\n\n${body}` };
+}
+
 const HELP_TEXT =
   `🤖 *Como usar*\n\n` +
   `📌 *PEDIDOS*\n` +
