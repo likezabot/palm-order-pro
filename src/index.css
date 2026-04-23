@@ -235,3 +235,65 @@
     animation: none !important;
   }
 }
+
+/* ============================================================
+   Alto Contraste — camada adicional (não substitui claro/escuro)
+   Pensado em idosos: fonte maior, peso reforçado, bordas grossas,
+   contraste de texto auxiliar elevado, foco evidente.
+   ============================================================ */
+html.hc {
+  font-size: 17px; /* escala todo o app via rem */
+}
+
+html.hc body {
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+html.hc h1,
+html.hc h2,
+html.hc h3,
+html.hc h4 {
+  font-weight: 700;
+}
+
+/* Contraste reforçado de textos auxiliares */
+html.hc.dark {
+  --muted-foreground: 0 0% 92%;
+  --border: 0 0% 40%;
+}
+html.hc:not(.dark) {
+  --muted-foreground: 0 0% 12%;
+  --border: 0 0% 30%;
+}
+
+/* Bordas mais grossas em superfícies interativas */
+html.hc .border,
+html.hc [class*="border-border"],
+html.hc input,
+html.hc textarea,
+html.hc select,
+html.hc button {
+  border-width: 2px;
+}
+
+/* Foco bem visível para quem usa óculos */
+html.hc *:focus-visible {
+  outline: 3px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Áreas de toque maiores em ações principais */
+html.hc button,
+html.hc a[role="button"],
+html.hc [role="button"] {
+  min-height: 56px;
+}
+
+/* Ícones um pouco maiores para acompanhar a fonte */
+html.hc svg {
+  transform: scale(1.05);
+  transform-origin: center;
+}
+

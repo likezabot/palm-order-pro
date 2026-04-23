@@ -4,6 +4,7 @@ import { useFeedback } from "@/hooks/use-feedback";
 import { getAppVersion } from "@/lib/version-check";
 
 import ThemeToggle from "@/components/ThemeToggle";
+import HighContrastToggle from "@/components/HighContrastToggle";
 import StockSummaryCard from "@/components/home/StockSummaryCard";
 
 const modes = [
@@ -20,7 +21,8 @@ const Index = () => {
 
   return (
     <div className="relative flex min-h-screen-safe flex-col items-center justify-center gap-6 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-      <div className="absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] z-10">
+      <div className="absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] z-10 flex items-center gap-2">
+        <HighContrastToggle />
         <ThemeToggle />
       </div>
       <div className="text-center mb-2 animate-fade-in-up">
