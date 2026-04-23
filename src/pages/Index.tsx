@@ -6,6 +6,7 @@ import { getAppVersion } from "@/lib/version-check";
 import ThemeToggle from "@/components/ThemeToggle";
 import HighContrastToggle from "@/components/HighContrastToggle";
 import StockSummaryCard from "@/components/home/StockSummaryCard";
+import logoPlanoB from "@/assets/logo-plano-b.png";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", path: "/palm", Icon: Smartphone },
