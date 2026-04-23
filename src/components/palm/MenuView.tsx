@@ -372,7 +372,6 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                 );
               }
               const qty = getQty(product.id);
-              const esgotado = isEsgotado(product.id);
               return (
                 <button
                   type="button"
@@ -380,14 +379,12 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                   onClick={() => handleAdd(product)}
                   aria-label={`Adicionar ${product.name} — R$ ${product.price.toFixed(2)}`}
                   className={`relative flex flex-col items-start text-left rounded-2xl border bg-card p-4 min-h-[112px] transition-all active:scale-[0.99] overflow-hidden ${
-                    esgotado
-                      ? "border-border/30 opacity-50 cursor-not-allowed"
-                      : qty > 0
-                        ? "border-foreground/20"
-                        : "border-border/40"
+                    qty > 0
+                      ? "border-foreground/20"
+                      : "border-border/40"
                   }`}
                 >
-                  {qty > 0 && !esgotado && (
+                  {qty > 0 && (
                     <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/60" />
                   )}
                   <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground pr-7">
