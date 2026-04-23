@@ -26,6 +26,8 @@ export const SystemTab = () => {
   const [logs, setLogs] = useState<RetentionLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [resetPeriod, setResetPeriod] = useState<"today" | "7d" | "30d" | "all">("today");
+  const [resetStock, setResetStock] = useState(true);
 
   const loadLogs = async () => {
     setLoadingLogs(true);
@@ -84,12 +86,28 @@ export const SystemTab = () => {
     }
   };
 
+  const periodToDays = (p: typeof resetPeriod): number | null => {
+    if (p === "today") return 0;
+    if (p === "7d") return 7;
+    if (p === "30d") return 30;
+    return null; // all
+  };
+
+  const periodLabel = (p: typeof resetPeriod) => {
+    if (p === "today") return "HOJE (últimas 24h)";
+    if (p === "7d") return "ÚLTIMOS 7 DIAS";
+    if (p === "30d") return "ÚLTIMOS 30 DIAS";
+    return "TUDO (sem limite de data)";
+  };
+
   const handleResetTestData = async () => {
     playFeedback("heavy");
     setResetting(true);
     try {
+      const days = periodToDays(resetPeriod);
       const { data: preview, error: pErr } = await supabase.rpc(
-        "preview_operational_data" as never,
+        "preview_operational_data_period" as never,
+        { p_days: days } as never,
       );
       if (pErr) throw pErr;
       const p = (preview as Record<string, number>) || {};
@@ -99,23 +117,26 @@ export const SystemTab = () => {
         `${p.cash_register ?? 0} caixas`,
         `${p.cash_movements ?? 0} mov. caixa`,
         `${p.inventory_movements ?? 0} mov. estoque`,
-        `${p.inventory_items_with_stock ?? 0} itens com estoque`,
         `${p.notification_queue ?? 0} notif. pendentes`,
+        resetStock ? `${p.inventory_items_with_stock ?? 0} itens terão estoque zerado` : "estoque NÃO será zerado",
       ].join("\n• ");
 
       const confirmed = window.prompt(
-        `⚠️ APAGAR TODOS OS DADOS OPERACIONAIS?\n\nSerá removido:\n• ${summary}\n\nO cardápio, cadastro de itens, receitas e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
+        `⚠️ APAGAR DADOS OPERACIONAIS\n\nPeríodo: ${periodLabel(resetPeriod)}\n\nSerá removido:\n• ${summary}\n\nO cardápio, cadastro de itens, receitas e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
       );
       if (confirmed?.trim().toUpperCase() !== "APAGAR") {
         toast({ title: "Cancelado", description: "Nada foi apagado." });
         return;
       }
 
-      const { data, error } = await supabase.rpc("reset_operational_data" as never);
+      const { data, error } = await supabase.rpc(
+        "reset_operational_data_period" as never,
+        { p_days: days, p_reset_stock: resetStock } as never,
+      );
       if (error) throw error;
       const r = (data as Record<string, number | string>) || {};
       toast({
-        title: "Dados de teste apagados",
+        title: "Dados apagados",
         description: `${r.orders ?? 0} pedidos · ${r.cash_register ?? 0} caixas · ${r.inventory_items_zeroed ?? 0} estoques zerados`,
       });
       await qc.invalidateQueries();
@@ -144,13 +165,53 @@ export const SystemTab = () => {
               Limpar dados de teste
             </h3>
             <p className="text-sm text-slate-600 mt-1">
-              Apaga <b>todos</b> os pedidos, caixas, movimentos de estoque,
-              notificações e estado do Telegram. Zera o estoque atual.{" "}
-              <b>Mantém</b> cardápio, cadastro de itens, receitas, vínculos do
-              Telegram e configurações. Use quando o dia foi só testes.
+              Apaga pedidos, caixas, movimentos de estoque, notificações e
+              estado do Telegram <b>do período escolhido</b>. <b>Mantém</b>{" "}
+              cardápio, cadastro de itens, receitas, vínculos do Telegram e
+              configurações.
             </p>
           </div>
         </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+            Período a apagar
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              ["today", "Hoje (24h)"],
+              ["7d", "Últimos 7 dias"],
+              ["30d", "Últimos 30 dias"],
+              ["all", "Tudo"],
+            ] as const).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setResetPeriod(val)}
+                className={`h-12 rounded-lg border-2 font-bold text-sm transition-colors ${
+                  resetPeriod === val
+                    ? "border-destructive bg-destructive text-destructive-foreground"
+                    : "border-border bg-background text-foreground hover:border-destructive/50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border bg-background">
+          <input
+            type="checkbox"
+            checked={resetStock}
+            onChange={(e) => setResetStock(e.target.checked)}
+            className="w-5 h-5 accent-destructive"
+          />
+          <span className="text-sm font-medium text-foreground">
+            Zerar estoque atual de todos os itens
+          </span>
+        </label>
+
         <Button
           onClick={handleResetTestData}
           disabled={resetting}
@@ -158,9 +219,10 @@ export const SystemTab = () => {
           className="w-full h-14 font-black text-base gap-2"
         >
           <Trash2 className="w-5 h-5" />
-          {resetting ? "APAGANDO…" : "APAGAR DADOS DE TESTE"}
+          {resetting ? "APAGANDO…" : `APAGAR — ${periodLabel(resetPeriod).split(" ")[0]}`}
         </Button>
       </div>
+
 
       <div className="rounded-xl border-2 border-border p-5 space-y-4">
         <div className="flex items-start gap-3">
