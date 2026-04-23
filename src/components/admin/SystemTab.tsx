@@ -86,12 +86,28 @@ export const SystemTab = () => {
     }
   };
 
+  const periodToDays = (p: typeof resetPeriod): number | null => {
+    if (p === "today") return 0;
+    if (p === "7d") return 7;
+    if (p === "30d") return 30;
+    return null; // all
+  };
+
+  const periodLabel = (p: typeof resetPeriod) => {
+    if (p === "today") return "HOJE (últimas 24h)";
+    if (p === "7d") return "ÚLTIMOS 7 DIAS";
+    if (p === "30d") return "ÚLTIMOS 30 DIAS";
+    return "TUDO (sem limite de data)";
+  };
+
   const handleResetTestData = async () => {
     playFeedback("heavy");
     setResetting(true);
     try {
+      const days = periodToDays(resetPeriod);
       const { data: preview, error: pErr } = await supabase.rpc(
-        "preview_operational_data" as never,
+        "preview_operational_data_period" as never,
+        { p_days: days } as never,
       );
       if (pErr) throw pErr;
       const p = (preview as Record<string, number>) || {};
@@ -101,23 +117,26 @@ export const SystemTab = () => {
         `${p.cash_register ?? 0} caixas`,
         `${p.cash_movements ?? 0} mov. caixa`,
         `${p.inventory_movements ?? 0} mov. estoque`,
-        `${p.inventory_items_with_stock ?? 0} itens com estoque`,
         `${p.notification_queue ?? 0} notif. pendentes`,
+        resetStock ? `${p.inventory_items_with_stock ?? 0} itens terão estoque zerado` : "estoque NÃO será zerado",
       ].join("\n• ");
 
       const confirmed = window.prompt(
-        `⚠️ APAGAR TODOS OS DADOS OPERACIONAIS?\n\nSerá removido:\n• ${summary}\n\nO cardápio, cadastro de itens, receitas e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
+        `⚠️ APAGAR DADOS OPERACIONAIS\n\nPeríodo: ${periodLabel(resetPeriod)}\n\nSerá removido:\n• ${summary}\n\nO cardápio, cadastro de itens, receitas e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
       );
       if (confirmed?.trim().toUpperCase() !== "APAGAR") {
         toast({ title: "Cancelado", description: "Nada foi apagado." });
         return;
       }
 
-      const { data, error } = await supabase.rpc("reset_operational_data" as never);
+      const { data, error } = await supabase.rpc(
+        "reset_operational_data_period" as never,
+        { p_days: days, p_reset_stock: resetStock } as never,
+      );
       if (error) throw error;
       const r = (data as Record<string, number | string>) || {};
       toast({
-        title: "Dados de teste apagados",
+        title: "Dados apagados",
         description: `${r.orders ?? 0} pedidos · ${r.cash_register ?? 0} caixas · ${r.inventory_items_zeroed ?? 0} estoques zerados`,
       });
       await qc.invalidateQueries();
