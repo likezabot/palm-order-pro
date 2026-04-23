@@ -4285,15 +4285,58 @@ async function wzHandleCallback(cb: any, waiter: string): Promise<boolean> {
   return false;
 }
 
-// Skip Deno.serve quando importado por testes (TELEGRAM_TEST_IMPORT=1).
-if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
+// ─────────────── Hardening: validação de origem ───────────────
+// Telegram sempre envia o header X-Telegram-Bot-Api-Secret-Token quando o webhook
+// foi registrado com `secret_token`. Sem isso, qualquer endpoint público pode
+// forjar updates (chat_id falso passa pela whitelist e dispara comandos no PDV).
+// WEBHOOK_SECRET deve ser configurado como secret e usado em setWebhook.
+const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET") ?? "";
+
+// Comparação em tempo constante para evitar timing attacks na descoberta do secret.
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function unauthorized(reason: string): Response {
+  return new Response(JSON.stringify({ error: "unauthorized", reason }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+// Resumo seguro do update para logs (sem texto/usuário/PII completa).
+function safeUpdateSummary(u: any): Record<string, unknown> {
+  if (!u || typeof u !== "object") return { kind: "invalid" };
+  const m = u.message ?? u.edited_message ?? u.callback_query?.message;
+  return {
+    update_id: u.update_id ?? null,
+    has_message: !!u.message,
+    has_callback: !!u.callback_query,
+    has_voice: !!(m?.voice),
+    chat_id: m?.chat?.id ?? null,
+    chat_type: m?.chat?.type ?? null,
+    text_len: typeof m?.text === "string" ? m.text.length : 0,
+  };
+}
+
+// Handler exportado p/ testes. O serve() abaixo só roda fora do modo TEST_IMPORT.
+export async function webhookHandler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   // ── TEST MODE endpoints (GET) ──
+  // Mesmo em TEST_MODE exigimos o WEBHOOK_SECRET para impedir que um curioso
+  // descubra a URL do edge function e dispare cleanup/drain.
   if (req.method === "GET") {
     const url = new URL(req.url);
     const op = url.searchParams.get("test");
     if (op) {
+      const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+      if (!WEBHOOK_SECRET || !safeEqual(provided, WEBHOOK_SECRET)) {
+        return unauthorized("missing_or_invalid_secret_for_test_endpoint");
+      }
       if (!TEST_MODE) {
         return new Response(JSON.stringify({ error: "TEST_MODE disabled" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -4309,6 +4352,19 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
       return new Response(JSON.stringify({ error: "unknown op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    // GET sem ?test não tem rota legítima.
+    return new Response("not found", { status: 404, headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response("method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  // Validação obrigatória do secret do Telegram (default-deny).
+  // Se WEBHOOK_SECRET não estiver configurado, recusamos tudo — postura segura.
+  const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+  if (!WEBHOOK_SECRET || !safeEqual(provided, WEBHOOK_SECRET)) {
+    return unauthorized("invalid_telegram_secret");
   }
 
   if (!TOKEN) {
@@ -4316,9 +4372,19 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     return testOrPlain();
   }
 
+  let update: any;
   try {
-    const update = await req.json();
-    console.log("Update:", JSON.stringify(update));
+    update = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "invalid_json" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    // Log seguro: sem texto/username/PII completos.
+    console.log("update", JSON.stringify(safeUpdateSummary(update)));
 
     // Callback de botão inline
     if (update?.callback_query) {
