@@ -557,9 +557,16 @@ function splitCommands(raw: string): string[] {
 // ─────────────── Confiança da transcrição de voz ───────────────
 // Avalia se a transcrição + parseamento são confiáveis o suficiente para auto-executar.
 // Dispara confirmação por botão se algum sinal de baixa confiança aparecer.
+// `productChecks` (opcional) traz info de resolução de produto p/ ADD/REMOVE.
+type VoiceParsedSig = {
+  kind: string;
+  qty?: number;
+  fromContext?: boolean;
+  productResolution?: "found" | "ambiguous" | "not_found" | "is_group_trigger" | null;
+};
 function assessVoiceConfidence(
   transcript: string,
-  parsedCmds: Array<{ kind: string; qty?: number }>,
+  parsedCmds: VoiceParsedSig[],
 ): { confident: boolean; reason?: string } {
   const t = (transcript ?? "").trim();
   if (t.length < 3) return { confident: false, reason: "transcrição muito curta" };
@@ -572,6 +579,15 @@ function assessVoiceConfidence(
       return { confident: false, reason: "mesa não identificada" };
     }
     if (typeof c.qty === "number" && c.qty > 10) return { confident: false, reason: "quantidade alta" };
+    // Específico ADD/REMOVE: produto não resolvido ou ambíguo → pede confirmação.
+    if (c.kind === "ADD" || c.kind === "REMOVE") {
+      if (c.productResolution === "not_found") return { confident: false, reason: "produto não encontrado" };
+      if (c.productResolution === "ambiguous") return { confident: false, reason: "produto ambíguo" };
+      // Mesa herdada de contexto + qty alta: maior risco de aplicar na mesa errada.
+      if (c.fromContext && typeof c.qty === "number" && c.qty >= 5) {
+        return { confident: false, reason: "mesa do contexto + quantidade alta" };
+      }
+    }
   }
   return { confident: true };
 }
@@ -4378,13 +4394,44 @@ Deno.serve(async (req) => {
     }
 
     // ─── VOZ: gate de confiança ANTES da execução ───
-    // Se veio de áudio E a confiança é baixa, pedimos confirmação por botão
-    // (cobre múltiplas linhas via campo `lines`). Cancela auto-execução.
+    // Resolve mesa de contexto + produto (sem mutação) para detectar incertezas
+    // específicas de ADD/REMOVE: produto não encontrado, ambíguo, mesa herdada com qty alta.
     if (voiceTranscript) {
-      const parsedAll = lines.map((ln) => {
-        try { return parseCommand(ln); } catch { return { kind: "PARSE_ERROR" } as any; }
-      });
-      const conf = assessVoiceConfidence(voiceTranscript, parsedAll as any);
+      const enriched: VoiceParsedSig[] = [];
+      const previewParts: string[] = [];
+      for (const ln of lines) {
+        let parsed: any;
+        try { parsed = parseCommand(ln); } catch { parsed = { kind: "PARSE_ERROR" }; }
+        const sig: VoiceParsedSig = { kind: parsed.kind, qty: parsed.qty };
+        let previewLine = ln;
+        try {
+          if (parsed.kind === "ADD" || parsed.kind === "REMOVE") {
+            const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+            sig.kind = cmd.kind;
+            sig.qty = (cmd as any).qty;
+            sig.fromContext = (cmd as any).fromContext;
+            if (cmd.kind === "ADD" || cmd.kind === "REMOVE") {
+              const r = await resolveProduct((cmd as any).productText);
+              sig.productResolution = r.kind as any;
+              const op = cmd.kind === "ADD" ? "+" : "−";
+              const tableTag = (cmd as any).fromContext ? `mesa ${cmd.table} (contexto)` : `mesa ${cmd.table}`;
+              const prodTag =
+                r.kind === "found" ? r.product.name :
+                r.kind === "ambiguous" ? `❓ ${(cmd as any).productText} (ambíguo)` :
+                r.kind === "not_found" ? `❌ ${(cmd as any).productText} (não encontrado)` :
+                (cmd as any).productText;
+              previewLine = `${tableTag} ${op}${(cmd as any).qty} ${prodTag}`;
+            } else {
+              sig.kind = cmd.kind;
+            }
+          }
+        } catch (e) {
+          console.warn("voice gate enrich error:", (e as any)?.message ?? e);
+        }
+        enriched.push(sig);
+        previewParts.push(previewLine);
+      }
+      const conf = assessVoiceConfidence(voiceTranscript, enriched);
       if (!conf.confident) {
         const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
         await sb.from("telegram_chat_state").upsert({
@@ -4393,13 +4440,13 @@ Deno.serve(async (req) => {
           data: { token, lines, transcript: voiceTranscript, waiter },
           expires_at: new Date(Date.now() + 2 * 60_000).toISOString(),
         });
-        const previewLines = lines.length > 0
-          ? lines.map((l, i) => `${i + 1}. ${l}`).join("\n")
+        const previewBlock = previewParts.length > 0
+          ? previewParts.map((l, i) => `${i + 1}. ${l}`).join("\n")
           : "(nada reconhecido)";
         const reasonTxt = conf.reason ? ` _(motivo: ${conf.reason})_` : "";
         await sendTelegram(
           chatId,
-          `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewLines}\n\nConfirmar?`,
+          `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewBlock}\n\nConfirmar?`,
           [[
             { text: "✅ Executar", callback_data: `vc|ok|${token}` },
             { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
