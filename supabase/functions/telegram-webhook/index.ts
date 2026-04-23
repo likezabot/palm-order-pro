@@ -4365,9 +4365,12 @@ export async function webhookHandler(req: Request): Promise<Response> {
       const authHeader = req.headers.get("authorization") ?? "";
       const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7) : "";
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
       const okSecret = !!WEBHOOK_SECRET && safeEqual(provided, WEBHOOK_SECRET);
       const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
-      if (!okSecret && !okService) {
+      // auto-heal é idempotente e não expõe dados — aceita anon p/ permitir cron via pg_net.
+      const okAnonForHeal = adminOp === "auto-heal" && !!anonKey && !!bearer && safeEqual(bearer, anonKey);
+      if (!okSecret && !okService && !okAnonForHeal) {
         return unauthorized("missing_or_invalid_secret_for_admin_endpoint");
       }
       if (!TOKEN) {
