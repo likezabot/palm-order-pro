@@ -29,14 +29,8 @@ export const GroupVariantDialog = ({
   isEsgotado,
   getQty,
 }: Props) => {
-  // Sort: available first, esgotado/uncadastrado at the end (stable)
-  const sorted = variants
-    .map((v, idx) => {
-      const status = !v.product ? 2 : isEsgotado(v.product.id) ? 1 : 0;
-      return { v, idx, status };
-    })
-    .sort((a, b) => (a.status !== b.status ? a.status - b.status : a.idx - b.idx))
-    .map((x) => x.v);
+  // Stock-based ordering removed — keep original variant order.
+  const sorted = variants;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
