@@ -80,17 +80,14 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   const { data: activeOrders, isLoading } = useQuery({
     queryKey: ["active-orders"],
     placeholderData: (prev) => prev,
-    // staleTime: 0 → sempre revalida ao montar/focar.
-    // Realtime + persister cobrem UX; isso evita exibir cache stale no PWA.
     staleTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase
           .from("orders")
-          .select("id, table_name, original_table_name, status, total, waiter_name, created_at, served_at, order_items(quantity)")
+          .select("id, table_name, original_table_name, status, total, waiter_name, created_at, served_at, version, order_items(quantity)")
           .in("status", ["new", "preparing", "done"]);
 
       if (error) throw error;
-      // Soma quantidades dos itens em cada pedido
       return (data ?? []).map((o: any) => ({
         ...o,
         item_count: (o.order_items ?? []).reduce(
@@ -99,22 +96,59 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
         ),
       }));
     },
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
+  // Realtime: atualiza cache direto pelo payload (UI instantânea)
   useEffect(() => {
+    let itemsReconcile: ReturnType<typeof setTimeout> | null = null;
+    const scheduleItemsReconcile = () => {
+      if (itemsReconcile) clearTimeout(itemsReconcile);
+      itemsReconcile = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["active-orders"] });
+      }, 400);
+    };
+
     const channel = supabase
       .channel(`orders-changes-${crypto.randomUUID()}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["active-orders"] });
-        }
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+        const newOrder: any = payload.new;
+        if (!["new", "preparing", "done"].includes(newOrder.status)) return;
+        queryClient.setQueryData<any[]>(["active-orders"], (old) => {
+          if (!old) return old;
+          if (old.some((o) => o.id === newOrder.id)) return old;
+          return [...old, { ...newOrder, item_count: 0 }];
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+        const updated: any = payload.new;
+        queryClient.setQueryData<any[]>(["active-orders"], (old) => {
+          if (!old) return old;
+          const inActive = ["new", "preparing", "done"].includes(updated.status);
+          const existing = old.find((o) => o.id === updated.id);
+          if (!existing && inActive) return [...old, { ...updated, item_count: 0 }];
+          if (existing && !inActive) return old.filter((o) => o.id !== updated.id);
+          if (!existing) return old;
+          if (typeof existing.version === "number" && typeof updated.version === "number" && updated.version < existing.version) {
+            return old;
+          }
+          return old.map((o) => (o.id === updated.id ? { ...o, ...updated } : o));
+        });
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
+        const oldOrder = payload.old as { id?: string };
+        if (!oldOrder?.id) return;
+        queryClient.setQueryData<any[]>(["active-orders"], (old) => old?.filter((o) => o.id !== oldOrder.id) ?? old);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
+        // Itens precisam de recount; usa reconciliação debounced.
+        scheduleItemsReconcile();
+      })
       .subscribe();
 
     return () => {
+      if (itemsReconcile) clearTimeout(itemsReconcile);
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
