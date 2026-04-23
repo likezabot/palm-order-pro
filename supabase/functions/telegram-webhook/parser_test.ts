@@ -419,6 +419,53 @@ Deno.test("fuzzy: query vazia retorna nada", opts, () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  GRUPO 9 — Apelidos (aliases) no fuzzy matching
+// ═══════════════════════════════════════════════════════════════════════════════
+const ALIAS_PRODUCTS: ProductRow[] = [
+  { id: "a1", name: "Coca-Cola Zero 350ml", category: "bebidas", active: true, aliases: ["coca zero", "zero", "ks zero"] },
+  { id: "a2", name: "Coca-Cola 350ml", category: "bebidas", active: true, aliases: ["coca", "ks"] },
+  { id: "a3", name: "Heineken 600ml", category: "cervejas", active: true, aliases: ["heineken longneck"] },
+  { id: "a4", name: "Caipirinha de Limão", category: "bebidas", active: true, aliases: ["caipira"] },
+  { id: "a5", name: "Caipirinha de Morango", category: "bebidas", active: true, aliases: ["caipira"] },
+];
+
+Deno.test("alias: 'coca zero' resolve para Coca-Cola Zero direto", opts, () => {
+  const r = fuzzyFindProducts("coca zero", ALIAS_PRODUCTS);
+  assert(r.length >= 1);
+  assertEquals(r[0].id, "a1");
+});
+
+Deno.test("alias: apelido sem acento bate ('caipira' → 2 ambíguo)", opts, () => {
+  const r = fuzzyFindProducts("caipira", ALIAS_PRODUCTS);
+  assertEquals(r.length, 2);
+  const ids = r.map((p) => p.id).sort();
+  assertEquals(ids, ["a4", "a5"]);
+});
+
+Deno.test("alias: plural funciona ('zeros' singulariza para 'zero')", opts, () => {
+  const r = fuzzyFindProducts("zeros", ALIAS_PRODUCTS);
+  assert(r.length >= 1, "deveria achar Coca-Cola Zero via alias 'zero'");
+  assertEquals(r[0].id, "a1");
+});
+
+Deno.test("alias: alias exato vence inclusão por nome ('coca' → a2 primeiro)", opts, () => {
+  const r = fuzzyFindProducts("coca", ALIAS_PRODUCTS);
+  assert(r.length >= 2);
+  assertEquals(r[0].id, "a2");
+});
+
+Deno.test("alias: ambíguo quando 2 produtos compartilham apelido", opts, () => {
+  const r = fuzzyFindProducts("caipira", ALIAS_PRODUCTS);
+  assert(r.length === 2, `esperado 2 matches ambíguos, recebido ${r.length}`);
+});
+
+Deno.test("alias: produtos sem apelidos continuam funcionando como antes", opts, () => {
+  const r = fuzzyFindProducts("guarana", SAMPLE_PRODUCTS);
+  assert(r.length >= 1);
+  assertEquals(r[0].id, "3");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  GRUPO 9 — splitCommands (multi-comando)
 // ═══════════════════════════════════════════════════════════════════════════════
 Deno.test("split: separadores explícitos (\\n, ;, //, |)", opts, () => {

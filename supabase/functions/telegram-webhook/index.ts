@@ -25,13 +25,31 @@ async function getMenuVocabulary(): Promise<string> {
     const sbLocal = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: prods } = await sbLocal
       .from("products")
-      .select("name, category")
+      .select("name, category, aliases")
       .eq("active", true)
       .limit(200);
-    const names = (prods ?? []).map((p: any) => String(p.name ?? "").trim()).filter(Boolean);
-    // Remove duplicatas por lower e ordena
-    const uniq = Array.from(new Set(names.map((n) => n.toLowerCase()))).sort();
-    const value = uniq.length > 0 ? uniq.join(", ") : "";
+    // Formato: "Nome Oficial (apelido1, apelido2)" — Gemini usa o nome oficial,
+    // mas reconhece os apelidos foneticamente.
+    const seen = new Set<string>();
+    const entries: string[] = [];
+    for (const p of (prods ?? []) as any[]) {
+      const name = String(p?.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const aliases = Array.isArray(p?.aliases) ? p.aliases : [];
+      const cleanAliases = Array.from(
+        new Set(
+          aliases
+            .map((a: any) => String(a ?? "").trim().toLowerCase())
+            .filter((a: string) => a && a !== key),
+        ),
+      ).slice(0, 5) as string[];
+      entries.push(cleanAliases.length ? `${name} (${cleanAliases.join(", ")})` : name);
+    }
+    entries.sort((a, b) => a.localeCompare(b));
+    const value = entries.join(", ");
     _menuVocabCache = { value, at: now };
     return value;
   } catch (e) {
@@ -2002,33 +2020,42 @@ async function executeStockQuery(item: StockItem): Promise<string> {
 
 // ─────────────────────────── visibilidade de produtos ───────────────────────────
 
-export type ProductRow = { id: string; name: string; category: string; active: boolean };
+export type ProductRow = { id: string; name: string; category: string; active: boolean; aliases?: string[] };
 
 export function fuzzyFindProducts(query: string, all: ProductRow[]): ProductRow[] {
   const q = singularize(normalize(query));
   if (!q) return [];
   const tokens = q.split(/\s+/).filter(Boolean);
+
+  // Helper: pontua a query contra um label normalizado (nome OU apelido).
+  function scoreAgainst(label: string): number {
+    const n = singularize(normalize(label));
+    if (!n) return -1;
+    if (n === q) return 100;
+    if (n.startsWith(q)) return 80;
+    if (n.includes(q)) return 60;
+    const allMatch = tokens.every((t) => n.includes(t));
+    if (allMatch) return 40;
+    const nt = n.split(/\s+/);
+    const close = tokens.every((t) =>
+      nt.some((w) => Math.abs(w.length - t.length) <= 3 && levenshtein(w, t) <= Math.max(1, Math.floor(t.length / 4)))
+    );
+    if (close) return 20;
+    return -1;
+  }
+
   type Scored = { p: ProductRow; score: number };
   const scored: Scored[] = [];
   for (const p of all) {
-    const n = singularize(normalize(p.name));
-    if (!n) continue;
-    let score = -1;
-    if (n === q) score = 100;
-    else if (n.startsWith(q)) score = 80;
-    else if (n.includes(q)) score = 60;
-    else {
-      const allMatch = tokens.every((t) => n.includes(t));
-      if (allMatch) score = 40;
-      else {
-        const nt = n.split(/\s+/);
-        const close = tokens.every((t) =>
-          nt.some((w) => Math.abs(w.length - t.length) <= 3 && levenshtein(w, t) <= Math.max(1, Math.floor(t.length / 4)))
-        );
-        if (close) score = 20;
-      }
+    let best = scoreAgainst(p.name);
+    // Apelidos entram no MESMO ranking (peso igual). Pega o melhor.
+    const aliases = Array.isArray(p.aliases) ? p.aliases : [];
+    for (const alias of aliases) {
+      if (!alias) continue;
+      const s = scoreAgainst(String(alias));
+      if (s > best) best = s;
     }
-    if (score >= 0) scored.push({ p, score });
+    if (best >= 0) scored.push({ p, score: best });
   }
   scored.sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name));
   const seen = new Set<string>();
@@ -2043,7 +2070,7 @@ export function fuzzyFindProducts(query: string, all: ProductRow[]): ProductRow[
 }
 
 async function fetchAllProducts(): Promise<ProductRow[]> {
-  const { data, error } = await sb.from("products").select("id, name, category, active");
+  const { data, error } = await sb.from("products").select("id, name, category, active, aliases");
   if (error) {
     console.error("[telegram-product] fetch error:", error.message);
     return [];
@@ -2513,40 +2540,41 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     return { text: ctxPrefix(cmd) + text, successTable: isViewSuccess(text) ? cmd.table : undefined };
   }
 
-  // ADD/REMOVE
-  const prefix = ctxPrefix(cmd);
-  const resolution = await resolveProduct(cmd.productText);
+  // ADD/REMOVE — narrow defensivo p/ TS (variantes _NOMESA e VIEW já tratadas acima).
+  const cmd2 = cmd as Extract<Command, { kind: "ADD" | "REMOVE" }>;
+  const prefix = ctxPrefix(cmd2);
+  const resolution = await resolveProduct(cmd2.productText);
   switch (resolution.kind) {
     case "not_found": {
-      const sugg = await suggestProducts(cmd.productText);
+      const sugg = await suggestProducts(cmd2.productText);
       if (sugg.length > 0) {
-        const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, sugg);
+        const keyboard = buildChoiceKeyboard(cmd2.kind, cmd2.table, cmd2.qty, sugg);
         return {
-          text: prefix + `❓ Não achei "${cmd.productText}" no cardápio. Talvez:`,
+          text: prefix + `❓ Não achei "${cmd2.productText}" no cardápio. Talvez:`,
           keyboard,
         };
       }
       return {
-        text: prefix + `❓ Não achei "${cmd.productText}" no cardápio.\nVerifique o nome e tente de novo.`,
+        text: prefix + `❓ Não achei "${cmd2.productText}" no cardápio.\nVerifique o nome e tente de novo.`,
       };
     }
     case "ambiguous": {
-      const picked = autoPickFromCandidates(cmd.productText, resolution.candidates);
+      const picked = autoPickFromCandidates(cmd2.productText, resolution.candidates);
       if (picked) {
-        return await runExecute(cmd, picked, waiter);
+        return await runExecute(cmd2, picked, waiter);
       }
-      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, resolution.candidates);
-      const op = cmd.kind === "ADD" ? "+" : "-";
+      const keyboard = buildChoiceKeyboard(cmd2.kind, cmd2.table, cmd2.qty, resolution.candidates);
+      const op = cmd2.kind === "ADD" ? "+" : "-";
       return {
-        text: prefix + `🤔 Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" — escolha a opção:`,
+        text: prefix + `🤔 Mesa ${cmd2.table} ${op}${cmd2.qty} "${cmd2.productText}" — escolha a opção:`,
         keyboard,
       };
     }
     case "is_group_trigger": {
       const variantProducts = await fetchProductsByNames(resolution.variants);
-      const picked = autoPickFromCandidates(cmd.productText, variantProducts);
+      const picked = autoPickFromCandidates(cmd2.productText, variantProducts);
       if (picked) {
-        return await runExecute(cmd, picked, waiter);
+        return await runExecute(cmd2, picked, waiter);
       }
       if (variantProducts.length === 0) {
         const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
@@ -2556,10 +2584,10 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
             `Reenvie escolhendo uma das opções acima.`,
         };
       }
-      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, variantProducts);
-      const op = cmd.kind === "ADD" ? "+" : "-";
+      const keyboard = buildChoiceKeyboard(cmd2.kind, cmd2.table, cmd2.qty, variantProducts);
+      const op = cmd2.kind === "ADD" ? "+" : "-";
       return {
-        text: prefix + `📦 Mesa ${cmd.table} ${op}${cmd.qty} "${resolution.group.name}" — escolha a variante:`,
+        text: prefix + `📦 Mesa ${cmd2.table} ${op}${cmd2.qty} "${resolution.group.name}" — escolha a variante:`,
         keyboard,
       };
     }
@@ -2572,7 +2600,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
         text: prefix + `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
       };
     case "found":
-      return await runExecute(cmd, resolution.product, waiter, resolution.fuzzyFrom);
+      return await runExecute(cmd2, resolution.product, waiter, resolution.fuzzyFrom);
   }
 }
 

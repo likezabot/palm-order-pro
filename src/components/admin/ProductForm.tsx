@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useState, useMemo, KeyboardEvent } from "react";
+import { ArrowLeft, X, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,16 @@ import {
 } from "@/lib/product-groups";
 import { Input } from "@/components/ui/input";
 import ProductRecipesPanel from "./ProductRecipesPanel";
+
+/** Normaliza apelido: lowercase, trim, remove acentos, colapsa espaços. */
+function normalizeAlias(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
 interface Props {
   product: Product | null;
@@ -26,6 +36,10 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   const [price, setPrice] = useState(product?.price?.toString() || "");
   const [category, setCategory] = useState(product?.category || initialCategory || "espetos");
   const [active, setActive] = useState(product?.active ?? true);
+  const [aliases, setAliases] = useState<string[]>(
+    Array.isArray(product?.aliases) ? (product!.aliases as string[]) : []
+  );
+  const [aliasDraft, setAliasDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -52,15 +66,53 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
 
   const groupsInCategory = groups.filter((g) => g.category === category);
 
+  // ── Apelidos ──────────────────────────────────────────────────────────────
+  function addAliasFromDraft() {
+    const cleaned = normalizeAlias(aliasDraft);
+    if (!cleaned) return;
+    if (cleaned === normalizeAlias(name)) {
+      setAliasDraft("");
+      return;
+    }
+    if (aliases.some((a) => normalizeAlias(a) === cleaned)) {
+      setAliasDraft("");
+      return;
+    }
+    setAliases([...aliases, cleaned]);
+    setAliasDraft("");
+  }
+  function removeAlias(idx: number) {
+    setAliases(aliases.filter((_, i) => i !== idx));
+  }
+  function handleAliasKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addAliasFromDraft();
+    } else if (e.key === "Backspace" && !aliasDraft && aliases.length > 0) {
+      setAliases(aliases.slice(0, -1));
+    }
+  }
+
   const handleSave = async () => {
     if (!name.trim() || !price || saving) return;
     setSaving(true);
     try {
+      // Normaliza apelidos no submit (defensivo) e remove duplicatas / nome.
+      const cleanName = name.trim();
+      const cleanAliases = Array.from(
+        new Set(
+          [...aliases, aliasDraft]
+            .map((a) => normalizeAlias(a))
+            .filter((a) => a && a !== normalizeAlias(cleanName)),
+        ),
+      );
+
       const data = {
-        name: name.trim(),
+        name: cleanName,
         price: parseFloat(price),
         category,
         active,
+        aliases: cleanAliases,
       };
 
       if (product) {
@@ -240,6 +292,56 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
               </label>
             </div>
           )}
+        </div>
+
+        {/* ── Apelidos / variações ─────────────────────────────────────── */}
+        <div>
+          <label className="text-sm font-semibold text-muted-foreground mb-1 block">
+            Apelidos / variações
+          </label>
+          <div className="rounded-lg border border-border bg-card p-3">
+            {aliases.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {aliases.map((a, i) => (
+                  <span
+                    key={`${a}-${i}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2.5 py-1 text-xs font-semibold"
+                  >
+                    {a}
+                    <button
+                      type="button"
+                      onClick={() => removeAlias(i)}
+                      className="hover:bg-primary/25 rounded-full p-0.5"
+                      aria-label={`Remover ${a}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={aliasDraft}
+                onChange={(e) => setAliasDraft(e.target.value)}
+                onKeyDown={handleAliasKeyDown}
+                placeholder="Ex.: coca zero, zero, ks zero"
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={addAliasFromDraft}
+                disabled={!aliasDraft.trim()}
+                className="rounded-md bg-primary/15 text-primary px-3 font-semibold disabled:opacity-40 active:scale-95 transition-transform"
+                aria-label="Adicionar apelido"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Como o garçom pode chamar este item por voz ou Telegram. Pressione Enter ou vírgula para adicionar.
+          </p>
         </div>
 
         {product && category === "refeicoes" && (
