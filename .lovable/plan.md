@@ -1,58 +1,66 @@
 
 
-# Adicionar botão (−) nas variantes do popup de grupos
+# Reposicionar controles (−)/(+)/badge no popup de grupos
 
-## O que muda
+## Problema
 
-No `GroupVariantDialog`, cada linha de variante passa a ter o mesmo controle dos cards simples: quando `qty > 0`, aparece um botão (−) discreto ao lado da badge preto/branco, permitindo decrementar sem fechar o popup.
+Hoje, quando `qty > 0`, o lado direito da linha vira uma sequência apertada: `R$ 6,00  (−) ③`. Três elementos com tamanhos e pesos diferentes brigando no mesmo eixo. Visualmente sujo e mobile-hostil — especialmente em alto contraste.
 
-## Comportamento
+## Nova estrutura visual
 
-- `qty === 0`: linha mostra só nome + preço (como hoje).
-- `qty > 0`: linha mostra nome + preço + botão (−) + badge preto/branco com a quantidade.
-- Tap na linha (área principal): soma +1 (comportamento atual preservado).
-- Tap no botão (−): subtrai 1. Quando chega a 0, o (−) e a badge somem juntos.
-- Popup permanece aberto em ambos os casos — fecha só por X / tap fora / Esc.
-- Esgotado e não-cadastrado seguem bloqueados.
+Trocar o aglomerado direito por um **stepper coeso e isolado**, alinhado à direita, com o preço passando a viver "encostado" no nome:
 
-## Mudança técnica
-
-**`src/components/palm/MenuView.tsx`** — passar nova prop `onPickDecrement` ao `GroupVariantDialog`:
-```ts
-onPickDecrement={(_name, product) => onDecrement(product)}
 ```
-(`onDecrement` já existe no escopo do `MenuView`, vindo de `Palm.tsx` via `updateQuantity(product.id, -1)`.)
+┌──────────────────────────────────────────────────────┐
+│ Água sem gás                                          │
+│ R$ 6,00                              [ −   3   + ]   │
+└──────────────────────────────────────────────────────┘
+```
+
+Quando `qty === 0`:
+```
+┌──────────────────────────────────────────────────────┐
+│ Água sem gás                                R$ 6,00  │
+└──────────────────────────────────────────────────────┘
+```
+
+### Detalhes
+
+- **Lado esquerdo** vira coluna: nome em cima (`text-[15px]`), preço em baixo (`text-[12px] text-muted-foreground/60 tabular-nums`) — só quando `qty > 0`. Quando `qty === 0`, preço fica à direita como hoje (linha limpa).
+- **Lado direito** (apenas quando `qty > 0`): um **stepper pill** unificado:
+  - Container: `inline-flex items-center rounded-full border border-border/50 bg-muted/30 h-9 px-1`
+  - Botão (−): `h-7 w-7 rounded-full hover:bg-background flex items-center justify-center text-muted-foreground hover:text-foreground`
+  - Número: `min-w-[28px] text-center text-[14px] font-medium tabular-nums px-1` (sem círculo preto — agora vive dentro do stepper)
+  - Botão (+): mesmo estilo do (−), com ícone `Plus` size 14
+- A área de tap principal da linha (`<button>` envolvente) continua somando +1 ao tocar no nome/área vazia, **mas** com `qty > 0` o (+) explícito do stepper já cobre isso de forma mais clara. `e.stopPropagation()` em ambos os botões do stepper.
+- Animação: o número anima com `animate-badge-pop` na key change (já existe).
+
+### Mudanças de código
 
 **`src/components/palm/GroupVariantDialog.tsx`**:
-- Nova prop opcional `onPickDecrement?: (name: string, product: Product) => void`.
-- Em cada linha com `qty > 0`, renderizar antes da badge um botão `(−)` no mesmo estilo do botão de decremento dos cards: `h-6 w-6 rounded-full bg-background/80 border border-border/40`, ícone `Minus size={12}` em `text-muted-foreground`.
-- `e.stopPropagation()` no `onClick` do (−) para não disparar o tap da linha (que somaria +1).
-- Linha continua clicável para somar +1 (área do nome/preço).
+- Importar `Plus` além de `Minus`.
+- Reestruturar o JSX da linha conforme acima:
+  - Esquerda: `<div className="flex flex-col flex-1 min-w-0">` com nome + preço condicional.
+  - Direita: se `qty > 0`, renderizar o stepper; senão, renderizar só o preço como hoje.
+- Botão (+) chama `onPick(name, product)`, botão (−) chama `onPickDecrement(name, product)`, ambos com `stopPropagation`.
+- Esgotado: continua mostrando "indisponível" à direita, sem stepper.
 
-## Layout da linha (qty > 0)
+### O que NÃO muda
 
-```
-┌────────────────────────────────────────────┐
-│ Água sem gás              R$ 6,00  (−) ③  │
-└────────────────────────────────────────────┘
-```
+- `MenuView.tsx` — props já estão prontas (`onPick`, `onPickDecrement`).
+- Lógica de adição/remoção, esgotado-confirm, ordenação, header do popup, divisores.
+- Cards simples da grade, FAB, runtime, impressão, Telegram.
 
-## O que NÃO muda
+### Validação
 
-- Lógica de `handleAdd`, `onPick`, `getQty`, esgotado-confirm.
-- Cards simples, busca, tabs, FAB, runtime global, impressão, Telegram.
-- Estilo geral do popup (header, divisores, tipografia).
+1. `qty === 0`: nome à esquerda, preço à direita (uma linha só, limpa).
+2. Primeiro tap (na área da linha): aparece o stepper `[− 1 +]` à direita; preço migra para baixo do nome.
+3. Tocar (+) no stepper: vira `[− 2 +]`, número anima.
+4. Tocar (−): decrementa; em 0, stepper some e preço volta para a direita.
+5. Esgotado: linha esmaecida, "indisponível", sem stepper.
+6. Popup permanece aberto em todas as interações.
 
-## Arquivos modificados
+## Resultado
 
-- `src/components/palm/MenuView.tsx` — passar `onPickDecrement`.
-- `src/components/palm/GroupVariantDialog.tsx` — receber prop, renderizar botão (−) condicional.
-
-## Validação
-
-1. Abrir grupo "Água", tocar 3× em "Água sem gás" → badge ③, botão (−) visível.
-2. Tocar 1× no (−) → badge ②, popup permanece aberto.
-3. Tocar até 0 → (−) e badge somem; só nome + preço.
-4. Tap na área da linha continua somando +1.
-5. Esgotado: linha desabilitada, sem (−).
+Controles agrupados num único pill arredondado, com hierarquia clara: nome domina, preço sussurra, stepper isolado e tactile. Acaba o aglomerado `R$ X (−) ③` e dá ar de app premium.
 
