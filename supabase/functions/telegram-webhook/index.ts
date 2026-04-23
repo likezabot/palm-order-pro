@@ -15,6 +15,31 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 type InlineButton = { text: string; callback_data: string };
 
 // ─────────────── Voice (Telegram voice → Lovable AI transcribe) ───────────────
+// Cache do vocabulário do cardápio (60s) — injetado no prompt do Gemini
+// para reduzir erros em nomes específicos ("panceta", "guaraná", "skol", etc).
+let _menuVocabCache: { value: string; at: number } | null = null;
+async function getMenuVocabulary(): Promise<string> {
+  const now = Date.now();
+  if (_menuVocabCache && now - _menuVocabCache.at < 60_000) return _menuVocabCache.value;
+  try {
+    const sbLocal = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: prods } = await sbLocal
+      .from("products")
+      .select("name, category")
+      .eq("active", true)
+      .limit(200);
+    const names = (prods ?? []).map((p: any) => String(p.name ?? "").trim()).filter(Boolean);
+    // Remove duplicatas por lower e ordena
+    const uniq = Array.from(new Set(names.map((n) => n.toLowerCase()))).sort();
+    const value = uniq.length > 0 ? uniq.join(", ") : "";
+    _menuVocabCache = { value, at: now };
+    return value;
+  } catch (e) {
+    console.warn("getMenuVocabulary falhou:", (e as any)?.message ?? e);
+    return _menuVocabCache?.value ?? "";
+  }
+}
+
 // Baixa o arquivo de voz pelo Bot API e transcreve via Lovable AI Gateway
 // (Gemini suporta áudio nativo). Retorna o texto transcrito ou null em erro.
 async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
@@ -54,6 +79,12 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
     const mime = "audio/ogg";
 
     // 4) transcrição via Lovable AI (Gemini 2.5 Flash, áudio nativo)
+    // Vocabulário do cardápio (cacheado) — ajuda Gemini com nomes específicos.
+    const vocab = await getMenuVocabulary();
+    const vocabHint = vocab
+      ? ` Itens conhecidos do cardápio (use EXATAMENTE esses nomes quando reconhecer; corrija foneticamente o que se aproxima): ${vocab}.`
+      : "";
+
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -66,12 +97,15 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
           {
             role: "system",
             content:
-              "Você é um transcritor literal pt-BR de comandos de voz curtos para um sistema de PDV de bar/restaurante. " +
+              "Você é um transcritor literal pt-BR de comandos de voz para um sistema de PDV de bar/restaurante. " +
               "Devolva APENAS o texto falado, em minúsculas, sem pontuação, sem comentários, sem aspas. " +
               "Converta números por extenso para dígitos (ex: 'duas cocas' → '2 coca'; 'mesa cinco mais três cervejas' → 'mesa 5 + 3 cerveja'). " +
               "Mantenha verbos de comando como 'mais', 'menos', 'entrada', 'saída', 'ajuste', 'estoque', 'ver pedido', 'mesa N'. " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
-              "Se não houver fala clara, devolva uma única palavra: vazio.",
+              "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
+              "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
+              vocabHint +
+              " Se não houver fala clara, devolva uma única palavra: vazio.",
           },
           {
             role: "user",
@@ -518,6 +552,28 @@ function splitCommands(raw: string): string[] {
     }
   }
   return result;
+}
+
+// ─────────────── Confiança da transcrição de voz ───────────────
+// Avalia se a transcrição + parseamento são confiáveis o suficiente para auto-executar.
+// Dispara confirmação por botão se algum sinal de baixa confiança aparecer.
+function assessVoiceConfidence(
+  transcript: string,
+  parsedCmds: Array<{ kind: string; qty?: number }>,
+): { confident: boolean; reason?: string } {
+  const t = (transcript ?? "").trim();
+  if (t.length < 3) return { confident: false, reason: "transcrição muito curta" };
+  if (t.length > 200) return { confident: false, reason: "transcrição muito longa" };
+  if (parsedCmds.length === 0) return { confident: false, reason: "nada reconhecido" };
+  if (parsedCmds.length > 5) return { confident: false, reason: "muitos comandos" };
+  for (const c of parsedCmds) {
+    if (c.kind === "PARSE_ERROR") return { confident: false, reason: "comando não reconhecido" };
+    if (c.kind === "NEEDS_TABLE" || c.kind === "ADD_NOMESA" || c.kind === "REMOVE_NOMESA" || c.kind === "VIEW_NOMESA") {
+      return { confident: false, reason: "mesa não identificada" };
+    }
+    if (typeof c.qty === "number" && c.qty > 10) return { confident: false, reason: "quantidade alta" };
+  }
+  return { confident: true };
 }
 const VIEW_TOKENS = [
   "ver", "ve", "consulta", "consultar", "consulte",
@@ -2641,17 +2697,29 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       return;
     }
     if (op === "ok") {
-      const line: string = (stateRow.data as any).line;
       const transcript: string = (stateRow.data as any).transcript;
       const waiter: string = (stateRow.data as any).waiter ?? (username ? `Telegram (@${username})` : "Telegram");
+      // Suporta novo formato { lines: string[] } e legado { line: string }.
+      const linesArr: string[] = Array.isArray((stateRow.data as any).lines)
+        ? (stateRow.data as any).lines
+        : [(stateRow.data as any).line].filter(Boolean);
       await answerCallback(cbId, "Executando…");
+      const replies: string[] = [];
       try {
-        const parsed = parseCommand(line);
-        const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
-        const reply = await handleCommand(cmd, waiter);
-        await editTelegramMessage(chatId, messageId, `🎤 Ouvi: "${transcript}"\n\n${reply.text}`, reply.keyboard);
+        for (const ln of linesArr) {
+          try {
+            const parsed = parseCommand(ln);
+            const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+            const reply = await handleCommand(cmd, waiter);
+            replies.push(reply.text);
+            if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
+          } catch (e: any) {
+            replies.push(`❌ "${ln}": ${String(e?.message ?? e)}`);
+          }
+        }
+        await editTelegramMessage(chatId, messageId, `🎤 *Ouvi:* "${transcript}"\n\n${replies.join("\n\n")}`);
       } catch (e: any) {
-        await editTelegramMessage(chatId, messageId, `🎤 Ouvi: "${transcript}"\n\n❌ Erro: ${String(e?.message ?? e)}`);
+        await editTelegramMessage(chatId, messageId, `🎤 *Ouvi:* "${transcript}"\n\n❌ Erro: ${String(e?.message ?? e)}`);
       }
       return;
     }
@@ -4309,33 +4377,45 @@ Deno.serve(async (req) => {
       return testOrPlain();
     }
 
-    if (lines.length <= 1) {
-      const parsed = parseCommand(lines[0] ?? text);
-
-      // Híbrido por confiança: se veio de áudio E é op de estoque (escrita), pede confirmação.
-      if (voiceTranscript && parsed.kind === "STOCK_MOVEMENT") {
+    // ─── VOZ: gate de confiança ANTES da execução ───
+    // Se veio de áudio E a confiança é baixa, pedimos confirmação por botão
+    // (cobre múltiplas linhas via campo `lines`). Cancela auto-execução.
+    if (voiceTranscript) {
+      const parsedAll = lines.map((ln) => {
+        try { return parseCommand(ln); } catch { return { kind: "PARSE_ERROR" } as any; }
+      });
+      const conf = assessVoiceConfidence(voiceTranscript, parsedAll as any);
+      if (!conf.confident) {
         const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
         await sb.from("telegram_chat_state").upsert({
           chat_id: chatId,
           step: "voice_confirm",
-          data: { token, line: lines[0] ?? text, transcript: voiceTranscript, waiter },
+          data: { token, lines, transcript: voiceTranscript, waiter },
           expires_at: new Date(Date.now() + 2 * 60_000).toISOString(),
         });
-        const verb = parsed.type === "in" ? "Entrada" : parsed.type === "out" ? "Saída" : "Ajuste";
-        const previewTxt =
-          `🎤 Ouvi: "${voiceTranscript}"\n\n` +
-          `🧾 Vou executar:\n• ${verb} de ${parsed.qty}${parsed.unit ? ` ${parsed.unit}` : ""} ${parsed.itemText}\n\nConfirmar?`;
-        await sendTelegram(chatId, previewTxt, [[
-          { text: "✅ Executar", callback_data: `vc|ok|${token}` },
-          { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
-        ]]);
-      } else {
-        const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
-        const reply = await handleCommand(cmd, waiter);
-        const prefix = voiceTranscript ? `🎤 Ouvi: "${voiceTranscript}"\n\n` : "";
-        await sendTelegram(chatId, prefix + reply.text, reply.keyboard);
-        if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
+        const previewLines = lines.length > 0
+          ? lines.map((l, i) => `${i + 1}. ${l}`).join("\n")
+          : "(nada reconhecido)";
+        const reasonTxt = conf.reason ? ` _(motivo: ${conf.reason})_` : "";
+        await sendTelegram(
+          chatId,
+          `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewLines}\n\nConfirmar?`,
+          [[
+            { text: "✅ Executar", callback_data: `vc|ok|${token}` },
+            { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
+          ]],
+        );
+        return testOrPlain();
       }
+    }
+
+    if (lines.length <= 1) {
+      const parsed = parseCommand(lines[0] ?? text);
+      const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+      const reply = await handleCommand(cmd, waiter);
+      const prefix = voiceTranscript ? `🎤 *Ouvi:* "${voiceTranscript}"\n\n` : "";
+      await sendTelegram(chatId, prefix + reply.text, reply.keyboard);
+      if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
       // Multi-comando: tenta consolidar ADD/REMOVE da mesma mesa em UMA impressão.
       // 1ª passada: parse + resolveContext + resolveProduct (sem mutação) por linha.
       type Slot =
@@ -4487,8 +4567,11 @@ Deno.serve(async (req) => {
         }
       }
 
+      const voicePrefix = voiceTranscript && lines.length > 1
+        ? `🎤 *Ouvi:* "${voiceTranscript}"\n\n`
+        : "";
       const header = `📊 ${lines.length} comandos processados:\n`;
-      await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
+      await sendTelegram(chatId, voicePrefix + header + "\n" + textBlocks.join("\n\n"));
 
       // Botões de undo (1 por mesa batched) em mensagens separadas.
       for (const [, res] of batchResults) {
