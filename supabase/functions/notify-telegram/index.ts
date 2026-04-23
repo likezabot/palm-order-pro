@@ -120,30 +120,68 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
 
   let sent = 0;
 
-  // ===== Alerta consolidado de ponte offline (1 a cada 10 min) =====
-  if (offlineFailures.length > 0 && cfg.print_failure !== false) {
-    // Janela de 10 minutos: dedupe_key fixo por janela
-    const windowStart = new Date(Math.floor(Date.now() / (10 * 60 * 1000)) * 10 * 60 * 1000);
-    const dedupeKey = `printer_offline:${windowStart.toISOString()}`;
-    const { data: existing } = await sb.from("notification_log")
-      .select("id").eq("dedupe_key", dedupeKey).maybeSingle();
+  // ===== Máquina de estados da ponte de impressão =====
+  // Lê estado atual
+  const { data: stateRow } = await sb.from("settings")
+    .select("value").eq("key", "printer_bridge_state").maybeSingle();
+  let bridgeState: { status: "online" | "offline"; since: string | null; alerted: boolean } =
+    { status: "online", since: null, alerted: false };
+  if (stateRow?.value) {
+    try { bridgeState = { ...bridgeState, ...JSON.parse(stateRow.value) }; } catch { /* ignore */ }
+  }
 
-    if (!existing) {
-      const tables = Array.from(new Set(
-        offlineFailures.map((e) => (e.payload || {}).table_name).filter(Boolean)
-      ));
-      const tablesText = tables.length > 0 ? `\nMesas aguardando: ${tables.join(", ")}` : "";
+  const nowMs = Date.now();
+  const OFFLINE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutos
+  let stateChanged = false;
+
+  if (offlineFailures.length > 0) {
+    if (bridgeState.status === "online") {
+      // Transição online → offline: marca o início, sem enviar nada ainda
+      bridgeState = { status: "offline", since: new Date(nowMs).toISOString(), alerted: false };
+      stateChanged = true;
+    } else if (!bridgeState.alerted && bridgeState.since) {
+      // Já offline: verifica se passou dos 10 min sem ter alertado
+      const offlineSinceMs = new Date(bridgeState.since).getTime();
+      if (nowMs - offlineSinceMs >= OFFLINE_THRESHOLD_MS && cfg.print_failure !== false) {
+        const tables = Array.from(new Set(
+          offlineFailures.map((e) => (e.payload || {}).table_name).filter(Boolean)
+        ));
+        const tablesText = tables.length > 0 ? `\nMesas aguardando: ${tables.join(", ")}` : "";
+        const text =
+          `🔌 <b>Impressora offline há 10 minutos</b>\n` +
+          `Pedidos estão na fila e imprimem quando a impressora voltar.${tablesText}`;
+        await broadcast(text, chats);
+        sent++;
+        bridgeState = { ...bridgeState, alerted: true };
+        stateChanged = true;
+      }
+    }
+    // Se já alertado, silêncio total
+  }
+
+  // ===== Eventos de recuperação ("voltou ao ar") =====
+  const recoveredEvents = otherEvents.filter((e) => e.event_type === "print_recovered");
+  const remainingOther = otherEvents.filter((e) => e.event_type !== "print_recovered");
+
+  if (recoveredEvents.length > 0 && bridgeState.status === "offline") {
+    // Só envia mensagem se realmente houve um alerta de offline (evita ruído em piscadas <10min)
+    if (bridgeState.alerted && cfg.print_failure !== false) {
       const text =
-        `🔌 <b>Impressora desligada</b>\n` +
-        `Temporariamente indisponível para impressão.${tablesText}\n` +
-        `<i>Os pedidos ficam na fila e imprimem assim que a impressora voltar.</i>`;
+        `✅ <b>Impressora voltou ao ar!</b>\n` +
+        `Pedidos pendentes serão impressos automaticamente.`;
       await broadcast(text, chats);
-      await sb.from("notification_log").insert({
-        event_type: "printer_offline", entity_id: offlineFailures[0].entity_id, dedupe_key: dedupeKey,
-      });
       sent++;
     }
-    // Não envia mensagens individuais nem fica avisando — só marca como processado
+    bridgeState = { status: "online", since: null, alerted: false };
+    stateChanged = true;
+  }
+
+  // Persiste estado se mudou
+  if (stateChanged) {
+    await sb.from("settings").upsert(
+      { key: "printer_bridge_state", value: JSON.stringify(bridgeState), updated_at: new Date().toISOString() },
+      { onConflict: "key" },
+    );
   }
 
   // ===== Eventos restantes (falhas reais + tudo o mais) =====
