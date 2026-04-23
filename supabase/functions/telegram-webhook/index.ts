@@ -2697,17 +2697,29 @@ async function handleCallbackQuery(cb: any): Promise<void> {
       return;
     }
     if (op === "ok") {
-      const line: string = (stateRow.data as any).line;
       const transcript: string = (stateRow.data as any).transcript;
       const waiter: string = (stateRow.data as any).waiter ?? (username ? `Telegram (@${username})` : "Telegram");
+      // Suporta novo formato { lines: string[] } e legado { line: string }.
+      const linesArr: string[] = Array.isArray((stateRow.data as any).lines)
+        ? (stateRow.data as any).lines
+        : [(stateRow.data as any).line].filter(Boolean);
       await answerCallback(cbId, "Executando…");
+      const replies: string[] = [];
       try {
-        const parsed = parseCommand(line);
-        const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
-        const reply = await handleCommand(cmd, waiter);
-        await editTelegramMessage(chatId, messageId, `🎤 Ouvi: "${transcript}"\n\n${reply.text}`, reply.keyboard);
+        for (const ln of linesArr) {
+          try {
+            const parsed = parseCommand(ln);
+            const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+            const reply = await handleCommand(cmd, waiter);
+            replies.push(reply.text);
+            if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
+          } catch (e: any) {
+            replies.push(`❌ "${ln}": ${String(e?.message ?? e)}`);
+          }
+        }
+        await editTelegramMessage(chatId, messageId, `🎤 *Ouvi:* "${transcript}"\n\n${replies.join("\n\n")}`);
       } catch (e: any) {
-        await editTelegramMessage(chatId, messageId, `🎤 Ouvi: "${transcript}"\n\n❌ Erro: ${String(e?.message ?? e)}`);
+        await editTelegramMessage(chatId, messageId, `🎤 *Ouvi:* "${transcript}"\n\n❌ Erro: ${String(e?.message ?? e)}`);
       }
       return;
     }
