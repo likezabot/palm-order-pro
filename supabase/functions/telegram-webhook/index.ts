@@ -4374,6 +4374,10 @@ export async function webhookHandler(req: Request): Promise<Response> {
       // auto-heal é idempotente e não expõe dados — aceita anon p/ permitir cron via pg_net.
       const okAnonForHeal = adminOp === "auto-heal" && !!anonKey && !!bearer && safeEqual(bearer, anonKey);
       if (!okSecret && !okService && !okAnonForHeal) {
+        console.log("[admin-auth] denied", JSON.stringify({
+          op: adminOp, has_secret_header: !!provided, has_bearer: !!bearer,
+          bearer_len: bearer.length, anon_len: anonKey.length, match_anon: bearer === anonKey,
+        }));
         return unauthorized("missing_or_invalid_secret_for_admin_endpoint");
       }
       if (!TOKEN) {
