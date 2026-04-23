@@ -69,48 +69,73 @@ export const GroupVariantDialog = ({
                 onClick={() => onPick(name, product)}
                 aria-label={`Adicionar ${name} — R$ ${product.price.toFixed(2)}`}
                 className={cn(
-                  "relative flex items-center justify-between gap-3 py-4 px-1 text-left transition-colors",
+                  "relative flex items-center justify-between gap-3 py-3 px-1 text-left transition-colors min-h-[56px]",
                   esgotado && "opacity-40 cursor-not-allowed",
                 )}
               >
-                <span className="flex-1 min-w-0 text-[15px] font-normal text-foreground leading-snug tracking-tight">
-                  {name}
-                </span>
-                <div className="flex items-center gap-2.5 shrink-0">
-                  {esgotado ? (
-                    <span className="text-[11px] text-muted-foreground/50">indisponível</span>
-                  ) : (
-                    <span className="text-[13px] text-muted-foreground/70 tabular-nums">
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="text-[15px] font-normal text-foreground leading-snug tracking-tight truncate">
+                    {name}
+                  </span>
+                  {qty > 0 && !esgotado && (
+                    <span className="text-[12px] text-muted-foreground/60 tabular-nums leading-tight mt-0.5">
                       R$ {product.price.toFixed(2)}
                     </span>
                   )}
-                  {qty > 0 && !esgotado && onPickDecrement && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Remover 1 ${name}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPickDecrement(name, product);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
+                </div>
+                <div className="flex items-center shrink-0">
+                  {esgotado ? (
+                    <span className="text-[11px] text-muted-foreground/50">indisponível</span>
+                  ) : qty > 0 && onPickDecrement ? (
+                    <div className="inline-flex items-center rounded-full border border-border/50 bg-muted/30 h-9 px-1 gap-0.5">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Remover 1 ${name}`}
+                        onClick={(e) => {
                           e.stopPropagation();
                           onPickDecrement(name, product);
-                        }
-                      }}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-background/80 border border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
-                    >
-                      <Minus size={12} />
-                    </span>
-                  )}
-                  {qty > 0 && (
-                    <span
-                      key={qty}
-                      className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background px-1.5 animate-badge-pop tabular-nums"
-                    >
-                      {qty}
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onPickDecrement(name, product);
+                          }
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                      >
+                        <Minus size={14} />
+                      </span>
+                      <span
+                        key={qty}
+                        className="min-w-[24px] text-center text-[14px] font-medium tabular-nums text-foreground px-0.5 animate-badge-pop"
+                      >
+                        {qty}
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Adicionar mais 1 ${name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPick(name, product);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onPick(name, product);
+                          }
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                      >
+                        <Plus size={14} />
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[13px] text-muted-foreground/70 tabular-nums">
+                      R$ {product.price.toFixed(2)}
                     </span>
                   )}
                 </div>
