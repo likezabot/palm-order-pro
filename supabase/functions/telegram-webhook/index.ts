@@ -509,6 +509,7 @@ function sleep(ms: number) {
 export type Command =
   | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string; fromContext?: boolean }
   | { kind: "VIEW"; table: string; fromContext?: boolean }
+  | { kind: "TABLE_VALUE"; table: string; fromContext?: boolean }
   | { kind: "SET_TABLE"; table: string }
   | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
   | { kind: "VIEW_NOMESA" }
