@@ -1,87 +1,116 @@
 
 
-# Plano: alinhar últimas inconsistências do Admin ao padrão "Rede"
+# Plano: redesign Premium da aba "Rede"
 
-## Diagnóstico
+## Problema atual
 
-A maior parte do Admin já segue o padrão Premium da aba Rede (Card shadcn + ícone em círculo `bg-primary/10` + tokens semânticos + botões `h-10/11`). Faltam **3 ajustes pontuais** que ainda destoam:
+Olhando o screenshot que você mandou:
+- Layout solto, cards "flutuando" sem hierarquia.
+- Botão "Renomear" mal posicionado, quebrando a linha.
+- Bolinhas coloridas grandes demais, parecem amadoras.
+- Sparkline sem eixo, sem contexto — parece um risco perdido.
+- Tipografia inconsistente (tamanhos misturados).
+- Falta densidade de informação técnica (você quer **dados reais + linguagem simples juntos**).
 
-### 1. `ProductsManager.tsx` (Cardápio) — principal ofensor
-- `<button>` cru com `font-bold uppercase`, pílulas custom em vez de `Button`/`ToggleGroup` shadcn.
-- Toolbar sticky sem header de seção (ícone em círculo + título + descrição).
-- Empty state com `border-2 border-dashed` (padrão antigo).
-- Tabs de categoria (Espetos / Bebidas …) como pílulas custom — destoam do resto do Admin.
-- Botões "A-Z / Grupos / Novo" usando classes manuais em vez de `Button variant="outline"` / `default`.
+## Novo design (Premium)
 
-### 2. `OrdersTab.tsx` — refinamento mínimo
-- Ícone do header está em `p-2` (8px). Outros tabs usam `p-2.5` para um pouco mais de presença. Padronizar.
+### Estrutura visual
 
-### 3. `StatsPanel.tsx` — header de seção ausente
-- Não tem o header padrão "ícone em círculo + título + descrição" no topo.
-- Adicionar um `SectionHeader` com `BarChart3` + "Estatísticas" + descrição curta antes dos KPIs.
+```text
+┌─────────────────────────────────────────────────┐
+│ 📱 Celular (Admin)              [Renomear ✎]   │  ← header compacto
+│ Última verificação há 2s · ⏸ Pausar           │
+├─────────────────────────────────────────────────┤
+│ ❌ Impressora desligada                         │  ← banner status geral
+│    Pedidos estão na fila aguardando             │
+└─────────────────────────────────────────────────┘
 
-## Mudanças por arquivo
+┌──────────────────┬──────────────────┬──────────────────┐
+│ 📶 Internet      │ ☁ Servidor       │ 🖨 Impressora    │
+│ ● Boa            │ ● Devagar        │ ● Desligada      │
+│                  │                  │                  │
+│ 93 ms            │ 221 ms           │ — ms             │
+│ ▁▂▁▂▁▂▁▁▂▁      │ ▂▃▅▄▃▂▃▂▃▂      │ ▁▁▁▁▁▁▁▁▁▁      │
+│ média 88ms       │ média 215ms      │ offline há 12min │
+│                  │                  │                  │
+│ Tudo normal nesse│ Servidor lento,  │ Pedidos ficam na │
+│ celular.         │ pode atrasar.    │ fila até voltar. │
+│                  │                  │                  │
+│ [Testar agora]   │ [Testar agora]   │ [Testar agora]   │
+└──────────────────┴──────────────────┴──────────────────┘
 
-### `src/components/admin/ProductsManager.tsx` (refactor visual)
+┌─────────────────────────────────────────────────┐
+│ Detalhes técnicos                          ▼    │  ← collapsible
+│  • navigator.onLine: true                       │
+│  • Conexão: 4g (downlink 10Mbps, RTT 100ms)     │
+│  • Realtime: SUBSCRIBED (heartbeat 3s atrás)    │
+│  • Bridge URL: http://localhost:9100/health     │
+│  • User agent: Mozilla/5.0 ...                  │
+└─────────────────────────────────────────────────┘
+```
 
-**Toolbar (sticky)**
-- Wrap dentro de um `Card` com `SectionHeader` (ícone `Package` em `bg-primary/10` + título "Cardápio" + descrição "Gerencie produtos, preços e visibilidade").
-- Trocar fundo `bg-background border-b` por `bg-card/50 backdrop-blur` mantendo sticky.
+### Especificações visuais
 
-**Filtros de status (Todos/Visíveis/Ocultos)**
-- Trocar `<div>` + `<button>` custom por componente `ToggleGroup` shadcn (`type="single"`).
-- Sem `font-bold` — usar `font-medium`.
+**Header**
+- Avatar do device (ícone grande em círculo com `bg-primary/10`).
+- Nome em `text-xl font-semibold`, badge da role ao lado (`Badge variant="outline"`).
+- "Renomear" vira ícone-botão pequeno (`Pencil` lucide, ghost variant).
+- Linha de meta (última verificação + pausar) em `text-xs text-muted-foreground`.
 
-**Tabs de categoria**
-- Trocar pílulas custom por `Button variant={active ? "default" : "outline"} size="sm"` em flex horizontal. Mantém scroll horizontal.
-- Contador como `Badge` ao lado do nome.
+**Banner de resumo**
+- Card dedicado com cor semântica forte: verde/amarelo/vermelho de fundo suave (ex.: `bg-destructive/10 border-destructive/30`).
+- Ícone grande (24px) + título bold + subtítulo descritivo.
+- Aparece só se houver problema; se tudo ok, mostra `✅ Tudo funcionando neste dispositivo` em verde sutil.
 
-**Botões da toolbar da categoria (A-Z / Grupos / Novo / Selecionar / Limpar)**
-- Todos viram `Button` shadcn:
-  - Selecionar → `variant="outline"` (ou `"default"` quando ativo).
-  - A-Z → `variant="secondary" size="sm"`.
-  - Grupos → `variant="outline" size="sm"`.
-  - Novo → `variant="default" size="sm"` (já é a ação primária).
-  - Limpar → `variant="ghost" size="sm"`.
-- Altura uniforme `h-9`, ícones 16px, sem `font-bold uppercase`.
+**Cards de métrica (3 colunas em desktop, empilhados em mobile)**
+- Estrutura uniforme: header com ícone + label, status dot + label semântico (cor do tema), métrica grande (latência), sparkline, média, frase amigável, botão "Testar agora".
+- **Status dot pequeno** (8px) ao lado do label, não bolão grande.
+- **Latência em destaque**: `text-3xl font-bold tabular-nums` — esse é o "dado real" que faltava.
+- **Sparkline melhorada**: SVG com gradient fill embaixo da linha, eixo Y implícito (escala automática), linha de 2px, cor seguindo o status. Altura 40px, largura 100%.
+- **Linha auxiliar**: média das últimas 20 medições em texto pequeno.
+- Para impressora, em vez de só "sem resposta": mostra **"offline há 12min"** (calculado do timestamp da última falha).
 
-**Empty state**
-- Trocar `border-2 border-dashed` por `Card` shadcn com:
-  - Ícone grande em círculo `bg-muted p-4`.
-  - Texto em `text-sm text-muted-foreground`.
-  - Mesmo padrão do empty state do `OrdersTab`.
+**Detalhes técnicos (collapsible)**
+- Accordion fechado por padrão.
+- Lista vertical de pares chave/valor em `font-mono text-xs`.
+- Inclui: `navigator.onLine`, `navigator.connection.effectiveType/downlink/rtt`, status do Realtime + tempo desde último heartbeat, URL da bridge, contagem de impressoras detectadas, user agent resumido.
+- Isso atende seu pedido de **"informações reais"** sem poluir a vista principal.
 
-**Header de busca (quando ativo)**
-- Trocar `text-xs font-black uppercase` por `text-sm font-semibold text-foreground` + contador como `Badge variant="secondary"`.
+### Tokens de cor (semânticos, do design system)
 
-### `src/components/admin/OrdersTab.tsx`
-- Trocar `<div className="rounded-full bg-primary/10 p-2">` por `p-2.5` (alinhar ao SystemTab/PrintConfig que usam `p-2`, na verdade já estão consistentes — manter `p-2`, só padronizar o **tamanho do ícone interno** para `w-5 h-5` se SectionHeader usar isso). Conferir e padronizar para `p-2 + w-4 h-4` em **todos** (já é o caso, mudança mínima de uma linha se necessário).
+| Status | Cor texto | Cor fundo card | Cor sparkline |
+|---|---|---|---|
+| Boa | `text-success` | `bg-success/5` | `stroke-success` |
+| Devagar | `text-warning` | `bg-warning/5` | `stroke-warning` |
+| Ruim/Offline | `text-destructive` | `bg-destructive/5` | `stroke-destructive` |
 
-### `src/components/admin/StatsPanel.tsx`
-- Adicionar no topo do componente (antes dos seletores de período) o mesmo `SectionHeader`:
-  ```tsx
-  <div className="flex items-start gap-3 mb-6">
-    <div className="rounded-full bg-primary/10 p-2 shrink-0">
-      <BarChart3 className="w-4 h-4 text-primary" />
-    </div>
-    <div>
-      <h2 className="text-base font-semibold tracking-tight text-foreground">Estatísticas</h2>
-      <p className="text-xs text-muted-foreground">Vendas, garçons e produtos no período</p>
-    </div>
-  </div>
-  ```
+Sem cores hardcoded — tudo via tokens do `index.css`.
 
-## Princípios reforçados (DNA "Rede")
+### Responsivo
 
-- Toda seção começa com **ícone em círculo `bg-primary/10` + título `text-base font-semibold` + descrição `text-xs text-muted-foreground`**.
-- Sem `font-black uppercase`, sem `<button>` cru — sempre `Button` shadcn.
-- Empty state sempre como `Card` com ícone em círculo `bg-muted`.
-- Tokens semânticos exclusivamente.
+- Desktop (≥1024px): 3 cards em grid horizontal.
+- Tablet (640-1024px): 2 + 1 abaixo, ou 3 menores.
+- Mobile (<640px): 1 coluna, cards full-width, sparkline reduzida.
+
+## Arquivos a editar
+
+**`src/components/admin/NetworkTab.tsx`** (reescrita visual completa):
+- Mantém a lógica de medição/polling existente.
+- Reestrutura JSX com novo layout (header + banner + grid de cards + accordion técnico).
+- Substitui bolões por dots pequenos.
+- Usa `Card`, `Badge`, `Button` do design system + `Accordion` do shadcn.
+- Sparkline ganha gradient + escala dinâmica.
+- Adiciona cálculo de "offline há X min" via `since` timestamp.
+- Adiciona seção de detalhes técnicos com `navigator.connection`, heartbeat realtime, etc.
+
+**`src/index.css`** (verificar/adicionar se faltar):
+- Garantir que `--success` e `--warning` existem como tokens HSL (se não, adicionar para alinhar com `--destructive` existente).
 
 ## Resultado prático
 
-- A aba **Cardápio** deixa de ser a "estranha" do Admin — alinha com Pedidos/Impressão/Sistema/Rede.
-- **Estatísticas** ganha header consistente.
-- Toolbar de produtos com hierarquia clara: Card → SectionHeader → busca/filtros → tabs categoria → ações.
-- Visualmente, navegar entre abas vira uma experiência fluida sem quebra de estilo.
+- Visual limpo, denso, com hierarquia clara — parece dashboard de SaaS premium.
+- **Dado real visível**: latência em ms grande, média, tempo offline, sparkline com escala.
+- **Linguagem simples mantida**: status semântico + frase amigável em cada card.
+- **Detalhes técnicos** num accordion pra quem quer ver `navigator.connection`, heartbeat realtime, etc.
+- Funciona bem em celular (mobile-first) e em PC.
 
