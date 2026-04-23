@@ -4592,9 +4592,22 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       const parsed = parseCommand(lines[0] ?? text);
       const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
       const reply = await handleCommand(cmd, waiter);
-      const prefix = voiceTranscript ? `🎤 *Ouvi:* "${voiceTranscript}"\n\n` : "";
-      await sendTelegram(chatId, prefix + reply.text, reply.keyboard);
+      if (voiceTranscript) {
+        const replyTxt = String(reply.text || "");
+        const isError = /^[❌❓🤔⚠️🚨]/.test(replyTxt) || /erro|Erro/.test(replyTxt);
+        if (isError) {
+          await voiceReply(`🎤 Ouvi: "${voiceTranscript}"\n\n${replyTxt}`);
+        } else {
+          const summary = (typeof previewParts !== "undefined" && previewParts[0]) ? previewParts[0] : voiceTranscript;
+          await voiceReply(`🎤 Entendi: ${summary} ✅`);
+        }
+      } else {
+        await sendTelegram(chatId, reply.text, reply.keyboard);
+      }
       if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
+      return testOrPlain();
+    }
+    {
       // Multi-comando: tenta consolidar ADD/REMOVE da mesma mesa em UMA impressão.
       // 1ª passada: parse + resolveContext + resolveProduct (sem mutação) por linha.
       type Slot =
