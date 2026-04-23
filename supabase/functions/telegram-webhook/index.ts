@@ -70,6 +70,7 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
               "Devolva APENAS o texto falado, em minúsculas, sem pontuação, sem comentários, sem aspas. " +
               "Converta números por extenso para dígitos (ex: 'duas cocas' → '2 coca'; 'mesa cinco mais três cervejas' → 'mesa 5 + 3 cerveja'). " +
               "Mantenha verbos de comando como 'mais', 'menos', 'entrada', 'saída', 'ajuste', 'estoque', 'ver pedido', 'mesa N'. " +
+              "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
               "Se não houver fala clara, devolva uma única palavra: vazio.",
           },
           {
@@ -458,6 +459,7 @@ type Command =
   | { kind: "REPORT" }
   | { kind: "STOCK_CRITICAL" }
   | { kind: "STOCK_MOVEMENT"; type: "in" | "out" | "adjustment"; qty: number; itemText: string; unit?: string }
+  | { kind: "STOCK_OUT_NOW"; itemText: string }
   | { kind: "STOCK_QUERY"; itemText: string }
   | { kind: "STOCK_LIST" }
   | { kind: "NOTIFY_TOGGLE"; on: boolean }
@@ -639,6 +641,18 @@ function parseCommand(raw: string): Command {
     return null;
   };
 
+  // ESGOTADO AGORA: "acabou X", "acabou o X", "não tem mais X", "terminou X", "zerou X", "sem X"
+  // Detectado ANTES do stockOut pra capturar formas sem quantidade.
+  const stockOutNow = text.match(/^(?:acabou|acabaram|terminou|terminaram|zerou|zeraram|nao\s+tem\s+mais|sem\s+mais|esgotou|esgotaram)\s+(?:o\s+|a\s+|os\s+|as\s+|um\s+|uma\s+|de\s+|do\s+|da\s+)?(.+?)$/) ||
+                      text.match(/^sem\s+(?!mais\b)(.+?)$/);
+  if (stockOutNow) {
+    const itemText = stockOutNow[1].trim();
+    // Só aceita se NÃO tiver número (senão é STOCK_MOVEMENT comum)
+    if (itemText && !/\d/.test(itemText)) {
+      return { kind: "STOCK_OUT_NOW", itemText };
+    }
+  }
+
   // ENTRADA: "entrada 10 coca", "entrada de estoque medalhão 20", "entrou 5kg picanha", "+ 10 coca"
   const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)(?:\s+(?:de|do|no|ao|em|para|pra)\s+estoque)?\s+(.+)$/) ||
                    text.match(/^\+\s+(\d.+)$/);
@@ -648,7 +662,8 @@ function parseCommand(raw: string): Command {
   }
 
   // SAÍDA: "saida 2 coca", "saida do estoque 5 coca", "usei 1kg picanha", "vendi 3 coca"
-  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)(?:\s+(?:de|do|no|em|para|pra)\s+estoque)?\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
+  // (removido "acabou" — agora é STOCK_OUT_NOW acima)
+  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|quebrou|quebrei|descartei|descartar|perdi|perda)(?:\s+(?:de|do|no|em|para|pra)\s+estoque)?\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
   if (stockOut) {
     const parsed = parseStockTail(stockOut[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "out", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
@@ -1921,6 +1936,7 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
     const verb = cmd.type === "in" ? "Somaria" : cmd.type === "out" ? "Subtrairia" : "Definiria saldo de";
     return `📦 (preview) ${verb} ${cmd.qty}${cmd.unit ? " " + cmd.unit : ""} em "${cmd.itemText}".`;
   }
+  if (cmd.kind === "STOCK_OUT_NOW") return `🚨 (preview) Marcaria "${cmd.itemText}" como esgotado (estoque = 0).`;
   if (cmd.kind === "STOCK_QUERY") return `📦 (preview) Mostraria saldo de "${cmd.itemText}".`;
   if (cmd.kind === "STOCK_LIST") return `📦 (preview) Listaria todos os itens do estoque (até 30).`;
   if (cmd.kind === "NOTIFY_TOGGLE") return `🔔 (preview) ${cmd.on ? "Ativaria" : "Desativaria"} as notificações.`;
@@ -2089,6 +2105,35 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       return { text: `🤔 Vários itens batem com "${cmd.itemText}":\n${list}\n\nSeja mais específico (ex: \`estoque coca 350\`).` };
     }
     return { text: await executeStockQuery(res.item) };
+  }
+  if (cmd.kind === "STOCK_OUT_NOW") {
+    const res = await resolveStockItem(cmd.itemText);
+    if (res.kind === "not_found") {
+      return {
+        text: `❓ Não achei "${cmd.itemText}" no estoque. Tente \`lista estoque\` pra ver os nomes.`,
+      };
+    }
+    if (res.kind === "ambiguous") {
+      const list = res.candidates.slice(0, 5).map((i) => `  • ${i.name}`).join("\n");
+      return { text: `🤔 Vários itens batem com "${cmd.itemText}":\n${list}\n\nSeja mais específico (ex: \`acabou coca 350\`).` };
+    }
+    try {
+      const out = await executeStockMovement(res.item, "adjustment", 0, waiter);
+      const token = registerStockUndo({
+        itemId: res.item.id,
+        itemName: res.item.name,
+        unit: res.item.unit,
+        type: "adjustment",
+        qty: 0,
+        previousStock: out.previousStock,
+      });
+      return {
+        text: `✅ Marquei *${res.item.name}* como esgotado (estoque = 0). PALM já mostra a tarja.`,
+        keyboard: buildStockUndoKeyboard(token),
+      };
+    } catch (e: any) {
+      return { text: `❌ Erro ao marcar esgotado: ${String(e?.message ?? e)}` };
+    }
   }
   if (cmd.kind === "STOCK_MOVEMENT") {
     const res = await resolveStockItem(cmd.itemText);

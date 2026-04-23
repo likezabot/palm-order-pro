@@ -17,7 +17,8 @@ Edge function `telegram-webhook` permite editar pedidos via texto:
 - `estoque coca` / `saldo coca` / `quanto tem de coca` → STOCK_QUERY.
 - `estoque` (sozinho) / `criticos` / `alertas` / `o que falta` → STOCK_CRITICAL.
 - `lista estoque` / `inventario` / `tudo do estoque` → STOCK_LIST.
-- Aliases extras: IN aceita `repor|abasteci|entregou|subir|reposicao`; OUT aceita `vendi|acabou|quebrou|descartei|perdi|baixa`.
+- **`acabou X` / `acabou o X` / `terminou X` / `zerou X` / `não tem mais X` / `sem X` / `esgotou X`** → STOCK_OUT_NOW (atalho rápido sem qty). Resolve via `find_inventory_item_by_text`, força `apply_inventory_movement(adjustment, 0)`. Resposta: `✅ Marquei "<nome>" como esgotado (estoque = 0). PALM já mostra a tarja.` Executa direto na voz (sem confirmação — baixo risco, reversível com undo). Botão ↩️ Desfazer aparece.
+- Aliases extras: IN aceita `repor|abasteci|entregou|subir|reposicao`; OUT aceita `vendi|quebrou|descartei|perdi|baixa`. (Removido "acabou" do OUT — agora é STOCK_OUT_NOW.)
 
 **Wizard v2 de Estoque (REFEITO — fluxo navegável e robusto):**
 

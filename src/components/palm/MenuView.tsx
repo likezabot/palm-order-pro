@@ -15,7 +15,6 @@ import {
   type ProductGroup,
 } from "@/lib/product-groups";
 import { CartFab } from "./CartFab";
-import { EsgotadoConfirmDialog } from "./EsgotadoConfirmDialog";
 import { useProductStockMap, useProductRecipes, isProductEsgotado } from "@/hooks/use-product-stock-map";
 
 interface Props {
@@ -41,7 +40,6 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
   const [renameValue, setRenameValue] = useState("");
   const [moveOpen, setMoveOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [esgotadoPending, setEsgotadoPending] = useState<Product | null>(null);
   const { playFeedback } = useFeedback();
   const { data: stockMap } = useProductStockMap();
   const { data: recipes } = useProductRecipes();
@@ -53,14 +51,9 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
 
   const isEsgotado = (id: string) => isProductEsgotado(stockMap, id, recipes);
 
-  // Intercepta o add: se o item estiver esgotado (estoque <= 0 e vinculado),
-  // abre confirm dialog. Se confirmar, chama onAdd normalmente.
+  // Adicionar item segue direto, mesmo se esgotado — a tarja visual continua aparecendo
+  // pra informar, mas não bloqueia mais o fluxo.
   const handleAdd = (product: Product) => {
-    if (isEsgotado(product.id)) {
-      playFeedback("click");
-      setEsgotadoPending(product);
-      return;
-    }
     onAdd(product);
   };
 
@@ -495,16 +488,6 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         onRename={(v) => onRenameTable?.(v)}
       />
 
-
-      <EsgotadoConfirmDialog
-        open={!!esgotadoPending}
-        productName={esgotadoPending?.name ?? null}
-        onCancel={() => setEsgotadoPending(null)}
-        onConfirm={() => {
-          if (esgotadoPending) onAdd(esgotadoPending);
-          setEsgotadoPending(null);
-        }}
-      />
 
       <CartFab itemCount={itemCount} total={total} onClick={onViewCart} />
     </div>

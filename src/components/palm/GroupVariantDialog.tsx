@@ -65,19 +65,18 @@ export const GroupVariantDialog = ({
               <button
                 type="button"
                 key={name}
-                disabled={esgotado}
                 onClick={() => onPick(name, product)}
                 aria-label={`Adicionar ${name} — R$ ${product.price.toFixed(2)}`}
                 className={cn(
                   "relative flex items-center justify-between gap-3 py-3 px-1 text-left transition-colors min-h-[56px]",
-                  esgotado && "opacity-40 cursor-not-allowed",
+                  esgotado && "opacity-60",
                 )}
               >
                 <div className="flex flex-col flex-1 min-w-0">
                   <span className="text-[15px] font-normal text-foreground leading-snug tracking-tight truncate">
                     {name}
                   </span>
-                  {qty > 0 && !esgotado && (
+                  {qty > 0 && (
                     <span className="text-[12px] text-muted-foreground/60 tabular-nums leading-tight mt-0.5">
                       R$ {product.price.toFixed(2)}
                     </span>
@@ -85,7 +84,7 @@ export const GroupVariantDialog = ({
                 </div>
                 <div className="flex items-center shrink-0">
                   {esgotado ? (
-                    <span className="text-[11px] text-muted-foreground/50">indisponível</span>
+                    <span className="text-[11px] font-medium text-destructive uppercase tracking-wide">esgotado</span>
                   ) : qty > 0 && onPickDecrement ? (
                     <div className="inline-flex items-center rounded-full border border-border/50 bg-muted/30 h-9 px-1 gap-0.5">
                       <span
