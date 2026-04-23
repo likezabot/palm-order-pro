@@ -4474,7 +4474,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
         // Idempotente. Roda diagnóstico e SÓ executa setWebhook se detectar
         // divergência (URL errada, erro recente de secret/auth, ou cert custom).
         // Seguro pra chamar via cron a cada poucos minutos.
-        const selfUrl = `${url.origin}${url.pathname}`;
+        const selfUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`;
         let infoJson: any = null;
         try {
           const r = await fetch(`${tgBase}/getWebhookInfo`);
