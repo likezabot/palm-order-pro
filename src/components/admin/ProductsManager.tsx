@@ -396,9 +396,12 @@ const ProductsManager = ({
         {search ? (
           // Modo busca: lista todas categorias com header
           allFilteredIds.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground bg-card rounded-xl border-2 border-dashed border-border">
-              Nenhum produto encontrado.
-            </div>
+            <Card className="p-12 flex flex-col items-center justify-center text-center">
+              <div className="rounded-full bg-muted p-4 mb-3">
+                <Search className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
+            </Card>
           ) : (
             CATEGORIES.map((cat) => {
               const list = filteredByCategory[cat] ?? [];
@@ -406,11 +409,16 @@ const ProductsManager = ({
             })
           )
         ) : items.length === 0 ? (
-          <div className="py-12 text-center text-sm text-muted-foreground bg-card rounded-xl border-2 border-dashed border-border">
-            {hasFilters
-              ? "Nenhum produto corresponde aos filtros."
-              : `Nenhum produto em ${CATEGORY_LABELS[activeCategory]}.`}
-          </div>
+          <Card className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="rounded-full bg-muted p-4 mb-3">
+              <Package className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {hasFilters
+                ? "Nenhum produto corresponde aos filtros."
+                : `Nenhum produto em ${CATEGORY_LABELS[activeCategory]}.`}
+            </p>
+          </Card>
         ) : (
           renderGrid(activeCategory, items)
         )}
