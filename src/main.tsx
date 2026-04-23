@@ -9,14 +9,18 @@ import { startGlobalOrderRuntime } from "./lib/global-order-runtime";
 import { queryClient } from "./lib/query-client";
 
 // Anti-flash: aplica tema salvo antes do React montar.
-// Default = dark (preserva visual atual).
+// Default = light. Só ativa dark se o usuário trocou manualmente (chave v2).
 try {
-  const t = localStorage.getItem("plano-b-theme");
-  if (t !== "light") {
+  const t = localStorage.getItem("plano-b-theme-v2");
+  if (t === "dark") {
     document.documentElement.classList.add("dark");
   }
+  // Alto contraste persistido — aplica antes do React para evitar flash.
+  if (localStorage.getItem("plano-b-high-contrast") === "1") {
+    document.documentElement.classList.add("hc");
+  }
 } catch {
-  document.documentElement.classList.add("dark");
+  // mantém claro como padrão em caso de erro
 }
 
 debugLog.info(
