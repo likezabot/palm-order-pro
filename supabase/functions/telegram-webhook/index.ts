@@ -395,9 +395,10 @@ function buildUndoSingleKeyboard(table: string, productId: string, qty: number, 
   // op = ação original ("a" → ADD foi feito → undo é REMOVE)
   return [[{ text: "↩️ Desfazer (60s)", callback_data: `u|${table}|${productId}|${qty}|${op}` }]];
 }
-function buildUndoBatchKeyboard(token: string): InlineButton[][] {
+function buildUndoBatchKeyboard(token: string, tableLabel?: string): InlineButton[][] {
   if (!token) return [];
-  return [[{ text: "↩️ Desfazer (60s)", callback_data: `ub|${token}` }]];
+  const label = tableLabel ? `↩️ Desfazer Mesa ${tableLabel} (60s)` : `↩️ Desfazer (60s)`;
+  return [[{ text: label, callback_data: `ub|${token}` }]];
 }
 
 // ─── Stock undo (60s, in-memory) ───
