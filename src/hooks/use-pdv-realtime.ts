@@ -5,16 +5,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { debugLog } from "@/lib/debug-logger";
 import { reportRealtime, markRealtimeHeartbeat, subscribeConnectivity } from "@/lib/connectivity-store";
-import type { Order } from "@/lib/types";
+import type { Order, OrderItem } from "@/lib/types";
 
 /**
- * Hook que gerencia a subscription Realtime do PDV — APENAS UI.
- *
- * IMPORTANTE: a autoimpressão foi movida para `src/lib/global-order-runtime.ts`,
- * que roda independente de tela aberta. Aqui só:
- * - mantém status do realtime para o badge ONLINE/OFFLINE
- * - invalida queries da UI (toast + atualização visual)
- * - emite som/feedback para o operador do PDV
+ * Realtime do PDV — agora aplica setQueryData direto no cache (UI instantânea)
+ * em vez de invalidateQueries (que dispara refetch). Mantém invalidação
+ * debounced só como reconciliação de fundo.
  */
 export function usePdvRealtime() {
   const queryClient = useQueryClient();
@@ -24,7 +20,6 @@ export function usePdvRealtime() {
 
   const toastRef = useRef(toast);
   const playFeedbackRef = useRef(playFeedback);
-
   useEffect(() => { toastRef.current = toast; }, [toast]);
   useEffect(() => { playFeedbackRef.current = playFeedback; }, [playFeedback]);
 
@@ -32,24 +27,79 @@ export function usePdvRealtime() {
     const channelName = `pdv-ui-${crypto.randomUUID()}`;
     debugLog.info("realtime", `→ inscrevendo canal UI ${channelName}`);
 
+    // Reconciliação debounced (rede de segurança)
+    let reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReconcile = () => {
+      if (reconcileTimer) clearTimeout(reconcileTimer);
+      reconcileTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
+      }, 2_000);
+    };
+
     const channel = supabase
       .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         markRealtimeHeartbeat();
-        queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
-        queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
         const newOrder = payload.new as Order;
+        // Insere otimisticamente no cache de pedidos
+        queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
+          if (!old) return old;
+          if (old.some((o) => o.id === newOrder.id)) return old;
+          return [newOrder, ...old];
+        });
         debugLog.info("realtime", `[${channelName}] INSERT orders`, { id: newOrder.id, table: newOrder.table_name });
         playFeedbackRef.current("notification");
         toastRef.current({ title: `Novo pedido! Mesa ${newOrder.table_name}` });
+        scheduleReconcile();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, () => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
         markRealtimeHeartbeat();
-        queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+        const updated = payload.new as Order;
+        queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
+          if (!old) return old;
+          let found = false;
+          const next = old.map((o) => {
+            if (o.id !== updated.id) return o;
+            found = true;
+            // Guard contra updates fora de ordem (versão menor = ignora)
+            if (typeof o.version === "number" && typeof updated.version === "number" && updated.version < o.version) {
+              return o;
+            }
+            return { ...o, ...updated };
+          });
+          return found ? next : old;
+        });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
         markRealtimeHeartbeat();
-        queryClient.invalidateQueries({ queryKey: ["pdv-items"] });
+        const oldOrder = payload.old as { id?: string };
+        if (!oldOrder?.id) return;
+        queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
+          if (!old) return old;
+          return old.filter((o) => o.id !== oldOrder.id);
+        });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, (payload) => {
+        markRealtimeHeartbeat();
+        const event = payload.eventType;
+        const row = (payload.new ?? payload.old) as Partial<OrderItem> | undefined;
+        const orderId = row?.order_id;
+        if (orderId) {
+          queryClient.setQueryData<OrderItem[]>(["pdv-items", orderId], (old) => {
+            if (!old) return old;
+            if (event === "DELETE") {
+              return old.filter((i) => i.id !== (payload.old as OrderItem).id);
+            }
+            const newItem = payload.new as OrderItem;
+            const idx = old.findIndex((i) => i.id === newItem.id);
+            if (idx === -1) return [...old, newItem];
+            const next = old.slice();
+            next[idx] = { ...next[idx], ...newItem };
+            return next;
+          });
+        }
+        scheduleReconcile();
       })
       .subscribe((status) => {
         const online = status === "SUBSCRIBED";
@@ -58,7 +108,7 @@ export function usePdvRealtime() {
         reportRealtime(status);
       });
 
-    // Fallback polling: quando realtime degradado/offline, recarrega a cada 10s.
+    // Fallback polling: quando realtime degradado/offline.
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     const unsubConn = subscribeConnectivity((s) => {
       const needsPoll = s.realtime === "degraded" || s.realtime === "offline";
@@ -78,6 +128,7 @@ export function usePdvRealtime() {
     return () => {
       debugLog.info("realtime", `← removendo canal ${channelName}`);
       if (pollTimer) clearInterval(pollTimer);
+      if (reconcileTimer) clearTimeout(reconcileTimer);
       unsubConn();
       supabase.removeChannel(channel);
     };
