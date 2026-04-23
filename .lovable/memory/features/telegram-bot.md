@@ -1,6 +1,6 @@
 ---
 name: Telegram bot
-description: Bot do Telegram edita pedidos por texto (mesa N + qty produto), CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque/lista estoque) E em modo CONVERSACIONAL v2 (wizard rico com navegação Voltar/Menu, top itens, contagem multi-item via carrinho, preview de operação em massa, undo, "fazer outra"). Categorias do estoque alinhadas ao cardápio (Refeições/Espetos/Bebidas/Cervejas) — trigger DB sync_inventory_category_from_product mantém em sync. Estado persistido em telegram_chat_state (TTL 5min normal, 30min se carrinho). Whitelist em settings.telegram_allowed_chats.
+description: Bot do Telegram edita pedidos por texto OU voz (mesa N + qty produto), CONTROLA ESTOQUE via gatilhos explícitos (entrada/saida/ajuste/estoque/lista estoque) E em modo CONVERSACIONAL v2 (wizard rico). Aceita VOICE (microfone) — transcreve com Lovable AI (Gemini 2.5 Flash, áudio nativo OGG/Opus) e roda no mesmo parser de texto. Confirmação híbrida: comandos de leitura/pedido executam direto com prefixo "🎤 Ouvi: ..."; STOCK_MOVEMENT pede botão ✅ Executar / ❌ Cancelar (state em telegram_chat_state step=voice_confirm, TTL 2min, callbacks vc|ok|<token> e vc|no|<token>). Categorias do estoque alinhadas ao cardápio. Whitelist em settings.telegram_allowed_chats.
 type: feature
 ---
 Edge function `telegram-webhook` permite editar pedidos via texto:
