@@ -4362,7 +4362,21 @@ export async function webhookHandler(req: Request): Promise<Response> {
     const adminOp = url.searchParams.get("admin");
     if (adminOp) {
       const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
-      if (!WEBHOOK_SECRET || !safeEqual(provided, WEBHOOK_SECRET)) {
+      const authHeader = req.headers.get("authorization") ?? "";
+      const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7) : "";
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      // Anon key é público (publishable). Hardcoded para garantir match — o env var
+      // que o runtime expõe pode não ser o mesmo do projeto.
+      const ANON_KEY_PUBLIC = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdicGNqanR4cXR6cW90bWtmeHJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNTE0OTIsImV4cCI6MjA5MTcyNzQ5Mn0.K82zsqXu_airg_b3GYtKQ2vk7r5hYj_nYrt3AcmurD8";
+      const okSecret = !!WEBHOOK_SECRET && safeEqual(provided, WEBHOOK_SECRET);
+      const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
+      // auto-heal é idempotente e não expõe dados — aceita anon p/ permitir cron via pg_net.
+      const okAnonForHeal = adminOp === "auto-heal" && !!bearer && safeEqual(bearer, ANON_KEY_PUBLIC);
+      if (!okSecret && !okService && !okAnonForHeal) {
+        console.log("[admin-auth] denied", JSON.stringify({
+          op: adminOp, has_secret_header: !!provided, has_bearer: !!bearer,
+          bearer_len: bearer.length, expected_len: ANON_KEY_PUBLIC.length, match_anon: bearer === ANON_KEY_PUBLIC,
+        }));
         return unauthorized("missing_or_invalid_secret_for_admin_endpoint");
       }
       if (!TOKEN) {
@@ -4375,8 +4389,9 @@ export async function webhookHandler(req: Request): Promise<Response> {
         return new Response(JSON.stringify(j), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       if (adminOp === "fix-webhook") {
-        // URL atual deste edge function — exatamente para onde o Telegram precisa apontar.
-        const selfUrl = `${url.origin}${url.pathname}`;
+        // URL pública deste edge function. Não usar url.origin: dentro do runtime
+        // a request chega como http://<host-interno>/telegram-webhook.
+        const selfUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`;
         const setRes = await fetch(`${tgBase}/setWebhook`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -4401,7 +4416,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
         );
       }
       if (adminOp === "health") {
-        const selfUrl = `${url.origin}${url.pathname}`;
+        const selfUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`;
         let infoJson: any = null;
         let fetchError: string | null = null;
         try {
@@ -4453,6 +4468,82 @@ export async function webhookHandler(req: Request): Promise<Response> {
             hint: allOk ? null : "Chame GET ?admin=fix-webhook com o header X-Telegram-Bot-Api-Secret-Token para reparar.",
           }, null, 2),
           { status: allOk ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (adminOp === "auto-heal") {
+        // Idempotente. Roda diagnóstico e SÓ executa setWebhook se detectar
+        // divergência (URL errada, erro recente de secret/auth, ou cert custom).
+        // Seguro pra chamar via cron a cada poucos minutos.
+        const selfUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`;
+        let infoJson: any = null;
+        try {
+          const r = await fetch(`${tgBase}/getWebhookInfo`);
+          infoJson = await r.json();
+        } catch (e) {
+          return new Response(
+            JSON.stringify({ ok: false, action: "none", error: `getWebhookInfo failed: ${(e as Error)?.message ?? e}` }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        const result = infoJson?.result ?? {};
+        const currentUrl: string = result?.url ?? "";
+        const lastErr: string = result?.last_error_message ?? "";
+        const lastErrDate: number = result?.last_error_date ?? 0;
+        const pending: number = result?.pending_update_count ?? 0;
+        const hasCustomCert = !!result?.has_custom_certificate;
+        const recentErr = lastErrDate > 0 && (Date.now() / 1000 - lastErrDate) < 600;
+
+        const reasons: string[] = [];
+        if (currentUrl !== selfUrl) reasons.push(`url_mismatch (registered=${currentUrl || "<none>"})`);
+        if (recentErr && /secret|unauthor|401|wrong/i.test(lastErr)) reasons.push(`auth_error: ${lastErr}`);
+        if (hasCustomCert) reasons.push("unexpected_custom_certificate");
+        if (pending > 100) reasons.push(`pending_backlog=${pending}`);
+
+        if (reasons.length === 0) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              action: "none",
+              healthy: true,
+              registered_url: currentUrl,
+              expected_url: selfUrl,
+              pending_update_count: pending,
+              last_error_message: lastErr || null,
+            }, null, 2),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Repara: setWebhook com URL atual + secret atual.
+        const setRes = await fetch(`${tgBase}/setWebhook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: selfUrl,
+            secret_token: WEBHOOK_SECRET,
+            allowed_updates: ["message", "edited_message", "callback_query"],
+            drop_pending_updates: false,
+          }),
+        });
+        const setJson = await setRes.json().catch(() => ({}));
+        console.log("[auto-heal] repaired webhook", JSON.stringify({ reasons, set_ok: setJson?.ok, desc: setJson?.description }));
+
+        // Re-valida.
+        const verifyRes = await fetch(`${tgBase}/getWebhookInfo`);
+        const verifyJson = await verifyRes.json().catch(() => ({}));
+        const verifiedUrl: string = verifyJson?.result?.url ?? "";
+        const verified = verifiedUrl === selfUrl && setJson?.ok === true;
+
+        return new Response(
+          JSON.stringify({
+            ok: verified,
+            action: "set_webhook",
+            reasons,
+            set_result: setJson,
+            verified_url: verifiedUrl,
+            expected_url: selfUrl,
+          }, null, 2),
+          { status: verified ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       return new Response(JSON.stringify({ error: "unknown admin op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
