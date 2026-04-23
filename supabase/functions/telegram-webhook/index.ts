@@ -3304,7 +3304,7 @@ async function wzListCategoriesWithCount(): Promise<{ name: string; label: strin
   // Anexa categorias legacy não canônicas que ainda tenham itens (ex: "outros").
   for (const [name, count] of counts.entries()) {
     if (!MENU_CATEGORIES.includes(name as any) && count > 0) {
-      result.push({ name, label: wzCategoryLabel(name), count });
+      result.push({ name: name as any, label: wzCategoryLabel(name), count });
     }
   }
   return result;
