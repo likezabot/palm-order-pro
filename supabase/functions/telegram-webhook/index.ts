@@ -524,7 +524,7 @@ export type Command =
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
 // Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
-const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
+const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "poer", "põe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar", "lanca", "lança", "lancar", "lançar", "joga", "jogar", "marca", "marcar", "anota", "anotar", "registra", "registrar", "pede", "pedir"];
 const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
 const ALL_OPS = [...ADD_OPS, ...REM_OPS];
 
