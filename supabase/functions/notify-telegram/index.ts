@@ -120,10 +120,10 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
 
   let sent = 0;
 
-  // ===== Alerta consolidado de ponte offline (1 a cada 30 min) =====
+  // ===== Alerta consolidado de ponte offline (1 a cada 10 min) =====
   if (offlineFailures.length > 0 && cfg.print_failure !== false) {
-    // Janela de 30 minutos: dedupe_key fixo por janela
-    const windowStart = new Date(Math.floor(Date.now() / (30 * 60 * 1000)) * 30 * 60 * 1000);
+    // Janela de 10 minutos: dedupe_key fixo por janela
+    const windowStart = new Date(Math.floor(Date.now() / (10 * 60 * 1000)) * 10 * 60 * 1000);
     const dedupeKey = `printer_offline:${windowStart.toISOString()}`;
     const { data: existing } = await sb.from("notification_log")
       .select("id").eq("dedupe_key", dedupeKey).maybeSingle();
