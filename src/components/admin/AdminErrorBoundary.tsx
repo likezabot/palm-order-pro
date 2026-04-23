@@ -13,14 +13,11 @@ interface State {
   retryCount: number;
 }
 
-const MAX_AUTO_RETRIES = 2;
-const RETRY_DELAY_MS = 1200;
+const MAX_AUTO_RETRIES = 1;
+const RETRY_DELAY_MS = 900;
+const RELOAD_GUARD_KEY = "admin-chunk-hard-reload-v1";
+const RELOAD_GUARD_WINDOW_MS = 15_000;
 
-/**
- * ErrorBoundary específico para a rota Admin.
- * Captura falhas de lazy loading (chunk 404, "Failed to fetch dynamically imported module")
- * e tenta recarregar automaticamente até MAX_AUTO_RETRIES vezes antes de mostrar UI de fallback.
- */
 class AdminErrorBoundary extends Component<Props, State> {
   state: State = {
     hasError: false,
@@ -36,9 +33,8 @@ class AdminErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    const isChunkError = this.isDynamicImportError(error);
-    if (isChunkError && this.state.retryCount < MAX_AUTO_RETRIES) {
-      this.scheduleAutoRetry();
+    if (this.isDynamicImportError(error) && this.canHardReloadOnce()) {
+      this.scheduleHardReload();
     }
   }
 
@@ -57,30 +53,46 @@ class AdminErrorBoundary extends Component<Props, State> {
     );
   }
 
-  private scheduleAutoRetry = () => {
-    this.setState({ retrying: true });
+  private canHardReloadOnce(): boolean {
+    try {
+      const lastAttempt = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) ?? "0");
+      return !lastAttempt || Date.now() - lastAttempt > RELOAD_GUARD_WINDOW_MS;
+    } catch {
+      return true;
+    }
+  }
+
+  private reloadAdminRoute = () => {
+    try {
+      sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+      const url = new URL(window.location.href);
+      url.pathname = "/admin";
+      url.searchParams.set("adminReload", String(Date.now()));
+      window.location.replace(url.toString());
+    } catch {
+      window.location.reload();
+    }
+  };
+
+  private scheduleHardReload = () => {
+    this.setState((s) => ({ retrying: true, retryCount: s.retryCount + 1 }));
     this.retryTimer = setTimeout(() => {
-      this.setState((s) => ({
-        hasError: false,
-        error: null,
-        retrying: false,
-        retryCount: s.retryCount + 1,
-      }));
+      this.reloadAdminRoute();
     }, RETRY_DELAY_MS);
   };
 
   private handleManualReload = () => {
-    window.location.reload();
+    this.reloadAdminRoute();
   };
 
   render() {
     if (this.state.retrying) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 bg-background">
-          <RefreshCw className="w-10 h-10 text-primary animate-spin" />
-          <p className="text-foreground font-medium">Recarregando Admin…</p>
-          <p className="text-sm text-muted-foreground">
-            Tentativa {this.state.retryCount + 1} de {MAX_AUTO_RETRIES}
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background p-6">
+          <RefreshCw className="h-10 w-10 animate-spin text-primary" />
+          <p className="font-medium text-foreground">Recarregando Admin…</p>
+          <p className="text-center text-sm text-muted-foreground">
+            Atualizando a rota para buscar o módulo novamente.
           </p>
         </div>
       );
@@ -89,18 +101,18 @@ class AdminErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       const isChunkError = this.isDynamicImportError(this.state.error);
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 bg-background">
-          <AlertTriangle className="w-12 h-12 text-destructive" />
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background p-6">
+          <AlertTriangle className="h-12 w-12 text-destructive" />
           <h1 className="text-xl font-bold text-foreground">
             {isChunkError ? "Falha ao carregar o Admin" : "Algo deu errado"}
           </h1>
-          <p className="text-sm text-muted-foreground text-center max-w-md">
+          <p className="max-w-md text-center text-sm text-muted-foreground">
             {isChunkError
-              ? "O carregamento do módulo falhou. Pode ser uma atualização recente ou conexão instável."
+              ? "O preview perdeu a referência do módulo do Admin após uma atualização."
               : this.state.error?.message ?? "Erro inesperado no painel."}
           </p>
           <Button onClick={this.handleManualReload} size="lg" className="mt-2 gap-2">
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="h-4 w-4" />
             Recarregar Admin
           </Button>
         </div>
