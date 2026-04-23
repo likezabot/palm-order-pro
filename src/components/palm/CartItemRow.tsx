@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { CartItem } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
@@ -92,4 +92,17 @@ const CartItemRow = ({
   );
 };
 
-export default CartItemRow;
+export default memo(CartItemRow, (prev, next) => {
+  return (
+    prev.item.product.id === next.item.product.id &&
+    prev.item.quantity === next.item.quantity &&
+    prev.item.note === next.item.note &&
+    prev.item.waiter_name === next.item.waiter_name &&
+    prev.item.product.price === next.item.product.price &&
+    prev.showWaiterTag === next.showWaiterTag &&
+    prev.fallbackWaiter === next.fallbackWaiter &&
+    prev.onUpdateQuantity === next.onUpdateQuantity &&
+    prev.onUpdateNote === next.onUpdateNote &&
+    prev.onRemove === next.onRemove
+  );
+});
