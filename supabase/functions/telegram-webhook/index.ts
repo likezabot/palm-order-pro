@@ -60,10 +60,11 @@ async function getMenuVocabulary(): Promise<string> {
 
 // Baixa o arquivo de voz pelo Bot API e transcreve via Lovable AI Gateway
 // (Gemini suporta áudio nativo). Retorna o texto transcrito ou null em erro.
-async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
+async function transcribeTelegramVoice(fileId: string, traceId = "----"): Promise<string | null> {
+  const tag = `[voice ${traceId}]`;
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
-    console.error("transcribeVoice: LOVABLE_API_KEY ausente");
+    console.error(`${tag} transcribe: LOVABLE_API_KEY ausente`);
     return null;
   }
   try {
@@ -76,16 +77,17 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
     const gfJson = await gfRes.json();
     const filePath: string | undefined = gfJson?.result?.file_path;
     if (!gfRes.ok || !filePath) {
-      console.error("transcribeVoice getFile falhou:", gfRes.status, gfJson);
+      console.error(`${tag} transcribe getFile falhou:`, gfRes.status, gfJson);
       return null;
     }
     // 2) download bytes
     const dlRes = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${filePath}`);
     if (!dlRes.ok) {
-      console.error("transcribeVoice download falhou:", dlRes.status);
+      console.error(`${tag} transcribe download falhou:`, dlRes.status);
       return null;
     }
     const buf = new Uint8Array(await dlRes.arrayBuffer());
+    console.log(`${tag} download ok bytes=${buf.length}`);
     // 3) base64 (chunked p/ evitar stack overflow)
     let bin = "";
     const CHUNK = 0x8000;
@@ -137,17 +139,17 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
     });
     if (!aiRes.ok) {
       const errTxt = await aiRes.text().catch(() => "");
-      console.error("transcribeVoice Lovable AI falhou:", aiRes.status, errTxt.slice(0, 300));
+      console.error(`${tag} transcribe Lovable AI falhou:`, aiRes.status, errTxt.slice(0, 300));
       return null;
     }
     const aiJson = await aiRes.json();
     const raw: string = aiJson?.choices?.[0]?.message?.content ?? "";
     const txt = String(raw).trim().replace(/^["'`]+|["'`]+$/g, "").trim();
-    console.log(`[transcribeVoice] result: "${txt}" (raw len=${raw.length})`);
+    console.log(`${tag} transcript: "${txt}" (raw len=${raw.length})`);
     if (!txt || txt.toLowerCase() === "vazio") return null;
     return txt;
   } catch (e) {
-    console.error("transcribeVoice erro:", e);
+    console.error(`${tag} transcribe erro:`, e);
     return null;
   }
 }
@@ -4262,27 +4264,46 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
 
     // Voice (microfone) → transcreve com Lovable AI e segue como texto.
     let voiceTranscript: string | null = null;
+    let voiceTraceId: string | null = null;
     const voiceFileId: string | undefined = message?.voice?.file_id;
     if (!fromBot && chatId && !text && voiceFileId) {
+      voiceTraceId = Math.random().toString(36).slice(2, 8);
+      const v = message?.voice ?? {};
+      console.log(`[voice ${voiceTraceId}] received duration=${v.duration ?? "?"}s mime=${v.mime_type ?? "?"} size=${v.file_size ?? "?"}`);
       // Whitelist antes de gastar transcrição
       const allowedEarly = await getAllowedChats();
       if (!allowedEarly || !allowedEarly.has(chatId)) {
-        console.warn("Voice de chat não autorizado:", chatId);
+        console.warn(`[voice ${voiceTraceId}] action=blocked reason=chat_not_allowed`);
         return testOrPlain();
       }
       // Dedupe antes de transcrever também
       if (typeof updateId === "number" && isDuplicate(updateId)) {
+        console.log(`[voice ${voiceTraceId}] action=skipped reason=duplicate update_id=${updateId}`);
         return testOrPlain();
       }
       setTestContext(chatId);
-      const transcribed = await transcribeTelegramVoice(voiceFileId);
-      if (!transcribed) {
-        await sendTelegram(chatId, "🎤 Não consegui entender o áudio. Tente falar mais claro ou mande por texto.");
+      try {
+        const transcribed = await transcribeTelegramVoice(voiceFileId, voiceTraceId);
+        if (!transcribed) {
+          console.warn(`[voice ${voiceTraceId}] action=failed reason=no_transcript`);
+          await sendTelegram(
+            chatId,
+            "🎤 Não consegui entender o áudio.\n\nTente falar mais perto do microfone, em ambiente silencioso, ou envie por texto.\nEx.: `mesa 5 +2 coca`",
+          );
+          clearTestContext();
+          return testOrPlain();
+        }
+        voiceTranscript = transcribed;
+        text = transcribed;
+      } catch (e) {
+        console.error(`[voice ${voiceTraceId}] action=failed reason=exception`, e);
+        await sendTelegram(
+          chatId,
+          "🎤 ❌ Erro ao processar o áudio. Tente novamente ou envie por texto.",
+        );
         clearTestContext();
         return testOrPlain();
       }
-      voiceTranscript = transcribed;
-      text = transcribed;
     }
 
     if (fromBot || !chatId || !text) {
@@ -4427,11 +4448,16 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     // Resolve mesa de contexto + produto (sem mutação) para detectar incertezas
     // específicas de ADD/REMOVE: produto não encontrado, ambíguo, mesa herdada com qty alta.
     if (voiceTranscript) {
+      const tag = `[voice ${voiceTraceId ?? "----"}]`;
+      console.log(`${tag} split lines=${lines.length}`);
       const enriched: VoiceParsedSig[] = [];
       const previewParts: string[] = [];
-      for (const ln of lines) {
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        console.log(`${tag} line[${i}] raw="${ln}"`);
         let parsed: any;
         try { parsed = parseCommand(ln); } catch { parsed = { kind: "PARSE_ERROR" }; }
+        console.log(`${tag} line[${i}] parsed kind=${parsed.kind} table=${parsed.table ?? "-"} qty=${parsed.qty ?? "-"} productText="${parsed.productText ?? ""}"`);
         const sig: VoiceParsedSig = { kind: parsed.kind, qty: parsed.qty };
         let previewLine = ln;
         try {
@@ -4440,9 +4466,15 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
             sig.kind = cmd.kind;
             sig.qty = (cmd as any).qty;
             sig.fromContext = (cmd as any).fromContext;
+            console.log(`${tag} line[${i}] context table=${(cmd as any).table ?? "-"} fromContext=${!!(cmd as any).fromContext}`);
             if (cmd.kind === "ADD" || cmd.kind === "REMOVE") {
               const r = await resolveProduct((cmd as any).productText);
               sig.productResolution = r.kind as any;
+              const resInfo =
+                r.kind === "found" ? `id=${r.product.id} name="${r.product.name}"` :
+                r.kind === "ambiguous" ? `candidates=${(r as any).candidates?.length ?? "?"}` :
+                r.kind === "not_found" ? `query="${(cmd as any).productText}"` : r.kind;
+              console.log(`${tag} line[${i}] product resolution=${r.kind} ${resInfo}`);
               const op = cmd.kind === "ADD" ? "+" : "−";
               const tableTag = (cmd as any).fromContext ? `mesa ${cmd.table} (contexto)` : `mesa ${cmd.table}`;
               const prodTag =
@@ -4456,12 +4488,25 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
             }
           }
         } catch (e) {
-          console.warn("voice gate enrich error:", (e as any)?.message ?? e);
+          console.warn(`${tag} line[${i}] enrich error:`, (e as any)?.message ?? e);
         }
         enriched.push(sig);
         previewParts.push(previewLine);
       }
+
+      // Fallback (b): nenhum comando reconhecido — não oferece botões inúteis.
+      const allErrors = enriched.length === 0 || enriched.every((s) => s.kind === "PARSE_ERROR");
+      if (allErrors) {
+        console.warn(`${tag} action=failed reason=no_commands_parsed`);
+        await sendTelegram(
+          chatId,
+          `🎤 *Ouvi:* "${voiceTranscript}"\n\n⚠️ Não consegui transformar isso em comando.\nTente: \`mesa N + qty produto\`\nEx.: \`mesa 2 mais 1 medalhão\`.`,
+        );
+        return testOrPlain();
+      }
+
       const conf = assessVoiceConfidence(voiceTranscript, enriched);
+      console.log(`${tag} confidence confident=${conf.confident}${conf.reason ? ` reason="${conf.reason}"` : ""}`);
       if (!conf.confident) {
         const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
         await sb.from("telegram_chat_state").upsert({
@@ -4474,6 +4519,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
           ? previewParts.map((l, i) => `${i + 1}. ${l}`).join("\n")
           : "(nada reconhecido)";
         const reasonTxt = conf.reason ? ` _(motivo: ${conf.reason})_` : "";
+        console.log(`${tag} action=ask_confirm token=${token}`);
         await sendTelegram(
           chatId,
           `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewBlock}\n\nConfirmar?`,
@@ -4484,6 +4530,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         );
         return testOrPlain();
       }
+      console.log(`${tag} action=executed (confident)`);
     }
 
     if (lines.length <= 1) {
