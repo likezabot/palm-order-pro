@@ -4631,7 +4631,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       if (allErrors) {
         console.warn(`${tag} action=failed reason=no_commands_parsed`);
         await voiceReply(
-          `🎤 Ouvi: "${voiceTranscript}"\n⚠️ Não consegui transformar isso em comando.\nEx.: mesa 2 mais 1 medalhão`,
+          `🎤 Ouvi: "${voiceTranscript}"\n⚠️ Não consegui transformar em comando.\nTente:\n• "mesa 2 mais 1 medalhão" (lançar)\n• "qual o valor da mesa 2" (consultar)\n• "entrada 5 coca" (estoque)`,
         );
         return testOrPlain();
       }
