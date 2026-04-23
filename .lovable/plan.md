@@ -1,48 +1,57 @@
 
 
-# Plano: eliminar erro de lazy load do Admin no preview Lovable
+# Plano: tela branca total no preview — reverter Admin pra lazy + matar service worker antigo
 
-## Problema confirmado
+## Causa real
 
-- O `npx vite build` (produção) **passa sem erros** — o código do Admin está íntegro.
-- No preview Lovable, o Vite dev-server invalida módulos com `?t=<timestamp>` a cada HMR. O `lazy(() => import("./pages/Admin"))` tenta buscar uma URL com timestamp **antigo** que já não existe mais → `TypeError: Failed to fetch dynamically imported module`.
-- O `AdminErrorBoundary` + `lazyWithRetry` já tentam recuperar, mas o retry usa o **mesmo factory cacheado** do `lazy()`, que continua apontando para o timestamp invalidado → loop até desistir → tela de erro.
+A tela está **100% branca** (sem nem o "Carregando…"), o que prova que o `index.html` carregou mas o JS do bundle nunca executou. Build de produção e TypeScript estão limpos. Restam duas causas plausíveis:
 
-## Solução cirúrgica (1 arquivo, ~3 linhas)
+1. **Service Worker antigo** (`public/sw.js`) está servindo um `index.html` em cache que referencia um chunk JS que não existe mais após a última mudança de bundle.
+2. O **import estático do Admin** (mudança da resposta anterior) inflou o `index-*.js` para 523 kB e juntou todo o código do admin no bundle inicial — qualquer falha de carregamento do bundle agora derruba o app inteiro, não só `/admin`.
 
-**Trocar o lazy load do Admin por import estático em `src/App.tsx`.**
+A combinação das duas é o que produziu "deu pau em tudo".
 
-Justificativa:
-- Admin é a rota onde o erro acontece de forma reproduzível.
-- Import estático elimina 100% do problema de chunk fantasma (não há fetch dinâmico, o módulo entra no bundle inicial).
-- Custo: o bundle inicial cresce ~206 kB (tamanho do chunk Admin atual). Aceitável — é uma rota de admin usada com frequência e o ganho de estabilidade compensa.
-- Mantém `AdminErrorBoundary` no lugar (continua útil para erros de runtime dentro do Admin).
-- Mantém lazy load nas outras rotas (Pdv, PrintStation, Stock, ForceUpdate, InstallPalm, InstallKitchen, NotFound) — elas não apresentam o problema.
+## Correção (2 mudanças cirúrgicas, 1 arquivo + 1 linha extra)
 
-## Mudança exata em `src/App.tsx`
+### Mudança 1 — Voltar Admin pro lazy load com retry forte (`src/App.tsx`)
 
-**Remover:**
+Reverter o import estático do Admin. Isolar o Admin de novo num chunk próprio para que **falha no Admin não quebre o bundle inicial**.
+
+- Remover: `import Admin from "./pages/Admin";`
+- Adicionar: `const Admin = lazyWithRetry(() => import("./pages/Admin"));`
+- Manter `AdminErrorBoundary` envolvendo a rota — ele já tem retry automático e botão de reload.
+
+Isso restaura o estado de **antes** da última mudança, que é onde o app inteiro funcionava (só `/admin` dava o erro de chunk fantasma, e mesmo assim o `AdminErrorBoundary` recuperava).
+
+### Mudança 2 — Forçar SW a se desregistrar uma vez (`src/main.tsx`)
+
+Adicionar um pequeno bloco no `main.tsx` que, na primeira carga após o deploy, força `navigator.serviceWorker.getRegistrations()` → `unregister()` + `caches.delete()` e dá `location.reload()` **uma única vez** (controlado por flag em `localStorage`). Isso garante que qualquer SW cacheando bundle velho seja limpo no próximo acesso do usuário.
+
+Pseudocódigo:
 ```ts
-const Admin = lazyWithRetry(() => import("./pages/Admin"));
+const SW_RESET_KEY = "sw-reset-2026-04-23";
+if (typeof window !== "undefined" && !localStorage.getItem(SW_RESET_KEY)) {
+  localStorage.setItem(SW_RESET_KEY, "1");
+  navigator.serviceWorker?.getRegistrations().then(rs => {
+    Promise.all(rs.map(r => r.unregister()))
+      .then(() => caches?.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))))
+      .then(() => location.reload());
+  });
+}
 ```
 
-**Adicionar no topo, junto aos outros imports diretos:**
-```ts
-import Admin from "./pages/Admin";
-```
+Roda **uma vez por dispositivo**, depois fica inerte. Sem impacto em performance.
 
-Resto do arquivo intacto (Suspense, AdminErrorBoundary, rota `/admin`, demais lazy imports).
+## Resultado esperado
+
+- Bundle inicial volta a ~317 kB (sem o Admin embutido). App carrega normalmente em qualquer rota.
+- Service worker antigo é purgado uma vez → próxima carga pega `index.html` fresco que referencia os chunks atuais.
+- `/admin` volta ao comportamento anterior: lazy load + ErrorBoundary cobrindo qualquer falha de chunk dinâmico.
+- Preview Lovable e produção ficam estáveis.
 
 ## Arquivos NÃO tocados
 
-- `src/pages/Admin.tsx`
-- `src/components/admin/AdminErrorBoundary.tsx`
-- `src/components/admin/NetworkTab.tsx`
-- Qualquer coisa de impressão, PDV, Palm, Kitchen, bridge, Telegram, Supabase.
-
-## Resultado prático
-
-- Preview Lovable: Admin abre instantaneamente, sem erro de chunk dinâmico, mesmo após edições/HMR.
-- Produção: continua funcionando (era o que já funcionava).
-- Bundle inicial fica ~206 kB maior — sem impacto perceptível em conexões normais.
+- `src/pages/Admin.tsx`, `src/components/admin/*`
+- `public/sw.js` (a lógica fica no app, não no SW)
+- Qualquer coisa de impressão, PDV, Palm, Kitchen, bridge, Telegram, Supabase
 
