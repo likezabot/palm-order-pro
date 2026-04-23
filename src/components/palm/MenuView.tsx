@@ -15,7 +15,6 @@ import {
   type ProductGroup,
 } from "@/lib/product-groups";
 import { CartFab } from "./CartFab";
-import { useProductStockMap, useProductRecipes, isProductEsgotado } from "@/hooks/use-product-stock-map";
 
 interface Props {
   onAdd: (product: Product) => void;
