@@ -88,8 +88,66 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
     }
   }
 
-  let sent = 0;
+  // ===== Pré-processamento: detecta print_failure por "ponte offline" e consolida =====
+  // Heurística: erros que indicam ponte de impressão desligada (não falha real da impressora)
+  const isBridgeOffline = (err: string): boolean => {
+    if (!err) return false;
+    const low = err.toLowerCase();
+    return (
+      low.includes("bridge_offline") ||
+      low.includes("failed to fetch") ||
+      low.includes("fetch failed") ||
+      low.includes("networkerror") ||
+      low.includes("econnrefused") ||
+      low.includes("bridge offline") ||
+      low.includes("ponte offline")
+    );
+  };
+
+  const offlineFailures: any[] = [];
+  const realFailures: any[] = [];
+  const otherEvents: any[] = [];
+
   for (const evt of byKey.values()) {
+    if (evt.event_type === "print_failure") {
+      const err = String((evt.payload || {}).error || "");
+      if (isBridgeOffline(err)) offlineFailures.push(evt);
+      else realFailures.push(evt);
+    } else {
+      otherEvents.push(evt);
+    }
+  }
+
+  let sent = 0;
+
+  // ===== Alerta consolidado de ponte offline (1 a cada 30 min) =====
+  if (offlineFailures.length > 0 && cfg.print_failure !== false) {
+    // Janela de 30 minutos: dedupe_key fixo por janela
+    const windowStart = new Date(Math.floor(Date.now() / (30 * 60 * 1000)) * 30 * 60 * 1000);
+    const dedupeKey = `printer_offline:${windowStart.toISOString()}`;
+    const { data: existing } = await sb.from("notification_log")
+      .select("id").eq("dedupe_key", dedupeKey).maybeSingle();
+
+    if (!existing) {
+      const tables = Array.from(new Set(
+        offlineFailures.map((e) => (e.payload || {}).table_name).filter(Boolean)
+      ));
+      const tablesText = tables.length > 0 ? `\nMesas aguardando: ${tables.join(", ")}` : "";
+      const text =
+        `🔌 <b>Impressora desligada</b>\n` +
+        `Temporariamente indisponível para impressão.${tablesText}\n` +
+        `<i>Os pedidos ficam na fila e imprimem assim que a impressora voltar.</i>`;
+      await broadcast(text, chats);
+      await sb.from("notification_log").insert({
+        event_type: "printer_offline", entity_id: offlineFailures[0].entity_id, dedupe_key: dedupeKey,
+      });
+      sent++;
+    }
+    // Não envia mensagens individuais nem fica avisando — só marca como processado
+  }
+
+  // ===== Eventos restantes (falhas reais + tudo o mais) =====
+  for (const evt of [...realFailures, ...otherEvents]) {
     const dedupeKey = `${evt.event_type}:${evt.entity_id}:${evt.created_at}`;
     // Idempotência
     const { data: existing } = await sb.from("notification_log")
@@ -134,7 +192,7 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
              (p.waiter_name ? `\nGarçom: ${p.waiter_name}` : "");
     } else if (evt.event_type === "print_failure" && cfg.print_failure !== false) {
       const tipo = p.print_type === "bill" ? "conta" : p.print_type === "delta" ? "acréscimo" : "pedido";
-      text = `🖨️ <b>Falha de impressão</b>\nMesa ${p.table_name} (${tipo})\n<i>${p.error}</i>`;
+      text = `🖨️ <b>Pedido não impresso</b>\nMesa ${p.table_name} (${tipo}) não foi impresso.\nMotivo: <i>${p.error}</i>`;
     } else if (evt.event_type === "cash_closed" && cfg.cash_closed !== false) {
       const sangrias = Number(p.sangrias || 0);
       const suprimentos = Number(p.suprimentos || 0);
