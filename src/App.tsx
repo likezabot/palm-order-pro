@@ -14,7 +14,7 @@ import AdminErrorBoundary from "@/components/admin/AdminErrorBoundary";
 import Index from "./pages/Index";
 import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
-import Admin from "./pages/Admin";
+
 
 // Retry helper: tenta o import dinâmico até 2x antes de propagar o erro
 // (cobre falhas transitórias de rede / chunk velho após deploy).
