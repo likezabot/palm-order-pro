@@ -59,7 +59,14 @@ const AnimatedRoutes = () => {
           <Route path="/palm" element={<Palm />} />
           <Route path="/kitchen" element={<Kitchen />} />
           <Route path="/cashier" element={<Pdv />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminErrorBoundary>
+                <Admin />
+              </AdminErrorBoundary>
+            }
+          />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/print-station" element={<PrintStation />} />
           <Route path="/estoque" element={<Stock />} />
