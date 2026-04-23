@@ -557,9 +557,16 @@ function splitCommands(raw: string): string[] {
 // ─────────────── Confiança da transcrição de voz ───────────────
 // Avalia se a transcrição + parseamento são confiáveis o suficiente para auto-executar.
 // Dispara confirmação por botão se algum sinal de baixa confiança aparecer.
+// `productChecks` (opcional) traz info de resolução de produto p/ ADD/REMOVE.
+type VoiceParsedSig = {
+  kind: string;
+  qty?: number;
+  fromContext?: boolean;
+  productResolution?: "found" | "ambiguous" | "not_found" | "is_group_trigger" | null;
+};
 function assessVoiceConfidence(
   transcript: string,
-  parsedCmds: Array<{ kind: string; qty?: number }>,
+  parsedCmds: VoiceParsedSig[],
 ): { confident: boolean; reason?: string } {
   const t = (transcript ?? "").trim();
   if (t.length < 3) return { confident: false, reason: "transcrição muito curta" };
@@ -572,6 +579,15 @@ function assessVoiceConfidence(
       return { confident: false, reason: "mesa não identificada" };
     }
     if (typeof c.qty === "number" && c.qty > 10) return { confident: false, reason: "quantidade alta" };
+    // Específico ADD/REMOVE: produto não resolvido ou ambíguo → pede confirmação.
+    if (c.kind === "ADD" || c.kind === "REMOVE") {
+      if (c.productResolution === "not_found") return { confident: false, reason: "produto não encontrado" };
+      if (c.productResolution === "ambiguous") return { confident: false, reason: "produto ambíguo" };
+      // Mesa herdada de contexto + qty alta: maior risco de aplicar na mesa errada.
+      if (c.fromContext && typeof c.qty === "number" && c.qty >= 5) {
+        return { confident: false, reason: "mesa do contexto + quantidade alta" };
+      }
+    }
   }
   return { confident: true };
 }
