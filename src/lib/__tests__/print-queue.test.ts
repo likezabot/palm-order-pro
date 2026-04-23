@@ -69,11 +69,8 @@ describe("print-queue (IndexedDB)", () => {
 
   it("getPrintQueue returns sorted by createdAt", async () => {
     const a = await enqueuePrintJob(baseJob);
-    // Force second job with later timestamp
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(Date.now() + 1000));
+    await new Promise((r) => setTimeout(r, 5));
     const b = await enqueuePrintJob({ ...baseJob, orderId: "order-2", printType: "delta" });
-    vi.useRealTimers();
     const all = await getPrintQueue();
     expect(all[0].id).toBe(a.id);
     expect(all[1].id).toBe(b.id);
