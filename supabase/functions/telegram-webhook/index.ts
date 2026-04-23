@@ -4370,8 +4370,10 @@ export async function webhookHandler(req: Request): Promise<Response> {
       const ANON_KEY_PUBLIC = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdicGNqanR4cXR6cW90bWtmeHJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNTE0OTIsImV4cCI6MjA5MTcyNzQ5Mn0.K82zsqXu_airg_b3GYtKQ2vk7r5hYj_nYrt3AcmurD8";
       const okSecret = !!WEBHOOK_SECRET && safeEqual(provided, WEBHOOK_SECRET);
       const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
-      // auto-heal é idempotente e não expõe dados — aceita anon p/ permitir cron via pg_net.
-      const okAnonForHeal = adminOp === "auto-heal" && !!bearer && safeEqual(bearer, ANON_KEY_PUBLIC);
+      // auto-heal e smoke-test são restritos (idempotente / restrito a TEST_CHAT_ID) —
+      // aceita anon p/ permitir invocação via pg_net e validações automatizadas.
+      const anonAllowedOps = new Set(["auto-heal", "smoke-test"]);
+      const okAnonForOp = anonAllowedOps.has(adminOp) && !!bearer && safeEqual(bearer, ANON_KEY_PUBLIC);
       if (!okSecret && !okService && !okAnonForHeal) {
         console.log("[admin-auth] denied", JSON.stringify({
           op: adminOp, has_secret_header: !!provided, has_bearer: !!bearer,
