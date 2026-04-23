@@ -813,6 +813,7 @@ export type Database = {
         }
         Returns: Json
       }
+      defer_order_print: { Args: { p_order_id: string }; Returns: undefined }
       fail_order_print: {
         Args: { p_error?: string; p_order_id: string }
         Returns: undefined
