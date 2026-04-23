@@ -2205,6 +2205,15 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
       return { text: `❌ Erro no estoque: ${String(e?.message ?? e)}` };
     }
   }
+  if (cmd.kind === "PRODUCT_HIDE" || cmd.kind === "PRODUCT_SHOW") {
+    return await handleProductVisibility(cmd, _undoChatId());
+  }
+  if (cmd.kind === "PRODUCT_PICK") {
+    return await handleProductPick(cmd.choice, _undoChatId());
+  }
+  if (cmd.kind === "PRODUCT_LIST") {
+    return await handleProductList(cmd.mode);
+  }
   if (cmd.kind === "NOTIFY_TOGGLE") {
     const newVal = JSON.stringify({
       orders: cmd.on, payments: cmd.on, stock_critical: cmd.on, daily_report: cmd.on,
