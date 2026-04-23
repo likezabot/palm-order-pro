@@ -464,6 +464,10 @@ type Command =
   | { kind: "STOCK_LIST" }
   | { kind: "NOTIFY_TOGGLE"; on: boolean }
   | { kind: "TABLE_STATUS"; table: string }
+  | { kind: "PRODUCT_HIDE"; query: string }
+  | { kind: "PRODUCT_SHOW"; query: string }
+  | { kind: "PRODUCT_LIST"; mode: "hidden" | "visible" | "all" }
+  | { kind: "PRODUCT_PICK"; choice: number }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
