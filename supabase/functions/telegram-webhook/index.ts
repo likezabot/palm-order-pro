@@ -4926,37 +4926,54 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
 
       if (voiceTranscript) {
-        // VOZ: bullets refletem o RESULTADO real (não o preview). Verbo por
-        // tipo de comando original. Botões de undo + picker consolidados na
-        // própria mensagem (sem mensagens extras).
+        // VOZ: cada mesa/ação vira uma mensagem separada para evitar
+        // truncamento e dar botão de Desfazer identificado por mesa.
+        const isErrText = (s: string) => /^[❌❓🤔⚠️🚨]/.test(String(s || "").split("\n")[0]);
         const lineKinds: string[] = lines.map((ln) => {
           try { return parseCommand(ln).kind; } catch { return "PARSE_ERROR"; }
         });
-        const firstLineOf = (s: string) => String(s || "").split("\n")[0];
-        const isErrLine = (s: string) => /^[❌❓🤔⚠️🚨]/.test(firstLineOf(s));
-        const bullets: string[] = textBlocks.map((blk, i) => {
-          const head = firstLineOf(blk);
-          if (isErrLine(head)) return `• ${head}`;
-          return `• ${voiceVerb(lineKinds[i])}: ${head}`;
+
+        let okCount = 0;
+        let problemCount = 0;
+        const slotMessages: Array<{ text: string; keyboard?: InlineButton[][] }> = [];
+
+        renderedSlots.forEach((r, i) => {
+          if (r.type === "batch") {
+            const res = batchResults.get(r.table);
+            const txt = res?.text ?? `(mesa ${r.table})`;
+            if (isErrText(txt)) {
+              problemCount++;
+              slotMessages.push({ text: txt, keyboard: res?.keyboard });
+            } else {
+              okCount++;
+              const verb = voiceVerb(lineKinds[i]) || "✅";
+              slotMessages.push({
+                text: `${verb} — Mesa ${r.table}\n${txt}`,
+                keyboard: res?.keyboard,
+              });
+            }
+          } else {
+            // standalone (consulta, picker, erro, etc.) — manda texto completo
+            const txt = r.reply.text;
+            const hasKb = r.reply.keyboard && r.reply.keyboard.length > 0;
+            if (hasKb || isErrText(txt)) problemCount++;
+            else okCount++;
+            slotMessages.push({ text: txt, keyboard: r.reply.keyboard });
+          }
         });
-        const consolidatedKb: InlineButton[][] = [];
-        for (const [, res] of batchResults) {
-          if (res.keyboard) for (const row of res.keyboard) consolidatedKb.push(row);
+
+        const total = slotMessages.length;
+        const header = problemCount > 0
+          ? `🎤 Ouvi: "${voiceTranscript}"\n⚠️ ${okCount}/${total} concluído — ${problemCount} precisa de atenção`
+          : `🎤 Ouvi: "${voiceTranscript}"\n✅ ${total}/${total} concluído`;
+
+        // Edita a mensagem "🎤 Ouvindo…" virando o cabeçalho.
+        await voiceReply(header);
+
+        // Envia uma mensagem por slot, na ordem da fala.
+        for (const msg of slotMessages) {
+          if (chatId) await sendTelegram(chatId, msg.text, msg.keyboard);
         }
-        for (const choice of pendingChoices) {
-          if (choice.keyboard) for (const row of choice.keyboard) consolidatedKb.push(row);
-        }
-        const hasPending = pendingChoices.length > 0;
-        const hasError = bullets.some((b) => isErrLine(b.replace(/^•\s*/, "")));
-        const header = hasPending
-          ? `🤔 Quase pronto — preciso de ${pendingChoices.length === 1 ? "1 escolha" : "algumas escolhas"}:`
-          : hasError
-            ? `⚠️ Parcial:`
-            : `✅ Pronto:`;
-        await voiceReply(
-          `🎤 Ouvi: "${voiceTranscript}"\n\n${header}\n${bullets.join("\n")}`,
-          consolidatedKb.length > 0 ? consolidatedKb : undefined,
-        );
       } else {
         const header = `📊 ${lines.length} comandos processados:\n`;
         await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
