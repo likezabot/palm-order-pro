@@ -4377,6 +4377,38 @@ Deno.serve(async (req) => {
       return testOrPlain();
     }
 
+    // ─── VOZ: gate de confiança ANTES da execução ───
+    // Se veio de áudio E a confiança é baixa, pedimos confirmação por botão
+    // (cobre múltiplas linhas via campo `lines`). Cancela auto-execução.
+    if (voiceTranscript) {
+      const parsedAll = lines.map((ln) => {
+        try { return parseCommand(ln); } catch { return { kind: "PARSE_ERROR" } as any; }
+      });
+      const conf = assessVoiceConfidence(voiceTranscript, parsedAll as any);
+      if (!conf.confident) {
+        const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+        await sb.from("telegram_chat_state").upsert({
+          chat_id: chatId,
+          step: "voice_confirm",
+          data: { token, lines, transcript: voiceTranscript, waiter },
+          expires_at: new Date(Date.now() + 2 * 60_000).toISOString(),
+        });
+        const previewLines = lines.length > 0
+          ? lines.map((l, i) => `${i + 1}. ${l}`).join("\n")
+          : "(nada reconhecido)";
+        const reasonTxt = conf.reason ? ` _(motivo: ${conf.reason})_` : "";
+        await sendTelegram(
+          chatId,
+          `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewLines}\n\nConfirmar?`,
+          [[
+            { text: "✅ Executar", callback_data: `vc|ok|${token}` },
+            { text: "❌ Cancelar", callback_data: `vc|no|${token}` },
+          ]],
+        );
+        return testOrPlain();
+      }
+    }
+
     if (lines.length <= 1) {
       const parsed = parseCommand(lines[0] ?? text);
 
