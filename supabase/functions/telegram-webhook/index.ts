@@ -458,6 +458,7 @@ type Command =
   | { kind: "REPORT" }
   | { kind: "STOCK_CRITICAL" }
   | { kind: "STOCK_MOVEMENT"; type: "in" | "out" | "adjustment"; qty: number; itemText: string; unit?: string }
+  | { kind: "STOCK_OUT_NOW"; itemText: string }
   | { kind: "STOCK_QUERY"; itemText: string }
   | { kind: "STOCK_LIST" }
   | { kind: "NOTIFY_TOGGLE"; on: boolean }
