@@ -4674,11 +4674,18 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       if (voiceTranscript) {
         const replyTxt = String(reply.text || "");
         const isError = /^[❌❓🤔⚠️🚨]/.test(replyTxt) || /erro|Erro/.test(replyTxt);
+        const cmdKind = (cmd as any)?.kind;
+        const isConsult = cmdKind === "VIEW" || cmdKind === "TABLE_VALUE" || cmdKind === "TABLE_STATUS" ||
+                         cmdKind === "STOCK_QUERY" || cmdKind === "STOCK_LIST" || cmdKind === "STOCK_CRITICAL" ||
+                         cmdKind === "REPORT" || cmdKind === "PRODUCT_LIST" || cmdKind === "HELP";
         if (isError) {
           await voiceReply(`🎤 Ouvi: "${voiceTranscript}"\n\n${replyTxt}`);
+        } else if (isConsult) {
+          // Em consultas, mostra o conteúdo real (já formatado pelo handler).
+          await voiceReply(replyTxt);
         } else {
           const summary = (typeof previewParts !== "undefined" && previewParts[0]) ? previewParts[0] : voiceTranscript;
-          await voiceReply(`🎤 Entendi: ${summary} ✅`);
+          await voiceReply(`${voiceVerb(cmdKind)}: ${summary} ✅`);
         }
       } else {
         await sendTelegram(chatId, reply.text, reply.keyboard);
