@@ -126,6 +126,8 @@ async function transcribeTelegramVoice(fileId: string, traceId = "----"): Promis
               "Em dúvida entre 'lança' e 'entrada', escolha SEMPRE 'lança'. " +
               "PRESERVE LITERALMENTE perguntas/consultas: 'qual o valor', 'quanto deu', 'quanto ficou', 'quanto custa', 'conta da mesa', 'total da mesa', 'fechamento', 'o que tem na mesa'. NUNCA reescreva uma pergunta como comando de pedido (ADD/REMOVE). " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
+              "PRESERVE qualificadores de produto: tamanho (1l, 600ml, 350ml, 290ml), embalagem (vidro, lata, pet, long neck), variante (zero, diet, tradicional, gelada). NÃO normalize para o nome genérico. " +
+              "Se o usuário falar uma instrução entre parênteses (ex: 'somente local', 'sem gelo'), MANTENHA entre parênteses no texto transcrito — não remova. " +
               "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
               "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
               vocabHint +
@@ -4394,12 +4396,12 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
 
     // Helper: quando origem é voz, edita a mensagem "🎤 Ouvindo…" em vez de mandar nova.
     // Após a 1ª edição, marcamos como consumida; chamadas seguintes caem no sendTelegram normal.
-    const voiceReply = async (txt: string): Promise<void> => {
+    const voiceReply = async (txt: string, keyboard?: InlineButton[][]): Promise<void> => {
       if (voiceStatusMsgId && chatId) {
-        await editTelegramMessage(chatId, voiceStatusMsgId, txt);
+        await editTelegramMessage(chatId, voiceStatusMsgId, txt, keyboard);
         voiceStatusMsgId = null;
       } else if (chatId) {
-        await sendTelegram(chatId, txt);
+        await sendTelegram(chatId, txt, keyboard);
       }
     };
 
@@ -4639,6 +4641,83 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       const conf = assessVoiceConfidence(voiceTranscript, enriched);
       console.log(`${tag} confidence confident=${conf.confident}${conf.reason ? ` reason="${conf.reason}"` : ""}`);
       if (!conf.confident) {
+        // Tenta caminho "parcial": executa as linhas óbvias e pede picker só
+        // para as ambíguas (produto não encontrado / ambíguo). Vale apenas se
+        // existir AO MENOS uma linha óbvia E AO MENOS uma linha ambígua de
+        // produto — caso contrário usamos o gate clássico (executar tudo / cancelar).
+        const isObviousLine = (s: VoiceParsedSig): boolean => {
+          if (s.kind === "PARSE_ERROR") return false;
+          if (s.kind === "NEEDS_TABLE" || s.kind === "ADD_NOMESA" || s.kind === "REMOVE_NOMESA" || s.kind === "VIEW_NOMESA") return false;
+          if (typeof s.qty === "number" && s.qty > 10) return false;
+          if (s.kind === "ADD" || s.kind === "REMOVE") {
+            if (s.productResolution !== "found") return false;
+            if (s.fromContext && typeof s.qty === "number" && s.qty >= 5) return false;
+          }
+          return true;
+        };
+        const isAmbiguousProductLine = (s: VoiceParsedSig): boolean =>
+          (s.kind === "ADD" || s.kind === "REMOVE") &&
+          (s.productResolution === "ambiguous" || s.productResolution === "not_found");
+
+        const hasObvious = enriched.some(isObviousLine);
+        const hasAmbiguousProduct = enriched.some(isAmbiguousProductLine);
+        const onlyProductIssues = enriched.every((s) => isObviousLine(s) || isAmbiguousProductLine(s));
+
+        if (lines.length >= 2 && hasObvious && hasAmbiguousProduct && onlyProductIssues) {
+          // Caminho parcial: executa óbvias agora, mostra picker das ambíguas.
+          console.log(`${tag} action=partial_execute obvious=${enriched.filter(isObviousLine).length} ambiguous=${enriched.filter(isAmbiguousProductLine).length}`);
+          const bullets: string[] = [];
+          const undoKbs: InlineButton[][] = [];
+          const pickerKbs: InlineButton[][] = [];
+          for (let i = 0; i < lines.length; i++) {
+            const ln = lines[i];
+            const sig = enriched[i];
+            if (isObviousLine(sig)) {
+              try {
+                const parsed = parseCommand(ln);
+                const cmd = await resolveWithContext(parsed, chatId, userId, chatType);
+                const reply = await handleCommand(cmd, waiter);
+                if (reply.successTable) await setLastTable(chatId, reply.successTable, userId, chatType);
+                bullets.push(`${voiceVerb((cmd as any)?.kind)}: ${reply.text.split("\n")[0]}`);
+                if (reply.keyboard) {
+                  for (const row of reply.keyboard) {
+                    if (row.some((b) => /Desfazer/i.test(b.text))) undoKbs.push(row);
+                  }
+                }
+              } catch (e: any) {
+                bullets.push(`❌ "${ln}": ${String(e?.message ?? e).slice(0, 80)}`);
+              }
+            } else {
+              // Ambígua: mostra opções inline (reutiliza callback a|/r|).
+              try {
+                const parsed = parseCommand(ln);
+                const cmd = await resolveWithContext(parsed, chatId, userId, chatType) as any;
+                const r = await resolveProduct(cmd.productText);
+                const cands: Product[] = r.kind === "ambiguous" ? r.candidates :
+                                          r.kind === "not_found" ? await suggestProducts(cmd.productText) : [];
+                if (cands.length > 0 && (cmd.kind === "ADD" || cmd.kind === "REMOVE")) {
+                  bullets.push(`❓ Mesa ${cmd.table} ${cmd.kind === "ADD" ? "+" : "−"}${cmd.qty} "${cmd.productText}" — escolha:`);
+                  const op = cmd.kind === "ADD" ? "a" : "r";
+                  for (const p of cands.slice(0, 4)) {
+                    pickerKbs.push([{ text: `${cmd.qty}× ${p.name} — ${fmtBRL(p.price * cmd.qty)}`, callback_data: `${op}|${cmd.table}|${p.id}|${cmd.qty}` }]);
+                  }
+                } else {
+                  bullets.push(`❌ "${ln}": produto não encontrado`);
+                }
+              } catch (e: any) {
+                bullets.push(`❌ "${ln}": ${String(e?.message ?? e).slice(0, 80)}`);
+              }
+            }
+          }
+          const finalKb: InlineButton[][] = [...pickerKbs, ...undoKbs];
+          const headerTxt = pickerKbs.length > 0
+            ? `🤔 Quase pronto — preciso de ${pickerKbs.length === 1 ? "1 escolha" : "algumas escolhas"}:`
+            : `✅ Pronto:`;
+          await voiceReply(`🎤 Ouvi: "${voiceTranscript}"\n\n${headerTxt}\n${bullets.map((b) => `• ${b}`).join("\n")}`, finalKb.length > 0 ? finalKb : undefined);
+          return testOrPlain();
+        }
+
+        // Gate clássico: executar tudo / cancelar.
         const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
         await sb.from("telegram_chat_state").upsert({
           chat_id: chatId,
@@ -4846,19 +4925,37 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
 
       if (voiceTranscript) {
-        // VOZ: resumo curto, com verbo de ação por linha. Suprime undos verbosos.
-        // Reparseamos cada linha pra escolher o verbo certo (enriched está em escopo do bloco anterior).
+        // VOZ: bullets refletem o RESULTADO real (não o preview). Verbo por
+        // tipo de comando original. Botões de undo + picker consolidados na
+        // própria mensagem (sem mensagens extras).
         const lineKinds: string[] = lines.map((ln) => {
           try { return parseCommand(ln).kind; } catch { return "PARSE_ERROR"; }
         });
-        const bullets = (typeof previewParts !== "undefined" && previewParts.length > 0)
-          ? previewParts.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`)
-          : textBlocks.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`);
-        await voiceReply(`✅ Pronto:\n${bullets.join("\n")}`);
-        // Mostra apenas erros standalone (produto ambíguo / não encontrado).
-        for (const choice of pendingChoices) {
-          await sendTelegram(chatId, choice.text, choice.keyboard);
+        const firstLineOf = (s: string) => String(s || "").split("\n")[0];
+        const isErrLine = (s: string) => /^[❌❓🤔⚠️🚨]/.test(firstLineOf(s));
+        const bullets: string[] = textBlocks.map((blk, i) => {
+          const head = firstLineOf(blk);
+          if (isErrLine(head)) return `• ${head}`;
+          return `• ${voiceVerb(lineKinds[i])}: ${head}`;
+        });
+        const consolidatedKb: InlineButton[][] = [];
+        for (const [, res] of batchResults) {
+          if (res.keyboard) for (const row of res.keyboard) consolidatedKb.push(row);
         }
+        for (const choice of pendingChoices) {
+          if (choice.keyboard) for (const row of choice.keyboard) consolidatedKb.push(row);
+        }
+        const hasPending = pendingChoices.length > 0;
+        const hasError = bullets.some((b) => isErrLine(b.replace(/^•\s*/, "")));
+        const header = hasPending
+          ? `🤔 Quase pronto — preciso de ${pendingChoices.length === 1 ? "1 escolha" : "algumas escolhas"}:`
+          : hasError
+            ? `⚠️ Parcial:`
+            : `✅ Pronto:`;
+        await voiceReply(
+          `🎤 Ouvi: "${voiceTranscript}"\n\n${header}\n${bullets.join("\n")}`,
+          consolidatedKb.length > 0 ? consolidatedKb : undefined,
+        );
       } else {
         const header = `📊 ${lines.length} comandos processados:\n`;
         await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
