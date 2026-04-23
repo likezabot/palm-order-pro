@@ -5056,8 +5056,14 @@ export async function webhookHandler(req: Request): Promise<Response> {
       }
     }
   } catch (err) {
-    console.error("Erro processando update:", err);
+    // Mensagem genérica pro cliente; detalhes só nos logs internos.
+    console.error("Erro processando update:", (err as any)?.message ?? err);
   }
 
   return testOrPlain();
-});
+}
+
+// Skip Deno.serve quando importado por testes (TELEGRAM_TEST_IMPORT=1).
+if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") {
+  Deno.serve(webhookHandler);
+}
