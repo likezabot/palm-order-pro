@@ -99,8 +99,6 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
 }
 
 // Dedupe (TTL 5min) para retries do Telegram.
-
-// Dedupe (TTL 5min) para retries do Telegram.
 const seenUpdates = new Map<number, number>();
 function isDuplicate(updateId: number): boolean {
   const now = Date.now();
