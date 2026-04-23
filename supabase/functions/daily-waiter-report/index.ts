@@ -143,6 +143,7 @@ async function buildReport(targetDateBRT?: string): Promise<string> {
   }
 
   return report;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
