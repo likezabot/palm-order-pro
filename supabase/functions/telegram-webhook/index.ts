@@ -640,6 +640,18 @@ function parseCommand(raw: string): Command {
     return null;
   };
 
+  // ESGOTADO AGORA: "acabou X", "acabou o X", "não tem mais X", "terminou X", "zerou X", "sem X"
+  // Detectado ANTES do stockOut pra capturar formas sem quantidade.
+  const stockOutNow = text.match(/^(?:acabou|acabaram|terminou|terminaram|zerou|zeraram|nao\s+tem\s+mais|sem\s+mais|esgotou|esgotaram)\s+(?:o\s+|a\s+|os\s+|as\s+|um\s+|uma\s+|de\s+|do\s+|da\s+)?(.+?)$/) ||
+                      text.match(/^sem\s+(?!mais\b)(.+?)$/);
+  if (stockOutNow) {
+    const itemText = stockOutNow[1].trim();
+    // Só aceita se NÃO tiver número (senão é STOCK_MOVEMENT comum)
+    if (itemText && !/\d/.test(itemText)) {
+      return { kind: "STOCK_OUT_NOW", itemText };
+    }
+  }
+
   // ENTRADA: "entrada 10 coca", "entrada de estoque medalhão 20", "entrou 5kg picanha", "+ 10 coca"
   const stockIn = text.match(/^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)(?:\s+(?:de|do|no|ao|em|para|pra)\s+estoque)?\s+(.+)$/) ||
                    text.match(/^\+\s+(\d.+)$/);
@@ -649,7 +661,8 @@ function parseCommand(raw: string): Command {
   }
 
   // SAÍDA: "saida 2 coca", "saida do estoque 5 coca", "usei 1kg picanha", "vendi 3 coca"
-  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|acabou|quebrou|quebrei|descartei|descartar|perdi|perda)(?:\s+(?:de|do|no|em|para|pra)\s+estoque)?\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
+  // (removido "acabou" — agora é STOCK_OUT_NOW acima)
+  const stockOut = text.match(/^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|quebrou|quebrei|descartei|descartar|perdi|perda)(?:\s+(?:de|do|no|em|para|pra)\s+estoque)?\s+(.+?)(?:\s+(?:do|de|no)\s+estoque)?$/);
   if (stockOut) {
     const parsed = parseStockTail(stockOut[1], true);
     if (parsed) return { kind: "STOCK_MOVEMENT", type: "out", qty: parsed.qty, itemText: parsed.itemText, unit: parsed.unit };
