@@ -4416,7 +4416,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
         );
       }
       if (adminOp === "health") {
-        const selfUrl = `${url.origin}${url.pathname}`;
+        const selfUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`;
         let infoJson: any = null;
         let fetchError: string | null = null;
         try {
