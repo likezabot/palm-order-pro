@@ -1,111 +1,181 @@
 
 
-# Refino completo: testes, performance, segurança
+# Auditoria de Segurança — Ciclo 2: PDV, RPC, RLS e lógica de negócio
 
-Você quer 4 coisas: (1) rede de testes que impeça quebra em futuras mudanças, (2) performance no front, (3) auditoria de segurança como rotina, (4) o `telegram-webhook` (que virou um arquivo de 5000 linhas) protegido por testes específicos dos fluxos novos.
+Ciclo 1 fechou o webhook do Telegram. Ciclo 2 ataca o **núcleo do POS**: RPCs do banco, RLS pública, fluxos de pagamento e operações destrutivas expostas ao cliente.
 
-## 1. Camada de testes — frontend
+## Escopo do mapeamento
 
-Hoje existem 14 testes só de funções puras em `src/lib/__tests__` (cart, payment, senha, receipt-layout). Falta cobrir o **comportamento dos componentes** e dos **hooks críticos** que, se quebrarem, derrubam o garçom/cozinha/caixa em produção.
+13 arquivos do front chamam **15 RPCs distintas**. 6 arquivos fazem `update/insert/delete` direto em tabelas críticas. 9 tabelas têm RLS `USING true` para `public`. 3 edge functions auxiliares sem auth.
 
-**Novos testes a adicionar** (Vitest + Testing Library, já configurados):
-- `src/hooks/__tests__/use-palm-cart.test.ts` — adicionar/remover/alterar qty, subtotal, persistência por mesa.
-- `src/hooks/__tests__/use-print-queue.test.ts` — enfileirar, retry, marcar como impresso, idempotência.
-- `src/hooks/__tests__/use-product-stock-map.test.ts` — mapeamento produto↔estoque, item esgotado.
-- `src/hooks/__tests__/use-pdv-realtime.test.ts` — recebe inserts/updates do Supabase, deduplica.
-- `src/components/palm/__tests__/MenuView.test.tsx` — render do cardápio, busca, item oculto não aparece.
-- `src/components/palm/__tests__/OrderReview.test.tsx` — totalizador, botão de envio, estado vazio.
-- `src/components/kitchen/__tests__/KanbanCard.test.tsx` — transição de status, tempo decorrido.
-- `src/components/cashier/__tests__/CloseOrder.test.tsx` — cálculo de troco, validação de pagamento.
-- `src/lib/__tests__/print-queue.test.ts` — fila com falha, dedupe, ordem.
-- `src/lib/__tests__/inventory.test.ts` — entrada/saída/ajuste, saldo, crítico.
-- `src/lib/__tests__/global-order-runtime.test.ts` — agregação de ordem, racing condition.
+## Mapa de superfície de ataque (restante)
 
-**Mocks**: `src/test/mocks/supabase.ts` — mock estável de `@/integrations/supabase/client` (auth, from, channel, realtime) reutilizável em todos os testes de componente.
+| # | Componente | Risco | Severidade | Hipótese de ataque |
+|---|---|---|---|---|
+| A1 | `pay_order` RPC | Trust em `p_amount_paid` / `p_payment_method` | **Crítica** | Cliente envia `amount_paid=0` em PIX, marca como pago sem receber |
+| A2 | `create_order` / `update_order_items` RPC | `p_total` e `subtotal` calculados no cliente | **Crítica** | Manipular `subtotal` para 0,01 e fechar conta de R$ 200 por 1 centavo |
+| A3 | `update_order_status` RPC | Aceita qualquer string, sem máquina de estados | **Alta** | Pular para `'paid'` sem `pay_order` (sem registrar método/valor); voltar `paid` para `new` (RPC barra, mas `from('orders').update` direto não) |
+| A4 | `Kitchen.tsx` linha 92 | `from('orders').update({status}).eq('id', x)` direto | **Alta** | RLS pública permite UPDATE em qualquer pedido — incluindo `status='paid'` ou zerar `total` |
+| A5 | RLS `orders_update USING true` | Anon key pode reescrever qualquer coluna | **Crítica** | `update({total: 0, payment_method: 'cash', amount_paid: 0, status: 'paid'})` |
+| A6 | RLS `products` ALL public | Reprice mass | **Alta** | `from('products').update({price: 0.01})` — ataque DoS comercial |
+| A7 | RLS `cash_register` / `cash_movements` ALL public | Falsificação de caixa | **Alta** | Inserir sangria fictícia, reabrir caixa fechado, alterar `final_amount` |
+| A8 | RLS `profiles` SELECT public | `pin` exposto | **Crítica** | `select('pin').eq('role','manager')` — pega PIN de gerente em texto plano |
+| A9 | RLS `settings` ALL public | Reescrever `telegram_notify_chats`, `telegram_allowed_chats` | **Crítica** | Adicionar próprio chat_id à whitelist do bot e ganhar controle remoto do POS via voz |
+| A10 | RPC `archive_and_purge_old_data` exposto ao client | DoS / perda de dados | **Crítica** | Qualquer client chama `rpc("archive_and_purge_old_data", {p_days_keep: 1})` e apaga histórico |
+| A11 | RPC `force_clear_orphan_prints` exposto | Trash impressões pendentes | **Média** | Marca pedidos `paid+pending` como `printed` sem imprimir |
+| A12 | RPC `merge_table_duplicates` sem rate-limit | Race / corrupção | **Média** | Chamar 50× em paralelo em mesa ativa enquanto garçom adiciona itens |
+| A13 | RPC `move_order_to_table` | Sequestro de mesa ativa | **Média** | Mover pedido alheio para mesa fictícia e travar fluxo |
+| A14 | Edge `notify-telegram` sem auth | Spam / drain queue | **Média** | Invocar 1000× em loop, esgotar cota Telegram |
+| A15 | Edge `daily-waiter-report` sem auth | Disparo arbitrário | **Baixa** | Forçar relatório de qualquer data, vazando faturamento por garçom para qualquer chat configurado |
+| A16 | Edge `check-stale-tables` sem auth | Spam de notificações | **Baixa** | Forçar disparo em loop |
+| A17 | `note` / `table_name` / `customer_name` livres | HTML/script via Telegram | **Média** | `note='<a href=evil>x</a>'` flui para `sendMessage` com `parse_mode: HTML` em todos os chats whitelistados |
+| A18 | Webhook Telegram — `voice_resolve` state | Replay de undo | **Baixa** | Reusar token de undo em janela de 60s para reverter ação alheia |
+| A19 | `pay_order` sem idempotência | Pagamento duplicado por race | **Média** | Double-tap dispara 2 RPC; segunda recebe `order_already_paid` (OK), mas e se cliente desabilita guard? |
+| A20 | `apply_inventory_movement` sem teto | Estoque negativo arbitrário | **Baixa** | `p_type='out', p_quantity=999999` zera/negativa estoque |
 
-**Smoke test E2E light**: `src/test/smoke.test.tsx` — renderiza `App.tsx` com MemoryRouter para cada rota (`/`, `/palm`, `/kitchen`, `/cashier`, `/admin`, `/stock`, `/pdv`, `/print-station`) e garante que **não joga erro**. Pega 90% das quebras de import/render numa única roda.
+## Matriz de ameaças (resumida)
 
-## 2. Camada de testes — `telegram-webhook` (Deno)
+- **Autorização**: A4–A10 — RLS pública é o problema raiz. Todos os controles "admin" no front são teatro.
+- **Lógica de negócio**: A1, A2, A3, A19 — preço/total/status confiados ao cliente.
+- **API/RPC**: A10, A11, A14–A16 — RPCs/funções destrutivas sem gate de role.
+- **Banco/RLS**: A5–A9 — `USING true` em tabelas com dados sensíveis e financeiros.
+- **Integrações**: A14, A17 — broadcast Telegram sem assinatura nem sanitização.
+- **Concorrência**: A12, A18, A19.
 
-Hoje só existe `parser_test.ts` (61 testes do parser). Os fluxos novos (auto-execução de óbvio, picker por linha, undo identificado, multi-mensagem) não têm rede de proteção — qualquer mexida no arquivo de 5000 linhas pode quebrar silenciosamente.
+## Plano de correção (TDD onde viável)
 
-**Novos arquivos de teste** em `supabase/functions/telegram-webhook/`:
-- `voice_confidence_test.ts` — `assessVoiceConfidence` e `isObviousLine`: linha óbvia executa, ambígua segura, qty alta + contexto pede confirmação.
-- `voice_verb_test.ts` — `voiceVerb(kind)` retorna o emoji/palavra certa para ADD/REMOVE/STOCK_MOVEMENT/VIEW/TABLE_VALUE.
-- `undo_keyboard_test.ts` — `buildUndoBatchKeyboard(token, tableLabel?)` gera label correto com e sem mesa.
-- `fuzzy_resolver_test.ts` — `fuzzyFindProducts` com apelidos: exato > startsWith > tokens > Levenshtein, ambíguo retorna candidatos.
-- `state_machine_test.ts` — wizard de estoque: transições entre `awaiting_item → awaiting_qty → awaiting_review`, expiração de TTL.
-- `multi_command_render_test.ts` — dado um array de `slotResults`, monta as N mensagens separadas com header dinâmico (`✅ 4/4` vs `⚠️ 3/4`).
+### Fase 1 — Cortar privilege escalation crítica (A1, A2, A5, A8, A9)
 
-Roda via `supabase--test_edge_functions` (que já existe). Antes de qualquer deploy futuro do webhook, esses testes precisam passar.
+**Migração SQL — recálculo no servidor + RLS apertada:**
 
-**Refator preventivo** (sem mudar comportamento): extrair do `index.ts` (4997 linhas) 3 módulos puros para facilitar teste:
-- `parser.ts` — parseCommand + regex
-- `voice.ts` — assessVoiceConfidence, voiceVerb, isObviousLine, render multi-mensagem
-- `keyboards.ts` — buildUndoBatchKeyboard, picker buttons
+1. **`pay_order` recalcula total no servidor** e valida `amount_paid`:
+   ```sql
+   -- Dentro de pay_order, antes do UPDATE:
+   SELECT COALESCE(SUM(subtotal),0) INTO v_real_total FROM order_items WHERE order_id = p_order_id;
+   IF abs(v_real_total - p_amount_paid) > 0.01 AND p_payment_method <> 'cash' THEN
+     RAISE EXCEPTION 'amount_mismatch: expected % got %', v_real_total, p_amount_paid;
+   END IF;
+   IF p_payment_method = 'cash' AND p_amount_paid + 0.001 < v_real_total THEN
+     RAISE EXCEPTION 'insufficient_cash';
+   END IF;
+   IF p_payment_method NOT IN ('cash','pix','card','credit','debit','none') THEN
+     RAISE EXCEPTION 'invalid_payment_method';
+   END IF;
+   ```
+   Mantém `'none'` (fechamento sem pagamento explícito do bar) mas força `amount_paid = total` recalculado.
 
-`index.ts` vira só HTTP handler + orquestração. Não muda nenhum fluxo, só fica testável e legível.
+2. **`create_order` / `update_order_items` recalculam `total` e `subtotal`** a partir de `products.price` (lookup por `product_id`), descartando o que veio do client. Para itens sem `product_id` (custom), aceita o `product_price` enviado mas registra flag `manual_price=true` em log futuro.
 
-## 3. Performance no front
+3. **`update_order_status` valida transições**:
+   ```sql
+   IF p_status NOT IN ('new','preparing','done','cancelled') THEN RAISE EXCEPTION 'invalid_status'; END IF;
+   IF v_current = 'paid' THEN RAISE EXCEPTION 'cannot_change_paid'; END IF;
+   -- bloqueia 'paid' aqui — só pay_order pode setar
+   IF p_status = 'paid' THEN RAISE EXCEPTION 'use_pay_order'; END IF;
+   ```
 
-Sem mexer no design/animações, são ganhos mecânicos:
+4. **Fechar RLS de mutação** em `orders`, `order_items`, `products`, `cash_register`, `cash_movements`, `inventory_items`, `inventory_movements`, `settings`, `profiles`. Estratégia minimamente invasiva (sistema é POS sem auth):
+   - **SELECT**: `public` permanece `true` (POS precisa ler).
+   - **INSERT/UPDATE/DELETE**: revogar `public`, exigir que mutações passem por **RPC SECURITY DEFINER**. RPCs já existem para o caminho legítimo (`create_order`, `update_order_items`, `pay_order`, `update_order_status`, `apply_inventory_movement`).
+   - Para tabelas que ainda fazem write direto do client (`products` no Admin, `settings`, `cash_register`/`cash_movements`), criar RPCs equivalentes: `admin_upsert_product`, `admin_set_setting`, `cash_open`, `cash_close`, `cash_movement_add`. Essas RPCs **exigem PIN de gerente** validado por nova função `verify_manager_pin(p_pin text) returns boolean` — tabela `profiles.pin` muda de `text` plano para `pin_hash` (bcrypt via pgcrypto) na mesma migração.
 
-- **Code splitting por rota**: `App.tsx` hoje importa todas as páginas estaticamente. Mudar para `React.lazy` + `Suspense` em Admin, Stock, PrintStation, Pdv, Cashier (rotas pesadas que não são abertas ao mesmo tempo). Garçom carrega só Palm.
-- **`React.memo` nos hot paths**: `KanbanCard`, `OrderRow`, `StockCard`, `CartItemRow`, `SortableProductCard` — re-renderizam em cascata quando o realtime do Supabase dispara. Memoizar com comparação por id+updated_at.
-- **Virtualização**: `MenuView` (cardápio), `StockList`, `OrdersTab` se passarem de 50 itens → `@tanstack/react-virtual` (já no ecossistema, leve).
-- **Debounce de busca**: campos de busca em Admin/Stock com debounce 200ms (hoje filtram a cada tecla).
-- **Realtime mais cirúrgico**: alguns subscriptions hoje escutam `event: '*'` na tabela inteira; trocar por `event: 'INSERT'` ou filtros de coluna específicos onde dá.
-- **Bundle**: `vite.config.ts` ganha `manualChunks` separando `recharts`, `@dnd-kit`, `radix-ui` em chunks próprios (cache mais estável entre deploys).
-- **Service worker**: revisar `public/sw.js` para não cachear `/functions/*` (já cacheia mais do que devia, segundo o tamanho).
+5. **`profiles.pin` → `pin_hash`**: migração one-shot, hash dos PINs existentes com `crypt(pin, gen_salt('bf'))`. Coluna `pin` é dropada. RLS `profiles` SELECT passa a expor só `id, name, role` (view `public.profiles_safe` ou policy com `USING true` mas coluna `pin_hash` revogada do role anon via `REVOKE SELECT (pin_hash) ON profiles FROM anon, authenticated`).
 
-**Métrica de antes/depois**: rodar `npm run build` antes e depois e comparar tamanho dos chunks; rodar Lighthouse local em `/palm` e `/kitchen`.
+6. **`Kitchen.tsx` substitui `from('orders').update({status})` por `rpc('update_order_status', ...)`** (que agora valida).
 
-## 4. Auditoria de segurança contínua
+### Fase 2 — Lockdown de RPCs administrativas (A10, A11)
 
-**Ação imediata** (uma vez):
-- `security--run_security_scan` — varredura completa de RLS, secrets, endpoints expostos.
-- `supabase--linter` — pega RLS desabilitado, policies permissivas demais.
-- Revisar `telegram-webhook` quanto a injeção via `text` do usuário (parâmetros indo pra DB), uso correto da whitelist `telegram_allowed_chats`, e logs que **não** vazem `chat_id` em produção sem mascarar.
+7. **`archive_and_purge_old_data`, `force_clear_orphan_prints`, `recover_stuck_prints`, `requeue_stuck_print_jobs`**: mover de `EXECUTE TO public` para `EXECUTE TO service_role` apenas. Frontend que precisava (SystemTab) chama via edge function nova `admin-rpc` que valida PIN de gerente.
 
-**Rotina** (documentada no README + memória do projeto):
-> Antes de cada commit que toca `supabase/functions/*`, `supabase/migrations/*` ou hooks de auth: rodar `security--run_security_scan` e `supabase--linter`. Se aparecer `error`, bloquear o deploy.
+### Fase 3 — Edge functions auxiliares (A14–A16)
 
-Adicionar `.lovable/memory/preferences/security.md` com essa regra para que toda iteração futura passe pelo crivo automaticamente.
+8. **`notify-telegram`, `daily-waiter-report`, `check-stale-tables`**: exigir header `X-Cron-Secret` (novo secret `CRON_SECRET`) com `safeEqual`. pg_cron passa o header. Se ausente/errado → 401.
 
-## 5. CI local via script (opcional, mas recomendado)
+### Fase 4 — Sanitização de campos livres (A17)
 
-Criar `scripts/check.sh` que roda em sequência:
-1. `npm run lint`
-2. `npm test`
-3. `deno test supabase/functions/telegram-webhook/*_test.ts`
-4. `npm run build`
+9. **Helper `escapeTelegramHtml(s)`** no webhook e no `notify-telegram`: substitui `&<>` por entidades antes de injetar `note`, `table_name`, `waiter_name`, `customer_name`, `delta.product_name` em mensagens com `parse_mode: HTML`. Limite hard 200 chars por campo.
 
-Antes de qualquer mudança grande, esse script tem que passar 100%. Se um teste novo falhar, sabemos exatamente o que quebrou.
+### Fase 5 — Hardening geral (A12, A13, A18, A19, A20)
 
-## Ordem de execução proposta
+10. **`apply_inventory_movement`**: limite `p_quantity <= 10000`; `current_stock` resultante não pode ficar abaixo de `-1000`.
+11. **`merge_table_duplicates`**: já tem `FOR UPDATE`, ok. Adicionar advisory lock `pg_advisory_xact_lock(hashtext('merge:' || p_table_name))` para serializar.
+12. **`pay_order`**: adicionar `FOR UPDATE` no SELECT inicial (hoje não tem) para fechar race de double-pay.
+13. **Telegram undo**: marcar token como `consumed_at` no banco antes de executar reversão; rejeitar se já consumido.
 
-1. **Refator preventivo do telegram-webhook** (extrair 3 módulos, sem mudar comportamento) + testes Deno cobrindo eles.
-2. **Mocks de Supabase** + testes de hooks críticos + smoke test de rotas.
-3. **Performance**: lazy loading de rotas, memo nos hot paths, manualChunks.
-4. **Scan de segurança** + correções de findings que aparecerem.
-5. **Documentar a rotina** (memória + README).
+## Camada de testes
 
-## O que NÃO muda
-- Design, cores, animações, layout, fontes.
-- Comportamento do garçom, cozinha, caixa, admin, estoque.
-- Fluxo de impressão (acabamos de estabilizar — não toca).
-- Telegram bot UX (verbos, undo identificado, picker por linha — tudo permanece).
+### Deno (webhook + RPCs via service_role)
+- `supabase/functions/_shared_test/rpc_security_test.ts` (novo) — chama RPCs com payload malicioso usando service_role e anon, valida que anon não consegue escrever direto:
+  - `pay_order` com `amount_paid=0` em PIX → `amount_mismatch`
+  - `create_order` com `subtotal` adulterado → recalcula
+  - `update_order_status` com `'paid'` → `use_pay_order`
+  - anon `from('orders').update({total: 0})` → policy bloqueia
+  - anon `from('profiles').select('pin_hash')` → coluna não retorna
+  - anon `rpc('archive_and_purge_old_data')` → permission denied
+  - `notify-telegram` sem `X-Cron-Secret` → 401
 
-## Arquivos afetados (resumo)
-- **Novos**: ~10 arquivos de teste em `src/`, ~6 em `supabase/functions/telegram-webhook/`, `src/test/mocks/supabase.ts`, `src/test/smoke.test.tsx`, `scripts/check.sh`, `.lovable/memory/preferences/security.md`.
-- **Refatorados**: `App.tsx` (lazy routes), `vite.config.ts` (manualChunks), `telegram-webhook/index.ts` (extrair módulos), 5-6 componentes (memo), `public/sw.js` (cache).
-- **Sem mudança funcional visível** para o usuário final.
+### Vitest (frontend)
+- `src/lib/__tests__/payment-server-validation.test.ts` — mock supabase: garante que `CloseOrder` envia `amount_paid` mas espera erro `amount_mismatch` se cálculo divergir.
+- `src/lib/__tests__/admin-pin-rpc.test.ts` — admin operations passam pelo `admin-rpc` com PIN.
 
-## Critério de sucesso
-1. `npm test` roda 40+ testes e passa.
-2. `deno test` no telegram-webhook roda 100+ testes e passa.
-3. `security--run_security_scan` retorna sem `error` e sem `warn` crítico.
-4. Bundle JS inicial cai pelo menos 30% (lazy routes).
-5. `MenuView`, `KanbanCard`, `OrderRow` não re-renderizam quando dados não mudam (verificável por teste).
-6. Próxima alteração que quebrar fluxo crítico é pega por teste **antes** do deploy.
+### Smoke ofensivo
+- `supabase/functions/telegram-webhook/replay_test.ts` — token de undo consumido 2× na janela → segunda chamada rejeitada.
+- `supabase/functions/telegram-webhook/html_inject_test.ts` — `note` com `<script>` é escapado antes do `sendMessage`.
+
+## Documentação obrigatória (entrega ao final)
+
+Atualizar `.lovable/memory/preferences/security.md` com:
+- Lista das 20 hipóteses, status (corrigido / mitigado / ignorado com justificativa).
+- Regra: **toda nova RPC SECURITY DEFINER deve recalcular valores monetários e validar transições de status**.
+- Regra: **mutações em tabelas financeiras só via RPC; nunca `from(...).update(...)` no client**.
+
+E criar `.lovable/security/audit-cycle-2.md` com o relatório completo no formato obrigatório (uma seção por vulnerabilidade A1–A20 com Severidade/Local/Como explorar/Payload/Causa raiz/Correção/Teste/Risco residual).
+
+## Arquivos afetados
+
+**Migrações SQL** (1 grande, transacional):
+- Reescreve `pay_order`, `create_order`, `update_order_items`, `update_order_status`, `apply_inventory_movement`, `merge_table_duplicates`.
+- Cria `verify_manager_pin`, `admin_upsert_product`, `admin_set_setting`, `cash_open`, `cash_close`, `cash_movement_add`, `consume_undo_token`.
+- Migra `profiles.pin` → `profiles.pin_hash` (pgcrypto).
+- Substitui RLS public ALL por RLS public SELECT + `REVOKE INSERT/UPDATE/DELETE FROM anon, authenticated` em 9 tabelas.
+- `REVOKE EXECUTE ... FROM public` em RPCs administrativas.
+- Drop policies permissivas redundantes.
+
+**Edge functions**:
+- `supabase/functions/notify-telegram/index.ts` — exige `CRON_SECRET`, escapa HTML.
+- `supabase/functions/daily-waiter-report/index.ts` — exige `CRON_SECRET`.
+- `supabase/functions/check-stale-tables/index.ts` — exige `CRON_SECRET`.
+- `supabase/functions/admin-rpc/index.ts` (novo) — proxy para RPCs admin, valida PIN via `verify_manager_pin`.
+- `supabase/functions/telegram-webhook/index.ts` — escape HTML em campos livres, undo com `consume_undo_token`.
+
+**Frontend**:
+- `src/pages/Kitchen.tsx` — usa `update_order_status` RPC.
+- `src/pages/Admin.tsx`, `src/components/admin/ProductsManager.tsx`, `src/components/admin/ProductForm.tsx` — chamam `admin-rpc` com PIN.
+- `src/components/admin/SystemTab.tsx` — `archive_and_purge_old_data` via `admin-rpc`.
+- `src/lib/product-groups.ts`, `src/lib/product-order.ts` — `admin_set_setting` via `admin-rpc`.
+- `src/components/print-station/PrintQueuePanel.tsx` — `force_clear_orphan_prints` via `admin-rpc`.
+- Login de gerente / cache de PIN em `sessionStorage` (não localStorage; expira ao fechar aba).
+
+**Testes**: ~10 arquivos novos.
+
+**Secrets a adicionar pelo usuário**:
+- `CRON_SECRET` (random 32 bytes) — depois de criar, usuário precisa atualizar headers do pg_cron que dispara `notify-telegram` e `daily-waiter-report`.
+
+## Critério de aceite
+
+1. Anon key NÃO consegue: alterar `orders.total`, ler `profiles.pin_hash`, executar `archive_and_purge_old_data`, modificar `settings.telegram_allowed_chats`, alterar `products.price` sem PIN.
+2. `pay_order` rejeita `amount_paid` divergente do total recalculado.
+3. `update_order_status` rejeita `'paid'`.
+4. `notify-telegram` retorna 401 sem `X-Cron-Secret`.
+5. Campos com `<script>` chegam escapados nos chats Telegram.
+6. Token de undo só executa 1×.
+7. Build passa, todos os 114 testes anteriores + ~25 novos passam.
+8. Fluxos legítimos (lançar pedido, fechar conta, imprimir, mover mesa, voz Telegram) continuam funcionando.
+9. Relatório `audit-cycle-2.md` entregue com 20 vulnerabilidades documentadas no formato obrigatório.
+
+## Observações sobre o ambiente
+
+- **POS sem login de usuário**: o app continua acessível sem auth (proposta operacional). A camada de proteção é via **RLS read-only para anon + RPC com PIN para mutação sensível**, não via JWT por usuário.
+- **PIN é o único fator** — não é ideal, mas é o que cabe sem reformar todo o login. Documentado como risco residual; recomendação futura é migrar para auth real (Supabase Auth com magic link) para garçons/gerentes.
+- **Riscos residuais conhecidos**: ataque interno (alguém com PIN), brute force de PIN 4 dígitos (mitigar com rate limit por IP em `verify_manager_pin` — 5 tentativas / 15min), perda de dispositivo logado.
 
