@@ -165,13 +165,53 @@ export const SystemTab = () => {
               Limpar dados de teste
             </h3>
             <p className="text-sm text-slate-600 mt-1">
-              Apaga <b>todos</b> os pedidos, caixas, movimentos de estoque,
-              notificações e estado do Telegram. Zera o estoque atual.{" "}
-              <b>Mantém</b> cardápio, cadastro de itens, receitas, vínculos do
-              Telegram e configurações. Use quando o dia foi só testes.
+              Apaga pedidos, caixas, movimentos de estoque, notificações e
+              estado do Telegram <b>do período escolhido</b>. <b>Mantém</b>{" "}
+              cardápio, cadastro de itens, receitas, vínculos do Telegram e
+              configurações.
             </p>
           </div>
         </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+            Período a apagar
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              ["today", "Hoje (24h)"],
+              ["7d", "Últimos 7 dias"],
+              ["30d", "Últimos 30 dias"],
+              ["all", "Tudo"],
+            ] as const).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setResetPeriod(val)}
+                className={`h-12 rounded-lg border-2 font-bold text-sm transition-colors ${
+                  resetPeriod === val
+                    ? "border-destructive bg-destructive text-destructive-foreground"
+                    : "border-border bg-background text-foreground hover:border-destructive/50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border bg-background">
+          <input
+            type="checkbox"
+            checked={resetStock}
+            onChange={(e) => setResetStock(e.target.checked)}
+            className="w-5 h-5 accent-destructive"
+          />
+          <span className="text-sm font-medium text-foreground">
+            Zerar estoque atual de todos os itens
+          </span>
+        </label>
+
         <Button
           onClick={handleResetTestData}
           disabled={resetting}
@@ -179,9 +219,10 @@ export const SystemTab = () => {
           className="w-full h-14 font-black text-base gap-2"
         >
           <Trash2 className="w-5 h-5" />
-          {resetting ? "APAGANDO…" : "APAGAR DADOS DE TESTE"}
+          {resetting ? "APAGANDO…" : `APAGAR — ${periodLabel(resetPeriod).split(" ")[0]}`}
         </Button>
       </div>
+
 
       <div className="rounded-xl border-2 border-border p-5 space-y-4">
         <div className="flex items-start gap-3">
