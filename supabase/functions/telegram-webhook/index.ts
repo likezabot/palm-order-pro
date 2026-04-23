@@ -400,7 +400,7 @@ function buildStockUndoKeyboard(token: string): InlineButton[][] {
 
 // ─────────────────────────── helpers ───────────────────────────
 
-function normalize(s: string): string {
+export function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")
@@ -419,7 +419,7 @@ function fmtBRL(n: number): string {
 
 // Singulariza tokens em pt-BR (conservador). Aplicado antes do resolveProduct.
 // Preserva dígitos/unidades (350, 2l, 600ml) e palavras curtas/acentuadas (gas, mes).
-function singularizeToken(tok: string): string {
+export function singularizeToken(tok: string): string {
   if (!tok) return tok;
   // dígitos ou tokens com dígito (350, 2l, 600ml) — não mexer
   if (/\d/.test(tok)) return tok;
@@ -450,12 +450,12 @@ function singularizeToken(tok: string): string {
   return tok;
 }
 
-function singularize(text: string): string {
+export function singularize(text: string): string {
   return text.split(/\s+/).map(singularizeToken).join(" ");
 }
 
 // Distância de Levenshtein (matriz O(n·m), strings curtas).
-function levenshtein(a: string, b: string): number {
+export function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
   const al = a.length, bl = b.length;
   if (al === 0) return bl;
@@ -482,7 +482,7 @@ function sleep(ms: number) {
 
 // ─────────────────────────── parser ───────────────────────────
 
-type Command =
+export type Command =
   | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string; fromContext?: boolean }
   | { kind: "VIEW"; table: string; fromContext?: boolean }
   | { kind: "SET_TABLE"; table: string }
@@ -515,7 +515,7 @@ const ALL_OPS = [...ADD_OPS, ...REM_OPS];
 // Também faz split conservador quando aparece outro "mesa N" no meio da linha,
 // somente se cada lado contém um operador/ação reconhecível (evita quebrar
 // produtos com "mesa" no nome).
-function splitCommands(raw: string): string[] {
+export function splitCommands(raw: string): string[] {
   if (!raw) return [];
   // Normaliza separadores explícitos para \n
   const text = raw.replace(/\s*\/\/\s*/g, "\n").replace(/\s+\|\s+/g, "\n").replace(/\s*;\s*/g, "\n");
@@ -659,7 +659,7 @@ function parseStockTailLoose(raw: string): { qty: number; unit?: string; itemTex
   return null;
 }
 
-function parseCommand(raw: string): Command {
+export function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
 
@@ -2004,7 +2004,7 @@ async function executeStockQuery(item: StockItem): Promise<string> {
 
 type ProductRow = { id: string; name: string; category: string; active: boolean };
 
-function fuzzyFindProducts(query: string, all: ProductRow[]): ProductRow[] {
+export function fuzzyFindProducts(query: string, all: ProductRow[]): ProductRow[] {
   const q = singularize(normalize(query));
   if (!q) return [];
   const tokens = q.split(/\s+/).filter(Boolean);
