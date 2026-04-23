@@ -1,116 +1,99 @@
 
 
-# Plano: redesign Premium da aba "Rede"
+# Plano: harmonia visual Premium em todo o Admin
 
-## Problema atual
+## Diagnóstico
 
-Olhando o screenshot que você mandou:
-- Layout solto, cards "flutuando" sem hierarquia.
-- Botão "Renomear" mal posicionado, quebrando a linha.
-- Bolinhas coloridas grandes demais, parecem amadoras.
-- Sparkline sem eixo, sem contexto — parece um risco perdido.
-- Tipografia inconsistente (tamanhos misturados).
-- Falta densidade de informação técnica (você quer **dados reais + linguagem simples juntos**).
+Hoje a aba "Rede" segue um padrão **clean / Premium** (cards `shadcn` com `border` sutil, fundo branco, ícones em círculo `bg-primary/10`, status semântico via tokens `--success/--warning/--destructive`, tipografia equilibrada). O resto do Admin usa um padrão **antigo "POS pesado"**:
 
-## Novo design (Premium)
+- `font-black uppercase` em quase tudo
+- Bordas grossas (`border-2`), botões `h-14` com sombras coloridas
+- Header com `shadow-sm` + título caixa-alta
+- Tabs com `text-xs font-bold` apertadas
+- Cores hardcoded (`text-slate-900`, `bg-slate-50/50`)
+- Aba Pedidos / Sistema / Impressão sem hierarquia visual consistente
 
-### Estrutura visual
+Objetivo: trazer **toda a aba Admin** pro mesmo idioma visual da Rede — mantendo legibilidade no balcão, mas com refinamento.
+
+## Princípios do novo design (do NetworkTab)
+
+1. **Tipografia balanceada**: `font-semibold` / `font-bold` em vez de `font-black`. Sem uppercase forçado em títulos. Números em `tabular-nums`.
+2. **Cards uniformes**: `Card` do shadcn, `border` simples (não `border-2`), `rounded-lg`, padding `p-4/p-5`.
+3. **Ícone em círculo `bg-primary/10`** como marca visual recorrente em headers de seção.
+4. **Status via dots pequenos** (8px) + cor semântica de token, sem bolões.
+5. **Cores semânticas exclusivas**: `text-success / text-warning / text-destructive / text-muted-foreground` — sem `text-slate-*` hardcoded.
+6. **Botões**: altura padrão `h-10/h-11`, `rounded-md`, sem sombras coloridas chamativas. Ações destrutivas usam `variant="destructive"` discreto.
+7. **Background**: `bg-background` (branco/neutro do tema) em vez de `bg-slate-50/50`. Espaçamento interno generoso (`max-w-4xl mx-auto py-6 space-y-6`).
+8. **Tabs**: pill style sutil com underline animado mais fino, ícone + label sempre, sem `font-bold` agressivo.
+
+## Mudanças por arquivo
+
+### `src/pages/Admin.tsx`
+- Trocar `bg-slate-50/50` → `bg-background`.
+- Tabs: trocar `h-14 font-bold text-xs sm:text-sm` por `h-12 font-medium text-sm`, espaçamento `gap-1`, underline mais sutil (`border-b border-transparent data-[state=active]:border-primary` permanece, mas dentro de uma `TabsList` com `bg-muted/30 rounded-none`).
+- Wrapper das `TabsContent` ganha `max-w-5xl mx-auto w-full px-4 sm:px-6 py-6` para alinhar largura entre todas as abas.
+
+### `src/components/admin/AdminHeader.tsx`
+- Título: `text-lg sm:text-xl font-semibold tracking-tight` (sem `font-black uppercase`). "Painel de Controle" em todos os tamanhos (responsivo encolhe).
+- Botão "Novo Produto": altura `h-10`, `rounded-md`, sem `shadow-lg shadow-primary/20`. Ícone `Plus` 16px.
+- Toggle Garçom/Admin: virar `Badge`/`Button` com `variant="outline"` + ícone, sem caixa-alta forçada.
+- Voltar: ícone num botão `ghost size="icon"` do shadcn em vez de `<button>` cru.
+- Borda inferior: `border-b` simples (sem `shadow-sm`).
+
+### `src/components/admin/OrdersTab.tsx`
+- Cards de pedido: trocar `border border-border rounded-xl shadow-sm` por `Card` shadcn.
+- Título "Mesa X": `text-base font-semibold` (sem `font-black`).
+- Total: `text-xl font-bold tabular-nums text-primary` + label "Total" pequeno acima em `text-xs text-muted-foreground`.
+- Garçom vira `Badge variant="secondary"` com avatar dot.
+- Botões "Imprimir/Editar": `Button variant="outline"` e `variant="default"`, altura `h-10`, ícones 16px.
+- Empty state: card com ícone grande em círculo `bg-muted` + texto centralizado em `text-muted-foreground`.
+- Header da seção (acima do grid): linha "Pedidos ativos · N" com contador em `Badge`.
+
+### `src/components/admin/SystemTab.tsx`
+- Já está próximo do padrão, refinar:
+  - Trocar `text-slate-900/600/500` → `text-foreground/text-muted-foreground`.
+  - `border-2 border-border` → `border` (Card shadcn).
+  - `font-black` → `font-semibold`.
+  - Botões `h-14 font-black uppercase` → `h-11 font-medium` com ícone à esquerda.
+  - Logs: cada item vira mini-Card com dot semântico (`success`/`destructive`) em vez de borda colorida grossa.
+  - Header de cada seção igual ao NetworkTab: ícone em círculo `bg-primary/10` + título `text-base font-semibold` + descrição `text-sm text-muted-foreground`.
+
+### `src/components/admin/PrintConfigPanel.tsx`
+- Envolver seções num `Card` cada (Bridge status, Modo de impressão, Layout, Fontes, Seções visíveis, Preview).
+- Header de seção com mesmo padrão (ícone em círculo + título semibold).
+- Status da bridge: trocar bloco verde/vermelho atual por banner igual ao "summary" do NetworkTab (`bg-success/5 border-success/20` ou `bg-destructive/5`).
+- Botões "Salvar/Resetar": `h-10`, sem `font-black`.
+
+### `src/components/admin/StatsPanel.tsx`
+- Cards de KPI (Faturamento, Pedidos, Ticket Médio, Produtos): padrão uniforme — Card shadcn com label `text-xs uppercase tracking-wide text-muted-foreground`, valor `text-3xl font-bold tabular-nums`, delta com seta colorida (success/destructive token).
+- Header do período: pílulas (`Tabs` ou `ToggleGroup`) com visual sutil em vez de botões grandes.
+- Gráficos (recharts): manter, mas envolver em `Card` com `CardHeader` + `CardTitle` consistente.
+- Tabelas (top produtos / garçons): linhas com `hover:bg-muted/50`, fonte `text-sm`, números `tabular-nums`.
+
+### Tokens / `src/index.css`
+- Verificar se `--success` e `--warning` já existem (NetworkTab usa). Se faltarem em algum modo, adicionar.
+- Sem novas variáveis necessárias além disso.
+
+## Layout-padrão de seção (template aplicado em tudo)
 
 ```text
-┌─────────────────────────────────────────────────┐
-│ 📱 Celular (Admin)              [Renomear ✎]   │  ← header compacto
-│ Última verificação há 2s · ⏸ Pausar           │
-├─────────────────────────────────────────────────┤
-│ ❌ Impressora desligada                         │  ← banner status geral
-│    Pedidos estão na fila aguardando             │
-└─────────────────────────────────────────────────┘
-
-┌──────────────────┬──────────────────┬──────────────────┐
-│ 📶 Internet      │ ☁ Servidor       │ 🖨 Impressora    │
-│ ● Boa            │ ● Devagar        │ ● Desligada      │
-│                  │                  │                  │
-│ 93 ms            │ 221 ms           │ — ms             │
-│ ▁▂▁▂▁▂▁▁▂▁      │ ▂▃▅▄▃▂▃▂▃▂      │ ▁▁▁▁▁▁▁▁▁▁      │
-│ média 88ms       │ média 215ms      │ offline há 12min │
-│                  │                  │                  │
-│ Tudo normal nesse│ Servidor lento,  │ Pedidos ficam na │
-│ celular.         │ pode atrasar.    │ fila até voltar. │
-│                  │                  │                  │
-│ [Testar agora]   │ [Testar agora]   │ [Testar agora]   │
-└──────────────────┴──────────────────┴──────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│ Detalhes técnicos                          ▼    │  ← collapsible
-│  • navigator.onLine: true                       │
-│  • Conexão: 4g (downlink 10Mbps, RTT 100ms)     │
-│  • Realtime: SUBSCRIBED (heartbeat 3s atrás)    │
-│  • Bridge URL: http://localhost:9100/health     │
-│  • User agent: Mozilla/5.0 ...                  │
-└─────────────────────────────────────────────────┘
+┌─ Card ─────────────────────────────────────┐
+│ ⚙️  Título da seção                        │  ← ícone em círculo bg-primary/10
+│    Descrição curta em muted-foreground     │
+├────────────────────────────────────────────┤
+│ [conteúdo da seção]                        │
+│ [Ação primária]  [Ação secundária]         │
+└────────────────────────────────────────────┘
 ```
 
-### Especificações visuais
-
-**Header**
-- Avatar do device (ícone grande em círculo com `bg-primary/10`).
-- Nome em `text-xl font-semibold`, badge da role ao lado (`Badge variant="outline"`).
-- "Renomear" vira ícone-botão pequeno (`Pencil` lucide, ghost variant).
-- Linha de meta (última verificação + pausar) em `text-xs text-muted-foreground`.
-
-**Banner de resumo**
-- Card dedicado com cor semântica forte: verde/amarelo/vermelho de fundo suave (ex.: `bg-destructive/10 border-destructive/30`).
-- Ícone grande (24px) + título bold + subtítulo descritivo.
-- Aparece só se houver problema; se tudo ok, mostra `✅ Tudo funcionando neste dispositivo` em verde sutil.
-
-**Cards de métrica (3 colunas em desktop, empilhados em mobile)**
-- Estrutura uniforme: header com ícone + label, status dot + label semântico (cor do tema), métrica grande (latência), sparkline, média, frase amigável, botão "Testar agora".
-- **Status dot pequeno** (8px) ao lado do label, não bolão grande.
-- **Latência em destaque**: `text-3xl font-bold tabular-nums` — esse é o "dado real" que faltava.
-- **Sparkline melhorada**: SVG com gradient fill embaixo da linha, eixo Y implícito (escala automática), linha de 2px, cor seguindo o status. Altura 40px, largura 100%.
-- **Linha auxiliar**: média das últimas 20 medições em texto pequeno.
-- Para impressora, em vez de só "sem resposta": mostra **"offline há 12min"** (calculado do timestamp da última falha).
-
-**Detalhes técnicos (collapsible)**
-- Accordion fechado por padrão.
-- Lista vertical de pares chave/valor em `font-mono text-xs`.
-- Inclui: `navigator.onLine`, `navigator.connection.effectiveType/downlink/rtt`, status do Realtime + tempo desde último heartbeat, URL da bridge, contagem de impressoras detectadas, user agent resumido.
-- Isso atende seu pedido de **"informações reais"** sem poluir a vista principal.
-
-### Tokens de cor (semânticos, do design system)
-
-| Status | Cor texto | Cor fundo card | Cor sparkline |
-|---|---|---|---|
-| Boa | `text-success` | `bg-success/5` | `stroke-success` |
-| Devagar | `text-warning` | `bg-warning/5` | `stroke-warning` |
-| Ruim/Offline | `text-destructive` | `bg-destructive/5` | `stroke-destructive` |
-
-Sem cores hardcoded — tudo via tokens do `index.css`.
-
-### Responsivo
-
-- Desktop (≥1024px): 3 cards em grid horizontal.
-- Tablet (640-1024px): 2 + 1 abaixo, ou 3 menores.
-- Mobile (<640px): 1 coluna, cards full-width, sparkline reduzida.
-
-## Arquivos a editar
-
-**`src/components/admin/NetworkTab.tsx`** (reescrita visual completa):
-- Mantém a lógica de medição/polling existente.
-- Reestrutura JSX com novo layout (header + banner + grid de cards + accordion técnico).
-- Substitui bolões por dots pequenos.
-- Usa `Card`, `Badge`, `Button` do design system + `Accordion` do shadcn.
-- Sparkline ganha gradient + escala dinâmica.
-- Adiciona cálculo de "offline há X min" via `since` timestamp.
-- Adiciona seção de detalhes técnicos com `navigator.connection`, heartbeat realtime, etc.
-
-**`src/index.css`** (verificar/adicionar se faltar):
-- Garantir que `--success` e `--warning` existem como tokens HSL (se não, adicionar para alinhar com `--destructive` existente).
+Espaçamento entre cards: `space-y-6`. Container: `max-w-4xl mx-auto`.
 
 ## Resultado prático
 
-- Visual limpo, denso, com hierarquia clara — parece dashboard de SaaS premium.
-- **Dado real visível**: latência em ms grande, média, tempo offline, sparkline com escala.
-- **Linguagem simples mantida**: status semântico + frase amigável em cada card.
-- **Detalhes técnicos** num accordion pra quem quer ver `navigator.connection`, heartbeat realtime, etc.
-- Funciona bem em celular (mobile-first) e em PC.
+- Admin inteiro com **mesma DNA visual** da aba Rede: clean, denso, semântico.
+- Sem `font-black uppercase` em títulos — leitura mais agradável.
+- Cards uniformes em todas as abas (Cardápio, Pedidos, Impressão, Estatísticas, Sistema, Rede).
+- Status sempre via tokens semânticos — pronto pra dark mode futuro.
+- Botões mais discretos, hierarquia clara entre ação primária / secundária / destrutiva.
+- Funciona igual bem em celular (441px) e desktop, mantendo o min 56px de toque nos botões críticos onde já existia.
 
