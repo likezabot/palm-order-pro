@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3 } from "lucide-react";
+import { ShoppingBag, Printer, Wrench, BarChart3, Activity } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
@@ -23,6 +23,7 @@ import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import AdminHeader from "@/components/admin/AdminHeader";
 import OrdersTab from "@/components/admin/OrdersTab";
 import SystemTab from "@/components/admin/SystemTab";
+import NetworkTab from "@/components/admin/NetworkTab";
 import { manualPrintOrder } from "@/lib/print-service";
 
 const Admin = () => {
@@ -43,7 +44,7 @@ const Admin = () => {
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
-    if (staffMode && (activeTab === "stats" || activeTab === "system")) {
+    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network")) {
       setActiveTab("products");
     }
   }, [staffMode, activeTab]);
@@ -225,6 +226,12 @@ const Admin = () => {
             >
               <Wrench className="w-4 h-4" /> Sistema
             </TabsTrigger>
+            <TabsTrigger
+              value="network"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
+            >
+              <Activity className="w-4 h-4" /> Rede
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -263,6 +270,10 @@ const Admin = () => {
 
         <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
           <SystemTab />
+        </TabsContent>
+
+        <TabsContent value="network" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
+          <NetworkTab />
         </TabsContent>
       </Tabs>
     </div>

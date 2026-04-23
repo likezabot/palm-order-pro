@@ -1,68 +1,72 @@
 
 
-# Plano: alerta único de impressora offline + alerta de "voltou ao ar"
+# Plano: aba "Rede" no Admin com status de conectividade
 
-## O que muda
+## O que vai aparecer
 
-Hoje o sistema manda **1 alerta a cada 10 minutos** enquanto a ponte de impressão está offline. Você quer:
+Uma nova aba **"Rede"** no Admin (após "Sistema"), que mostra em tempo real **3 cards de status**:
 
-1. **1 único alerta** quando a impressora cair (após 10 min offline contínuo, pra evitar piscadas de rede curtas).
-2. **Silêncio total** enquanto continuar offline — sem repetir.
-3. **1 alerta de "voltou ao ar"** quando a ponte reconectar e imprimir com sucesso.
+### 1. Impressora (ponte local)
+- Status: 🟢 Online / 🔴 Offline
+- Latência (ms) do `GET http://localhost:9100/health`
+- Impressora USB detectada: sim/não + quantidade
+- Última verificação (timestamp)
+
+### 2. Servidor (Lovable Cloud)
+- Status: 🟢 Online / 🔴 Offline / 🟡 Degradado
+- Latência (ms) do ping `GET /rest/v1/settings?limit=1`
+- Status do Realtime: SUBSCRIBED / TIMED_OUT / CLOSED
+- Tempo desde o último heartbeat do Realtime
+
+### 3. Internet (do PC/tablet)
+- Status: 🟢 Online / 🔴 Offline
+- Latência (ms) do ping externo `https://www.google.com/generate_204`
+- `navigator.onLine` (sinal nativo do navegador)
+- Tipo de conexão (4G/Wi-Fi/etc) via `navigator.connection.effectiveType`
 
 ## Como vai funcionar
 
-### Estado persistido em `settings`
+- **Auto-refresh a cada 5 segundos** enquanto a aba estiver aberta (pausa quando troca de aba para não gastar bateria/dados).
+- Cada card mostra um **gráfico mini** das últimas 20 medições de latência (sparkline simples em SVG), pra você ver se a rede está estável ou oscilando.
+- Botão **"Testar agora"** em cada card pra forçar uma medição imediata.
+- Cores semânticas:
+  - 🟢 verde: latência < 200ms
+  - 🟡 amarelo: 200-800ms
+  - 🔴 vermelho: > 800ms ou offline
 
-Crio uma chave `printer_bridge_state` com o formato:
-```json
-{ "status": "online" | "offline", "since": "2026-04-23T11:30:00Z", "alerted": true|false }
+## Arquivos a criar/editar
+
+**Novo**: `src/components/admin/NetworkTab.tsx`
+- Componente principal com 3 cards.
+- Hook interno `useNetworkPings` que mede latência das 3 fontes a cada 5s.
+- Histórico em memória (array de últimas 20 medições por fonte).
+- Sparkline SVG inline pra cada card.
+
+**Editar**: `src/pages/Admin.tsx`
+- Adicionar aba "Rede" no `TabsList` (ícone `Activity` do lucide-react).
+- Adicionar `<TabsContent value="network">` chamando `<NetworkTab />`.
+- Aba marcada como `admin-only` (oculta em modo Garçom).
+
+## Detalhes técnicos
+
+**Medição de latência** (3 endpoints independentes):
+```ts
+// Ponte local
+const t0 = performance.now();
+await fetch('http://localhost:9100/health', { signal: AbortSignal.timeout(3000) });
+const latency = performance.now() - t0;
 ```
 
-Isso permite a função saber **o estado anterior** e só agir nas transições.
+**Realtime status**: lê do `connectivity-store` já existente (`src/lib/connectivity-store.ts`) via `useConnectivity()` (hook já presente em `src/hooks/use-connectivity.ts`).
 
-### Lógica nova no `notify-telegram`
+**Sparkline**: SVG `<polyline>` com `points` calculado a partir do array de medições, normalizado para o `<svg viewBox="0 0 100 30">`. Sem libs externas.
 
-Substituo o bloco atual de "alerta a cada 10 min" por uma máquina de estados:
-
-```text
-Estado atual    | Sinal recebido           | Ação
-----------------|--------------------------|------------------------------------------
-online          | falha de ponte           | marca offline (since=agora, alerted=false)
-offline (<10m)  | falha de ponte           | nada (aguardando confirmar 10min)
-offline (≥10m)  | falha de ponte, !alerted | envia "🔌 Impressora offline há 10min"
-                |                          | marca alerted=true
-offline         | impressão bem-sucedida   | envia "✅ Impressora voltou ao ar"
-                |                          | marca online
-online          | impressão bem-sucedida   | nada
-```
-
-### Detectando "voltou ao ar"
-
-Adiciono um **novo trigger no banco** `queue_print_recovered` em `orders`: quando `print_status` muda de `pending`/`printing` para `printed` e o estado salvo é `offline`, enfileira evento `print_recovered`.
-
-A função `notify-telegram` processa esse evento, envia a mensagem de recuperação e marca o estado como `online`.
-
-### Mensagens
-
-- **Cai (após 10 min):** `🔌 Impressora offline há 10 minutos. Pedidos estão na fila e imprimem quando voltar.`
-- **Volta:** `✅ Impressora voltou ao ar! Pedidos pendentes serão impressos automaticamente.`
-
-## Arquivos afetados
-
-**Edge Function** `supabase/functions/notify-telegram/index.ts`:
-- Remove o loop de "1 a cada 10 min".
-- Adiciona leitura/escrita de `printer_bridge_state` em `settings`.
-- Implementa máquina de estados (offline/online) com transições.
-- Processa novo evento `print_recovered`.
-
-**Migração SQL** (nova):
-- Trigger `queue_print_recovered` em `orders` que detecta transição `pending|printing → printed` e enfileira evento na `notification_queue`.
-- Insert inicial em `settings` com `printer_bridge_state = {"status":"online"}`.
+**Pausar quando aba escondida**: usa `document.visibilityState` no `useEffect` do hook.
 
 ## Resultado prático
 
-- Internet do PC oscila por 2-3 min → **nenhum aviso** (não atinge os 10 min).
-- Impressora fica desligada de manhã inteira → **1 aviso** quando passa dos 10 min, depois silêncio.
-- Você liga a impressora de novo → **1 aviso** "voltou ao ar" assim que o primeiro pedido imprimir.
+- Você abre Admin → aba "Rede".
+- Vê na hora se a impressora caiu, se a internet do PC tá lenta, ou se o servidor tá demorando.
+- O sparkline mostra picos de latência ao longo do tempo (ex.: internet caiu por 30s e voltou).
+- Sem precisar abrir DevTools nem pingar manualmente.
 
