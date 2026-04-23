@@ -17,7 +17,7 @@ export interface CartItem {
 }
 
 export type OrderPrintType = "extra" | "full" | "bill";
-export type OrderPrintStatus = "pending" | "printing" | "printed" | "failed";
+export type OrderPrintStatus = "pending" | "printing" | "printed" | "failed" | "queued";
 
 export interface Order {
   id: string;

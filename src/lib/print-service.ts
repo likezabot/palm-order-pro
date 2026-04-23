@@ -89,6 +89,19 @@ async function failPrint(orderId: string, errorMsg?: string): Promise<void> {
   if (error) console.error("[print-service] Erro ao registrar falha:", error);
 }
 
+/**
+ * Adia a impressão: o job já foi enfileirado localmente (IndexedDB) e o worker
+ * `print-queue-worker` cuidará de reimprimir quando a ponte voltar.
+ * Marca o pedido como `queued` SEM atualizar `updated_at` para não disparar
+ * loop de re-impressão pelo realtime.
+ */
+async function deferPrint(orderId: string): Promise<void> {
+  const { error } = await supabase.rpc("defer_order_print", {
+    p_order_id: orderId,
+  } as any);
+  if (error) console.error("[print-service] Erro ao adiar print:", error);
+}
+
 export async function isOrderPrinted(orderId: string): Promise<boolean> {
   const { data } = await supabase
     .from("orders")
@@ -162,7 +175,7 @@ export async function autoPrintOrder(order: {
       cfg,
     );
     await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
-    await failPrint(order.id, "print_failed");
+    await deferPrint(order.id);
     return { printed: false, reason: "bridge_offline_queued" };
   }
 }
@@ -256,7 +269,7 @@ export async function autoPrintUpdate(order: {
   } else {
     if (payloadForQueue) {
       await enqueueOnBridgeFailure(order.id, tableValue, queueType, payloadForQueue);
-      await failPrint(order.id, reason);
+      await deferPrint(order.id);
       return { printed: false, reason: "bridge_offline_queued" };
     }
     await failPrint(order.id, reason);
