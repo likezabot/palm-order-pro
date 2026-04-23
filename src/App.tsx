@@ -9,12 +9,32 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import UpdateBanner from "@/components/UpdateBanner";
 import ConnectivityBanner from "@/components/ConnectivityBanner";
+import AdminErrorBoundary from "@/components/admin/AdminErrorBoundary";
 // Index, Palm e Kitchen são leves e abertos com mais frequência → import direto.
 import Index from "./pages/Index";
 import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
+
+// Retry helper: tenta o import dinâmico até 2x antes de propagar o erro
+// (cobre falhas transitórias de rede / chunk velho após deploy).
+const lazyWithRetry = <T extends { default: React.ComponentType<any> }>(
+  factory: () => Promise<T>,
+) =>
+  lazy(async () => {
+    try {
+      return await factory();
+    } catch (err) {
+      await new Promise((r) => setTimeout(r, 600));
+      try {
+        return await factory();
+      } catch (err2) {
+        throw err2;
+      }
+    }
+  });
+
 // Rotas pesadas → lazy (Admin tem charts; PrintStation tem fila; Pdv tem realtime denso etc.).
-const Admin = lazy(() => import("./pages/Admin"));
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
 const Pdv = lazy(() => import("./pages/Pdv"));
 const PrintStation = lazy(() => import("./pages/PrintStation"));
 const Stock = lazy(() => import("./pages/Stock"));
