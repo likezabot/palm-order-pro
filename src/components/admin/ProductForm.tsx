@@ -66,15 +66,53 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
 
   const groupsInCategory = groups.filter((g) => g.category === category);
 
+  // ── Apelidos ──────────────────────────────────────────────────────────────
+  function addAliasFromDraft() {
+    const cleaned = normalizeAlias(aliasDraft);
+    if (!cleaned) return;
+    if (cleaned === normalizeAlias(name)) {
+      setAliasDraft("");
+      return;
+    }
+    if (aliases.some((a) => normalizeAlias(a) === cleaned)) {
+      setAliasDraft("");
+      return;
+    }
+    setAliases([...aliases, cleaned]);
+    setAliasDraft("");
+  }
+  function removeAlias(idx: number) {
+    setAliases(aliases.filter((_, i) => i !== idx));
+  }
+  function handleAliasKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addAliasFromDraft();
+    } else if (e.key === "Backspace" && !aliasDraft && aliases.length > 0) {
+      setAliases(aliases.slice(0, -1));
+    }
+  }
+
   const handleSave = async () => {
     if (!name.trim() || !price || saving) return;
     setSaving(true);
     try {
+      // Normaliza apelidos no submit (defensivo) e remove duplicatas / nome.
+      const cleanName = name.trim();
+      const cleanAliases = Array.from(
+        new Set(
+          [...aliases, aliasDraft]
+            .map((a) => normalizeAlias(a))
+            .filter((a) => a && a !== normalizeAlias(cleanName)),
+        ),
+      );
+
       const data = {
-        name: name.trim(),
+        name: cleanName,
         price: parseFloat(price),
         category,
         active,
+        aliases: cleanAliases,
       };
 
       if (product) {
