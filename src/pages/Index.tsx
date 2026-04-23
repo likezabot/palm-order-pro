@@ -6,6 +6,7 @@ import { getAppVersion } from "@/lib/version-check";
 import ThemeToggle from "@/components/ThemeToggle";
 import HighContrastToggle from "@/components/HighContrastToggle";
 import StockSummaryCard from "@/components/home/StockSummaryCard";
+import logoPlanoB from "@/assets/logo-plano-b.png";
 
 const modes = [
   { label: "ATENDIMENTO / PALM", path: "/palm", Icon: Smartphone },
@@ -25,7 +26,12 @@ const Index = () => {
         <HighContrastToggle />
         <ThemeToggle />
       </div>
-      <div className="text-center mb-2 animate-fade-in-up">
+      <div className="text-center mb-2 animate-fade-in-up flex flex-col items-center">
+        <img
+          src={logoPlanoB}
+          alt="Plano B Espetaria"
+          className="h-28 w-28 object-contain mb-2 drop-shadow-[0_0_24px_hsl(var(--primary)/0.35)] dark:invert dark:brightness-110"
+        />
         <h1 className="text-4xl font-black tracking-widest brand-gradient-text">
           PLANO B
         </h1>
