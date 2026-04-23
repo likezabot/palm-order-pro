@@ -119,20 +119,16 @@ export function resolveGroupInventory(
 }
 
 async function writeGroups(next: ProductGroup[]): Promise<void> {
-  const { data } = await supabase
-    .from("settings")
-    .select("id")
-    .eq("key", PRODUCT_GROUPS_KEY)
-    .maybeSingle();
   const value = JSON.stringify(next);
-  if (data) {
-    await supabase
-      .from("settings")
-      .update({ value, updated_at: new Date().toISOString() })
-      .eq("key", PRODUCT_GROUPS_KEY);
-  } else {
-    await supabase.from("settings").insert({ key: PRODUCT_GROUPS_KEY, value });
-  }
+  const { withPin } = await import("@/lib/manager-pin");
+  await withPin(async (pin) => {
+    const { error } = await supabase.rpc("admin_set_setting", {
+      p_pin: pin,
+      p_key: PRODUCT_GROUPS_KEY,
+      p_value: value,
+    });
+    if (error) throw error;
+  }, "Salvar grupos do cardápio");
 }
 
 /** Adds a product name to a group's members (idempotent). Creates the group if it doesn't exist. */

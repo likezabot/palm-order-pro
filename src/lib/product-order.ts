@@ -55,25 +55,19 @@ export const fetchAllOrders = async (categories: string[]) => {
   return map;
 };
 
-/** Persiste a ordem de IDs de uma categoria (upsert). */
+/** Persiste a ordem de IDs de uma categoria (upsert via RPC com PIN). */
 export const saveOrder = async (category: string, ids: string[]) => {
   const key = orderKey(category);
   const value = JSON.stringify(ids);
-  const { data: existing } = await supabase
-    .from("settings")
-    .select("id")
-    .eq("key", key)
-    .maybeSingle();
-  if (existing) {
-    const { error } = await supabase
-      .from("settings")
-      .update({ value })
-      .eq("key", key);
+  const { withPin } = await import("@/lib/manager-pin");
+  await withPin(async (pin) => {
+    const { error } = await supabase.rpc("admin_set_setting", {
+      p_pin: pin,
+      p_key: key,
+      p_value: value,
+    });
     if (error) throw error;
-  } else {
-    const { error } = await supabase.from("settings").insert({ key, value });
-    if (error) throw error;
-  }
+  }, "Salvar ordem do cardápio");
 };
 
 /** Reseta a ordem da categoria para alfabético (salva array vazio). */

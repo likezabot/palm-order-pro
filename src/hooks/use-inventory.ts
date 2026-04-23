@@ -95,35 +95,26 @@ export function useUpsertInventoryItem() {
     mutationFn: async (
       item: Partial<InventoryItem> & { name: string; slug: string; category: string; unit: string }
     ) => {
-      const payload: any = {
-        name: item.name,
-        slug: item.slug,
-        category: item.category,
-        unit: item.unit,
-        aliases: item.aliases ?? [],
-        min_stock: item.min_stock ?? 0,
-        is_active: item.is_active ?? true,
-        product_id: item.product_id ?? null,
-      };
-      if (item.id) {
-        const { data, error } = await supabase
-          .from("inventory_items" as any)
-          .update(payload)
-          .eq("id", item.id)
-          .select()
-          .single();
+      const { withPin } = await import("@/lib/manager-pin");
+      const result = await withPin(async (pin) => {
+        const { data, error } = await supabase.rpc("admin_upsert_inventory_item" as any, {
+          p_pin: pin,
+          p_id: item.id ?? null,
+          p_name: item.name,
+          p_slug: item.slug,
+          p_category: item.category,
+          p_unit: item.unit,
+          p_aliases: item.aliases ?? [],
+          p_min_stock: item.min_stock ?? 0,
+          p_is_active: item.is_active ?? true,
+          p_product_id: item.product_id ?? null,
+          p_current_stock: item.current_stock ?? 0,
+        });
         if (error) throw error;
         return data;
-      } else {
-        payload.current_stock = item.current_stock ?? 0;
-        const { data, error } = await supabase
-          .from("inventory_items" as any)
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
-      }
+      }, item.id ? "Editar item de estoque" : "Criar item de estoque");
+      if (result === null) throw new Error("Operação cancelada");
+      return result;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory-items"] });
@@ -136,28 +127,48 @@ export function useDeactivateItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      // Reusa o upsert (que valida PIN) — busca item atual e atualiza is_active=false.
+      const { data: cur, error: e1 } = await supabase
         .from("inventory_items" as any)
-        .update({ is_active: false })
-        .eq("id", id);
-      if (error) throw error;
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (e1) throw e1;
+      const c = cur as any;
+      const { withPin } = await import("@/lib/manager-pin");
+      await withPin(async (pin) => {
+        const { error } = await supabase.rpc("admin_upsert_inventory_item" as any, {
+          p_pin: pin,
+          p_id: id,
+          p_name: c.name,
+          p_slug: c.slug,
+          p_category: c.category,
+          p_unit: c.unit,
+          p_aliases: c.aliases ?? [],
+          p_min_stock: c.min_stock ?? 0,
+          p_is_active: false,
+          p_product_id: c.product_id ?? null,
+          p_current_stock: c.current_stock ?? 0,
+        });
+        if (error) throw error;
+      }, "Desativar item de estoque");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory-items"] }),
   });
 }
 
 /**
- * Toggles `active` on a menu product. Used by the out-of-stock confirm dialog
- * (set active=false) and by the "Reactivate in menu" button (set active=true).
+ * Toggles `active` on a menu product. Sem PIN: garçom pode marcar esgotado
+ * em rotina operacional. RPC `toggle_product_active` é SECURITY DEFINER.
  */
 export function useToggleProductActive() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (vars: { product_id: string; active: boolean }) => {
-      const { error } = await supabase
-        .from("products")
-        .update({ active: vars.active })
-        .eq("id", vars.product_id);
+      const { error } = await supabase.rpc("toggle_product_active" as any, {
+        p_id: vars.product_id,
+        p_active: vars.active,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -186,9 +197,16 @@ export function useBulkImportFromMenu() {
         product_id: p.id,
       }));
       if (rows.length === 0) return { inserted: 0 };
-      const { error } = await supabase.from("inventory_items" as any).insert(rows);
-      if (error) throw error;
-      return { inserted: rows.length };
+      const { withPin } = await import("@/lib/manager-pin");
+      const result = await withPin(async (pin) => {
+        const { data, error } = await supabase.rpc("admin_bulk_import_inventory" as any, {
+          p_pin: pin,
+          p_items: rows,
+        });
+        if (error) throw error;
+        return data as number;
+      }, "Importar produtos do cardápio");
+      return { inserted: result ?? 0 };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory-items"] });

@@ -74,11 +74,20 @@ export default function ProductRecipesPanel({ productId }: Props) {
 
   const handleAdd = async () => {
     if (!picking) return;
-    const { error } = await supabase
-      .from("product_recipes" as any)
-      .insert({ product_id: productId, ingredient_product_id: picking });
-    if (error) {
-      toast({ title: "Erro ao adicionar", description: error.message, variant: "destructive" });
+    const { withPin } = await import("@/lib/manager-pin");
+    try {
+      const ok = await withPin(async (pin) => {
+        const { error } = await supabase.rpc("admin_set_recipe" as any, {
+          p_pin: pin,
+          p_product_id: productId,
+          p_ingredient_product_id: picking,
+        });
+        if (error) throw error;
+        return true;
+      }, "Vincular ingrediente");
+      if (!ok) return;
+    } catch (err: any) {
+      toast({ title: "Erro ao adicionar", description: err?.message ?? String(err), variant: "destructive" });
       return;
     }
     setPicking("");
@@ -86,9 +95,16 @@ export default function ProductRecipesPanel({ productId }: Props) {
   };
 
   const handleRemove = async (id: string) => {
-    const { error } = await supabase.from("product_recipes" as any).delete().eq("id", id);
-    if (error) {
-      toast({ title: "Erro ao remover", description: error.message, variant: "destructive" });
+    const { withPin } = await import("@/lib/manager-pin");
+    try {
+      const ok = await withPin(async (pin) => {
+        const { error } = await supabase.rpc("admin_delete_recipe" as any, { p_pin: pin, p_id: id });
+        if (error) throw error;
+        return true;
+      }, "Remover ingrediente");
+      if (!ok) return;
+    } catch (err: any) {
+      toast({ title: "Erro ao remover", description: err?.message ?? String(err), variant: "destructive" });
       return;
     }
     await invalidate();
