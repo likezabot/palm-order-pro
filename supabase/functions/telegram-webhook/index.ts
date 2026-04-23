@@ -4312,8 +4312,12 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     }
     setTestContext(chatId);
     setUndoChatContext(chatId);
-    if (typeof updateId === "number" && isDuplicate(updateId)) {
-      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_duplicate update_id=${updateId}`);
+    // NOTE: para voz a dedup já foi feita ANTES da transcrição (linha ~4280).
+    // Não rechecamos aqui porque o Telegram pode reentregar o mesmo update_id
+    // enquanto a transcrição roda — e a 2ª passagem é justamente a que vai
+    // executar o comando e responder ao usuário.
+    if (!voiceTraceId && typeof updateId === "number" && isDuplicate(updateId)) {
+      console.warn(`[webhook] checkpoint=exit_duplicate update_id=${updateId}`);
       return testOrPlain();
     }
 
