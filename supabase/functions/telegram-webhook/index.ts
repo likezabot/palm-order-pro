@@ -4448,11 +4448,16 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     // Resolve mesa de contexto + produto (sem mutação) para detectar incertezas
     // específicas de ADD/REMOVE: produto não encontrado, ambíguo, mesa herdada com qty alta.
     if (voiceTranscript) {
+      const tag = `[voice ${voiceTraceId ?? "----"}]`;
+      console.log(`${tag} split lines=${lines.length}`);
       const enriched: VoiceParsedSig[] = [];
       const previewParts: string[] = [];
-      for (const ln of lines) {
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        console.log(`${tag} line[${i}] raw="${ln}"`);
         let parsed: any;
         try { parsed = parseCommand(ln); } catch { parsed = { kind: "PARSE_ERROR" }; }
+        console.log(`${tag} line[${i}] parsed kind=${parsed.kind} table=${parsed.table ?? "-"} qty=${parsed.qty ?? "-"} productText="${parsed.productText ?? ""}"`);
         const sig: VoiceParsedSig = { kind: parsed.kind, qty: parsed.qty };
         let previewLine = ln;
         try {
@@ -4461,9 +4466,15 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
             sig.kind = cmd.kind;
             sig.qty = (cmd as any).qty;
             sig.fromContext = (cmd as any).fromContext;
+            console.log(`${tag} line[${i}] context table=${(cmd as any).table ?? "-"} fromContext=${!!(cmd as any).fromContext}`);
             if (cmd.kind === "ADD" || cmd.kind === "REMOVE") {
               const r = await resolveProduct((cmd as any).productText);
               sig.productResolution = r.kind as any;
+              const resInfo =
+                r.kind === "found" ? `id=${r.product.id} name="${r.product.name}"` :
+                r.kind === "ambiguous" ? `candidates=${(r as any).candidates?.length ?? "?"}` :
+                r.kind === "not_found" ? `query="${(cmd as any).productText}"` : r.kind;
+              console.log(`${tag} line[${i}] product resolution=${r.kind} ${resInfo}`);
               const op = cmd.kind === "ADD" ? "+" : "−";
               const tableTag = (cmd as any).fromContext ? `mesa ${cmd.table} (contexto)` : `mesa ${cmd.table}`;
               const prodTag =
@@ -4477,12 +4488,25 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
             }
           }
         } catch (e) {
-          console.warn("voice gate enrich error:", (e as any)?.message ?? e);
+          console.warn(`${tag} line[${i}] enrich error:`, (e as any)?.message ?? e);
         }
         enriched.push(sig);
         previewParts.push(previewLine);
       }
+
+      // Fallback (b): nenhum comando reconhecido — não oferece botões inúteis.
+      const allErrors = enriched.length === 0 || enriched.every((s) => s.kind === "PARSE_ERROR");
+      if (allErrors) {
+        console.warn(`${tag} action=failed reason=no_commands_parsed`);
+        await sendTelegram(
+          chatId,
+          `🎤 *Ouvi:* "${voiceTranscript}"\n\n⚠️ Não consegui transformar isso em comando.\nTente: \`mesa N + qty produto\`\nEx.: \`mesa 2 mais 1 medalhão\`.`,
+        );
+        return testOrPlain();
+      }
+
       const conf = assessVoiceConfidence(voiceTranscript, enriched);
+      console.log(`${tag} confidence confident=${conf.confident}${conf.reason ? ` reason="${conf.reason}"` : ""}`);
       if (!conf.confident) {
         const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
         await sb.from("telegram_chat_state").upsert({
@@ -4495,6 +4519,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
           ? previewParts.map((l, i) => `${i + 1}. ${l}`).join("\n")
           : "(nada reconhecido)";
         const reasonTxt = conf.reason ? ` _(motivo: ${conf.reason})_` : "";
+        console.log(`${tag} action=ask_confirm token=${token}`);
         await sendTelegram(
           chatId,
           `🎤 *Ouvi:* "${voiceTranscript}"${reasonTxt}\n\n🧾 Vou executar:\n${previewBlock}\n\nConfirmar?`,
@@ -4505,6 +4530,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         );
         return testOrPlain();
       }
+      console.log(`${tag} action=executed (confident)`);
     }
 
     if (lines.length <= 1) {
