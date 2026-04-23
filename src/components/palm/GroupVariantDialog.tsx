@@ -29,14 +29,8 @@ export const GroupVariantDialog = ({
   isEsgotado,
   getQty,
 }: Props) => {
-  // Sort: available first, esgotado/uncadastrado at the end (stable)
-  const sorted = variants
-    .map((v, idx) => {
-      const status = !v.product ? 2 : isEsgotado(v.product.id) ? 1 : 0;
-      return { v, idx, status };
-    })
-    .sort((a, b) => (a.status !== b.status ? a.status - b.status : a.idx - b.idx))
-    .map((x) => x.v);
+  // Stock-based ordering removed — keep original variant order.
+  const sorted = variants;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -59,7 +53,6 @@ export const GroupVariantDialog = ({
                 </div>
               );
             }
-            const esgotado = isEsgotado(product.id);
             const qty = getQty(product.id);
             return (
               <button
@@ -69,7 +62,6 @@ export const GroupVariantDialog = ({
                 aria-label={`Adicionar ${name} — R$ ${product.price.toFixed(2)}`}
                 className={cn(
                   "relative flex items-center justify-between gap-3 py-3 px-1 text-left transition-colors min-h-[56px]",
-                  esgotado && "opacity-60",
                 )}
               >
                 <div className="flex flex-col flex-1 min-w-0">
@@ -83,9 +75,7 @@ export const GroupVariantDialog = ({
                   )}
                 </div>
                 <div className="flex items-center shrink-0">
-                  {esgotado ? (
-                    <span className="text-[11px] font-medium text-destructive uppercase tracking-wide">esgotado</span>
-                  ) : qty > 0 && onPickDecrement ? (
+                  {qty > 0 && onPickDecrement ? (
                     <div className="inline-flex items-center rounded-full border border-border/50 bg-muted/30 h-9 px-1 gap-0.5">
                       <span
                         role="button"

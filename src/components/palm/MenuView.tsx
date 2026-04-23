@@ -15,7 +15,6 @@ import {
   type ProductGroup,
 } from "@/lib/product-groups";
 import { CartFab } from "./CartFab";
-import { useProductStockMap, useProductRecipes, isProductEsgotado } from "@/hooks/use-product-stock-map";
 
 interface Props {
   onAdd: (product: Product) => void;
@@ -41,15 +40,13 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
   const [moveOpen, setMoveOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { playFeedback } = useFeedback();
-  const { data: stockMap } = useProductStockMap();
-  const { data: recipes } = useProductRecipes();
   const { data: productGroups = [] } = useProductGroups();
   const hiddenProductNames = useMemo(
     () => getHiddenProductNames(productGroups, activeCategory),
     [productGroups, activeCategory],
   );
 
-  const isEsgotado = (id: string) => isProductEsgotado(stockMap, id, recipes);
+  const isEsgotado = (_id: string) => false;
 
   // Adicionar item segue direto, mesmo se esgotado — a tarja visual continua aparecendo
   // pra informar, mas não bloqueia mais o fluxo.
@@ -123,15 +120,7 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
     ? filteredRaw
     : sortByPersistedOrder(filteredRaw, orderMap[activeCategory] ?? null);
 
-  // Disponíveis primeiro, esgotados ao final (estável).
-  const filtered = useMemo(() => {
-    const withIdx = filteredOrdered.map((p, idx) => ({ p, idx, esgotado: isProductEsgotado(stockMap, p.id, recipes) }));
-    withIdx.sort((a, b) => {
-      if (a.esgotado !== b.esgotado) return a.esgotado ? 1 : -1;
-      return a.idx - b.idx;
-    });
-    return withIdx.map((x) => x.p);
-  }, [filteredOrdered, stockMap, recipes]);
+  const filtered = filteredOrdered;
 
   // Contador por categoria (soma quantidades).
   const categoryCounts = useMemo(() => {
@@ -383,7 +372,6 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                 );
               }
               const qty = getQty(product.id);
-              const esgotado = isEsgotado(product.id);
               return (
                 <button
                   type="button"
@@ -391,14 +379,12 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                   onClick={() => handleAdd(product)}
                   aria-label={`Adicionar ${product.name} — R$ ${product.price.toFixed(2)}`}
                   className={`relative flex flex-col items-start text-left rounded-2xl border bg-card p-4 min-h-[112px] transition-all active:scale-[0.99] overflow-hidden ${
-                    esgotado
-                      ? "border-border/30 opacity-50 cursor-not-allowed"
-                      : qty > 0
-                        ? "border-foreground/20"
-                        : "border-border/40"
+                    qty > 0
+                      ? "border-foreground/20"
+                      : "border-border/40"
                   }`}
                 >
-                  {qty > 0 && !esgotado && (
+                  {qty > 0 && (
                     <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/60" />
                   )}
                   <span className="font-medium text-[15px] leading-snug tracking-tight text-foreground pr-7">
