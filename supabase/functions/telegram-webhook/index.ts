@@ -4352,7 +4352,57 @@ export async function webhookHandler(req: Request): Promise<Response> {
       }
       return new Response(JSON.stringify({ error: "unknown op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    // GET sem ?test não tem rota legítima.
+
+    // ── ADMIN: diagnóstico + auto-reparo do webhook ──
+    // Protegido pelo mesmo WEBHOOK_SECRET. Não depende de TEST_MODE.
+    // Uso:
+    //   GET ?admin=info        → getWebhookInfo
+    //   GET ?admin=fix-webhook → setWebhook (re-registra URL atual + secret atual)
+    const adminOp = url.searchParams.get("admin");
+    if (adminOp) {
+      const provided = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+      if (!WEBHOOK_SECRET || !safeEqual(provided, WEBHOOK_SECRET)) {
+        return unauthorized("missing_or_invalid_secret_for_admin_endpoint");
+      }
+      if (!TOKEN) {
+        return new Response(JSON.stringify({ error: "TELEGRAM_BOT_TOKEN not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const tgBase = `https://api.telegram.org/bot${TOKEN}`;
+      if (adminOp === "info") {
+        const r = await fetch(`${tgBase}/getWebhookInfo`);
+        const j = await r.json();
+        return new Response(JSON.stringify(j), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (adminOp === "fix-webhook") {
+        // URL atual deste edge function — exatamente para onde o Telegram precisa apontar.
+        const selfUrl = `${url.origin}${url.pathname}`;
+        const setRes = await fetch(`${tgBase}/setWebhook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: selfUrl,
+            secret_token: WEBHOOK_SECRET,
+            allowed_updates: ["message", "edited_message", "callback_query"],
+            drop_pending_updates: false,
+          }),
+        });
+        const setJson = await setRes.json();
+        const infoRes = await fetch(`${tgBase}/getWebhookInfo`);
+        const infoJson = await infoRes.json();
+        return new Response(
+          JSON.stringify({
+            set: setJson,
+            info: infoJson,
+            registered_url: selfUrl,
+            secret_configured: !!WEBHOOK_SECRET,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "unknown admin op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // GET sem ?test/?admin não tem rota legítima.
     return new Response("not found", { status: 404, headers: corsHeaders });
   }
 
