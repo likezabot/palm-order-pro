@@ -16,24 +16,6 @@ import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
 
 
-// Retry helper: tenta o import dinâmico até 2x antes de propagar o erro
-// (cobre falhas transitórias de rede / chunk velho após deploy).
-const lazyWithRetry = <T extends { default: React.ComponentType<any> }>(
-  factory: () => Promise<T>,
-) =>
-  lazy(async () => {
-    try {
-      return await factory();
-    } catch (err) {
-      await new Promise((r) => setTimeout(r, 600));
-      try {
-        return await factory();
-      } catch (err2) {
-        throw err2;
-      }
-    }
-  });
-
 // Rotas pesadas → lazy (Admin tem charts; PrintStation tem fila; Pdv tem realtime denso etc.).
 const Pdv = lazy(() => import("./pages/Pdv"));
 const PrintStation = lazy(() => import("./pages/PrintStation"));
@@ -42,7 +24,7 @@ const ForceUpdate = lazy(() => import("./pages/ForceUpdate"));
 const InstallPalm = lazy(() => import("./pages/InstallPalm"));
 const InstallKitchen = lazy(() => import("./pages/InstallKitchen"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const Admin = lazyWithRetry(() => import("./pages/Admin"));
+const Admin = lazy(() => import("./pages/Admin"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">
