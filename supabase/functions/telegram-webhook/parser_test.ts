@@ -97,6 +97,17 @@ Deno.test("ADD: operadores alternativos (manda, bota, poe, soma, inclui)", opts,
   expectAdd("mesa 8 inclui 1 espeto", "8", 1, "espeto");
 });
 
+Deno.test("ADD: gírias de bar (lança, joga, marca, anota, registra, pede)", opts, () => {
+  // Caso real do usuário: áudio "lança um medalhão na mesa 2"
+  expectAdd("lanca um medalhao na mesa 2", "2", 1, "medalhao");
+  expectAdd("lança um medalhão na mesa 2", "2", 1, "medalh");
+  expectAdd("joga 2 coca na mesa 5", "5", 2, "coca");
+  expectAdd("mesa 7 marca 1 espeto", "7", 1, "espeto");
+  expectAdd("mesa 3 anota 2 cervejas", "3", 2, "cerveja");
+  expectAdd("registra 1 skol pra mesa 9", "9", 1, "skol");
+  expectAdd("mesa 4 pede 1 agua", "4", 1, "agua");
+});
+
 Deno.test("ADD: forma 2 — '<op> qty produto na mesa N'", opts, () => {
   expectAdd("manda 2 coca na mesa 9", "9", 2, "coca");
   // Nota: usar palavra ("mais") em vez de "+" no início, pois "+ N ..." prioriza
