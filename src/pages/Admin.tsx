@@ -52,6 +52,17 @@ const Admin = () => {
     localStorage.setItem("pdv_autoprint", String(autoPrint));
   }, [autoPrint]);
 
+  // Realtime: produtos alterados pelo bot do Telegram aparecem no Admin sem refresh.
+  useEffect(() => {
+    const ch = supabase
+      .channel("admin-products-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [queryClient]);
+
   const { data: products = [] } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {
