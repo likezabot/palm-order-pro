@@ -42,7 +42,7 @@ const KanbanCard = ({ order, items, actionLabel, actionColor, onAction, pulse }:
 
   return (
     <div
-      className={`rounded-xl bg-card border border-border/70 border-l-[5px] ${sideBorder} p-4 space-y-2 transition-all shadow-card animate-fade-in-up ${
+      className={`rounded-xl bg-card border border-border/70 border-l-[5px] ${sideBorder} p-4 space-y-2 transition-all duration-300 ease-out shadow-card animate-fade-in-up ${
         servedAt ? "opacity-75" : ""
       } ${
         isUrgent ? "ring-1 ring-destructive/40" : isLate ? "ring-1 ring-warning/30" : ""
