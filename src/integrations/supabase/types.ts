@@ -857,12 +857,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      preview_operational_data: { Args: never; Returns: Json }
       recover_stuck_prints: { Args: never; Returns: Json }
       rename_order_table: {
         Args: { p_new_name: string; p_order_id: string }
         Returns: undefined
       }
       requeue_stuck_print_jobs: { Args: { p_seconds?: number }; Returns: Json }
+      reset_operational_data: { Args: never; Returns: Json }
       toggle_product_active: {
         Args: { p_active: boolean; p_id: string }
         Returns: undefined
