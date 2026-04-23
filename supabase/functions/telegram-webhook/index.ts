@@ -15,6 +15,31 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 type InlineButton = { text: string; callback_data: string };
 
 // ─────────────── Voice (Telegram voice → Lovable AI transcribe) ───────────────
+// Cache do vocabulário do cardápio (60s) — injetado no prompt do Gemini
+// para reduzir erros em nomes específicos ("panceta", "guaraná", "skol", etc).
+let _menuVocabCache: { value: string; at: number } | null = null;
+async function getMenuVocabulary(): Promise<string> {
+  const now = Date.now();
+  if (_menuVocabCache && now - _menuVocabCache.at < 60_000) return _menuVocabCache.value;
+  try {
+    const sbLocal = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: prods } = await sbLocal
+      .from("products")
+      .select("name, category")
+      .eq("active", true)
+      .limit(200);
+    const names = (prods ?? []).map((p: any) => String(p.name ?? "").trim()).filter(Boolean);
+    // Remove duplicatas por lower e ordena
+    const uniq = Array.from(new Set(names.map((n) => n.toLowerCase()))).sort();
+    const value = uniq.length > 0 ? uniq.join(", ") : "";
+    _menuVocabCache = { value, at: now };
+    return value;
+  } catch (e) {
+    console.warn("getMenuVocabulary falhou:", (e as any)?.message ?? e);
+    return _menuVocabCache?.value ?? "";
+  }
+}
+
 // Baixa o arquivo de voz pelo Bot API e transcreve via Lovable AI Gateway
 // (Gemini suporta áudio nativo). Retorna o texto transcrito ou null em erro.
 async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
