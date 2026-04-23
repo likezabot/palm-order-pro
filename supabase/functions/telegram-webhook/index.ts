@@ -124,6 +124,7 @@ async function transcribeTelegramVoice(fileId: string, traceId = "----"): Promis
               "PRESERVE LITERALMENTE verbos de PEDIDO: 'lança', 'lançar', 'lance', 'joga', 'jogar', 'manda', 'mandar', 'marca', 'marcar', 'anota', 'anotar', 'pede', 'pedir', 'bota', 'botar', 'coloca', 'colocar'. " +
               "NUNCA troque esses verbos por 'entrada' ou 'saída'. As palavras 'entrada' e 'saída' SÓ devem aparecer se o usuário falar literalmente 'entrada' ou 'saída'/'saida' (ex: 'entrada de 10 coca'). " +
               "Em dúvida entre 'lança' e 'entrada', escolha SEMPRE 'lança'. " +
+              "PRESERVE LITERALMENTE perguntas/consultas: 'qual o valor', 'quanto deu', 'quanto ficou', 'quanto custa', 'conta da mesa', 'total da mesa', 'fechamento', 'o que tem na mesa'. NUNCA reescreva uma pergunta como comando de pedido (ADD/REMOVE). " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
               "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
               "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
