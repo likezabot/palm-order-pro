@@ -4374,7 +4374,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
       // aceita anon p/ permitir invocação via pg_net e validações automatizadas.
       const anonAllowedOps = new Set(["auto-heal", "smoke-test"]);
       const okAnonForOp = anonAllowedOps.has(adminOp) && !!bearer && safeEqual(bearer, ANON_KEY_PUBLIC);
-      if (!okSecret && !okService && !okAnonForHeal) {
+      if (!okSecret && !okService && !okAnonForOp) {
         console.log("[admin-auth] denied", JSON.stringify({
           op: adminOp, has_secret_header: !!provided, has_bearer: !!bearer,
           bearer_len: bearer.length, expected_len: ANON_KEY_PUBLIC.length, match_anon: bearer === ANON_KEY_PUBLIC,
