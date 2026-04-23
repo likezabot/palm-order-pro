@@ -2091,6 +2091,11 @@ const HELP_TEXT =
   `  • estoque coca / quanto tem de coca\n` +
   `  • lista estoque / inventario → todos os itens\n` +
   `  • estoque (sozinho) / alertas → críticos\n\n` +
+  `🍽 *CARDÁPIO* (visibilidade)\n` +
+  `  • ocultar panceta / esconder coca / desativar skol\n` +
+  `  • tirar coca do cardapio\n` +
+  `  • mostrar panceta / ativar coca / colocar skol no cardapio\n` +
+  `  • listar ocultos / listar visiveis / listar cardapio\n\n` +
   `🛠 *OUTROS*\n` +
   `  • errei / desfazer / oops → desfaz último\n` +
   `  • relatorio / caixa / vendas hoje → resumo do dia\n` +
