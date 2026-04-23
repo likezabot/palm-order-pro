@@ -115,6 +115,12 @@ export async function checkBridgeStatus(
 
   const healthUrl = url.replace(/\/print$/, "/health");
   const t0 = performance.now();
+  const cacheResult = (
+    result: { online: boolean; printer_connected: boolean; error?: string },
+  ) => {
+    _bridgeStatusCache.set(url, { at: Date.now(), result });
+    return result;
+  };
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 1500);
@@ -125,25 +131,25 @@ export async function checkBridgeStatus(
 
     if (!response.ok) {
       debugLog.warn("bridge", `health HTTP ${response.status} (${ms}ms)`, { url: healthUrl });
-      return { online: false, printer_connected: false, error: `HTTP ${response.status}` };
+      return cacheResult({ online: false, printer_connected: false, error: `HTTP ${response.status}` });
     }
 
     const data = await response.json();
     const printerOk = !!data.printer_connected;
     debugLog[printerOk ? "success" : "warn"]("bridge", `health OK em ${ms}ms — printer_connected=${printerOk}`, { url: healthUrl });
-    return {
+    return cacheResult({
       online: true,
       printer_connected: printerOk,
       error: printerOk ? undefined : "Impressora USB nao detectada na ponte",
-    };
+    });
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
     debugLog.warn("bridge", `health falhou em ${ms}ms: ${e?.message ?? "indisponível"}`, { url: healthUrl });
-    return {
+    return cacheResult({
       online: false,
       printer_connected: false,
       error: "Ponte local indisponivel (lp-bridge em localhost:9100)",
-    };
+    });
   }
 }
 

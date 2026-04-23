@@ -31,6 +31,9 @@ let unsubConn: (() => void) | null = null;
 const inFlight = new Set<string>();
 /** Eventos já tratados (idempotência por evento, não por order). */
 const handledEvents = new Set<string>();
+/** Cooldown por order_id — circuit breaker contra loops de re-impressão. */
+const recentlyAttempted = new Map<string, number>();
+const COOLDOWN_MS = 30_000;
 
 function invalidateOrderCaches(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["pdv-orders"] });
@@ -44,6 +47,15 @@ async function runAutoPrint(order: Order, isUpdate: boolean) {
     debugLog.info("global-print", `skip — já em processamento ${order.id}`);
     return;
   }
+  const lastAttempt = recentlyAttempted.get(order.id);
+  if (lastAttempt && Date.now() - lastAttempt < COOLDOWN_MS) {
+    debugLog.info(
+      "global-print",
+      `skip — cooldown ativo ${order.id} (último há ${Date.now() - lastAttempt}ms)`,
+    );
+    return;
+  }
+  recentlyAttempted.set(order.id, Date.now());
   inFlight.add(order.id);
   try {
     const result = isUpdate
@@ -160,8 +172,13 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
         invalidateOrderCaches(queryClient);
 
         const totalChanged = updated.total !== old.total;
+        // printReset: só se passou de algum estado terminal/intermediário PARA pending.
+        // Crucial: ignora 'queued' → 'pending' (acontece se o worker completou)
+        // e ignora 'pending' → 'pending' (no-op).
         const printReset =
-          updated.print_status === "pending" && old.print_status !== "pending";
+          updated.print_status === "pending" &&
+          old.print_status !== "pending" &&
+          old.print_status !== "queued";
 
         if (totalChanged || printReset) {
           const eventKey = `${updated.id}:upd:${updated.updated_at}`;
