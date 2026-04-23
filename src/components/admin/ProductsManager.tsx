@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, ArrowDownAZ, Search, X, CheckSquare } from "lucide-react";
+import { Plus, ArrowDownAZ, Search, X, CheckSquare, Package, Layers } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -12,6 +12,10 @@ import { Product, CATEGORIES, CATEGORY_LABELS } from "@/lib/types";
 import SortableProductCard from "./SortableProductCard";
 import BulkActionsBar from "./BulkActionsBar";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useFeedback } from "@/hooks/use-feedback";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +23,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ProductGroupBanner } from "./ProductGroupBanner";
 import { GroupsManager } from "./GroupsManager";
 import { useProductGroups, getGroupsForCategory } from "@/lib/product-groups";
-import { Layers } from "lucide-react";
 
 interface Props {
   productsByCategory: Record<string, Product[]>;
