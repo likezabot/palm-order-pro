@@ -84,11 +84,65 @@ async function buildReport(targetDateBRT?: string): Promise<string> {
   const totalPedidos = ranking.reduce((s, r) => s + r.count, 0);
   const winner = ranking[0];
 
-  return `🏆 <b>Fechamento do dia — ${dateLabel}</b>\n\n` +
+  let report = `🏆 <b>Fechamento do dia — ${dateLabel}</b>\n\n` +
          lines.join("\n") +
          `\n\n🎉 Parabéns ${winner.display}! 👏\n` +
          `Total da casa: <b>${fmtBRL(totalCasa)}</b> · ${totalPedidos} pedidos`;
-}
+
+  // Seção: movimentação de estoque do dia + críticos
+  try {
+    const { data: movs } = await sb
+      .from("inventory_movements")
+      .select("item_id,movement_type,quantity")
+      .gte("created_at", startUTC.toISOString())
+      .lt("created_at", endUTC.toISOString());
+
+    const { data: items } = await sb
+      .from("inventory_items")
+      .select("id,name,unit,current_stock,min_stock,is_active")
+      .eq("is_active", true);
+
+    const itemMap = new Map<string, any>((items || []).map((i: any) => [i.id, i]));
+    type Agg = { name: string; unit: string; ins: number; outs: number; current: number };
+    const agg = new Map<string, Agg>();
+    for (const m of (movs || []) as any[]) {
+      const it = itemMap.get(m.item_id);
+      if (!it) continue;
+      const cur = agg.get(m.item_id) || { name: it.name, unit: it.unit || "", ins: 0, outs: 0, current: Number(it.current_stock) };
+      const q = Number(m.quantity || 0);
+      if (m.movement_type === "in") cur.ins += q;
+      else if (m.movement_type === "out") cur.outs += q;
+      agg.set(m.item_id, cur);
+    }
+
+    const movLines: string[] = [];
+    for (const a of Array.from(agg.values()).sort((x, y) => (y.ins + y.outs) - (x.ins + x.outs)).slice(0, 15)) {
+      const parts: string[] = [];
+      if (a.ins > 0) parts.push(`+${a.ins} entradas`);
+      if (a.outs > 0) parts.push(`−${a.outs} saídas`);
+      if (parts.length === 0) continue;
+      movLines.push(`  • ${a.name}: ${parts.join(", ")} → saldo ${a.current} ${a.unit}`.trim());
+    }
+
+    const critLines: string[] = [];
+    for (const it of (items || []) as any[]) {
+      const cur = Number(it.current_stock);
+      const min = Number(it.min_stock);
+      if (cur <= 0) critLines.push(`  🚨 ${it.name}: zerado`);
+      else if (min > 0 && cur <= min) critLines.push(`  ⚠️ ${it.name}: ${cur} ${it.unit || ""} (mín ${min})`.trim());
+    }
+
+    if (movLines.length > 0 || critLines.length > 0) {
+      report += `\n\n📦 <b>Movimentação de estoque hoje</b>`;
+      if (movLines.length > 0) report += `\n` + movLines.join("\n");
+      else report += `\n  (sem movimentação registrada)`;
+      if (critLines.length > 0) report += `\n\n<b>Críticos:</b>\n` + critLines.join("\n");
+    }
+  } catch (e) {
+    console.error("stock summary error:", e);
+  }
+
+  return report;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
