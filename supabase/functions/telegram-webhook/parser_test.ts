@@ -10,6 +10,7 @@
 // Setup: stubba env vars antes de importar o handler (que tem Deno.serve no final
 // e cria o supabase client no top level — passamos URL bobas para não falhar).
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
+Deno.env.set("TELEGRAM_TEST_IMPORT", "1");
 Deno.env.set("TELEGRAM_BOT_TOKEN", Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "test-token");
 Deno.env.set("SUPABASE_URL", Deno.env.get("SUPABASE_URL") ?? Deno.env.get("VITE_SUPABASE_URL") ?? "http://localhost:54321");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "test-service-key");
