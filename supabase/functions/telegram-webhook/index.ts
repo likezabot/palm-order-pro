@@ -4307,11 +4307,13 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     }
 
     if (fromBot || !chatId || !text) {
+      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_no_text fromBot=${fromBot} hasText=${!!text}`);
       return testOrPlain();
     }
     setTestContext(chatId);
     setUndoChatContext(chatId);
     if (typeof updateId === "number" && isDuplicate(updateId)) {
+      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_duplicate update_id=${updateId}`);
       return testOrPlain();
     }
 
@@ -4319,6 +4321,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     const allowed = await getAllowedChats();
     if (!allowed || !allowed.has(chatId)) {
       console.warn("Chat não autorizado:", chatId);
+      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_not_whitelisted`);
       await sendTelegram(
         chatId,
         `🚫 Chat não autorizado.\nID deste chat: ${chatId}\n\nPeça ao admin para liberar em settings.telegram_allowed_chats.`,
@@ -4363,19 +4366,23 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     let waiter: string;
     if (typeof userId === "number") {
       let bound = await getWaiterBinding(userId);
+      if (voiceTraceId) console.log(`[voice ${voiceTraceId}] binding userId=${userId} chatType=${chatType} bound=${bound ?? "null"}`);
       if (!bound) {
         // Em grupo, ignora silenciosamente para não poluir — onboarding é em DM.
         if (isGroupChat(chatType)) {
+          if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_group_no_binding action=sent_dm_request`);
           await sendTelegram(chatId, `⚠️ @${username ?? "usuário"}, você ainda não está vinculado a um garçom.\nMe chame em conversa privada para escolher seu nome.`);
           return testOrPlain();
         }
         // DM: tenta interpretar a mensagem como escolha de nome
         const picked = await tryBindFromText(userId, text, username);
         if (picked) {
+          if (voiceTraceId) console.log(`[voice ${voiceTraceId}] checkpoint=bound_via_voice picked=${picked}`);
           await sendTelegram(chatId, `✅ Pronto! Você está identificado como *${picked}*.\n\nAgora pode mandar comandos:\n  • mesa 5 + 2 coca\n  • mesa 5 status\n  • ajuda\n\nPara trocar: \`/trocar\``);
           return testOrPlain();
         }
         // Não bateu — mostra a lista clicável
+        if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_dm_no_binding action=sent_picker text="${text}"`);
         const names = await listWaiterNames();
         await sendTelegram(chatId, buildWaiterPickerMessage(names, username), buildWaiterPickerKeyboard(names));
         return testOrPlain();
@@ -4384,14 +4391,17 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     } else {
       waiter = username ? `Telegram (@${username})` : "Telegram";
     }
+    if (voiceTraceId) console.log(`[voice ${voiceTraceId}] waiter=${waiter}`);
 
     // ─── WIZARD: gatilho explícito (estoque, gerenciar estoque, etc) ───
     if (wzIsTrigger(trimmed)) {
+      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_wizard_trigger`);
       await wzStartMenu(chatId);
       return testOrPlain();
     }
     // ─── WIZARD: input livre (qty digitada, nome de item, etc) ───
     if (await wzHandleTextInput(chatId, trimmed, waiter)) {
+      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_wizard_text_input`);
       return testOrPlain();
     }
 
