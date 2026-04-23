@@ -184,8 +184,9 @@ const ProductsManager = ({
   const renderGrid = (cat: string, list: Product[]) => (
     <div key={cat}>
       {search && (
-        <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground px-1 mb-2 mt-3">
-          {CATEGORY_LABELS[cat]} <span className="opacity-60">({list.length})</span>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground px-1 mb-2 mt-3">
+          {CATEGORY_LABELS[cat]}
+          <Badge variant="secondary" className="font-medium tabular-nums">{list.length}</Badge>
         </h3>
       )}
       {selectionMode ? (
