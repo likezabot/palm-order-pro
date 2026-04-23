@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import DuplicatesResolver from "@/components/admin/DuplicatesResolver";
 import SettingsDialog from "@/components/admin/SettingsDialog";
 import TabIdBadge from "@/components/TabIdBadge";
+import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 
 interface Props {
@@ -24,18 +25,20 @@ export const AdminHeader = ({
   const { playFeedback } = useFeedback();
 
   return (
-    <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 bg-white shadow-sm">
-      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-        <button
+    <div className="border-b border-border bg-card px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => {
             playFeedback("click");
             navigate("/");
           }}
-          className="text-muted-foreground hover:bg-secondary p-2 rounded-full transition-colors shrink-0"
+          className="h-9 w-9 shrink-0"
         >
-          <ArrowLeft size={24} />
-        </button>
-        <h1 className="text-base sm:text-xl font-black uppercase tracking-tight truncate">
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <h1 className="text-base sm:text-lg font-semibold tracking-tight truncate text-foreground">
           <span className="hidden sm:inline">Painel de Controle</span>
           <span className="sm:hidden">Admin</span>
         </h1>
@@ -43,15 +46,17 @@ export const AdminHeader = ({
       </div>
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
         <DuplicatesResolver />
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => {
             playFeedback("click");
             onToggleStaffMode();
           }}
-          className={`flex items-center gap-1 rounded-lg px-2 sm:px-3 py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider transition-colors ${
+          className={`h-9 gap-1.5 font-medium ${
             staffMode
-              ? "bg-warning/20 text-warning border border-warning/40"
-              : "bg-secondary text-muted-foreground hover:text-foreground"
+              ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/15 hover:text-warning"
+              : ""
           }`}
           title={
             staffMode
@@ -59,21 +64,22 @@ export const AdminHeader = ({
               : "Modo Admin: tudo visível"
           }
         >
-          {staffMode ? <EyeOff size={14} /> : <Eye size={14} />}
+          {staffMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           <span className="hidden xs:inline">{staffMode ? "Garçom" : "Admin"}</span>
-        </button>
+        </Button>
         <SettingsDialog autoPrint={autoPrint} onAutoPrintChange={onAutoPrintChange} />
-        <button
+        <Button
+          size="sm"
           onClick={() => {
             playFeedback("click");
             onNewProduct();
           }}
-          className="flex items-center gap-1.5 rounded-xl bg-primary px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-primary-foreground active:scale-95 shadow-lg shadow-primary/20 transition-all"
+          className="h-9 gap-1.5 font-medium"
         >
-          <Plus size={18} />
-          <span className="hidden sm:inline">NOVO PRODUTO</span>
-          <span className="sm:hidden">NOVO</span>
-        </button>
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Novo produto</span>
+          <span className="sm:hidden">Novo</span>
+        </Button>
       </div>
     </div>
   );

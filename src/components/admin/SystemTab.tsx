@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, Archive, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useToast } from "@/hooks/use-toast";
 import { getAppVersion } from "@/lib/version-check";
@@ -82,15 +83,18 @@ export const SystemTab = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-4 space-y-6">
-      <div className="rounded-xl border-2 border-border p-5 space-y-4">
+    <div className="space-y-6">
+      {/* Forçar atualização */}
+      <Card className="p-5 space-y-4">
         <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-primary/10 p-2.5">
-            <RefreshCw className="w-5 h-5 text-primary" />
+          <div className="rounded-full bg-primary/10 p-2 shrink-0">
+            <RefreshCw className="w-4 h-4 text-primary" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-black text-lg text-slate-900">Forçar atualização</h3>
-            <p className="text-sm text-slate-600 mt-1">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
+              Forçar atualização
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
               Limpa cache, desregistra o service worker e recarrega a página. Use
               quando o tablet ficar travado em uma versão antiga.
             </p>
@@ -98,26 +102,27 @@ export const SystemTab = () => {
         </div>
         <Button
           onClick={handleForceUpdate}
-          className="w-full h-14 font-black text-base gap-2"
+          className="w-full h-11 gap-2 font-medium"
           variant="destructive"
         >
-          <RefreshCw className="w-5 h-5" /> FORÇAR ATUALIZAÇÃO
+          <RefreshCw className="w-4 h-4" /> Forçar atualização
         </Button>
-        <p className="text-xs text-slate-500 text-center font-mono">
+        <p className="text-xs text-muted-foreground text-center font-mono">
           Versão atual: {getAppVersion()}
         </p>
-      </div>
+      </Card>
 
-      <div className="rounded-xl border-2 border-border p-5 space-y-4">
+      {/* Arquivar pedidos */}
+      <Card className="p-5 space-y-4">
         <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-primary/10 p-2.5">
-            <Archive className="w-5 h-5 text-primary" />
+          <div className="rounded-full bg-primary/10 p-2 shrink-0">
+            <Archive className="w-4 h-4 text-primary" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-black text-lg text-slate-900">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
               Arquivar pedidos antigos
             </h3>
-            <p className="text-sm text-slate-600 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Consolida pedidos pagos com mais de 60 dias em histórico diário
               (por garçom, produto e total) e apaga os registros detalhados.
               Roda automaticamente todo dia às 04:00; use o botão para forçar
@@ -128,38 +133,40 @@ export const SystemTab = () => {
         <Button
           onClick={handleArchive}
           disabled={archiving}
-          className="w-full h-14 font-black text-base gap-2"
+          className="w-full h-11 gap-2 font-medium"
         >
-          <Archive className="w-5 h-5" />
-          {archiving ? "ARQUIVANDO…" : "ARQUIVAR AGORA"}
+          <Archive className="w-4 h-4" />
+          {archiving ? "Arquivando…" : "Arquivar agora"}
         </Button>
-      </div>
+      </Card>
 
-      <div className="rounded-xl border-2 border-border p-5 space-y-3">
+      {/* Histórico */}
+      <Card className="p-5 space-y-4">
         <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-primary/10 p-2.5">
-            <History className="w-5 h-5 text-primary" />
+          <div className="rounded-full bg-primary/10 p-2 shrink-0">
+            <History className="w-4 h-4 text-primary" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-black text-lg text-slate-900">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
               Histórico de arquivamentos
             </h3>
-            <p className="text-sm text-slate-600 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Últimas 20 execuções (manual ou automática às 04:00).
             </p>
           </div>
           <Button
-            size="sm"
-            variant="outline"
+            size="icon"
+            variant="ghost"
             onClick={loadLogs}
             disabled={loadingLogs}
+            className="h-8 w-8 shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${loadingLogs ? "animate-spin" : ""}`} />
           </Button>
         </div>
 
         {logs.length === 0 ? (
-          <p className="text-sm text-slate-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-6">
             {loadingLogs ? "Carregando…" : "Nenhuma execução registrada ainda."}
           </p>
         ) : (
@@ -170,33 +177,38 @@ export const SystemTab = () => {
               return (
                 <div
                   key={log.id}
-                  className={`rounded-lg border p-3 text-sm ${
-                    ok ? "border-border bg-muted/30" : "border-destructive/40 bg-destructive/5"
-                  }`}
+                  className="rounded-lg border border-border bg-muted/30 p-3 text-sm"
                 >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-bold text-slate-900">
-                      {new Date(log.executed_at).toLocaleString("pt-BR")}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded font-mono bg-background border">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                          ok ? "bg-success" : "bg-destructive"
+                        }`}
+                      />
+                      <span className="font-medium text-foreground truncate tabular-nums">
+                        {new Date(log.executed_at).toLocaleString("pt-BR")}
+                      </span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-background border border-border text-muted-foreground shrink-0">
                       {log.trigger_source}
                     </span>
                   </div>
                   {ok ? (
-                    <div className="text-xs text-slate-600 grid grid-cols-2 gap-x-2">
-                      <span>Pedidos: <b>{String(r.deleted_orders ?? 0)}</b></span>
-                      <span>Itens: <b>{String(r.deleted_order_items ?? 0)}</b></span>
-                      <span>Dias resumo: <b>{String(r.archived_summary_days ?? 0)}</b></span>
-                      <span>Garçons: <b>{String(r.archived_waiter_rows ?? 0)}</b></span>
-                      <span>Produtos: <b>{String(r.archived_product_rows ?? 0)}</b></span>
-                      <span>Mov. estoque: <b>{String(r.deleted_inventory_movements ?? 0)}</b></span>
+                    <div className="text-xs text-muted-foreground grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      <span>Pedidos: <span className="font-semibold text-foreground tabular-nums">{String(r.deleted_orders ?? 0)}</span></span>
+                      <span>Itens: <span className="font-semibold text-foreground tabular-nums">{String(r.deleted_order_items ?? 0)}</span></span>
+                      <span>Dias resumo: <span className="font-semibold text-foreground tabular-nums">{String(r.archived_summary_days ?? 0)}</span></span>
+                      <span>Garçons: <span className="font-semibold text-foreground tabular-nums">{String(r.archived_waiter_rows ?? 0)}</span></span>
+                      <span>Produtos: <span className="font-semibold text-foreground tabular-nums">{String(r.archived_product_rows ?? 0)}</span></span>
+                      <span>Mov. estoque: <span className="font-semibold text-foreground tabular-nums">{String(r.deleted_inventory_movements ?? 0)}</span></span>
                     </div>
                   ) : (
                     <p className="text-xs text-destructive font-mono break-all">
                       {log.error_message}
                     </p>
                   )}
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-2 tabular-nums">
                     {log.days_kept} dias mantidos · {log.duration_ms ?? 0}ms
                   </p>
                 </div>
@@ -204,7 +216,7 @@ export const SystemTab = () => {
             })}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 };
