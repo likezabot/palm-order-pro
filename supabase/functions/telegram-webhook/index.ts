@@ -553,6 +553,28 @@ function splitCommands(raw: string): string[] {
   }
   return result;
 }
+
+// ─────────────── Confiança da transcrição de voz ───────────────
+// Avalia se a transcrição + parseamento são confiáveis o suficiente para auto-executar.
+// Dispara confirmação por botão se algum sinal de baixa confiança aparecer.
+function assessVoiceConfidence(
+  transcript: string,
+  parsedCmds: Array<{ kind: string; qty?: number }>,
+): { confident: boolean; reason?: string } {
+  const t = (transcript ?? "").trim();
+  if (t.length < 3) return { confident: false, reason: "transcrição muito curta" };
+  if (t.length > 200) return { confident: false, reason: "transcrição muito longa" };
+  if (parsedCmds.length === 0) return { confident: false, reason: "nada reconhecido" };
+  if (parsedCmds.length > 5) return { confident: false, reason: "muitos comandos" };
+  for (const c of parsedCmds) {
+    if (c.kind === "PARSE_ERROR") return { confident: false, reason: "comando não reconhecido" };
+    if (c.kind === "NEEDS_TABLE" || c.kind === "ADD_NOMESA" || c.kind === "REMOVE_NOMESA" || c.kind === "VIEW_NOMESA") {
+      return { confident: false, reason: "mesa não identificada" };
+    }
+    if (typeof c.qty === "number" && c.qty > 10) return { confident: false, reason: "quantidade alta" };
+  }
+  return { confident: true };
+}
 const VIEW_TOKENS = [
   "ver", "ve", "consulta", "consultar", "consulte",
   "total", "totais", "pedido", "pedidos",
