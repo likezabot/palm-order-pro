@@ -464,6 +464,10 @@ type Command =
   | { kind: "STOCK_LIST" }
   | { kind: "NOTIFY_TOGGLE"; on: boolean }
   | { kind: "TABLE_STATUS"; table: string }
+  | { kind: "PRODUCT_HIDE"; query: string }
+  | { kind: "PRODUCT_SHOW"; query: string }
+  | { kind: "PRODUCT_LIST"; mode: "hidden" | "visible" | "all" }
+  | { kind: "PRODUCT_PICK"; choice: number }
   | { kind: "HELP" }
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
@@ -598,6 +602,42 @@ function parseCommand(raw: string): Command {
   // RELATÓRIO: muitas formas de pedir o resumo do dia
   if (/^(?:relatorio|relatório|ranking|fechamento|resumo(?:\s+(?:do\s+)?dia)?|fecha(?:r)?\s+dia|balanco|balanço|me\s+(?:da|de)\s+o?\s*relatorio|gera(?:r)?\s+relatorio|report|dia|como\s+foi\s+o\s+dia|vendas\s+hoje|total\s+do\s+dia|caixa)$/.test(text)) {
     return { kind: "REPORT" };
+  }
+
+  // ─── PRODUTOS: visibilidade (ocultar/mostrar/listar) ───
+  // Listas (antes do match com argumento, são frases inteiras)
+  if (/^(?:lista(?:r)?|ver|mostra(?:r)?)\s+(?:produtos?\s+)?(?:ocultos?|escondidos?|desativados?|inativos?|invisiv\w*)$/.test(text)) {
+    return { kind: "PRODUCT_LIST", mode: "hidden" };
+  }
+  if (/^(?:lista(?:r)?|ver)\s+(?:produtos?\s+)?(?:visiveis|ativos|cardapio|menu|todos(?:\s+(?:os\s+)?produtos)?)$/.test(text) ||
+      /^(?:lista(?:r)?\s+cardapio|ver\s+cardapio|ver\s+menu)$/.test(text)) {
+    return { kind: "PRODUCT_LIST", mode: "visible" };
+  }
+
+  // PICK numérico (1-9): só faz sentido com state product_pick — resolvido em handleCommand.
+  // Aqui só capturamos a intenção; resolveProductPickContext valida o estado real depois.
+  const pickM = text.match(/^([1-9])$/);
+  if (pickM) {
+    return { kind: "PRODUCT_PICK", choice: parseInt(pickM[1], 10) };
+  }
+
+  // OCULTAR: "ocultar X", "esconder X", "desativar X", "tirar X do cardapio", "tira X do cardapio"
+  const hideM = text.match(/^(?:ocultar|oculta|esconder|esconde|desativar|desativa|desabilita(?:r)?|inativa(?:r)?)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)(?:\s+(?:do|no|de)\s+cardapio)?$/) ||
+                text.match(/^(?:tirar|tira|remove(?:r)?|removar)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)\s+(?:do|de)\s+cardapio$/);
+  if (hideM) {
+    const q = hideM[1].trim();
+    if (q && !/^\d/.test(q)) return { kind: "PRODUCT_HIDE", query: q };
+  }
+
+  // MOSTRAR: "mostrar X", "ativar X", "exibir X", "voltar X", "colocar X no cardapio", "libera X"
+  const showM = text.match(/^(?:mostrar|mostra|ativar|ativa|exibir|exibe|habilita(?:r)?|reativa(?:r)?|libera(?:r)?)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)(?:\s+(?:no|para o|pro|de\s+volta\s+ao?|ao)\s+cardapio)?$/) ||
+                text.match(/^(?:colocar|coloca|por|botar|bota|voltar|volta|por\s+de\s+volta)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)\s+(?:no|para o|pro|de\s+volta\s+ao?|ao)\s+cardapio$/);
+  if (showM) {
+    const q = showM[1].trim();
+    // Evita capturar "voltar avisos", "ativar avisos", "ativar notificacoes" — já tratados acima/abaixo
+    if (q && !/^\d/.test(q) && !/^(?:avisos?|notificac\w*|alertas?|estoque)$/.test(q)) {
+      return { kind: "PRODUCT_SHOW", query: q };
+    }
   }
 
   // ESTOQUE: LISTAR todos (antes de CRÍTICO porque "lista estoque" / "inventario" é mais específico)
@@ -1888,6 +1928,150 @@ async function executeStockQuery(item: StockItem): Promise<string> {
   return `${icon} *${item.name}*: ${fmtStockQty(cur, item.unit)}${minLine}`;
 }
 
+// ─────────────────────────── visibilidade de produtos ───────────────────────────
+
+type ProductRow = { id: string; name: string; category: string; active: boolean };
+
+function fuzzyFindProducts(query: string, all: ProductRow[]): ProductRow[] {
+  const q = singularize(normalize(query));
+  if (!q) return [];
+  const tokens = q.split(/\s+/).filter(Boolean);
+  type Scored = { p: ProductRow; score: number };
+  const scored: Scored[] = [];
+  for (const p of all) {
+    const n = singularize(normalize(p.name));
+    if (!n) continue;
+    let score = -1;
+    if (n === q) score = 100;
+    else if (n.startsWith(q)) score = 80;
+    else if (n.includes(q)) score = 60;
+    else {
+      const allMatch = tokens.every((t) => n.includes(t));
+      if (allMatch) score = 40;
+      else {
+        const nt = n.split(/\s+/);
+        const close = tokens.every((t) =>
+          nt.some((w) => Math.abs(w.length - t.length) <= 3 && levenshtein(w, t) <= Math.max(1, Math.floor(t.length / 4)))
+        );
+        if (close) score = 20;
+      }
+    }
+    if (score >= 0) scored.push({ p, score });
+  }
+  scored.sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name));
+  const seen = new Set<string>();
+  const out: ProductRow[] = [];
+  for (const s of scored) {
+    if (seen.has(s.p.id)) continue;
+    seen.add(s.p.id);
+    out.push(s.p);
+    if (out.length >= 9) break;
+  }
+  return out;
+}
+
+async function fetchAllProducts(): Promise<ProductRow[]> {
+  const { data, error } = await sb.from("products").select("id, name, category, active");
+  if (error) {
+    console.error("[telegram-product] fetch error:", error.message);
+    return [];
+  }
+  return (data ?? []) as ProductRow[];
+}
+
+const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
+  refeicoes: "Refeições",
+  espetos: "Espetos",
+  bebidas: "Bebidas",
+  cervejas: "Cervejas",
+};
+function productCategoryLabel(slug: string): string {
+  return PRODUCT_CATEGORY_LABELS[slug] ?? (slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : "Outros");
+}
+
+async function handleProductVisibility(
+  cmd: Extract<Command, { kind: "PRODUCT_HIDE" | "PRODUCT_SHOW" }>,
+  chatId: number,
+): Promise<HandlerReply> {
+  const desired = cmd.kind === "PRODUCT_SHOW";
+  const all = await fetchAllProducts();
+  const matches = fuzzyFindProducts(cmd.query, all);
+  console.log("[telegram-product]", cmd.kind, "query:", cmd.query, "matches:", matches.length);
+  if (matches.length === 0) {
+    return { text: `❓ Não encontrei produto parecido com: "${cmd.query}".\nUse \`listar visiveis\` ou \`listar ocultos\` para ver os nomes.` };
+  }
+  if (matches.length === 1) {
+    const p = matches[0];
+    if (p.active === desired) {
+      return { text: `ℹ️ "${p.name}" já está ${desired ? "ativo" : "oculto"}.` };
+    }
+    const { error } = await sb.from("products").update({ active: desired }).eq("id", p.id);
+    if (error) {
+      console.error("[telegram-product] update error:", error.message);
+      return { text: `❌ Erro ao atualizar: ${error.message}` };
+    }
+    console.log("[telegram-product] updated", p.id, "active=", desired);
+    return { text: `${desired ? "✅ Ativado no cardápio" : "🚫 Ocultado do cardápio"}: *${p.name}*` };
+  }
+  const candidates = matches.map((p) => ({ id: p.id, name: p.name, active: p.active }));
+  await wzSet(chatId, "product_pick" as any, { product_pick: { action: cmd.kind, candidates } } as any);
+  const verb = desired ? "ativar" : "ocultar";
+  const list = matches
+    .map((p, i) => `${i + 1}. ${p.name}${p.active ? "" : " _(oculto)_"}`)
+    .join("\n");
+  return {
+    text: `🤔 Encontrei ${matches.length} produtos para ${verb}. Responda com o número (1-${matches.length}):\n\n${list}\n\n_(válido por 5 min)_`,
+  };
+}
+
+async function handleProductPick(choice: number, chatId: number): Promise<HandlerReply> {
+  const state = await wzGet(chatId);
+  const pickData = (state?.data as any)?.product_pick;
+  if (!state || state.step !== ("product_pick" as any) || !pickData) {
+    return { text: `❓ Não sei o que fazer com "${choice}". Envie \`ajuda\` para ver os comandos.` };
+  }
+  const idx = choice - 1;
+  const pick = pickData.candidates?.[idx];
+  if (!pick) {
+    return { text: `❓ Número ${choice} fora da lista (1-${pickData.candidates?.length ?? 0}).` };
+  }
+  const desired = pickData.action === "PRODUCT_SHOW";
+  const { error } = await sb.from("products").update({ active: desired }).eq("id", pick.id);
+  await wzClear(chatId);
+  if (error) {
+    return { text: `❌ Erro ao atualizar: ${error.message}` };
+  }
+  console.log("[telegram-product] picked", pick.id, "active=", desired);
+  return { text: `${desired ? "✅ Ativado no cardápio" : "🚫 Ocultado do cardápio"}: *${pick.name}*` };
+}
+
+async function handleProductList(mode: "hidden" | "visible" | "all"): Promise<HandlerReply> {
+  let q = sb.from("products").select("name, category, active").order("category").order("name");
+  if (mode === "hidden") q = q.eq("active", false);
+  else if (mode === "visible") q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) return { text: `❌ Erro ao listar: ${error.message}` };
+  const rows = (data ?? []) as ProductRow[];
+  if (rows.length === 0) {
+    return { text: mode === "hidden" ? "✅ Nenhum produto oculto." : "📋 Nenhum produto cadastrado." };
+  }
+  const byCat = new Map<string, ProductRow[]>();
+  for (const r of rows) {
+    const k = r.category || "outros";
+    if (!byCat.has(k)) byCat.set(k, []);
+    byCat.get(k)!.push(r);
+  }
+  const header = mode === "hidden"
+    ? `🚫 *Produtos ocultos (${rows.length})*`
+    : mode === "visible"
+    ? `📋 *Produtos visíveis (${rows.length})*`
+    : `📋 *Todos os produtos (${rows.length})*`;
+  const body = Array.from(byCat.entries())
+    .map(([cat, ps]) => `*${productCategoryLabel(cat)}* (${ps.length})\n` + ps.map((p) => `• ${p.name}${mode === "all" && !p.active ? " _(oculto)_" : ""}`).join("\n"))
+    .join("\n\n");
+  return { text: `${header}\n\n${body}` };
+}
+
 const HELP_TEXT =
   `🤖 *Como usar*\n\n` +
   `📌 *PEDIDOS*\n` +
@@ -1907,6 +2091,11 @@ const HELP_TEXT =
   `  • estoque coca / quanto tem de coca\n` +
   `  • lista estoque / inventario → todos os itens\n` +
   `  • estoque (sozinho) / alertas → críticos\n\n` +
+  `🍽 *CARDÁPIO* (visibilidade)\n` +
+  `  • ocultar panceta / esconder coca / desativar skol\n` +
+  `  • tirar coca do cardapio\n` +
+  `  • mostrar panceta / ativar coca / colocar skol no cardapio\n` +
+  `  • listar ocultos / listar visiveis / listar cardapio\n\n` +
   `🛠 *OUTROS*\n` +
   `  • errei / desfazer / oops → desfaz último\n` +
   `  • relatorio / caixa / vendas hoje → resumo do dia\n` +
@@ -1941,6 +2130,10 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   if (cmd.kind === "STOCK_LIST") return `📦 (preview) Listaria todos os itens do estoque (até 30).`;
   if (cmd.kind === "NOTIFY_TOGGLE") return `🔔 (preview) ${cmd.on ? "Ativaria" : "Desativaria"} as notificações.`;
   if (cmd.kind === "TABLE_STATUS") return `📋 (preview) Mostraria o resumo rápido da mesa ${cmd.table}.`;
+  if (cmd.kind === "PRODUCT_HIDE") return `🚫 (preview) Ocultaria do cardápio: "${cmd.query}".`;
+  if (cmd.kind === "PRODUCT_SHOW") return `✅ (preview) Ativaria no cardápio: "${cmd.query}".`;
+  if (cmd.kind === "PRODUCT_LIST") return `📋 (preview) Listaria produtos (${cmd.mode}).`;
+  if (cmd.kind === "PRODUCT_PICK") return `🔢 (preview) Aplicaria escolha ${cmd.choice}.`;
   if (cmd.kind === "PARSE_ERROR") {
     return `❓ (preview) Não interpretaria: "${cmd.raw}" — faltou mesa, ação ou produto.`;
   }
@@ -2164,6 +2357,15 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     } catch (e: any) {
       return { text: `❌ Erro no estoque: ${String(e?.message ?? e)}` };
     }
+  }
+  if (cmd.kind === "PRODUCT_HIDE" || cmd.kind === "PRODUCT_SHOW") {
+    return await handleProductVisibility(cmd, _undoChatId());
+  }
+  if (cmd.kind === "PRODUCT_PICK") {
+    return await handleProductPick(cmd.choice, _undoChatId());
+  }
+  if (cmd.kind === "PRODUCT_LIST") {
+    return await handleProductList(cmd.mode);
   }
   if (cmd.kind === "NOTIFY_TOGGLE") {
     const newVal = JSON.stringify({
