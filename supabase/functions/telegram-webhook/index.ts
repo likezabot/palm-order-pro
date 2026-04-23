@@ -4371,7 +4371,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
       const okSecret = !!WEBHOOK_SECRET && safeEqual(provided, WEBHOOK_SECRET);
       const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
       // auto-heal é idempotente e não expõe dados — aceita anon p/ permitir cron via pg_net.
-      const okAnonForHeal = adminOp === "auto-heal" && !!anonKey && !!bearer && safeEqual(bearer, anonKey);
+      const okAnonForHeal = adminOp === "auto-heal" && !!bearer && safeEqual(bearer, ANON_KEY_PUBLIC);
       if (!okSecret && !okService && !okAnonForHeal) {
         console.log("[admin-auth] denied", JSON.stringify({
           op: adminOp, has_secret_header: !!provided, has_bearer: !!bearer,
