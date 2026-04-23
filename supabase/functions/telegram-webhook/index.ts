@@ -2371,7 +2371,7 @@ function isMutationSuccess(kind: "ADD" | "REMOVE", text: string): boolean {
   return text.startsWith("➖ Mesa ") || text.startsWith("⚠️ Removidos ");
 }
 
-function ctxPrefix(cmd: Extract<Command, { kind: "ADD" | "REMOVE" | "VIEW" }>): string {
+function ctxPrefix(cmd: Extract<Command, { kind: "ADD" | "REMOVE" | "VIEW" | "TABLE_VALUE" }>): string {
   return cmd.fromContext ? `📍 (mesa ${cmd.table}, contexto)\n` : "";
 }
 
