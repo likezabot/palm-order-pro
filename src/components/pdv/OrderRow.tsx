@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, memo } from "react";
 import { Clock, CheckCircle2, Users, Package, Printer, Pencil, ChevronRight, AlertTriangle, DollarSign, UtensilsCrossed } from "lucide-react";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
@@ -47,7 +47,7 @@ interface OrderRowProps {
   onClose?: (order: Order) => void;
 }
 
-export const OrderRow = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }, ref) => {
+const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }, ref) => {
   // Cronômetro do TEMPO NA ETAPA ATUAL (updated_at)
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const wasPrinted = order.print_status === "printed";
@@ -190,4 +190,20 @@ export const OrderRow = forwardRef<HTMLDivElement, OrderRowProps>(({ order, item
     </div>
   );
 });
-OrderRow.displayName = "OrderRow";
+OrderRowImpl.displayName = "OrderRow";
+
+export const OrderRow = memo(OrderRowImpl, (prev, next) => {
+  return (
+    prev.order.id === next.order.id &&
+    prev.order.updated_at === next.order.updated_at &&
+    prev.order.status === next.order.status &&
+    prev.order.print_status === next.order.print_status &&
+    prev.itemCount === next.itemCount &&
+    prev.selected === next.selected &&
+    prev.onAdvance === next.onAdvance &&
+    prev.onPrint === next.onPrint &&
+    prev.onEdit === next.onEdit &&
+    prev.onClose === next.onClose &&
+    prev.onSelect === next.onSelect
+  );
+}) as typeof OrderRowImpl;
