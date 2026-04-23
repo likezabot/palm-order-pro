@@ -1,43 +1,88 @@
 
+# Plano: consertar o bot do Telegram com validação + auto-correção antes de te devolver
 
-# Plano: destravar `telegram-webhook` (401 no gateway)
+## Problema confirmado
 
-## Diagnóstico
+O áudio nem entra no fluxo de voz do bot:
+- os requests mais recentes para `telegram-webhook` continuam voltando **401**
+- não existem logs `[voice ...]`, então o código de “🎤 Ouvindo…” nem está sendo alcançado
+- o `telegram-webhook` hoje exige o header `X-Telegram-Bot-Api-Secret-Token` bater com `WEBHOOK_SECRET`
 
-Logs do edge runtime confirmam:
-- Você mandou comando agora há pouco → Telegram fez `POST /functions/v1/telegram-webhook` → **resposta 401** (`status_code:401` em `1.776968026927e+15`).
-- Antes desse 401, **só** existem chamadas a `notify-telegram` (saídas, status 200). Nenhuma entrada do Telegram chegou ao handler nas últimas horas.
-- A função `telegram-webhook` está bootando normalmente (logs `booted (time: 29ms)`), ou seja, o código está OK. O 401 vem **antes** do handler — é o gateway de Edge Functions exigindo JWT.
-- `supabase/config.toml` já tem `[functions.telegram-webhook] verify_jwt = false`, mas o último deploy não aplicou esse flag no gateway (acontece quando o deploy é parcial ou quando outra mudança no projeto rodou antes do config virar efetivo).
+Conclusão: o problema real agora não é Palm/Admin/preview. O webhook do Telegram está registrado **sem o secret atual** ou com **secret diferente** do que a função espera. Por isso o update é barrado antes de processar texto/voz.
 
-Conclusão: nada foi “quebrado” no código da limpeza anterior (mexi só em `App.tsx` e `main.tsx`, fora do escopo do bot). O que precisa é **forçar um redeploy da `telegram-webhook`** para o gateway reler o `verify_jwt = false`.
+## O que vou implementar
 
-## Correção (1 ação, 0 mudança de código)
+### 1. Diagnóstico programático do webhook
+Adicionar no backend do bot um bloco de diagnóstico que consulte o Telegram com `getWebhookInfo` e compare:
+- URL atual registrada
+- se existe erro pendente no Telegram
+- se o endpoint esperado é o `telegram-webhook` atual
+- se o projeto tem `WEBHOOK_SECRET` configurado
 
-### Passo único — Redeploy forçado de `telegram-webhook`
+Resultado: consigo saber exatamente se o problema é:
+- URL errada
+- secret ausente
+- secret divergente
+- webhook quebrado no Telegram
 
-Usar `supabase--deploy_edge_functions` com `function_names: ["telegram-webhook"]`.
+### 2. Auto-correção do webhook
+Adicionar uma rotina de reparo que faça `setWebhook` com:
+- a URL correta do `telegram-webhook`
+- o `secret_token` igual ao `WEBHOOK_SECRET` atual
 
-Isso:
-- Republica a função com o `config.toml` atual (que já tem `verify_jwt = false`).
-- O gateway passa a aceitar o POST do Telegram sem JWT.
-- O bot volta a responder a comandos de texto e voz imediatamente.
+Isso corrige o cenário em que o bot foi redeployado, mas o Telegram ficou apontando para configuração antiga.
 
-## Validação pós-deploy
+### 3. Método fechado de validação e reteste
+Vou criar um fluxo obrigatório de validação, para não te entregar “talvez funcionando”:
 
-1. Mandar de novo um comando simples no Telegram (ex.: `mesa 1`).
-2. Reler os logs com `analytics_query` filtrando `pathname like '%telegram-webhook%'` — esperado `status_code: 200`.
-3. Se ainda vier 401, abrir `edge_function_logs` da `telegram-webhook` e olhar mensagens de erro pós-boot.
+```text
+validar estado atual
+→ se inválido: reparar webhook
+→ validar novamente
+→ rodar smoke test interno
+→ validar logs HTTP
+→ só então considerar corrigido
+```
 
-## O que NÃO será mexido
+Se qualquer etapa falhar:
+- o processo volta para a etapa de reparo
+- refaço o teste
+- não considero concluído até passar
 
-- `supabase/functions/telegram-webhook/index.ts` (5069 linhas — está íntegro).
-- `supabase/config.toml` (já correto).
-- Frontend (`App.tsx`, `main.tsx`, `AdminErrorBoundary.tsx`).
-- Qualquer outra função (`notify-telegram` está respondendo 200, sem ação).
-- Whitelist `telegram_allowed_chats`, bindings de usuário, vocabulário do menu — nada disso muda.
+### 4. Smoke test interno no próprio bot
+Aproveitar o `TEST_MODE` que já existe no `telegram-webhook` para criar/verificar testes de fumaça controlados:
+- texto simples
+- comando com mesa
+- fluxo de voz simulado
+- captura da resposta do bot sem imprimir e sem depender do app
+
+Objetivo: provar no backend que o handler responde corretamente antes do teste real no Telegram.
+
+### 5. Critério de aceite real
+Só vou considerar resolvido quando os 3 sinais baterem juntos:
+1. requests do `telegram-webhook` pararem de retornar **401**
+2. logs passarem a mostrar entrada real no fluxo de voz (`[voice ...] received`)
+3. um áudio/comando real voltar com resposta do bot (`🎤 Ouvindo…`, confirmação ou execução)
+
+## Arquivos que entram no ajuste
+
+- `supabase/functions/telegram-webhook/index.ts`
+- `supabase/functions/telegram-webhook/security_test.ts`
+- possivelmente um teste novo para saúde/reparo do webhook no diretório `supabase/functions/telegram-webhook/`
+
+## O que NÃO vou mexer
+
+- frontend React
+- Admin / Palm / Kitchen / PDV
+- animações
+- impressão
+- bridge local
+- telas do app
 
 ## Resultado esperado
 
-Bot volta a responder em <1s após o redeploy. Sem perda de estado, sem mudança de comportamento, sem risco para PDV/Palm/Kitchen/impressão.
-
+Depois da correção:
+- o Telegram volta a entregar updates ao bot
+- áudio volta a mostrar resposta imediata
+- o sistema passa a ter um processo repetível de **validar → corrigir → validar de novo**
+- se a correção não passar no teste, eu volto e refaço antes de te devolver
