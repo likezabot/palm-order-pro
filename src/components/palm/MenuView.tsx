@@ -467,7 +467,6 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         isEsgotado={isEsgotado}
         getQty={getQty}
         onPick={(_name, product) => {
-          setOpenGroup(null);
           handleAdd(product);
         }}
       />
