@@ -294,6 +294,56 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           )}
         </div>
 
+        {/* ── Apelidos / variações ─────────────────────────────────────── */}
+        <div>
+          <label className="text-sm font-semibold text-muted-foreground mb-1 block">
+            Apelidos / variações
+          </label>
+          <div className="rounded-lg border border-border bg-card p-3">
+            {aliases.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {aliases.map((a, i) => (
+                  <span
+                    key={`${a}-${i}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2.5 py-1 text-xs font-semibold"
+                  >
+                    {a}
+                    <button
+                      type="button"
+                      onClick={() => removeAlias(i)}
+                      className="hover:bg-primary/25 rounded-full p-0.5"
+                      aria-label={`Remover ${a}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={aliasDraft}
+                onChange={(e) => setAliasDraft(e.target.value)}
+                onKeyDown={handleAliasKeyDown}
+                placeholder="Ex.: coca zero, zero, ks zero"
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={addAliasFromDraft}
+                disabled={!aliasDraft.trim()}
+                className="rounded-md bg-primary/15 text-primary px-3 font-semibold disabled:opacity-40 active:scale-95 transition-transform"
+                aria-label="Adicionar apelido"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Como o garçom pode chamar este item por voz ou Telegram. Pressione Enter ou vírgula para adicionar.
+          </p>
+        </div>
+
         {product && category === "refeicoes" && (
           <ProductRecipesPanel productId={product.id} />
         )}
