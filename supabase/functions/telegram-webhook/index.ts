@@ -143,6 +143,7 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
     const aiJson = await aiRes.json();
     const raw: string = aiJson?.choices?.[0]?.message?.content ?? "";
     const txt = String(raw).trim().replace(/^["'`]+|["'`]+$/g, "").trim();
+    console.log(`[transcribeVoice] result: "${txt}" (raw len=${raw.length})`);
     if (!txt || txt.toLowerCase() === "vazio") return null;
     return txt;
   } catch (e) {
@@ -524,8 +525,8 @@ export type Command =
   | { kind: "PARSE_ERROR"; raw: string; hint?: "no_op" | "no_product" | "no_table" | "no_qty" | "generic" };
 
 // Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
-const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar"];
-const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
+const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "poer", "põe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar", "lanca", "lança", "lancar", "lançar", "joga", "jogar", "marca", "marcar", "anota", "anotar", "registra", "registrar", "pede", "pedir"];
+const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar", "apaga", "apagar", "deleta", "deletar"];
 const ALL_OPS = [...ADD_OPS, ...REM_OPS];
 
 // ─────────────────────────── multi-command splitter ───────────────────────────
