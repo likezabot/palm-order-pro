@@ -37,7 +37,10 @@ Comandos para alternar `products.active` sem entrar no Admin. Sincroniza Admin/P
 - **Logs**: `[telegram-product] <kind> query: ... matches: N` e `updated <id> active=<bool>`.
 
 ## Voz
-Áudio (OGG/Opus) → Lovable AI Gemini 2.5 Flash → roda no mesmo parser. Confirmação híbrida: leitura/pedido/visibilidade/STOCK_OUT_NOW executam direto com prefixo "🎤 Ouvi: ..."; `STOCK_MOVEMENT` pede botão ✅/❌ (state `voice_confirm`, callbacks `vc|ok|<token>` / `vc|no|<token>`).
+Áudio (OGG/Opus) → Lovable AI Gemini 2.5 Flash. Prompt enriquecido com **vocabulário do cardápio** (cache 60s via `getMenuVocabulary()`) e instrução para **quebrar múltiplos comandos em linhas** (`\n`). Após transcrever, `assessVoiceConfidence(transcript, parsedAll)` decide:
+- **Confiança alta** → auto-executa com prefixo `🎤 *Ouvi:* "..."` em negrito (single ou multi-linha).
+- **Confiança baixa** → state `voice_confirm` com `lines: string[]` + botões ✅/❌ (`vc|ok|<token>` / `vc|no|<token>`). Handler suporta novo formato `lines` e legado `line`.
+- **Sinais de baixa confiança**: transcrição <3 ou >200 chars, parse error, mesa não identificada (NEEDS_TABLE/NOMESA), qty>10, >5 comandos.
 
 ## Realtime publication
 Tabelas em `supabase_realtime`: `inventory_items`, `products` (idempotente via `DO $$ ... EXCEPTION WHEN duplicate_object`).
