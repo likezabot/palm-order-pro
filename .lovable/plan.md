@@ -1,148 +1,66 @@
 
 
-# Comandos Telegram para visibilidade de produtos (mostrar/ocultar/listar)
+# Apelidos de produtos para reconhecimento por voz/texto no Telegram
 
-## Escopo
+## Objetivo
+Adicionar uma camada de **apelidos** (aliases) por produto, editáveis no Admin, que alimenta:
+1. O **dicionário** enviado ao Gemini na transcrição de voz
+2. O **fuzzy matching** do parser de comandos no `telegram-webhook`
 
-Adicionar 3 novos comandos ao bot Telegram, sem mexer em pedidos, impressão, pagamento, layout do cupom, estoque ou no parser existente:
-
-- **Ocultar** produto: `ocultar X` / `esconder X` / `desativar X` / `tirar X do cardápio` / `tira X` → `products.active = false`
-- **Mostrar** produto: `mostrar X` / `ativar X` / `colocar X no cardápio` / `voltar X` / `ativa X` → `products.active = true`
-- **Listar**: `listar ocultos` / `ver ocultos` / `listar visíveis` / `listar cardapio` → relatório agrupado por categoria
-
-Resposta refletida no Admin e Palm em <1s via Realtime.
+Sem mexer em pedidos, impressão, pagamento, layout do cupom ou cozinha.
 
 ## Mudanças
 
-### 1. `supabase/functions/telegram-webhook/index.ts`
-
-**Novos kinds no `Command` union:**
-```ts
-| { kind: "PRODUCT_HIDE"; query: string }
-| { kind: "PRODUCT_SHOW"; query: string }
-| { kind: "PRODUCT_LIST"; mode: "hidden" | "visible" | "all" }
-| { kind: "PRODUCT_PICK"; choice: number }   // resposta "1", "2"...
-```
-
-**Parser (em `parseCommand`, antes dos blocos de estoque):**
-- `^(?:ocultar|oculta|esconder|esconde|desativar|desativa|tirar|tira|remover|remove)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)(?:\s+(?:do|no)\s+cardapio)?$` → `PRODUCT_HIDE`
-- `^(?:mostrar|mostra|ativar|ativa|exibir|exibe|colocar|coloca|voltar|volta|liberar|libera)\s+(?:o\s+|a\s+|os\s+|as\s+)?(.+?)(?:\s+(?:no|para o|pro)\s+cardapio)?$` → `PRODUCT_SHOW`
-- `^(?:listar?|ver|mostra(?:r)?)\s+(ocultos?|escondidos?|desativados?|inativos?|invisiv\w*)$` → `PRODUCT_LIST mode=hidden`
-- `^(?:listar?|ver|mostra(?:r)?)\s+(visiveis|ativos|ativ[oa]s|cardapio|menu|produtos?)$` → `PRODUCT_LIST mode=visible`
-- `^\s*([1-9]|10)\s*$` quando há `telegram_chat_state.step = 'product_pick'` válido → `PRODUCT_PICK`
-
-Importante: posicionar **antes** dos parsers de `STOCK_*` para não conflitar com "tirei", e **depois** do parser de pedido `mesa N + qty`. A heurística "começa com verbo conhecido sem `mesa`" evita ambiguidade.
-
-**Novo bloco de handlers (em `handleCommand`, após STOCK_OUT_NOW):**
-
-```ts
-case "PRODUCT_HIDE":
-case "PRODUCT_SHOW": {
-  const desired = cmd.kind === "PRODUCT_HIDE" ? false : true;
-  const matches = await fuzzyFindProducts(cmd.query); // busca em products (ativos+inativos), normalizada, ranqueada
-  console.log("[telegram-product]", cmd.kind, "query:", cmd.query, "matches:", matches.length);
-  if (matches.length === 0) {
-    return `❓ Não encontrei produto parecido com: "${cmd.query}".`;
-  }
-  if (matches.length === 1) {
-    const p = matches[0];
-    if (p.active === desired) {
-      return `ℹ️ "${p.name}" já está ${desired ? "ativo" : "oculto"}.`;
-    }
-    await sb.from("products").update({ active: desired }).eq("id", p.id);
-    console.log("[telegram-product] updated", p.id, "active=", desired);
-    return `${desired ? "✅ Ativado" : "🚫 Ocultado"}: ${p.name}`;
-  }
-  // multi → salva estado e devolve numerada
-  await saveChatState(chatId, "product_pick", {
-    action: cmd.kind, candidates: matches.slice(0, 9).map(p => ({ id: p.id, name: p.name, active: p.active }))
-  }, 5 * 60); // TTL 5min
-  return `Encontrei ${matches.length} produtos. Responda com o número:\n` +
-         matches.slice(0,9).map((p,i)=>`${i+1}. ${p.name}${p.active?"":" (oculto)"}`).join("\n");
-}
-
-case "PRODUCT_PICK": {
-  const state = await loadChatState(chatId, "product_pick");
-  if (!state) return "⏰ Sem escolha pendente. Mande o comando de novo.";
-  const idx = cmd.choice - 1;
-  const pick = state.data.candidates[idx];
-  if (!pick) return `❓ Número ${cmd.choice} fora da lista.`;
-  const desired = state.data.action === "PRODUCT_HIDE" ? false : true;
-  await sb.from("products").update({ active: desired }).eq("id", pick.id);
-  await clearChatState(chatId);
-  return `${desired ? "✅ Ativado" : "🚫 Ocultado"}: ${pick.name}`;
-}
-
-case "PRODUCT_LIST": {
-  const q = sb.from("products").select("name, category, active").order("category").order("name");
-  const { data } = cmd.mode === "hidden"
-    ? await q.eq("active", false)
-    : cmd.mode === "visible" ? await q.eq("active", true) : await q;
-  if (!data?.length) return cmd.mode === "hidden" ? "✅ Nenhum produto oculto." : "Nenhum produto.";
-  // agrupa por CATEGORY_LABELS
-  const byCat = groupBy(data, p => p.category);
-  const header = cmd.mode === "hidden" ? "🚫 Produtos ocultos:" : "📋 Produtos visíveis:";
-  return header + "\n\n" + Object.entries(byCat).map(([cat, ps]) =>
-    `*${labelCat(cat)}*\n` + ps.map(p => `• ${p.name}`).join("\n")
-  ).join("\n\n");
-}
-```
-
-**Nova função `fuzzyFindProducts(query)`:**
-- Normaliza (lowercase, strip acentos, trim, singulariza simples)
-- Busca **todos** `products` (sem filtrar `active`, pra poder reativar)
-- Ranking: match exato > startsWith > includes > Levenshtein por token (≤2)
-- Limita a 9 candidatos (cabe em 1-9 do teclado numérico)
-
-Reutiliza helpers já existentes: `normalize()`, `singularize()`, `levenshtein()` do próprio arquivo.
-
-**Helpers de estado:** `saveChatState/loadChatState/clearChatState` já existem (usados pelo wizard). Só passar `step="product_pick"`.
-
-**Atualizar HELP** pra incluir os 3 novos comandos.
-
-### 2. Realtime na tabela `products`
-
-Migration idempotente:
+### 1. Banco — nova coluna em `products`
+Migration:
 ```sql
-DO $$ BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE public.products
+  ADD COLUMN IF NOT EXISTS aliases text[] NOT NULL DEFAULT '{}';
+
+CREATE INDEX IF NOT EXISTS idx_products_aliases_gin
+  ON public.products USING GIN (aliases);
 ```
 
-### 3. `src/components/palm/MenuView.tsx` e `src/pages/Admin.tsx`
+Sem trigger, sem default complexo. `inventory_items` já tem `aliases` — mesma convenção.
 
-Adicionar `useEffect` com canal Supabase Realtime que invalida as queries de products quando recebe `postgres_changes`:
+### 2. Admin — editor de apelidos
+**`src/components/admin/ProductForm.tsx`**: novo campo "Apelidos / variações" (chips estilo tag input).
+- Input de texto + botão "+" / Enter adiciona; X remove.
+- Normaliza no submit: lowercase, trim, sem acento, dedup, ignora vazios e o próprio nome.
+- Exibe abaixo: dica curta — "Como o garçom pode chamar este item por voz/Telegram. Ex.: coca zero, zero, ks zero".
 
-```ts
-useEffect(() => {
-  const ch = supabase.channel("products-rt")
-    .on("postgres_changes", { event: "*", schema: "public", table: "products" },
-       () => queryClient.invalidateQueries({ queryKey: ["palm-products"] }))
-    .subscribe();
-  return () => { supabase.removeChannel(ch); };
-}, [queryClient]);
-```
+**`src/components/admin/SortableProductCard.tsx`**: mostra contador discreto `🏷️ 3 apelidos` quando > 0 (somente leitura, edição via form).
 
-Mesma coisa no Admin com `["admin-products"]`. Sem mudança no fetch existente (filtro `.eq("active", true)` no Palm continua certo — produtos ocultos somem).
+### 3. Telegram webhook — usar apelidos
+Em `supabase/functions/telegram-webhook/index.ts`:
 
-### 4. Memória
+- **`getMenuVocabulary()`**: além do `name`, concatena `aliases` no formato `Coca-Cola Zero (coca zero, zero, ks zero)` no prompt do Gemini. Cache 60s mantém.
+- **`fuzzyFindProducts(query, products)`**: estende ranking para também testar `query` contra cada alias (mesmo pipeline: exact > startsWith > includes > tokens > Levenshtein). Match por alias entra com peso igual ao por nome.
+- **`ProductRow` type**: adicionar `aliases?: string[]`.
+- **Query de produtos**: incluir `aliases` no `select`.
 
-Atualizar `mem://features/telegram-bot.md` listando os comandos novos.
+### 4. Testes
+**`supabase/functions/telegram-webhook/parser_test.ts`**: +6 casos cobrindo:
+- "coca zero" resolve para "Coca-Cola Zero" via alias
+- Apelido com acento/sem acento
+- Apelido + plural ("zeros")
+- Conflito alias vs nome de outro produto (nome vence)
+- Alias ambíguo (2 produtos com mesmo apelido) → `ambiguous`
+- Sem apelidos cadastrados, fluxo atual continua igual
 
-## O que NÃO muda
+### 5. Memory
+Atualizar `.lovable/memory/features/telegram-bot.md` documentando que `products.aliases` alimenta vocabulário e fuzzy.
 
-- Parser de pedidos (`mesa N + qty …`), estoque, wizard, voz, undo, impressão, RPCs.
-- Schema (só publication realtime, sem coluna nova).
-- RLS de `products` (já permite update público — e a edge function usa service role).
-- Restrição de segurança: bot **só** alterna `active`. Não permite alterar preço, deletar produto, alterar pedido pago, etc.
+## Detalhes técnicos
 
-## Validação manual
+- **Normalização de aliases**: aplicada no Admin (escrita) E no fuzzy (leitura), via `normalize()` já existente — sem migrations de dados.
+- **Vocabulário no prompt**: limitado a ~150 produtos ativos, com até 5 apelidos por item para não explodir tokens. Cache 60s.
+- **Sem breaking changes**: coluna default `'{}'`, todos os fluxos atuais continuam idênticos quando aliases vazio.
+- **Realtime**: `products` já está em `supabase_realtime` — Admin/Palm refletem mudança em apelidos automaticamente, mas como o vocab tem cache de 60s no edge, o bot pega novos apelidos em até 1 min (suficiente).
 
-1. `ocultar panceta` → some do Palm em <1s, aparece no Admin como inativo.
-2. `mostrar panceta` → volta.
-3. `coca` (após `ocultar coca`, se houver várias) → bot lista numerada; responder `2` aplica.
-4. `listar ocultos` → texto agrupado por categoria.
-5. `listar visíveis` → cardápio inteiro.
-6. Voz "esconde a panceta" → mesmo efeito.
-7. Pedido `mesa 5 + 2 cerveja` continua funcionando (não conflita com parser novo).
+## Critério de sucesso
+1. No Admin, edito o produto "Coca-Cola Zero" e adiciono apelidos "coca zero, zero, ks zero".
+2. Mando "mesa 5 + 2 coca zero" no Telegram → reconhece direto, sem ambiguidade.
+3. Mando áudio "duas zero pra mesa cinco" → Gemini transcreve com mais precisão e resolve.
+4. Pedidos, impressão, cozinha continuam funcionando idênticos.
 
