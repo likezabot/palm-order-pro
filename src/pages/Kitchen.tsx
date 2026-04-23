@@ -145,16 +145,23 @@ const Kitchen = () => {
 
   const updateStatus = async (orderId: string, status: string) => {
     playFeedback("click");
+    // Optimistic update: muda o card de coluna instantaneamente
+    const previous = queryClient.getQueryData<Order[]>(["kitchen-orders"]);
+    queryClient.setQueryData<Order[]>(["kitchen-orders"], (old) => {
+      if (!old) return old;
+      return old.map((o) => (o.id === orderId ? { ...o, status } : o));
+    });
+
     const { error } = await supabase.rpc("update_order_status", {
       p_order_id: orderId,
       p_status: status,
     });
     if (error) {
+      // Rollback
+      if (previous) queryClient.setQueryData(["kitchen-orders"], previous);
       console.error("[Kitchen] updateStatus error:", error);
       alert("Erro ao atualizar pedido: " + error.message);
-      return;
     }
-    queryClient.invalidateQueries({ queryKey: ["kitchen-orders"] });
   };
 
   const getItems = (orderId: string) => allItems.filter((i) => i.order_id === orderId);
