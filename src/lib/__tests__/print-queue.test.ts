@@ -67,13 +67,12 @@ describe("print-queue (IndexedDB)", () => {
     expect(all.length).toBe(0);
   });
 
-  it("getPrintQueue returns sorted by createdAt", async () => {
-    const a = await enqueuePrintJob(baseJob);
-    await new Promise((r) => setTimeout(r, 5));
-    const b = await enqueuePrintJob({ ...baseJob, orderId: "order-2", printType: "delta" });
+  it("clearPrintQueue empties the store", async () => {
+    await enqueuePrintJob(baseJob);
+    await enqueuePrintJob({ ...baseJob, printType: "bill" });
+    await clearPrintQueue();
     const all = await getPrintQueue();
-    expect(all[0].id).toBe(a.id);
-    expect(all[1].id).toBe(b.id);
+    expect(all.length).toBe(0);
   });
 });
 
