@@ -29,6 +29,14 @@ const Kitchen = () => {
     });
   };
 
+  const sortOrders = (rows: Order[]) =>
+    [...rows].sort((a, b) => {
+      const aServed = a.served_at ? 1 : 0;
+      const bServed = b.served_at ? 1 : 0;
+      if (aServed !== bServed) return aServed - bServed;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+
   const { data: orders = [] } = useQuery({
     queryKey: ["kitchen-orders"],
     queryFn: async () => {
@@ -38,15 +46,10 @@ const Kitchen = () => {
         .in("status", ["new", "preparing", "done"])
         .order("created_at", { ascending: true });
       if (error) throw error;
-      // Pedidos servidos vão para o final (prioridade baixa pra cozinha)
-      const rows = (data as Order[]) ?? [];
-      return [...rows].sort((a, b) => {
-        const aServed = a.served_at ? 1 : 0;
-        const bServed = b.served_at ? 1 : 0;
-        return aServed - bServed;
-      });
+      return sortOrders((data as Order[]) ?? []);
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: allItems = [] } = useQuery({
@@ -56,22 +59,75 @@ const Kitchen = () => {
       if (error) throw error;
       return data as OrderItem[];
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
-  // Realtime subscription
+  // Realtime subscription com setQueryData direto (UI instantânea)
   useEffect(() => {
+    let itemsReconcile: ReturnType<typeof setTimeout> | null = null;
+    const scheduleItemsReconcile = () => {
+      if (itemsReconcile) clearTimeout(itemsReconcile);
+      itemsReconcile = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["kitchen-items"] });
+      }, 400);
+    };
+
     const channel = supabase
       .channel(`kitchen-realtime-${crypto.randomUUID()}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["kitchen-orders"] });
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+        const newOrder = payload.new as Order;
+        if (!["new", "preparing", "done"].includes(newOrder.status)) return;
+        queryClient.setQueryData<Order[]>(["kitchen-orders"], (old) => {
+          if (!old) return [newOrder];
+          if (old.some((o) => o.id === newOrder.id)) return old;
+          return sortOrders([...old, newOrder]);
+        });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["kitchen-items"] });
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+        const updated = payload.new as Order;
+        queryClient.setQueryData<Order[]>(["kitchen-orders"], (old) => {
+          if (!old) return old;
+          const inKitchen = ["new", "preparing", "done"].includes(updated.status);
+          const existing = old.find((o) => o.id === updated.id);
+          if (!existing && inKitchen) return sortOrders([...old, updated]);
+          if (existing && !inKitchen) return old.filter((o) => o.id !== updated.id);
+          if (!existing) return old;
+          // Guard de versão
+          if (typeof existing.version === "number" && typeof updated.version === "number" && updated.version < existing.version) {
+            return old;
+          }
+          return sortOrders(old.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)));
+        });
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
+        const oldOrder = payload.old as { id?: string };
+        if (!oldOrder?.id) return;
+        queryClient.setQueryData<Order[]>(["kitchen-orders"], (old) => old?.filter((o) => o.id !== oldOrder.id) ?? old);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, (payload) => {
+        const event = payload.eventType;
+        queryClient.setQueryData<OrderItem[]>(["kitchen-items"], (old) => {
+          if (!old) return old;
+          if (event === "DELETE") {
+            const oldItem = payload.old as OrderItem;
+            return old.filter((i) => i.id !== oldItem.id);
+          }
+          const newItem = payload.new as OrderItem;
+          const idx = old.findIndex((i) => i.id === newItem.id);
+          if (idx === -1) return [...old, newItem];
+          const next = old.slice();
+          next[idx] = { ...next[idx], ...newItem };
+          return next;
+        });
+        scheduleItemsReconcile();
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (itemsReconcile) clearTimeout(itemsReconcile);
+      supabase.removeChannel(channel);
+    };
   }, [queryClient]);
 
   // Beep + pulse on new orders
