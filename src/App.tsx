@@ -14,6 +14,7 @@ import AdminErrorBoundary from "@/components/admin/AdminErrorBoundary";
 import Index from "./pages/Index";
 import Palm from "./pages/Palm";
 import Kitchen from "./pages/Kitchen";
+import Admin from "./pages/Admin";
 
 // Retry helper: tenta o import dinâmico até 2x antes de propagar o erro
 // (cobre falhas transitórias de rede / chunk velho após deploy).
@@ -34,7 +35,6 @@ const lazyWithRetry = <T extends { default: React.ComponentType<any> }>(
   });
 
 // Rotas pesadas → lazy (Admin tem charts; PrintStation tem fila; Pdv tem realtime denso etc.).
-const Admin = lazyWithRetry(() => import("./pages/Admin"));
 const Pdv = lazy(() => import("./pages/Pdv"));
 const PrintStation = lazy(() => import("./pages/PrintStation"));
 const Stock = lazy(() => import("./pages/Stock"));
