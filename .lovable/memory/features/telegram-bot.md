@@ -37,10 +37,15 @@ Comandos para alternar `products.active` sem entrar no Admin. Sincroniza Admin/P
 - **Logs**: `[telegram-product] <kind> query: ... matches: N` e `updated <id> active=<bool>`.
 
 ## Voz
-Áudio (OGG/Opus) → Lovable AI Gemini 2.5 Flash. Prompt enriquecido com **vocabulário do cardápio** (cache 60s via `getMenuVocabulary()`) e instrução para **quebrar múltiplos comandos em linhas** (`\n`). Após transcrever, pré-resolução por linha (`parseCommand` + `resolveWithContext` + `resolveProduct`) alimenta `assessVoiceConfidence(transcript, enriched)` que decide:
+Áudio (OGG/Opus) → Lovable AI Gemini 2.5 Flash. Prompt enriquecido com **vocabulário do cardápio** (cache 60s via `getMenuVocabulary()`) — formato `Nome Oficial (apelido1, apelido2)` usando `products.name + products.aliases` (até 5 apelidos por item) — e instrução para **quebrar múltiplos comandos em linhas** (`\n`). Após transcrever, pré-resolução por linha (`parseCommand` + `resolveWithContext` + `resolveProduct`) alimenta `assessVoiceConfidence(transcript, enriched)` que decide:
 - **Confiança alta** → auto-executa com prefixo `🎤 *Ouvi:* "..."` em negrito (single ou multi-linha).
 - **Confiança baixa** → state `voice_confirm` com `lines: string[]` + botões ✅/❌ (`vc|ok|<token>` / `vc|no|<token>`). Preview mostra mesa+qty+produto resolvido por linha (com tag "contexto" se mesa veio do contexto, "❌ não encontrado" / "❓ ambíguo" para produto).
 - **Sinais de baixa confiança**: transcrição <3 ou >200 chars, parse error, mesa não identificada (NEEDS_TABLE/NOMESA), qty>10, >5 comandos. Específicos ADD/REMOVE: produto `not_found` ou `ambiguous`, ou mesa herdada de contexto + qty≥5.
+
+## Apelidos de produtos (`products.aliases`)
+Coluna `text[]` em `public.products` (default `'{}'`). Editável no Admin (`ProductForm.tsx` — chips com Enter/vírgula, normaliza lowercase + sem acento + dedup). Alimenta:
+- **Vocabulário do prompt Gemini** (`getMenuVocabulary` — formato `Nome (apelido1, apelido2)`, até 5 por item, cache 60s).
+- **`fuzzyFindProducts`**: pontua a query contra o `name` E cada `alias` no MESMO ranking (exact > startsWith > includes > tokens > Levenshtein). Pega o melhor score. Apelidos ambíguos (mesmo apelido em 2 produtos) viram `ambiguous` normalmente.
 
 ## Realtime publication
 Tabelas em `supabase_realtime`: `inventory_items`, `products` (idempotente via `DO $$ ... EXCEPTION WHEN duplicate_object`).
