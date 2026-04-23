@@ -528,6 +528,21 @@ const StatsPanel = () => {
 
   return (
     <div className="space-y-6">
+      {/* Section header */}
+      <div className="flex items-start gap-3">
+        <div className="rounded-full bg-primary/10 p-2 shrink-0">
+          <TrendingUp className="w-4 h-4 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">
+            Estatísticas
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Vendas, garçons e produtos no período
+          </p>
+        </div>
+      </div>
+
       {/* Filtro de período */}
       <div className="flex items-center gap-2 flex-wrap">
         {([
