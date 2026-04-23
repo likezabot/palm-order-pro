@@ -3417,7 +3417,7 @@ async function wzShowItemPicker(chatId: number, messageId: number | undefined, a
   rows.push(wzNavRow({ back: true, home: true, cancel: true }));
 
   const history = wzPushHistory(currentStep, currentData);
-  await wzSet(chatId, "awaiting_item", { ...currentData, action, page: safePage, history });
+  await wzSet(chatId, "awaiting_item", { ...currentData, action, page: safePage, history } as any);
 
   const text = lines.join("\n");
   if (messageId !== undefined) await editTelegramMessage(chatId, messageId, text, rows);
