@@ -4264,27 +4264,46 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
 
     // Voice (microfone) → transcreve com Lovable AI e segue como texto.
     let voiceTranscript: string | null = null;
+    let voiceTraceId: string | null = null;
     const voiceFileId: string | undefined = message?.voice?.file_id;
     if (!fromBot && chatId && !text && voiceFileId) {
+      voiceTraceId = Math.random().toString(36).slice(2, 8);
+      const v = message?.voice ?? {};
+      console.log(`[voice ${voiceTraceId}] received duration=${v.duration ?? "?"}s mime=${v.mime_type ?? "?"} size=${v.file_size ?? "?"}`);
       // Whitelist antes de gastar transcrição
       const allowedEarly = await getAllowedChats();
       if (!allowedEarly || !allowedEarly.has(chatId)) {
-        console.warn("Voice de chat não autorizado:", chatId);
+        console.warn(`[voice ${voiceTraceId}] action=blocked reason=chat_not_allowed`);
         return testOrPlain();
       }
       // Dedupe antes de transcrever também
       if (typeof updateId === "number" && isDuplicate(updateId)) {
+        console.log(`[voice ${voiceTraceId}] action=skipped reason=duplicate update_id=${updateId}`);
         return testOrPlain();
       }
       setTestContext(chatId);
-      const transcribed = await transcribeTelegramVoice(voiceFileId);
-      if (!transcribed) {
-        await sendTelegram(chatId, "🎤 Não consegui entender o áudio. Tente falar mais claro ou mande por texto.");
+      try {
+        const transcribed = await transcribeTelegramVoice(voiceFileId, voiceTraceId);
+        if (!transcribed) {
+          console.warn(`[voice ${voiceTraceId}] action=failed reason=no_transcript`);
+          await sendTelegram(
+            chatId,
+            "🎤 Não consegui entender o áudio.\n\nTente falar mais perto do microfone, em ambiente silencioso, ou envie por texto.\nEx.: `mesa 5 +2 coca`",
+          );
+          clearTestContext();
+          return testOrPlain();
+        }
+        voiceTranscript = transcribed;
+        text = transcribed;
+      } catch (e) {
+        console.error(`[voice ${voiceTraceId}] action=failed reason=exception`, e);
+        await sendTelegram(
+          chatId,
+          "🎤 ❌ Erro ao processar o áudio. Tente novamente ou envie por texto.",
+        );
         clearTestContext();
         return testOrPlain();
       }
-      voiceTranscript = transcribed;
-      text = transcribed;
     }
 
     if (fromBot || !chatId || !text) {
