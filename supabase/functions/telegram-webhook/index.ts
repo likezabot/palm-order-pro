@@ -4375,7 +4375,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
       if (!okSecret && !okService && !okAnonForHeal) {
         console.log("[admin-auth] denied", JSON.stringify({
           op: adminOp, has_secret_header: !!provided, has_bearer: !!bearer,
-          bearer_len: bearer.length, anon_len: anonKey.length, match_anon: bearer === anonKey,
+          bearer_len: bearer.length, expected_len: ANON_KEY_PUBLIC.length, match_anon: bearer === ANON_KEY_PUBLIC,
         }));
         return unauthorized("missing_or_invalid_secret_for_admin_endpoint");
       }
