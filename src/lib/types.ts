@@ -5,6 +5,8 @@ export interface Product {
   category: string;
   active: boolean;
   created_at: string;
+  /** Apelidos / variações para reconhecimento por voz/texto no Telegram. */
+  aliases?: string[];
 }
 
 export interface CartItem {
