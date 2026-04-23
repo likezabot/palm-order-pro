@@ -4759,22 +4759,29 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         }
       }
 
-      const voicePrefix = voiceTranscript && lines.length > 1
-        ? `🎤 *Ouvi:* "${voiceTranscript}"\n\n`
-        : "";
-      const header = `📊 ${lines.length} comandos processados:\n`;
-      await sendTelegram(chatId, voicePrefix + header + "\n" + textBlocks.join("\n\n"));
-
-      // Botões de undo (1 por mesa batched) em mensagens separadas.
-      for (const [, res] of batchResults) {
-        if (res.keyboard) {
-          await sendTelegram(chatId, `↩️ Desfazer mesa?`, res.keyboard);
+      if (voiceTranscript) {
+        // VOZ: resumo curto + suprime undos / escolhas verbosas.
+        const summaryLines = (typeof previewParts !== "undefined" && previewParts.length > 0)
+          ? previewParts.map((l) => `• ${l}`).join("\n")
+          : textBlocks.join("\n");
+        await voiceReply(`🎤 Entendi:\n${summaryLines}\n✅`);
+        // Mostra apenas erros standalone (produto ambíguo / não encontrado).
+        for (const choice of pendingChoices) {
+          await sendTelegram(chatId, choice.text, choice.keyboard);
         }
-      }
-
-      // Mensagens separadas com botões de escolha.
-      for (const choice of pendingChoices) {
-        await sendTelegram(chatId, choice.text, choice.keyboard);
+      } else {
+        const header = `📊 ${lines.length} comandos processados:\n`;
+        await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
+        // Botões de undo (1 por mesa batched) em mensagens separadas.
+        for (const [, res] of batchResults) {
+          if (res.keyboard) {
+            await sendTelegram(chatId, `↩️ Desfazer mesa?`, res.keyboard);
+          }
+        }
+        // Mensagens separadas com botões de escolha.
+        for (const choice of pendingChoices) {
+          await sendTelegram(chatId, choice.text, choice.keyboard);
+        }
       }
     }
   } catch (err) {
