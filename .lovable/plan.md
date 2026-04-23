@@ -1,105 +1,72 @@
 
 
-# Plano: aba "Rede" individual por dispositivo + linguagem simples
+# Plano: aba "Rede" no Admin com status de conectividade
 
-## O que muda
+## O que vai aparecer
 
-A aba "Rede" hoje mostra "Internet (do PC/tablet)" de forma genérica. Você quer:
+Uma nova aba **"Rede"** no Admin (após "Sistema"), que mostra em tempo real **3 cards de status**:
 
-1. **Identificar o dispositivo atual** (esse celular, esse PC, esse tablet) com nome amigável.
-2. **Medir a internet desse aparelho específico** (não genérico).
-3. **Mostrar um resumo em linguagem simples**, tipo "📶 Sua internet está ruim, pode travar pedidos" em vez de "latência 850ms".
+### 1. Impressora (ponte local)
+- Status: 🟢 Online / 🔴 Offline
+- Latência (ms) do `GET http://localhost:9100/health`
+- Impressora USB detectada: sim/não + quantidade
+- Última verificação (timestamp)
 
-## Como vai aparecer
+### 2. Servidor (Lovable Cloud)
+- Status: 🟢 Online / 🔴 Offline / 🟡 Degradado
+- Latência (ms) do ping `GET /rest/v1/settings?limit=1`
+- Status do Realtime: SUBSCRIBED / TIMED_OUT / CLOSED
+- Tempo desde o último heartbeat do Realtime
 
-### Cabeçalho da aba
-```
-📱 Este dispositivo: iPhone de Jose (Palm)
-   Última verificação: agora mesmo
-```
+### 3. Internet (do PC/tablet)
+- Status: 🟢 Online / 🔴 Offline
+- Latência (ms) do ping externo `https://www.google.com/generate_204`
+- `navigator.onLine` (sinal nativo do navegador)
+- Tipo de conexão (4G/Wi-Fi/etc) via `navigator.connection.effectiveType`
 
-Detecta automaticamente:
-- **Tipo**: celular / tablet / PC (via `navigator.userAgent` + viewport)
-- **Modo de uso**: Palm / Cozinha / Caixa / Admin (rota atual)
-- **Nome opcional editável**: salvo em `localStorage` (ex.: "Tablet do balcão")
+## Como vai funcionar
 
-### 3 cards com resumo simples
+- **Auto-refresh a cada 5 segundos** enquanto a aba estiver aberta (pausa quando troca de aba para não gastar bateria/dados).
+- Cada card mostra um **gráfico mini** das últimas 20 medições de latência (sparkline simples em SVG), pra você ver se a rede está estável ou oscilando.
+- Botão **"Testar agora"** em cada card pra forçar uma medição imediata.
+- Cores semânticas:
+  - 🟢 verde: latência < 200ms
+  - 🟡 amarelo: 200-800ms
+  - 🔴 vermelho: > 800ms ou offline
 
-**Card 1 — Sua internet (deste aparelho)**
-```
-🟢 Boa — 45ms
-Tudo funcionando normal nesse celular.
-```
-ou
-```
-🟡 Lenta — 650ms
-Sua internet está oscilando. Pedidos podem demorar pra chegar.
-```
-ou
-```
-🔴 Ruim — sem resposta
-Esse aparelho está sem internet. Verifique Wi-Fi ou dados móveis.
-```
+## Arquivos a criar/editar
 
-**Card 2 — Servidor**
-```
-🟢 Online — 120ms
-Servidor respondendo bem.
-```
+**Novo**: `src/components/admin/NetworkTab.tsx`
+- Componente principal com 3 cards.
+- Hook interno `useNetworkPings` que mede latência das 3 fontes a cada 5s.
+- Histórico em memória (array de últimas 20 medições por fonte).
+- Sparkline SVG inline pra cada card.
 
-**Card 3 — Impressora local** (só aparece se a rota usar impressora — Caixa/Admin/Estação)
-```
-🔴 Desligada
-A impressora não está respondendo. Pedidos ficam na fila.
-```
+**Editar**: `src/pages/Admin.tsx`
+- Adicionar aba "Rede" no `TabsList` (ícone `Activity` do lucide-react).
+- Adicionar `<TabsContent value="network">` chamando `<NetworkTab />`.
+- Aba marcada como `admin-only` (oculta em modo Garçom).
 
-No celular do garçom (Palm), o card da impressora **não aparece** (não faz sentido).
+## Detalhes técnicos
 
-### Resumo geral no topo
-
-Uma linha resumo acima dos cards:
-```
-✅ Tudo ok neste aparelho
-```
-ou
-```
-⚠️ Internet do seu celular está lenta — pedidos podem atrasar
-```
-ou
-```
-❌ Sem conexão neste aparelho
+**Medição de latência** (3 endpoints independentes):
+```ts
+// Ponte local
+const t0 = performance.now();
+await fetch('http://localhost:9100/health', { signal: AbortSignal.timeout(3000) });
+const latency = performance.now() - t0;
 ```
 
-## Arquivos a editar
+**Realtime status**: lê do `connectivity-store` já existente (`src/lib/connectivity-store.ts`) via `useConnectivity()` (hook já presente em `src/hooks/use-connectivity.ts`).
 
-**`src/components/admin/NetworkTab.tsx`** (reescrita):
-- Detecta dispositivo: `getDeviceInfo()` retorna `{ type: 'mobile'|'tablet'|'desktop', name, role }`.
-- Nome editável persistido em `localStorage` (`device_friendly_name`).
-- Card de impressora condicional (oculto em rotas que não imprimem).
-- Mensagens em **português coloquial**, sem termos técnicos no card principal.
-- Latência ainda aparece, mas como secundária (cinza, pequena).
-- Mantém sparkline e botão "Testar agora".
+**Sparkline**: SVG `<polyline>` com `points` calculado a partir do array de medições, normalizado para o `<svg viewBox="0 0 100 30">`. Sem libs externas.
 
-**Novo helper**: `src/lib/device-info.ts`
-- `getDeviceType()`: classifica via UA + `window.innerWidth`.
-- `getDeviceFriendlyName()`: lê/salva localStorage.
-- `getCurrentRole()`: extrai da rota (`/palm`, `/kitchen`, `/cashier`, etc.).
-
-## Tradução técnico → simples
-
-| Técnico (antes) | Simples (depois) |
-|---|---|
-| Latência 45ms | 🟢 Boa |
-| Latência 350ms | 🟡 Lenta |
-| Latência > 800ms | 🔴 Ruim |
-| Offline | ❌ Sem conexão |
-| Realtime TIMED_OUT | "Servidor demorando pra responder" |
-| Bridge 9100 offline | "Impressora desligada" |
+**Pausar quando aba escondida**: usa `document.visibilityState` no `useEffect` do hook.
 
 ## Resultado prático
 
-- Garçom abre Admin no celular dele → vê **"📱 Celular do João — Sua internet está boa"**.
-- Caixa abre Admin no PC → vê **"💻 PC do Caixa — Internet ok, impressora desligada"**.
-- Sem jargão. Sem confundir "qual internet é essa".
-- Cada aparelho mostra **a sua própria** medição.
+- Você abre Admin → aba "Rede".
+- Vê na hora se a impressora caiu, se a internet do PC tá lenta, ou se o servidor tá demorando.
+- O sparkline mostra picos de latência ao longo do tempo (ex.: internet caiu por 30s e voltou).
+- Sem precisar abrir DevTools nem pingar manualmente.
 
