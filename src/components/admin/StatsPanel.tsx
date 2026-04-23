@@ -527,7 +527,7 @@ const StatsPanel = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       {/* Filtro de período */}
       <div className="flex items-center gap-2 flex-wrap">
         {([
@@ -538,9 +538,9 @@ const StatsPanel = () => {
           <Button
             key={key}
             size="sm"
-            variant={period === key ? "default" : "secondary"}
+            variant={period === key ? "default" : "outline"}
             onClick={() => setPeriod(key)}
-            className="font-bold"
+            className="h-8 font-medium"
           >
             {label}
           </Button>
@@ -549,8 +549,8 @@ const StatsPanel = () => {
           <PopoverTrigger asChild>
             <Button
               size="sm"
-              variant={period === "custom" ? "default" : "secondary"}
-              className={cn("font-bold gap-1.5", !customDate && period !== "custom" && "text-muted-foreground")}
+              variant={period === "custom" ? "default" : "outline"}
+              className={cn("h-8 font-medium gap-1.5", !customDate && period !== "custom" && "text-muted-foreground")}
             >
               <CalendarIcon size={14} />
               {period === "custom" && customDate
@@ -569,21 +569,21 @@ const StatsPanel = () => {
             />
           </PopoverContent>
         </Popover>
-        <span className="text-xs text-muted-foreground ml-auto">
-          Atualiza a cada 30s · {filteredOrders.length} pedidos no recorte
+        <span className="text-xs text-muted-foreground ml-auto tabular-nums">
+          Atualiza a cada 30s · {filteredOrders.length} pedidos
         </span>
       </div>
 
       {/* Filtro por garçom */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+        <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
           <Users size={14} /> Garçom:
         </span>
         <Button
           size="sm"
-          variant={waiterFilter === "all" ? "default" : "secondary"}
+          variant={waiterFilter === "all" ? "default" : "outline"}
           onClick={() => setWaiterFilter("all")}
-          className="font-bold h-8"
+          className="h-8 font-medium"
         >
           Todos
         </Button>
@@ -591,9 +591,9 @@ const StatsPanel = () => {
           <Button
             key={w}
             size="sm"
-            variant={waiterFilter === w ? "default" : "secondary"}
+            variant={waiterFilter === w ? "default" : "outline"}
             onClick={() => setWaiterFilter(w)}
-            className="font-bold h-8"
+            className="h-8 font-medium"
           >
             {w}
           </Button>
@@ -983,11 +983,11 @@ const KpiCard = ({
   delta?: number | null;
   deltaLabel?: string;
 }) => (
-  <div className="rounded-xl bg-card border border-border p-4">
-    <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
+  <div className="rounded-lg bg-card border border-border p-4">
+    <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium uppercase tracking-wide">
       {icon} {label}
     </div>
-    <div className="mt-2 text-2xl font-black text-foreground">{value}</div>
+    <div className="mt-2 text-2xl font-bold tabular-nums text-foreground">{value}</div>
     {delta !== undefined && (
       <div className="mt-1.5">
         <DeltaBadge delta={delta} label={deltaLabel} />
@@ -1025,8 +1025,8 @@ const DeltaBadge = ({ delta, label }: { delta: number | null; label?: string }) 
 };
 
 const ChartCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="rounded-xl bg-card border border-border p-4">
-    <h3 className="font-bold text-sm mb-3 text-foreground">{title}</h3>
+  <div className="rounded-lg bg-card border border-border p-4">
+    <h3 className="text-sm font-semibold mb-3 text-foreground tracking-tight">{title}</h3>
     {children}
   </div>
 );
@@ -1038,8 +1038,8 @@ const EmptyChart = () => (
 );
 
 const TopList = ({ title, items }: { title: string; items: { name: string; qty: number }[] }) => (
-  <div className="rounded-xl bg-card border border-border p-4">
-    <h3 className="font-bold text-sm mb-3 text-foreground">{title}</h3>
+  <div className="rounded-lg bg-card border border-border p-4">
+    <h3 className="text-sm font-semibold mb-3 text-foreground tracking-tight">{title}</h3>
     {items.length === 0 ? (
       <p className="text-xs text-muted-foreground">Sem dados</p>
     ) : (
