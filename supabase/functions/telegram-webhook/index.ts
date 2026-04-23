@@ -2130,6 +2130,10 @@ async function previewCommand(cmd: Command, chatId: number): Promise<string> {
   if (cmd.kind === "STOCK_LIST") return `📦 (preview) Listaria todos os itens do estoque (até 30).`;
   if (cmd.kind === "NOTIFY_TOGGLE") return `🔔 (preview) ${cmd.on ? "Ativaria" : "Desativaria"} as notificações.`;
   if (cmd.kind === "TABLE_STATUS") return `📋 (preview) Mostraria o resumo rápido da mesa ${cmd.table}.`;
+  if (cmd.kind === "PRODUCT_HIDE") return `🚫 (preview) Ocultaria do cardápio: "${cmd.query}".`;
+  if (cmd.kind === "PRODUCT_SHOW") return `✅ (preview) Ativaria no cardápio: "${cmd.query}".`;
+  if (cmd.kind === "PRODUCT_LIST") return `📋 (preview) Listaria produtos (${cmd.mode}).`;
+  if (cmd.kind === "PRODUCT_PICK") return `🔢 (preview) Aplicaria escolha ${cmd.choice}.`;
   if (cmd.kind === "PARSE_ERROR") {
     return `❓ (preview) Não interpretaria: "${cmd.raw}" — faltou mesa, ação ou produto.`;
   }
