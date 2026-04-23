@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { ArrowLeft } from "lucide-react";
+import { useState, useMemo, KeyboardEvent } from "react";
+import { ArrowLeft, X, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,16 @@ import {
 } from "@/lib/product-groups";
 import { Input } from "@/components/ui/input";
 import ProductRecipesPanel from "./ProductRecipesPanel";
+
+/** Normaliza apelido: lowercase, trim, remove acentos, colapsa espaços. */
+function normalizeAlias(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
 interface Props {
   product: Product | null;
@@ -26,6 +36,10 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   const [price, setPrice] = useState(product?.price?.toString() || "");
   const [category, setCategory] = useState(product?.category || initialCategory || "espetos");
   const [active, setActive] = useState(product?.active ?? true);
+  const [aliases, setAliases] = useState<string[]>(
+    Array.isArray(product?.aliases) ? (product!.aliases as string[]) : []
+  );
+  const [aliasDraft, setAliasDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
