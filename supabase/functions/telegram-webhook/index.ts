@@ -2572,9 +2572,9 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     }
     case "is_group_trigger": {
       const variantProducts = await fetchProductsByNames(resolution.variants);
-      const picked = autoPickFromCandidates(cmd.productText, variantProducts);
+      const picked = autoPickFromCandidates(cmd2.productText, variantProducts);
       if (picked) {
-        return await runExecute(cmd, picked, waiter);
+        return await runExecute(cmd2, picked, waiter);
       }
       if (variantProducts.length === 0) {
         const variants = resolution.variants.map((v) => `  • ${v}`).join("\n");
@@ -2584,10 +2584,10 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
             `Reenvie escolhendo uma das opções acima.`,
         };
       }
-      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, variantProducts);
-      const op = cmd.kind === "ADD" ? "+" : "-";
+      const keyboard = buildChoiceKeyboard(cmd2.kind, cmd2.table, cmd2.qty, variantProducts);
+      const op = cmd2.kind === "ADD" ? "+" : "-";
       return {
-        text: prefix + `📦 Mesa ${cmd.table} ${op}${cmd.qty} "${resolution.group.name}" — escolha a variante:`,
+        text: prefix + `📦 Mesa ${cmd2.table} ${op}${cmd2.qty} "${resolution.group.name}" — escolha a variante:`,
         keyboard,
       };
     }
@@ -2600,7 +2600,7 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
         text: prefix + `⚠️ "${resolution.itemName}" existe no estoque mas não está vinculado a nenhum produto do cardápio.`,
       };
     case "found":
-      return await runExecute(cmd, resolution.product, waiter, resolution.fuzzyFrom);
+      return await runExecute(cmd2, resolution.product, waiter, resolution.fuzzyFrom);
   }
 }
 
