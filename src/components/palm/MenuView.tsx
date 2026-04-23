@@ -469,6 +469,10 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
         onPick={(_name, product) => {
           handleAdd(product);
         }}
+        onPickDecrement={(_name, product) => {
+          playFeedback("click");
+          onDecrement(product);
+        }}
       />
 
       {canMove && existingOrderId && originalTableName && (

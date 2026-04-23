@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Minus } from "lucide-react";
 
 export type GroupVariantEntry = {
   name: string;
@@ -13,6 +14,7 @@ interface Props {
   groupName: string;
   variants: GroupVariantEntry[];
   onPick: (variantName: string, product: Product) => void;
+  onPickDecrement?: (variantName: string, product: Product) => void;
   isEsgotado: (productId: string) => boolean;
   getQty: (productId: string) => number;
 }
@@ -23,6 +25,7 @@ export const GroupVariantDialog = ({
   groupName,
   variants,
   onPick,
+  onPickDecrement,
   isEsgotado,
   getQty,
 }: Props) => {
@@ -79,6 +82,27 @@ export const GroupVariantDialog = ({
                   ) : (
                     <span className="text-[13px] text-muted-foreground/70 tabular-nums">
                       R$ {product.price.toFixed(2)}
+                    </span>
+                  )}
+                  {qty > 0 && !esgotado && onPickDecrement && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Remover 1 ${name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPickDecrement(name, product);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onPickDecrement(name, product);
+                        }
+                      }}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-background/80 border border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
+                    >
+                      <Minus size={12} />
                     </span>
                   )}
                   {qty > 0 && (
