@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, Archive, History } from "lucide-react";
+import { RefreshCw, Archive, History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useToast } from "@/hooks/use-toast";
 import { getAppVersion } from "@/lib/version-check";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 type RetentionLog = {
   id: number;
@@ -20,9 +21,11 @@ type RetentionLog = {
 export const SystemTab = () => {
   const { playFeedback } = useFeedback();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [archiving, setArchiving] = useState(false);
   const [logs, setLogs] = useState<RetentionLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const loadLogs = async () => {
     setLoadingLogs(true);
@@ -81,8 +84,84 @@ export const SystemTab = () => {
     }
   };
 
+  const handleResetTestData = async () => {
+    playFeedback("heavy");
+    setResetting(true);
+    try {
+      const { data: preview, error: pErr } = await supabase.rpc(
+        "preview_operational_data" as never,
+      );
+      if (pErr) throw pErr;
+      const p = (preview as Record<string, number>) || {};
+      const summary = [
+        `${p.orders ?? 0} pedidos`,
+        `${p.order_items ?? 0} itens`,
+        `${p.cash_register ?? 0} caixas`,
+        `${p.cash_movements ?? 0} mov. caixa`,
+        `${p.inventory_movements ?? 0} mov. estoque`,
+        `${p.inventory_items_with_stock ?? 0} itens com estoque`,
+        `${p.notification_queue ?? 0} notif. pendentes`,
+      ].join("\n• ");
+
+      const confirmed = window.prompt(
+        `⚠️ APAGAR TODOS OS DADOS OPERACIONAIS?\n\nSerá removido:\n• ${summary}\n\nO cardápio, cadastro de itens, receitas e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
+      );
+      if (confirmed?.trim().toUpperCase() !== "APAGAR") {
+        toast({ title: "Cancelado", description: "Nada foi apagado." });
+        return;
+      }
+
+      const { data, error } = await supabase.rpc("reset_operational_data" as never);
+      if (error) throw error;
+      const r = (data as Record<string, number | string>) || {};
+      toast({
+        title: "Dados de teste apagados",
+        description: `${r.orders ?? 0} pedidos · ${r.cash_register ?? 0} caixas · ${r.inventory_items_zeroed ?? 0} estoques zerados`,
+      });
+      await qc.invalidateQueries();
+      await loadLogs();
+    } catch (e) {
+      playFeedback("error");
+      toast({
+        variant: "destructive",
+        title: "Falha ao apagar",
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto py-4 space-y-6">
+      <div className="rounded-xl border-2 border-destructive/60 bg-destructive/5 p-5 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-destructive/15 p-2.5">
+            <Trash2 className="w-5 h-5 text-destructive" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-black text-lg text-destructive">
+              Limpar dados de teste
+            </h3>
+            <p className="text-sm text-slate-600 mt-1">
+              Apaga <b>todos</b> os pedidos, caixas, movimentos de estoque,
+              notificações e estado do Telegram. Zera o estoque atual.{" "}
+              <b>Mantém</b> cardápio, cadastro de itens, receitas, vínculos do
+              Telegram e configurações. Use quando o dia foi só testes.
+            </p>
+          </div>
+        </div>
+        <Button
+          onClick={handleResetTestData}
+          disabled={resetting}
+          variant="destructive"
+          className="w-full h-14 font-black text-base gap-2"
+        >
+          <Trash2 className="w-5 h-5" />
+          {resetting ? "APAGANDO…" : "APAGAR DADOS DE TESTE"}
+        </Button>
+      </div>
+
       <div className="rounded-xl border-2 border-border p-5 space-y-4">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-primary/10 p-2.5">
