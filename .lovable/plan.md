@@ -1,55 +1,60 @@
 
 
-# Logging detalhado de voz + fallback quando nada funciona
+# UX simples de retorno por voz (sem despejar resumo de estoque)
 
-## Objetivo
-Quando chega um áudio no Telegram, deixar rastro completo nos logs (`voz → transcrição → parse → resolução → ação`) e garantir que o usuário SEMPRE recebe uma resposta — seja confirmação, execução, ou um aviso claro de "não entendi".
+## O problema real
+No áudio "lança o medalhão na mesa 2", o Gemini reescreveu como **"entrada medalhão de frango na mesa 2"** — a palavra "lança" ficou parecida com "entrada" e o transcritor "ajudou" demais. Aí o parser caiu em STOCK_MOVEMENT (entrada de estoque) em vez de criar um pedido na mesa 2. Por isso você vê saldo subindo de 2→4 unidades em vez de o medalhão ir pra mesa.
 
-## Mudanças em `supabase/functions/telegram-webhook/index.ts`
+Além disso, hoje o bot manda **muita coisa de estoque** depois de cada comando (Saldo, "comandos processados", botão Desfazer, etc.). Você quer só uma confirmação curta tipo *"Entendi: lançar 1 medalhão na mesa 2"*.
 
-### 1. Logs estruturados de voz
-Inserir uma série de `console.log` com prefixo `[voice]` e um `traceId` curto (gerado no início do handler de voz) para rastrear toda a cadeia em uma única busca de logs:
+## Mudanças
 
-- `[voice <id>] received` — duration, mime, file_size do voice/audio Telegram
-- `[voice <id>] download ok bytes=...` (já existe parcial em `transcribeVoice`, padronizar)
-- `[voice <id>] transcript: "..."` (já existe, ajustar formato)
-- `[voice <id>] split lines=N` — quantas linhas Gemini retornou
-- Para cada linha:
-  - `[voice <id>] line[i] raw="..."` 
-  - `[voice <id>] line[i] parsed kind=ADD table=5 qty=2 productText="medalhao"`
-  - `[voice <id>] line[i] context table=5 fromContext=true`
-  - `[voice <id>] line[i] product resolution=found id=... name="Medalhão" score=0.92` (ou `ambiguous candidates=3` / `not_found`)
-- `[voice <id>] confidence confident=false reason="produto ambíguo"` (ou `true`)
-- `[voice <id>] action=ask_confirm` / `action=executed` / `action=failed reason=...`
+### 1. Não deixar "lança/lançar/joga" virar "entrada" na transcrição
+No prompt do Gemini em `transcribeVoice` (`supabase/functions/telegram-webhook/index.ts` linhas 119-128), adicionar instrução explícita:
+> "PRESERVE LITERALMENTE verbos de pedido: 'lança', 'lançar', 'joga', 'manda', 'marca', 'anota', 'pede'. NUNCA troque por 'entrada' ou 'saída'. 'entrada' e 'saída' só quando o usuário falar literalmente essas palavras."
 
-Sem dados sensíveis (token, chat_id já existe nos logs do framework).
+### 2. Indicador "🎤 Ouvindo…" enquanto processa
+Antes de chamar a transcrição, mandar uma mensagem curta `🎤 Ouvindo…` e guardar o `message_id`. Quando terminar de processar (sucesso, erro, ou pedindo confirmação), **editar essa mesma mensagem** com o resultado final usando `editMessageText`. Sem poluir o chat com mensagens novas.
 
-### 2. Fallback "não entendi" — sempre responder
-Hoje há um caminho onde, se `transcribeVoice` retorna `null`, o fluxo só loga e segue. Garantir mensagem ao usuário em 3 cenários:
+### 3. Confirmação curta "Entendi: ..."
+No caminho de áudio com confiança alta (auto-executa), trocar o atual `🎤 *Ouvi:* "..."` + bloco verboso por uma linha só:
+> `🎤 Entendi: lançar 1× Medalhão de Frango na mesa 2 ✅`
 
-a) **Falha na transcrição** (`transcribeVoice` retornou null): enviar  
-   `🎤 Não consegui entender o áudio. Tente falar mais perto do microfone, em ambiente silencioso, ou envie por texto. (Ex.: "mesa 5 +2 coca")`
+Para múltiplos comandos:
+> `🎤 Entendi:`  
+> `• mesa 2 + 1× Medalhão de Frango ✅`  
+> `• mesa 5 + 2× Coca ✅`
 
-b) **Transcreveu mas parser não achou nada útil** (todas as linhas `PARSE_ERROR` ou vazio após split): enviar  
-   `🎤 Ouvi: "..."\n\n⚠️ Não consegui transformar isso em comando. Tente: "mesa N + qty produto" (ex.: "mesa 2 mais 1 medalhão").`
+### 4. Esconder ruído de estoque no fluxo de voz
+Quando o comando vier de áudio, **suprimir** as mensagens automáticas de:
+- Saldo atualizado de estoque (📥 Entrada / Saldo: X unidade)
+- Botão "↩️ Desfazer (60s)" individual
+- "📊 N comandos processados"
 
-c) **Erro inesperado** no pipeline de voz (catch geral): enviar  
-   `🎤 Ouvi: "..."\n\n❌ Erro ao processar. Tente novamente ou envie por texto.`
+Manter apenas erros (produto não encontrado, mesa ocupada) e a linha curta de "Entendi". Isso é controlado passando uma flag `silent: true` para os handlers de execução quando a origem é voz.
 
-Gate de confiança existente (caso b parcial) já mostra preview + botões — manter, só adicionar log `action=ask_confirm`.
+### 5. Balanço de estoque no relatório do fim do dia
+Adicionar ao `daily-waiter-report` (edge function que já manda o ranking diário às 23h59) uma seção:
+```
+📦 Movimentação de estoque hoje
+  • Medalhão de Frango: +4 entradas, −1 saída → saldo 5
+  • Coca: −12 saídas → saldo 8
+  ⚠️ Críticos: Cerveja (saldo 2, mín 5)
+```
+Consulta `inventory_movements` agrupado por item no dia + `inventory_items.current_stock`/`min_stock`. Sem mexer em pedidos nem alertas em tempo real (alertas críticos imediatos seguem funcionando como hoje).
 
-### 3. Pequena melhoria no gate
-Quando `enriched` está totalmente vazio (nenhum comando reconhecido), em vez de mostrar `(nada reconhecido)` no preview e botão "✅ Executar" inútil, mandar a mensagem (b) acima e NÃO oferecer botões.
+## O que NÃO muda
+- Parser de texto, fluxo de pedidos, impressão, kanban da cozinha, cardápio, apelidos.
+- Comandos de estoque por texto (`entrada 10 coca`) continuam respondendo normalmente — o silenciamento é só para origem voz.
+- Alertas de estoque crítico/zerado em tempo real seguem ativos (esses são importantes na hora).
+- Wizard de estoque, gerenciamento manual no Admin.
 
-## Detalhes técnicos
-- `traceId`: `Math.random().toString(36).slice(2, 8)` no início do bloco que processa `message.voice` ou `message.audio`.
-- Passar `traceId` como parâmetro opcional para `transcribeVoice(fileId, traceId)` para correlacionar os logs internos.
-- Nenhuma mudança de schema, nenhum novo secret, nenhuma mudança em fluxos de texto/estoque/cardápio.
-- Os testes de parser existentes seguem passando — só adicionamos logs e um caminho de erro ao usuário.
+## Arquivos afetados
+- `supabase/functions/telegram-webhook/index.ts` — prompt, "Ouvindo…", edit final, flag silent nos handlers de voz.
+- `supabase/functions/daily-waiter-report/index.ts` — nova seção de movimentação de estoque do dia.
 
 ## Critério de sucesso
-1. Mando áudio "lança um medalhão na mesa 2" → vejo nos logs do edge function a cadeia completa com o mesmo `traceId`.
-2. Mando áudio inaudível → recebo no Telegram a mensagem (a) ao invés de silêncio.
-3. Mando áudio que transcreve mas não vira comando → recebo mensagem (b) com a transcrição visível.
-4. Áudio bom continua executando direto, áudio com baixa confiança continua pedindo ✅/❌.
+1. Áudio "lança um medalhão na mesa 2" → bot mostra `🎤 Ouvindo…` → edita para `🎤 Entendi: lançar 1× Medalhão de Frango na mesa 2 ✅` → o pedido aparece na mesa 2.
+2. Áudio "entrada 5 coca" → ainda funciona como reposição de estoque, mas com retorno enxuto (`🎤 Entendi: entrada de 5× Coca ✅`), sem o bloco de Saldo + botão Desfazer.
+3. Às 23h59 chega o relatório diário com a nova seção de movimentação de estoque + críticos.
 
