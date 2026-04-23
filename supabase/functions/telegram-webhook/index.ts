@@ -2605,6 +2605,27 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     const text = await executeView(cmd.table);
     return { text: ctxPrefix(cmd) + text, successTable: isViewSuccess(text) ? cmd.table : undefined };
   }
+  if (cmd.kind === "TABLE_VALUE") {
+    const order = await resolveTable(cmd.table);
+    if (!order) {
+      return { text: ctxPrefix(cmd) + `⚠️ Mesa ${cmd.table} não tem pedido aberto.` };
+    }
+    const { data: items } = await sb
+      .from("order_items")
+      .select("quantity, subtotal")
+      .eq("order_id", order.id);
+    const list = (items ?? []) as Array<{ quantity: number; subtotal: number }>;
+    if (list.length === 0) {
+      return { text: ctxPrefix(cmd) + `💰 Mesa ${cmd.table}: pedido vazio (R$ 0,00).`, successTable: cmd.table };
+    }
+    const total = list.reduce((s, i) => s + Number(i.subtotal), 0);
+    const itemCount = list.reduce((s, i) => s + Number(i.quantity), 0);
+    const itemLabel = itemCount === 1 ? "item" : "itens";
+    return {
+      text: ctxPrefix(cmd) + `💰 Mesa ${cmd.table}: ${fmtBRL(total)} (${itemCount} ${itemLabel})`,
+      successTable: cmd.table,
+    };
+  }
 
   // ADD/REMOVE — narrow defensivo p/ TS (variantes _NOMESA e VIEW já tratadas acima).
   const cmd2 = cmd as Extract<Command, { kind: "ADD" | "REMOVE" }>;
