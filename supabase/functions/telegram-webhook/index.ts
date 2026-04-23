@@ -878,6 +878,41 @@ export function parseCommand(raw: string): Command {
     if (t) return { kind: "SET_TABLE", table: t };
   }
 
+  // TABLE_VALUE: perguntas conversacionais sobre valor/conta da mesa
+  //   "qual o valor da mesa 2", "quanto deu a mesa 2", "quanto ficou na mesa 5",
+  //   "conta da mesa 3", "total da mesa 4", "fechamento da mesa 7", "valor mesa 2"
+  {
+    const valuePatterns: RegExp[] = [
+      new RegExp(`^(?:qual\\s+(?:o\\s+|e\\s+(?:o\\s+)?)?)?valor\\s+(?:da\\s+|na\\s+|do\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^quanto\\s+(?:deu|da|ta|esta|está|ficou|custa|custou|gastou|gastaram|consumiu|consumiram|foi)\\s+(?:a\\s+|na\\s+|da\\s+|de\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^(?:conta|total|fechamento|preco|preço|valor)\\s+(?:da\\s+|na\\s+|do\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:valor|conta|total|fechamento|quanto|quanto\\s+(?:deu|ficou|ta|esta))\\??$`),
+    ];
+    for (const re of valuePatterns) {
+      const m = text.match(re);
+      if (m) {
+        const t = parseTableNumber(m[1]);
+        if (t) return { kind: "TABLE_VALUE", table: t };
+      }
+    }
+  }
+
+  // VIEW conversacional: "o que tem na mesa 2", "o que pediram na mesa 5",
+  //   "lista da mesa 3", "pedido da mesa 4", "itens da mesa 7"
+  {
+    const viewPatterns: RegExp[] = [
+      new RegExp(`^o\\s+que\\s+(?:tem|pediram|pediu|foi\\s+pedido|tem\\s+(?:de\\s+)?pedido)\\s+(?:na\\s+|da\\s+|no\\s+|do\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^(?:lista|listar|itens|pedido|pedidos|consumo|extrato|resumo)\\s+(?:da\\s+|na\\s+|do\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+    ];
+    for (const re of viewPatterns) {
+      const m = text.match(re);
+      if (m) {
+        const t = parseTableNumber(m[1]);
+        if (t) return { kind: "VIEW", table: t };
+      }
+    }
+  }
+
   // VIEW: "mesa N ver pedido" / "mesa N o que tem" / "mesa N consumo" / "ver [pedido] [da/na] mesa N"
   const viewA = text.match(new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:ver(?:\\s+pedido)?|pedido|detalhe(?:s)?|consumo|o\\s+que\\s+tem)$`));
   if (viewA) {
