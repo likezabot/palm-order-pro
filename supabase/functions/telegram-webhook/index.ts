@@ -3841,12 +3841,37 @@ Deno.serve(async (req) => {
 
     const message = update?.message ?? update?.edited_message;
     const chatId: number | undefined = message?.chat?.id;
-    const text: string | undefined = message?.text;
+    let text: string | undefined = message?.text;
     const fromBot: boolean = message?.from?.is_bot === true;
     const username: string | undefined = message?.from?.username;
     const userId: number | undefined = message?.from?.id;
     const chatType: ChatType = message?.chat?.type;
     const updateId: number | undefined = update?.update_id;
+
+    // Voice (microfone) → transcreve com Lovable AI e segue como texto.
+    let voiceTranscript: string | null = null;
+    const voiceFileId: string | undefined = message?.voice?.file_id;
+    if (!fromBot && chatId && !text && voiceFileId) {
+      // Whitelist antes de gastar transcrição
+      const allowedEarly = await getAllowedChats();
+      if (!allowedEarly || !allowedEarly.has(chatId)) {
+        console.warn("Voice de chat não autorizado:", chatId);
+        return testOrPlain();
+      }
+      // Dedupe antes de transcrever também
+      if (typeof updateId === "number" && isDuplicate(updateId)) {
+        return testOrPlain();
+      }
+      setTestContext(chatId);
+      const transcribed = await transcribeTelegramVoice(voiceFileId);
+      if (!transcribed) {
+        await sendTelegram(chatId, "🎤 Não consegui entender o áudio. Tente falar mais claro ou mande por texto.");
+        clearTestContext();
+        return testOrPlain();
+      }
+      voiceTranscript = transcribed;
+      text = transcribed;
+    }
 
     if (fromBot || !chatId || !text) {
       return testOrPlain();
