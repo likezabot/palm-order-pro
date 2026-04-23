@@ -4846,11 +4846,15 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
 
       if (voiceTranscript) {
-        // VOZ: resumo curto + suprime undos / escolhas verbosas.
-        const summaryLines = (typeof previewParts !== "undefined" && previewParts.length > 0)
-          ? previewParts.map((l) => `• ${l}`).join("\n")
-          : textBlocks.join("\n");
-        await voiceReply(`🎤 Entendi:\n${summaryLines}\n✅`);
+        // VOZ: resumo curto, com verbo de ação por linha. Suprime undos verbosos.
+        // Reparseamos cada linha pra escolher o verbo certo (enriched está em escopo do bloco anterior).
+        const lineKinds: string[] = lines.map((ln) => {
+          try { return parseCommand(ln).kind; } catch { return "PARSE_ERROR"; }
+        });
+        const bullets = (typeof previewParts !== "undefined" && previewParts.length > 0)
+          ? previewParts.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`)
+          : textBlocks.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`);
+        await voiceReply(`✅ Pronto:\n${bullets.join("\n")}`);
         // Mostra apenas erros standalone (produto ambíguo / não encontrado).
         for (const choice of pendingChoices) {
           await sendTelegram(chatId, choice.text, choice.keyboard);
