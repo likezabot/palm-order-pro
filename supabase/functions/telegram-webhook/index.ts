@@ -525,7 +525,7 @@ export type Command =
 
 // Operadores compartilhados (usados pelo parser e pelo fallback NOMESA).
 const ADD_OPS = ["+", "add", "adiciona", "adicionar", "coloca", "colocar", "poe", "poer", "põe", "manda", "mandar", "bota", "botar", "mais", "soma", "somar", "inclui", "incluir", "acrescenta", "acrescentar", "lanca", "lança", "lancar", "lançar", "joga", "jogar", "marca", "marcar", "anota", "anotar", "registra", "registrar", "pede", "pedir"];
-const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar"];
+const REM_OPS = ["-", "remove", "remover", "tira", "tirar", "retira", "retirar", "cancela", "cancelar", "menos", "subtrai", "subtrair", "exclui", "excluir", "desconta", "descontar", "apaga", "apagar", "deleta", "deletar"];
 const ALL_OPS = [...ADD_OPS, ...REM_OPS];
 
 // ─────────────────────────── multi-command splitter ───────────────────────────
