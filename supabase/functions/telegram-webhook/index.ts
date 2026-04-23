@@ -4567,8 +4567,11 @@ Deno.serve(async (req) => {
         }
       }
 
+      const voicePrefix = voiceTranscript && lines.length > 1
+        ? `🎤 *Ouvi:* "${voiceTranscript}"\n\n`
+        : "";
       const header = `📊 ${lines.length} comandos processados:\n`;
-      await sendTelegram(chatId, header + "\n" + textBlocks.join("\n\n"));
+      await sendTelegram(chatId, voicePrefix + header + "\n" + textBlocks.join("\n\n"));
 
       // Botões de undo (1 por mesa batched) em mensagens separadas.
       for (const [, res] of batchResults) {
