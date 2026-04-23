@@ -42,6 +42,7 @@ const ForceUpdate = lazy(() => import("./pages/ForceUpdate"));
 const InstallPalm = lazy(() => import("./pages/InstallPalm"));
 const InstallKitchen = lazy(() => import("./pages/InstallKitchen"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">

@@ -8,6 +8,30 @@ import { startConnectivityMonitor } from "./lib/connectivity-monitor";
 import { startGlobalOrderRuntime } from "./lib/global-order-runtime";
 import { queryClient } from "./lib/query-client";
 
+// One-time SW + caches purge para limpar bundles fantasmas após mudança de chunking.
+try {
+  const SW_RESET_KEY = "sw-reset-2026-04-23";
+  if (typeof window !== "undefined" && !localStorage.getItem(SW_RESET_KEY)) {
+    localStorage.setItem(SW_RESET_KEY, "1");
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then((rs) => {
+        Promise.all(rs.map((r) => r.unregister()))
+          .then(() =>
+            "caches" in window
+              ? caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k))))
+              : null,
+          )
+          .then(() => {
+            if (rs.length > 0) location.reload();
+          })
+          .catch(() => {});
+      }).catch(() => {});
+    }
+  }
+} catch {
+  // ignore
+}
+
 // Anti-flash: aplica tema salvo antes do React montar.
 // Default = light. Só ativa dark se o usuário trocou manualmente (chave v2).
 try {
