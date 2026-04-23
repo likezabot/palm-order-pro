@@ -4166,7 +4166,8 @@ async function wzHandleCallback(cb: any, waiter: string): Promise<boolean> {
   return false;
 }
 
-Deno.serve(async (req) => {
+// Skip Deno.serve quando importado por testes (TELEGRAM_TEST_IMPORT=1).
+if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   // ── TEST MODE endpoints (GET) ──
