@@ -4892,7 +4892,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
           let keyboard: InlineButton[][] | undefined;
           if (result.ok && result.ops.length > 0) {
             const token = registerBatchUndo(chatId, table, result.ops);
-            keyboard = buildUndoBatchKeyboard(token);
+            keyboard = buildUndoBatchKeyboard(token, voiceTranscript ? table : undefined);
           }
           batchResults.set(table, { text: line, keyboard });
         } catch (e: any) {
