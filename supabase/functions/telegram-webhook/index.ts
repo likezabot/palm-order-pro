@@ -4292,6 +4292,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
     // Voice (microfone) → transcreve com Lovable AI e segue como texto.
     let voiceTranscript: string | null = null;
     let voiceTraceId: string | null = null;
+    let voiceStatusMsgId: number | null = null; // mensagem "🎤 Ouvindo…" que será editada com o resultado
     const voiceFileId: string | undefined = message?.voice?.file_id;
     if (!fromBot && chatId && !text && voiceFileId) {
       voiceTraceId = Math.random().toString(36).slice(2, 8);
@@ -4309,14 +4310,15 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         return testOrPlain();
       }
       setTestContext(chatId);
+      // Mensagem-status que vamos editar quando processarmos
+      voiceStatusMsgId = await sendTelegramReturningId(chatId, "🎤 Ouvindo…");
       try {
         const transcribed = await transcribeTelegramVoice(voiceFileId, voiceTraceId);
         if (!transcribed) {
           console.warn(`[voice ${voiceTraceId}] action=failed reason=no_transcript`);
-          await sendTelegram(
-            chatId,
-            "🎤 Não consegui entender o áudio.\n\nTente falar mais perto do microfone, em ambiente silencioso, ou envie por texto.\nEx.: `mesa 5 +2 coca`",
-          );
+          const failMsg = "🎤 ❌ Não entendi o áudio. Tente falar mais perto do microfone ou envie por texto.\nEx.: mesa 5 +2 coca";
+          if (voiceStatusMsgId) await editTelegramMessage(chatId, voiceStatusMsgId, failMsg);
+          else await sendTelegram(chatId, failMsg);
           clearTestContext();
           return testOrPlain();
         }
@@ -4324,14 +4326,24 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
         text = transcribed;
       } catch (e) {
         console.error(`[voice ${voiceTraceId}] action=failed reason=exception`, e);
-        await sendTelegram(
-          chatId,
-          "🎤 ❌ Erro ao processar o áudio. Tente novamente ou envie por texto.",
-        );
+        const errMsg = "🎤 ❌ Erro ao processar o áudio. Tente novamente ou envie por texto.";
+        if (voiceStatusMsgId) await editTelegramMessage(chatId, voiceStatusMsgId, errMsg);
+        else await sendTelegram(chatId, errMsg);
         clearTestContext();
         return testOrPlain();
       }
     }
+
+    // Helper: quando origem é voz, edita a mensagem "🎤 Ouvindo…" em vez de mandar nova.
+    // Após a 1ª edição, marcamos como consumida; chamadas seguintes caem no sendTelegram normal.
+    const voiceReply = async (txt: string): Promise<void> => {
+      if (voiceStatusMsgId && chatId) {
+        await editTelegramMessage(chatId, voiceStatusMsgId, txt);
+        voiceStatusMsgId = null;
+      } else if (chatId) {
+        await sendTelegram(chatId, txt);
+      }
+    };
 
     if (fromBot || !chatId || !text) {
       if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_no_text fromBot=${fromBot} hasText=${!!text}`);
