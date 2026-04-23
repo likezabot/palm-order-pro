@@ -2540,32 +2540,33 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
     return { text: ctxPrefix(cmd) + text, successTable: isViewSuccess(text) ? cmd.table : undefined };
   }
 
-  // ADD/REMOVE
-  const prefix = ctxPrefix(cmd);
-  const resolution = await resolveProduct(cmd.productText);
+  // ADD/REMOVE — narrow defensivo p/ TS (variantes _NOMESA e VIEW já tratadas acima).
+  const cmd2 = cmd as Extract<Command, { kind: "ADD" | "REMOVE" }>;
+  const prefix = ctxPrefix(cmd2);
+  const resolution = await resolveProduct(cmd2.productText);
   switch (resolution.kind) {
     case "not_found": {
-      const sugg = await suggestProducts(cmd.productText);
+      const sugg = await suggestProducts(cmd2.productText);
       if (sugg.length > 0) {
-        const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, sugg);
+        const keyboard = buildChoiceKeyboard(cmd2.kind, cmd2.table, cmd2.qty, sugg);
         return {
-          text: prefix + `❓ Não achei "${cmd.productText}" no cardápio. Talvez:`,
+          text: prefix + `❓ Não achei "${cmd2.productText}" no cardápio. Talvez:`,
           keyboard,
         };
       }
       return {
-        text: prefix + `❓ Não achei "${cmd.productText}" no cardápio.\nVerifique o nome e tente de novo.`,
+        text: prefix + `❓ Não achei "${cmd2.productText}" no cardápio.\nVerifique o nome e tente de novo.`,
       };
     }
     case "ambiguous": {
-      const picked = autoPickFromCandidates(cmd.productText, resolution.candidates);
+      const picked = autoPickFromCandidates(cmd2.productText, resolution.candidates);
       if (picked) {
-        return await runExecute(cmd, picked, waiter);
+        return await runExecute(cmd2, picked, waiter);
       }
-      const keyboard = buildChoiceKeyboard(cmd.kind, cmd.table, cmd.qty, resolution.candidates);
-      const op = cmd.kind === "ADD" ? "+" : "-";
+      const keyboard = buildChoiceKeyboard(cmd2.kind, cmd2.table, cmd2.qty, resolution.candidates);
+      const op = cmd2.kind === "ADD" ? "+" : "-";
       return {
-        text: prefix + `🤔 Mesa ${cmd.table} ${op}${cmd.qty} "${cmd.productText}" — escolha a opção:`,
+        text: prefix + `🤔 Mesa ${cmd2.table} ${op}${cmd2.qty} "${cmd2.productText}" — escolha a opção:`,
         keyboard,
       };
     }
