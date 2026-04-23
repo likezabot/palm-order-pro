@@ -79,6 +79,12 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
     const mime = "audio/ogg";
 
     // 4) transcrição via Lovable AI (Gemini 2.5 Flash, áudio nativo)
+    // Vocabulário do cardápio (cacheado) — ajuda Gemini com nomes específicos.
+    const vocab = await getMenuVocabulary();
+    const vocabHint = vocab
+      ? ` Itens conhecidos do cardápio (use EXATAMENTE esses nomes quando reconhecer; corrija foneticamente o que se aproxima): ${vocab}.`
+      : "";
+
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -91,12 +97,15 @@ async function transcribeTelegramVoice(fileId: string): Promise<string | null> {
           {
             role: "system",
             content:
-              "Você é um transcritor literal pt-BR de comandos de voz curtos para um sistema de PDV de bar/restaurante. " +
+              "Você é um transcritor literal pt-BR de comandos de voz para um sistema de PDV de bar/restaurante. " +
               "Devolva APENAS o texto falado, em minúsculas, sem pontuação, sem comentários, sem aspas. " +
               "Converta números por extenso para dígitos (ex: 'duas cocas' → '2 coca'; 'mesa cinco mais três cervejas' → 'mesa 5 + 3 cerveja'). " +
               "Mantenha verbos de comando como 'mais', 'menos', 'entrada', 'saída', 'ajuste', 'estoque', 'ver pedido', 'mesa N'. " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
-              "Se não houver fala clara, devolva uma única palavra: vazio.",
+              "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
+              "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
+              vocabHint +
+              " Se não houver fala clara, devolva uma única palavra: vazio.",
           },
           {
             role: "user",
