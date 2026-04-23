@@ -124,6 +124,7 @@ async function transcribeTelegramVoice(fileId: string, traceId = "----"): Promis
               "PRESERVE LITERALMENTE verbos de PEDIDO: 'lança', 'lançar', 'lance', 'joga', 'jogar', 'manda', 'mandar', 'marca', 'marcar', 'anota', 'anotar', 'pede', 'pedir', 'bota', 'botar', 'coloca', 'colocar'. " +
               "NUNCA troque esses verbos por 'entrada' ou 'saída'. As palavras 'entrada' e 'saída' SÓ devem aparecer se o usuário falar literalmente 'entrada' ou 'saída'/'saida' (ex: 'entrada de 10 coca'). " +
               "Em dúvida entre 'lança' e 'entrada', escolha SEMPRE 'lança'. " +
+              "PRESERVE LITERALMENTE perguntas/consultas: 'qual o valor', 'quanto deu', 'quanto ficou', 'quanto custa', 'conta da mesa', 'total da mesa', 'fechamento', 'o que tem na mesa'. NUNCA reescreva uma pergunta como comando de pedido (ADD/REMOVE). " +
               "PRESERVE verbos no passado como 'acabou', 'terminou', 'zerou', 'esgotou' (NÃO converta para infinitivo). " +
               "Se houver MÚLTIPLOS COMANDOS (ex: 'mesa 5 mais 2 coca e mesa 7 mais 1 espeto'), separe cada um em UMA LINHA própria usando \\n. " +
               "Cada linha deve ser um comando completo executável. Não use vírgulas para separar comandos diferentes." +
@@ -509,6 +510,7 @@ function sleep(ms: number) {
 export type Command =
   | { kind: "ADD" | "REMOVE"; table: string; qty: number; productText: string; fromContext?: boolean }
   | { kind: "VIEW"; table: string; fromContext?: boolean }
+  | { kind: "TABLE_VALUE"; table: string; fromContext?: boolean }
   | { kind: "SET_TABLE"; table: string }
   | { kind: "ADD_NOMESA" | "REMOVE_NOMESA"; qty: number; productText: string }
   | { kind: "VIEW_NOMESA" }
@@ -875,6 +877,41 @@ export function parseCommand(raw: string): Command {
   if (setT) {
     const t = parseTableNumber(setT[1]);
     if (t) return { kind: "SET_TABLE", table: t };
+  }
+
+  // TABLE_VALUE: perguntas conversacionais sobre valor/conta da mesa
+  //   "qual o valor da mesa 2", "quanto deu a mesa 2", "quanto ficou na mesa 5",
+  //   "conta da mesa 3", "total da mesa 4", "fechamento da mesa 7", "valor mesa 2"
+  {
+    const valuePatterns: RegExp[] = [
+      new RegExp(`^(?:qual\\s+(?:o\\s+|e\\s+(?:o\\s+)?)?)?valor\\s+(?:da\\s+|na\\s+|do\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^quanto\\s+(?:deu|da|ta|esta|está|ficou|custa|custou|gastou|gastaram|consumiu|consumiram|foi)\\s+(?:a\\s+|na\\s+|da\\s+|de\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^(?:conta|total|fechamento|preco|preço|valor)\\s+(?:da\\s+|na\\s+|do\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^mesa\\s+(${NUM_WORD_RE})\\s+(?:valor|conta|total|fechamento|quanto|quanto\\s+(?:deu|ficou|ta|esta))\\??$`),
+    ];
+    for (const re of valuePatterns) {
+      const m = text.match(re);
+      if (m) {
+        const t = parseTableNumber(m[1]);
+        if (t) return { kind: "TABLE_VALUE", table: t };
+      }
+    }
+  }
+
+  // VIEW conversacional: "o que tem na mesa 2", "o que pediram na mesa 5",
+  //   "lista da mesa 3", "pedido da mesa 4", "itens da mesa 7"
+  {
+    const viewPatterns: RegExp[] = [
+      new RegExp(`^o\\s+que\\s+(?:tem|pediram|pediu|foi\\s+pedido|tem\\s+(?:de\\s+)?pedido)\\s+(?:na\\s+|da\\s+|no\\s+|do\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+      new RegExp(`^(?:lista|listar|itens|pedido|pedidos|consumo|extrato|resumo)\\s+(?:da\\s+|na\\s+|do\\s+|no\\s+)?mesa\\s+(${NUM_WORD_RE})\\??$`),
+    ];
+    for (const re of viewPatterns) {
+      const m = text.match(re);
+      if (m) {
+        const t = parseTableNumber(m[1]);
+        if (t) return { kind: "VIEW", table: t };
+      }
+    }
   }
 
   // VIEW: "mesa N ver pedido" / "mesa N o que tem" / "mesa N consumo" / "ver [pedido] [da/na] mesa N"
@@ -2334,7 +2371,7 @@ function isMutationSuccess(kind: "ADD" | "REMOVE", text: string): boolean {
   return text.startsWith("➖ Mesa ") || text.startsWith("⚠️ Removidos ");
 }
 
-function ctxPrefix(cmd: Extract<Command, { kind: "ADD" | "REMOVE" | "VIEW" }>): string {
+function ctxPrefix(cmd: Extract<Command, { kind: "ADD" | "REMOVE" | "VIEW" | "TABLE_VALUE" }>): string {
   return cmd.fromContext ? `📍 (mesa ${cmd.table}, contexto)\n` : "";
 }
 
@@ -2568,6 +2605,27 @@ async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply
   if (cmd.kind === "VIEW") {
     const text = await executeView(cmd.table);
     return { text: ctxPrefix(cmd) + text, successTable: isViewSuccess(text) ? cmd.table : undefined };
+  }
+  if (cmd.kind === "TABLE_VALUE") {
+    const order = await resolveTable(cmd.table);
+    if (!order) {
+      return { text: ctxPrefix(cmd) + `⚠️ Mesa ${cmd.table} não tem pedido aberto.` };
+    }
+    const { data: items } = await sb
+      .from("order_items")
+      .select("quantity, subtotal")
+      .eq("order_id", order.id);
+    const list = (items ?? []) as Array<{ quantity: number; subtotal: number }>;
+    if (list.length === 0) {
+      return { text: ctxPrefix(cmd) + `💰 Mesa ${cmd.table}: pedido vazio (R$ 0,00).`, successTable: cmd.table };
+    }
+    const total = list.reduce((s, i) => s + Number(i.subtotal), 0);
+    const itemCount = list.reduce((s, i) => s + Number(i.quantity), 0);
+    const itemLabel = itemCount === 1 ? "item" : "itens";
+    return {
+      text: ctxPrefix(cmd) + `💰 Mesa ${cmd.table}: ${fmtBRL(total)} (${itemCount} ${itemLabel})`,
+      successTable: cmd.table,
+    };
   }
 
   // ADD/REMOVE — narrow defensivo p/ TS (variantes _NOMESA e VIEW já tratadas acima).
@@ -3246,7 +3304,7 @@ async function wzListCategoriesWithCount(): Promise<{ name: string; label: strin
   // Anexa categorias legacy não canônicas que ainda tenham itens (ex: "outros").
   for (const [name, count] of counts.entries()) {
     if (!MENU_CATEGORIES.includes(name as any) && count > 0) {
-      result.push({ name, label: wzCategoryLabel(name), count });
+      result.push({ name: name as any, label: wzCategoryLabel(name), count });
     }
   }
   return result;
@@ -3359,7 +3417,7 @@ async function wzShowItemPicker(chatId: number, messageId: number | undefined, a
   rows.push(wzNavRow({ back: true, home: true, cancel: true }));
 
   const history = wzPushHistory(currentStep, currentData);
-  await wzSet(chatId, "awaiting_item", { ...currentData, action, page: safePage, history });
+  await wzSet(chatId, "awaiting_item", { ...currentData, action, page: safePage, history } as any);
 
   const text = lines.join("\n");
   if (messageId !== undefined) await editTelegramMessage(chatId, messageId, text, rows);
@@ -4345,6 +4403,27 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
     };
 
+    // Verbo de ação por tipo de comando, usado nas confirmações de voz.
+    const voiceVerb = (kind?: string): string => {
+      switch (kind) {
+        case "ADD": return "🍽️ Lancei";
+        case "REMOVE": return "🗑️ Removi";
+        case "STOCK_MOVEMENT": return "📦 Atualizei estoque";
+        case "STOCK_OUT_NOW": return "📦 Marquei como esgotado";
+        case "STOCK_QUERY":
+        case "STOCK_LIST":
+        case "STOCK_CRITICAL":
+        case "VIEW":
+        case "TABLE_VALUE":
+        case "TABLE_STATUS":
+        case "REPORT": return "👀 Consulta";
+        case "UNDO": return "↩️ Desfiz";
+        case "SET_TABLE": return "📍 Mesa fixada";
+        case "NOTIFY_TOGGLE": return "🔔 Atualizei avisos";
+        default: return "✅ Pronto";
+      }
+    };
+
     if (fromBot || !chatId || !text) {
       if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_no_text fromBot=${fromBot} hasText=${!!text}`);
       return testOrPlain();
@@ -4552,7 +4631,7 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       if (allErrors) {
         console.warn(`${tag} action=failed reason=no_commands_parsed`);
         await voiceReply(
-          `🎤 Ouvi: "${voiceTranscript}"\n⚠️ Não consegui transformar isso em comando.\nEx.: mesa 2 mais 1 medalhão`,
+          `🎤 Ouvi: "${voiceTranscript}"\n⚠️ Não consegui transformar em comando.\nTente:\n• "mesa 2 mais 1 medalhão" (lançar)\n• "qual o valor da mesa 2" (consultar)\n• "entrada 5 coca" (estoque)`,
         );
         return testOrPlain();
       }
@@ -4595,11 +4674,18 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       if (voiceTranscript) {
         const replyTxt = String(reply.text || "");
         const isError = /^[❌❓🤔⚠️🚨]/.test(replyTxt) || /erro|Erro/.test(replyTxt);
+        const cmdKind = (cmd as any)?.kind;
+        const isConsult = cmdKind === "VIEW" || cmdKind === "TABLE_VALUE" || cmdKind === "TABLE_STATUS" ||
+                         cmdKind === "STOCK_QUERY" || cmdKind === "STOCK_LIST" || cmdKind === "STOCK_CRITICAL" ||
+                         cmdKind === "REPORT" || cmdKind === "PRODUCT_LIST" || cmdKind === "HELP";
         if (isError) {
           await voiceReply(`🎤 Ouvi: "${voiceTranscript}"\n\n${replyTxt}`);
+        } else if (isConsult) {
+          // Em consultas, mostra o conteúdo real (já formatado pelo handler).
+          await voiceReply(replyTxt);
         } else {
           const summary = (typeof previewParts !== "undefined" && previewParts[0]) ? previewParts[0] : voiceTranscript;
-          await voiceReply(`🎤 Entendi: ${summary} ✅`);
+          await voiceReply(`${voiceVerb(cmdKind)}: ${summary} ✅`);
         }
       } else {
         await sendTelegram(chatId, reply.text, reply.keyboard);
@@ -4760,11 +4846,15 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
 
       if (voiceTranscript) {
-        // VOZ: resumo curto + suprime undos / escolhas verbosas.
-        const summaryLines = (typeof previewParts !== "undefined" && previewParts.length > 0)
-          ? previewParts.map((l) => `• ${l}`).join("\n")
-          : textBlocks.join("\n");
-        await voiceReply(`🎤 Entendi:\n${summaryLines}\n✅`);
+        // VOZ: resumo curto, com verbo de ação por linha. Suprime undos verbosos.
+        // Reparseamos cada linha pra escolher o verbo certo (enriched está em escopo do bloco anterior).
+        const lineKinds: string[] = lines.map((ln) => {
+          try { return parseCommand(ln).kind; } catch { return "PARSE_ERROR"; }
+        });
+        const bullets = (typeof previewParts !== "undefined" && previewParts.length > 0)
+          ? previewParts.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`)
+          : textBlocks.map((l, i) => `• ${voiceVerb(lineKinds[i])}: ${l}`);
+        await voiceReply(`✅ Pronto:\n${bullets.join("\n")}`);
         // Mostra apenas erros standalone (produto ambíguo / não encontrado).
         for (const choice of pendingChoices) {
           await sendTelegram(chatId, choice.text, choice.keyboard);

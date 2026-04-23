@@ -558,3 +558,62 @@ Deno.test("PARSE_ERROR: hint correto por contexto", opts, () => {
   assertEquals(noTable.kind, "PARSE_ERROR");
   assertEquals(noTable.hint, "generic");
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GRUPO 12 — TABLE_VALUE (perguntas conversacionais sobre valor da mesa)
+// ═══════════════════════════════════════════════════════════════════════════════
+Deno.test("TABLE_VALUE: perguntas de valor da mesa", opts, () => {
+  const cases: Array<[string, string]> = [
+    ["qual o valor da mesa 2", "2"],
+    ["qual valor da mesa 2", "2"],
+    ["valor da mesa 5", "5"],
+    ["valor mesa 3", "3"],
+    ["quanto deu a mesa 2", "2"],
+    ["quanto ficou a mesa 7", "7"],
+    ["quanto ficou na mesa 4", "4"],
+    ["quanto ta a mesa 3", "3"],
+    ["quanto custou a mesa 6", "6"],
+    ["conta da mesa 3", "3"],
+    ["conta mesa 8", "8"],
+    ["total da mesa 4", "4"],
+    ["total mesa 9", "9"],
+    ["fechamento da mesa 7", "7"],
+    ["mesa 5 valor", "5"],
+    ["mesa 2 conta", "2"],
+    ["mesa 3 total", "3"],
+    ["mesa 4 quanto deu", "4"],
+  ];
+  for (const [input, expectedTable] of cases) {
+    const r = parseCommand(input) as Extract<Command, { kind: "TABLE_VALUE" }>;
+    assertEquals(r.kind, "TABLE_VALUE", `[${input}] esperado TABLE_VALUE, recebido ${r.kind}`);
+    assertEquals(r.table, expectedTable, `[${input}] mesa esperada ${expectedTable}, recebida ${r.table}`);
+  }
+});
+
+Deno.test("VIEW: variações conversacionais", opts, () => {
+  const cases: Array<[string, string]> = [
+    ["o que tem na mesa 2", "2"],
+    ["o que pediram na mesa 5", "5"],
+    ["o que pediu na mesa 3", "3"],
+    ["lista da mesa 7", "7"],
+    ["pedido da mesa 4", "4"],
+    ["pedidos da mesa 6", "6"],
+    ["itens da mesa 8", "8"],
+    ["consumo da mesa 2", "2"],
+    ["extrato da mesa 9", "9"],
+    ["resumo da mesa 5", "5"],
+  ];
+  for (const [input, expectedTable] of cases) {
+    const r = parseCommand(input) as Extract<Command, { kind: "VIEW" }>;
+    assertEquals(r.kind, "VIEW", `[${input}] esperado VIEW, recebido ${r.kind}`);
+    assertEquals(r.table, expectedTable, `[${input}] mesa esperada ${expectedTable}, recebida ${r.table}`);
+  }
+});
+
+Deno.test("TABLE_VALUE: não confunde com ADD/REMOVE", opts, () => {
+  // Garantir que perguntas não viram comando de pedido
+  const r1 = parseCommand("qual o valor da mesa 2");
+  assert(r1.kind !== "ADD" && r1.kind !== "REMOVE", `[${r1.kind}] não pode ser ADD/REMOVE`);
+  const r2 = parseCommand("conta da mesa 5");
+  assert(r2.kind !== "ADD" && r2.kind !== "REMOVE");
+});
