@@ -4551,9 +4551,8 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       const allErrors = enriched.length === 0 || enriched.every((s) => s.kind === "PARSE_ERROR");
       if (allErrors) {
         console.warn(`${tag} action=failed reason=no_commands_parsed`);
-        await sendTelegram(
-          chatId,
-          `🎤 *Ouvi:* "${voiceTranscript}"\n\n⚠️ Não consegui transformar isso em comando.\nTente: \`mesa N + qty produto\`\nEx.: \`mesa 2 mais 1 medalhão\`.`,
+        await voiceReply(
+          `🎤 Ouvi: "${voiceTranscript}"\n⚠️ Não consegui transformar isso em comando.\nEx.: mesa 2 mais 1 medalhão`,
         );
         return testOrPlain();
       }
