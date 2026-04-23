@@ -4403,6 +4403,27 @@ if (Deno.env.get("TELEGRAM_TEST_IMPORT") !== "1") Deno.serve(async (req) => {
       }
     };
 
+    // Verbo de ação por tipo de comando, usado nas confirmações de voz.
+    const voiceVerb = (kind?: string): string => {
+      switch (kind) {
+        case "ADD": return "🍽️ Lancei";
+        case "REMOVE": return "🗑️ Removi";
+        case "STOCK_MOVEMENT": return "📦 Atualizei estoque";
+        case "STOCK_OUT_NOW": return "📦 Marquei como esgotado";
+        case "STOCK_QUERY":
+        case "STOCK_LIST":
+        case "STOCK_CRITICAL":
+        case "VIEW":
+        case "TABLE_VALUE":
+        case "TABLE_STATUS":
+        case "REPORT": return "👀 Consulta";
+        case "UNDO": return "↩️ Desfiz";
+        case "SET_TABLE": return "📍 Mesa fixada";
+        case "NOTIFY_TOGGLE": return "🔔 Atualizei avisos";
+        default: return "✅ Pronto";
+      }
+    };
+
     if (fromBot || !chatId || !text) {
       if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_no_text fromBot=${fromBot} hasText=${!!text}`);
       return testOrPlain();
