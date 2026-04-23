@@ -4389,8 +4389,9 @@ export async function webhookHandler(req: Request): Promise<Response> {
         return new Response(JSON.stringify(j), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       if (adminOp === "fix-webhook") {
-        // URL atual deste edge function — exatamente para onde o Telegram precisa apontar.
-        const selfUrl = `${url.origin}${url.pathname}`;
+        // URL pública deste edge function. Não usar url.origin: dentro do runtime
+        // a request chega como http://<host-interno>/telegram-webhook.
+        const selfUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`;
         const setRes = await fetch(`${tgBase}/setWebhook`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
