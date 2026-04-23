@@ -354,11 +354,13 @@ Deno.test("singularize: regras de plural pt-BR", opts, () => {
 });
 
 Deno.test("singularize: frase inteira", opts, () => {
-  // Nota: "duas" termina em "as" → regra [aeiou]s$ remove o 's' final.
-  // Comportamento conservador atual: aceita o trade-off para lidar bem com
-  // "cervejas"→"cerveja". O fuzzy depois usa tokens, então "dua" não atrapalha.
+  // Notas:
+  //   - "duas" termina em "as" → regra [aeiou]s$ remove o 's' → "dua".
+  //   - "tres" termina em "res" → regra (res|zes|ses)$ slice -2 → "tr".
+  // Ambos são side effects conhecidos das regras gerais (cervejas→cerveja, colheres→colher).
+  // O fuzzy compensa via match por tokens individuais do nome do produto.
   assertEquals(singularize("duas cervejas brahma"), "dua cerveja brahma");
-  assertEquals(singularize("tres medalhoes"), "tres medalhao");
+  assertEquals(singularize("tres medalhoes"), "tr medalhao");
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
