@@ -4372,7 +4372,7 @@ export async function webhookHandler(req: Request): Promise<Response> {
       const okService = !!serviceKey && !!bearer && safeEqual(bearer, serviceKey);
       // auto-heal e smoke-test são restritos (idempotente / restrito a TEST_CHAT_ID) —
       // aceita anon p/ permitir invocação via pg_net e validações automatizadas.
-      const anonAllowedOps = new Set(["auto-heal", "smoke-test"]);
+      const anonAllowedOps = new Set(["auto-heal", "smoke-test", "ensure-healthy"]);
       const okAnonForOp = anonAllowedOps.has(adminOp) && !!bearer && safeEqual(bearer, ANON_KEY_PUBLIC);
       if (!okSecret && !okService && !okAnonForOp) {
         console.log("[admin-auth] denied", JSON.stringify({
@@ -4646,6 +4646,168 @@ export async function webhookHandler(req: Request): Promise<Response> {
           }, null, 2),
           { status: allOk && anyCaptured ? 200 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
+      }
+      if (adminOp === "ensure-healthy") {
+        // Fluxo atômico: validar → reparar (se necessário) → revalidar → smoke-test.
+        // Critérios de aceite:
+        //   1) getWebhookInfo retorna URL == selfUrl
+        //   2) WEBHOOK_SECRET configurado
+        //   3) sem erro recente (<10min) tipo "secret/401/wrong/unauthorized"
+        //   4) handler responde 200 a updates simulados (smoke-test) — prova
+        //      que o pipeline de mensagens entra (incluindo o fluxo de voz quando
+        //      TEST_MODE captura a resposta sem chamar Telegram externo).
+        const traceId = Math.random().toString(36).slice(2, 8);
+        const tag = `[ensure-healthy ${traceId}]`;
+        const startedAt = Date.now();
+        const log: Array<{ step: string; ok: boolean; detail?: any }> = [];
+        const selfUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`;
+
+        const validate = async (label: string) => {
+          let infoJson: any = null;
+          let fetchErr: string | null = null;
+          try {
+            const r = await fetch(`${tgBase}/getWebhookInfo`);
+            infoJson = await r.json();
+          } catch (e) {
+            fetchErr = String((e as Error)?.message ?? e);
+          }
+          const result = infoJson?.result ?? {};
+          const currentUrl: string = result?.url ?? "";
+          const lastErr: string = result?.last_error_message ?? "";
+          const lastErrDate: number = result?.last_error_date ?? 0;
+          const recentAuthErr = lastErrDate > 0
+            && (Date.now() / 1000 - lastErrDate) < 600
+            && /secret|unauthor|401|wrong/i.test(lastErr);
+          const checks = {
+            telegram_reachable: !!infoJson?.ok,
+            secret_configured: !!WEBHOOK_SECRET,
+            url_matches: !!currentUrl && currentUrl === selfUrl,
+            no_recent_auth_error: !recentAuthErr,
+          };
+          const healthy = Object.values(checks).every(Boolean);
+          const detail = {
+            registered_url: currentUrl,
+            expected_url: selfUrl,
+            last_error_message: lastErr || null,
+            last_error_date: lastErrDate || null,
+            fetch_error: fetchErr,
+            checks,
+          };
+          console.log(`${tag} validate(${label})`, JSON.stringify({ healthy, ...detail }));
+          log.push({ step: `validate:${label}`, ok: healthy, detail });
+          return { healthy, detail, recentAuthErr, currentUrl };
+        };
+
+        // 1) validar
+        const v1 = await validate("initial");
+
+        // 2) reparar se necessário
+        let repaired = false;
+        let setResult: any = null;
+        if (!v1.healthy) {
+          console.log(`${tag} repairing webhook (reason: ${JSON.stringify(v1.detail.checks)})`);
+          try {
+            const setRes = await fetch(`${tgBase}/setWebhook`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                url: selfUrl,
+                secret_token: WEBHOOK_SECRET,
+                allowed_updates: ["message", "edited_message", "callback_query"],
+                drop_pending_updates: false,
+              }),
+            });
+            setResult = await setRes.json().catch(() => ({}));
+            repaired = !!setResult?.ok;
+            console.log(`${tag} setWebhook result`, JSON.stringify({ ok: setResult?.ok, desc: setResult?.description }));
+            log.push({ step: "repair:setWebhook", ok: repaired, detail: setResult });
+          } catch (e) {
+            log.push({ step: "repair:setWebhook", ok: false, detail: { error: String((e as Error)?.message ?? e) } });
+          }
+        } else {
+          log.push({ step: "repair:skipped", ok: true, detail: "already healthy" });
+        }
+
+        // 3) revalidar
+        const v2 = v1.healthy ? v1 : await validate("post_repair");
+        const webhookOk = v2.healthy;
+
+        // 4) smoke-test interno (só roda se TEST_MODE estiver ativo;
+        //    quando inativo registra como "skipped" sem reprovar o fluxo).
+        let smokeOk = true;
+        let smokeDetail: any = { skipped: true, reason: "TEST_MODE_disabled" };
+        if (TEST_MODE && TEST_CHAT_ID !== null) {
+          drainTestBuffer();
+          clearTestContext();
+          const baseChat = { id: TEST_CHAT_ID, type: "private" };
+          const baseFrom = { id: TEST_CHAT_ID, is_bot: false, first_name: "EnsureHealthy", username: "ensurehealthy" };
+          const now = Math.floor(Date.now() / 1000);
+          const smokeCases = [
+            { name: "text", update: { update_id: now, message: { message_id: 9001, from: baseFrom, chat: baseChat, date: now, text: "ping ensure-healthy" } } },
+            { name: "command", update: { update_id: now + 1, message: { message_id: 9002, from: baseFrom, chat: baseChat, date: now, text: "/start", entities: [{ type: "bot_command", offset: 0, length: 6 }] } } },
+          ];
+          const caseResults: any[] = [];
+          for (const c of smokeCases) {
+            const innerReq = new Request(`${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-webhook`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Telegram-Bot-Api-Secret-Token": WEBHOOK_SECRET ?? "" },
+              body: JSON.stringify(c.update),
+            });
+            let status = 0;
+            let captured: any[] = [];
+            try {
+              const res = await webhookHandler(innerReq);
+              status = res.status;
+              const txt = await res.text();
+              try {
+                const parsed = JSON.parse(txt);
+                if (parsed && Array.isArray(parsed.captured)) captured = parsed.captured;
+              } catch { /* ignore */ }
+            } catch (e) {
+              caseResults.push({ name: c.name, status: 0, error: String((e as Error)?.message ?? e) });
+              continue;
+            }
+            const remaining = drainTestBuffer();
+            clearTestContext();
+            caseResults.push({ name: c.name, status, captured: [...captured, ...remaining] });
+          }
+          const handlerOk = caseResults.every((r) => r.status === 200);
+          const anyCaptured = caseResults.some((r) => Array.isArray(r.captured) && r.captured.length > 0);
+          smokeOk = handlerOk && anyCaptured;
+          smokeDetail = { handler_responded_200: handlerOk, captured_any_message: anyCaptured, cases: caseResults };
+        }
+        console.log(`${tag} smoke-test`, JSON.stringify({ ok: smokeOk, detail: smokeDetail }));
+        log.push({ step: "smoke-test", ok: smokeOk, detail: smokeDetail });
+
+        // Critérios de aceite finais:
+        //   - webhook validado (não vai mais bater 401 do Telegram)
+        //   - handler entra no fluxo (smoke ok ou pulado por config)
+        const accepted = webhookOk && smokeOk;
+        const summary = {
+          ok: accepted,
+          trace_id: traceId,
+          duration_ms: Date.now() - startedAt,
+          repaired,
+          webhook_healthy: webhookOk,
+          smoke_test_ok: smokeOk,
+          acceptance_criteria: {
+            webhook_no_401: webhookOk,
+            handler_pipeline_entered: smokeOk,
+          },
+          initial_state: v1.detail,
+          final_state: v2.detail,
+          repair_result: setResult,
+          smoke_test: smokeDetail,
+          log,
+          hint: accepted
+            ? null
+            : "Falhou nos critérios de aceite. Veja `log` para identificar etapa, ou rode GET ?admin=health para diagnóstico estruturado.",
+        };
+        console.log(`${tag} done`, JSON.stringify({ accepted, repaired, webhookOk, smokeOk, ms: Date.now() - startedAt }));
+        return new Response(JSON.stringify(summary, null, 2), {
+          status: accepted ? 200 : 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       return new Response(JSON.stringify({ error: "unknown admin op" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
