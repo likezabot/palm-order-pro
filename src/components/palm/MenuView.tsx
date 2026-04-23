@@ -472,6 +472,7 @@ const MenuView = ({ onAdd, onDecrement, cart, total, itemCount, onViewCart, onBa
                   </div>
                 </div>
               );
+            })}
           </div>
         )}
       </div>
