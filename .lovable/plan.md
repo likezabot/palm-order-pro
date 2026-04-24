@@ -1,70 +1,29 @@
-# Corrigir falha de impressão no desktop integrado
+# Salvar os dois prompts de reconstrução
 
-## Problema identificado
-Há 3 falhas combinadas:
+Vou criar dois arquivos em `docs/`:
 
-1. A URL da bridge está sendo tratada como configuração global e sincronizada entre dispositivos. Isso faz `localhost` ou outro endereço “vazar” entre celular, web e desktop.
-2. O frontend ainda interpreta o `/health` com o formato antigo da bridge (`printer_connected`) e pode marcar a bridge como indisponível/inválida mesmo com a v2.2 rodando.
-3. A impressão manual no PDV está com bug de UI: `manualPrintOrder()` retorna um objeto, mas a tela trata isso como booleano e mostra sucesso mesmo quando a impressão falhou.
+## 1. `docs/PROMPT_LOVABLE_NOVO_PROJETO.md`
+Prompt completo para colar em uma **nova sessão Lovable** e reconstruir o app web do zero, já com as correções aprendidas:
+- Stack React 18 + Vite + TS + Tailwind + shadcn + Lovable Cloud, dark theme #0D0D0D / #E25822, Inter, PWA, sem auth.
+- 5 módulos: Home, Palm (garçom), Kitchen (kanban), Cashier, Admin.
+- Schema completo: products, orders, order_items, cash_register, cash_movements, inventory_items, inventory_movements, settings, agregados diários, notification_queue.
+- RPCs SECURITY DEFINER: create_order, update_order_items, update_order_status, rename_order_table, merge_table_duplicates, claim/complete/defer_order_print, recover_stuck_prints, force_clear_orphan_prints, cash_open/close/movement_add, verify_manager_pin.
+- Triggers de estoque automático e reset de served_at.
+- Seed do cardápio (Refeições, Espetos, Bebidas, Cervejas) com preços reais.
+- **Camada de impressão correta desde o dia 1**: `LOCAL_ONLY_KEYS = ['bridgeUrl','printMode']` nunca sincronizam via DB; `checkBridgeStatus` aceita formato legado e v2.2; fila IndexedDB; worker tick 15s; `manualPrintOrder` retorna `{ok, bridgeOk, queued, error}` e PDV/Cashier checam corretamente.
+- PWA com sw.js network-first, manifest standalone.
+- Critério de aceite explícito.
 
-## O que vou implementar
+## 2. `docs/PROMPT_CODEX_BRIDGE_ELECTRON_FINAL.md`
+Prompt completo para o **Codex** gerar **um único instalador Windows** (.exe) que substitui bridge.exe + console preto:
+- Estrutura `desktop/` com main.cjs, preload.cjs, bridge/server.cjs, bridge/printer.cjs, bridge/config.cjs, assets, build/installer.nsh.
+- package.json com electron 31 + electron-builder 24, target nsis x64, oneClick=false.
+- main.cjs: Express na 9100, BrowserWindow → palm-order-pro.lovable.app/admin, Tray (Abrir, Status, Reiniciar Bridge, Logs, Iniciar com Windows, Sair), close→hide, singleInstanceLock, ping de status 30s.
+- bridge/server.cjs: `/health` (cache 5s, formato v2.2 com bridge_version, printer_ok, printer_ready, printer_name, printer_method), `/printers`, `/config` GET+POST em %APPDATA%, `/test`, `/print` (base64 → tempfile .bin → PowerShell Out-Printer → unlink).
+- bridge/printer.cjs: spawn powershell.exe NoProfile NonInteractive windowsHide com Get-Content -Encoding Byte | Out-Printer -Name.
+- build/installer.nsh: netsh advfirewall add/delete rule porta 9100 no install/uninstall.
+- Comandos de build gerando `dist/Plano B Fast Order Setup 2.2.0.exe`.
+- Critério de aceite: 2 cliques, sem console preto, bandeja funcional, close→hide, firewall automático, "Iniciar com Windows" persistente, diagnóstico mostra "PONTE ONLINE v2.2.0".
+- NÃO MEXER: código React do palm-order-pro nem Supabase.
 
-### 1. Separar config compartilhada da config local do dispositivo
-Vou ajustar `src/lib/print-config.ts` para que:
-- layout do cupom continue sincronizado entre dispositivos
-- `bridgeUrl` fique local por dispositivo
-- `printMode` também possa permanecer local, evitando um device forçar o outro para modo bridge/browser
-
-Isso evita que o desktop fique preso numa URL errada e evita que o celular receba `localhost`.
-
-### 2. Compatibilizar o frontend com a bridge v2.2
-Vou atualizar `src/lib/thermal-printer.ts` para aceitar os dois contratos de health:
-- legado: `printer_connected`
-- novo: `printer_ready`, `printer_name`, `printer_method`, `bridge_version`
-
-Também vou melhorar a leitura de erro para distinguir:
-- bridge offline
-- bridge online sem impressora pronta
-- timeout/localhost inacessível
-
-### 3. Corrigir o diagnóstico e a UX do admin
-Vou ajustar `src/components/admin/PrinterDiagnostics.tsx` e `src/components/admin/PrintConfigPanel.tsx` para:
-- mostrar claramente quando a URL é local do dispositivo
-- não sobrescrever a URL local com sync remoto
-- refletir corretamente o status da bridge v2.2
-- manter a mesma tela no web e no desktop, mas com comportamento de configuração local
-
-### 4. Corrigir a impressão manual que hoje dá falso positivo
-Vou corrigir `src/pages/Pdv.tsx` para tratar `ManualPrintResult` corretamente, igual ao fluxo já mais seguro do caixa.
-
-Resultado esperado:
-- não exibir “Cupom enviado para impressão!” quando a bridge falhar
-- mostrar erro real ou status de fila
-- alinhar o comportamento do PDV com `src/pages/Cashier.tsx`
-
-### 5. Garantir que a fila local respeite o novo health
-Vou validar `src/lib/print-queue-worker.ts` indiretamente via normalização do status, para que retries não parem por interpretar errado a resposta da bridge.
-
-## Arquivos principais
-- `src/lib/print-config.ts`
-- `src/lib/thermal-printer.ts`
-- `src/components/admin/PrinterDiagnostics.tsx`
-- `src/components/admin/PrintConfigPanel.tsx`
-- `src/pages/Pdv.tsx`
-
-## Resultado esperado
-Depois disso:
-- o desktop pode usar `http://localhost:9100/print` sem quebrar o celular
-- o celular pode usar `http://IP_DO_PC:9100/print` sem contaminar o desktop
-- o admin mostra o status real da bridge integrada v2.2
-- a impressão manual não vai mais mentir que imprimiu quando falhou
-- os testes Health / Mínimo / Cupom ficam coerentes com o que a bridge realmente respondeu
-
-## Detalhes técnicos
-- Preservar localmente `bridgeUrl` e `printMode` ao fazer `syncPrintConfigFromDb()`
-- Normalizar health com algo como:
-  - `printer_connected ?? printer_ready ?? false`
-- Ler metadados novos do payload bruto (`bridge_version`, `printer_name`, `printer_method`)
-- Ajustar `Pdv.tsx` para verificar `result.ok`, `result.bridgeOk` e `result.queued` em vez de usar truthiness do objeto
-
-Se você aprovar, eu implemento essas correções no frontend agora.
+Depois de salvos, basta abrir cada arquivo em `docs/`, copiar e colar no destino correspondente.
