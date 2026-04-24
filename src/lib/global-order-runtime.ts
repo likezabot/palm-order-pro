@@ -116,7 +116,7 @@ async function bootstrapPending() {
 async function runWatchdog() {
   try {
     const { data, error } = await supabase.rpc("requeue_stuck_print_jobs", {
-      p_seconds: 90,
+      p_seconds: 45,
     } as any);
     if (error) {
       debugLog.error("global-orders", "watchdog requeue erro", error);
@@ -231,8 +231,8 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
     }
   });
 
-  // Watchdog: a cada 90s recupera jobs presos em "printing"
-  watchdogTimer = setInterval(runWatchdog, 90_000);
+  // Watchdog: a cada 45s recupera jobs presos em "printing"
+  watchdogTimer = setInterval(runWatchdog, 45_000);
 
   // Bootstrap inicial — pega pedidos pendentes que chegaram com app fechado
   void bootstrapPending();
