@@ -156,8 +156,11 @@ export function resetPrintConfig(): PrintConfig {
   return { ...DEFAULT_CONFIG };
 }
 
-/** Load from database and update localStorage cache */
+/** Load from database and update localStorage cache.
+ *  IMPORTANTE: bridgeUrl e printMode são LOCAIS por dispositivo, então
+ *  sempre preservamos os valores que já estão no localStorage. */
 export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
+  const local = loadPrintConfig();
   try {
     const { data } = await supabase
       .from("settings")
@@ -173,18 +176,24 @@ export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
         fontSizes: { ...(parsed.fontSizes || {}) },
         visibleSections: { ...DEFAULT_VISIBLE, ...(parsed.visibleSections || {}) },
       };
+      // preserva config local do dispositivo
+      for (const k of LOCAL_ONLY_KEYS) {
+        (merged as any)[k] = (local as any)[k] ?? (merged as any)[k];
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       return merged;
     }
   } catch {
     // DB not available, use local
   }
-  return loadPrintConfig();
+  return local;
 }
 
-/** Fire-and-forget save to database */
+/** Fire-and-forget save to database — strip campos locais antes de subir. */
 function savePrintConfigToDb(config: PrintConfig): void {
-  const value = JSON.stringify(config);
+  const sanitized: any = { ...config };
+  for (const k of LOCAL_ONLY_KEYS) delete sanitized[k];
+  const value = JSON.stringify(sanitized);
   supabase
     .from("settings")
     .upsert(
