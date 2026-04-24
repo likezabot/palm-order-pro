@@ -336,7 +336,7 @@ export default function NetworkTab() {
           extraStatus={
             <>
               <div>
-                Endpoint: <code className="font-mono">localhost:9100/health</code>
+                Endpoint: <code className="font-mono">{getBridgeBaseUrl().replace(/^https?:\/\//, "")}/health</code>
               </div>
               <div>
                 Impressoras detectadas:{" "}
