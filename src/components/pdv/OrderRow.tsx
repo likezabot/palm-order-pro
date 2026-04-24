@@ -1,7 +1,9 @@
 import { forwardRef, memo } from "react";
-import { Clock, CheckCircle2, Users, Package, Printer, Pencil, ChevronRight, AlertTriangle, DollarSign, UtensilsCrossed } from "lucide-react";
+import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed } from "lucide-react";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
+import { usePrintJobsStatus } from "@/hooks/use-print-jobs-status";
+import { PrintStatusBadge } from "@/components/pdv/PrintStatusBadge";
 import type { Order } from "@/lib/types";
 
 const STATUS_LABEL: Record<string, string> = {
