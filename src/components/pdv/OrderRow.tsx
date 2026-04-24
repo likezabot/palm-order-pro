@@ -185,18 +185,4 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
 });
 OrderRowImpl.displayName = "OrderRow";
 
-export const OrderRow = memo(OrderRowImpl, (prev, next) => {
-  return (
-    prev.order.id === next.order.id &&
-    prev.order.updated_at === next.order.updated_at &&
-    prev.order.status === next.order.status &&
-    prev.order.print_status === next.order.print_status &&
-    prev.itemCount === next.itemCount &&
-    prev.selected === next.selected &&
-    prev.onAdvance === next.onAdvance &&
-    prev.onPrint === next.onPrint &&
-    prev.onEdit === next.onEdit &&
-    prev.onClose === next.onClose &&
-    prev.onSelect === next.onSelect
-  );
-}) as typeof OrderRowImpl;
+export const OrderRow = memo(OrderRowImpl) as typeof OrderRowImpl;
