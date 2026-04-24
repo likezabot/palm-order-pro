@@ -206,6 +206,10 @@ const Pdv = () => {
     } as any);
 
     if (shouldPrint) {
+      await enqueuePrintJob(selectedOrder.id, "bill", { total });
+    }
+
+    if (shouldPrint) {
       const printConfig = loadPrintConfig();
       const items = allItems.filter((i) => i.order_id === selectedOrder.id);
       if (items.length > 0 && printConfig.printMode === "bridge") {
