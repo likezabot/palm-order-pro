@@ -1,117 +1,91 @@
 
 
-# Plano: Botão "Resetar Dia de Testes" no Admin
+# Diagnóstico: pedido novo do Palm não sai na impressora, mas adições/fechamento saem
 
-## Objetivo
+## O sintoma
 
-Adicionar um botão no Admin → System que apaga **todos os dados operacionais do dia** (pedidos, itens, caixa, movimentos de estoque, estado do Telegram), deixando só o cadastro (produtos, inventário, settings, recipes, bindings) intacto. Para usar quando o dia foi só testes.
+- **Palm → primeiro pedido de uma mesa** → bridge `.exe` recebe o POST `/print`, retorna OK, mas **nada sai na impressora**.
+- **Palm → adição em pedido existente / Cashier → fechar conta** → bridge recebe, retorna OK, **imprime normalmente**.
 
-## Onde fica
+Mesmo `.exe`, mesma impressora, mesmo endpoint. Só muda o *tipo* do pedido.
 
-Aba **Sistema** (`SystemTab.tsx`), em um card novo no topo, em vermelho, separado dos outros (arquivar / forçar update). Título: **"Limpar dados de teste"**.
+## Evidência nos logs
 
-Comportamento do botão:
-1. Confirmação dupla (digitar `APAGAR` no prompt).
-2. Mostra preview do que vai ser apagado (contagem por tabela).
-3. Após confirmar, chama uma RPC `reset_operational_data()` e mostra resumo.
+Olhando os network requests da sessão atual:
 
-## O que será apagado
+1. `POST http://localhost:9100/print` às `02:15:11Z` — `Failed to fetch` (na verdade nem chegou ao bridge, porque o bridge estava offline naquele momento — `health` falhou logo antes). Mas o payload em si **decodificado em base64** revela algo importante.
 
-| Tabela | Ação |
-|---|---|
-| `order_items` | DELETE all |
-| `orders` | DELETE all |
-| `cash_movements` | DELETE all |
-| `cash_register` | DELETE all (fecha tudo, abertos e fechados) |
-| `inventory_movements` | DELETE all |
-| `stock_movements` | DELETE all |
-| `notification_queue` | DELETE all |
-| `notification_log` | DELETE all |
-| `telegram_chat_state` | DELETE all |
-| `telegram_undo_stack` | DELETE all |
-| `data_retention_log` | DELETE all |
-| `pin_attempt_log` | DELETE all |
-| `inventory_items.current_stock` | RESET para 0 |
+2. Decodificando o payload do pedido novo (mesa 1, Jose, 3 itens):
+   ```
+   ESC @ ... PLANO B ESPETARIA ... MESA: 1 ... 1x PANCETA SUINA R$10.00 ...
+   1x CORACAO DE FRANGO R$10.00 ... 1x COCA-COLA ... R$9.00 ...
+   TOTAL: R$ 0.00          ← ⚠️
+   Qtd itens: 3
+   ```
+   **Total impresso = R$ 0,00**, embora itens somem R$ 29,00.
 
-## O que NÃO será apagado
+3. Já o payload de **fechar conta** (request anterior, 01:58:53Z) traz:
+   ```
+   *** CONTA *** ... TOTAL: R$ 79.00
+   ```
+   Com total correto.
 
-- `products` (cardápio)
-- `inventory_items` (só zera o estoque, mantém o cadastro)
-- `product_recipes`
-- `settings`
-- `profiles`
-- `telegram_user_bindings` (vínculos garçom↔Telegram)
+## Hipótese mais provável (a investigar no codex)
 
-## Implementação técnica
+O layout do recibo do **pedido novo** (`print_type = 'full'` / pedido inicial) está sendo gerado com um **bug de cálculo / dado faltante** que produz uma string ESC/POS **válida sintaticamente, mas com algum byte de controle que faz a impressora térmica ignorar / engolir o job em silêncio**. Suspeitos típicos:
 
-### 1. Migration: nova função RPC
+1. **Total = 0** vindo de `order.total` ainda `null` no momento da montagem do recibo (a primeira gravação do pedido só preenche `total` depois do trigger; o builder do recibo lê antes).
+2. **Comando ESC/POS malformado ao montar a seção de itens** (ex.: alinhamento `ESC a` enviado dentro do meio de uma linha em negrito sem fechar atributos), o que algumas impressoras Bematech/Epson interpretam como "pular buffer".
+3. **Falta de `LF` / `\n` final** ou **falta de `GS V` (cut)** no fim do payload do pedido novo — bridge devolve sucesso (gravou no spooler), mas a impressora espera o cut para liberar o papel.
+4. **Codepage**: caracteres acentuados (`PANCETA SUÍNA`, `CORAÇÃO`) são gerados sem `ESC t <codepage>` no início do pedido novo, mas com codepage no fechar conta. Resultado: impressora rejeita o job ao encontrar byte fora da tabela.
 
-```sql
-CREATE OR REPLACE FUNCTION public.reset_operational_data()
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_result jsonb := '{}'::jsonb;
-  v_count int;
-BEGIN
-  DELETE FROM order_items; GET DIAGNOSTICS v_count = ROW_COUNT;
-  v_result := v_result || jsonb_build_object('order_items', v_count);
+A **diferença comportamental** (adição imprime, novo não) é o melhor sinal: o builder de adição usa o helper `delta-items` + `receipt-layout` que está correto. O builder do pedido novo (caminho `Palm → enqueue → claim → print full`) provavelmente passa por um path divergente.
 
-  DELETE FROM orders; GET DIAGNOSTICS v_count = ROW_COUNT;
-  v_result := v_result || jsonb_build_object('orders', v_count);
+## O que vou entregar
 
-  DELETE FROM cash_movements; GET DIAGNOSTICS v_count = ROW_COUNT;
-  v_result := v_result || jsonb_build_object('cash_movements', v_count);
+Um único arquivo **`docs/PROMPT_CODEX_BUG_IMPRESSAO_PEDIDO_NOVO.md`** com um prompt pronto para colar no Codex (ou em qualquer LLM com acesso ao repositório), contendo:
 
-  DELETE FROM cash_register; GET DIAGNOSTICS v_count = ROW_COUNT;
-  v_result := v_result || jsonb_build_object('cash_register', v_count);
+### 1. Contexto resumido
+- Stack: React + Supabase + bridge local Node (`bridge/lp-bridge.js` na porta 9100), impressora ESC/POS USB.
+- Pipeline: Palm cria pedido → `enqueue` → worker `claim_order_print` → monta payload em `src/lib/receipt-html.ts` + `src/lib/receipt-layout.ts` + `src/lib/thermal-printer.ts` → POST `/print` no bridge.
 
-  DELETE FROM inventory_movements; GET DIAGNOSTICS v_count = ROW_COUNT;
-  v_result := v_result || jsonb_build_object('inventory_movements', v_count);
+### 2. Sintoma exato
+- Pedido novo: bridge 200 OK, papel não sai.
+- Adição / fechar conta: bridge 200 OK, papel sai.
+- Total no payload do pedido novo aparece como `R$ 0.00` mesmo com itens somando R$ 29,00 (evidência decodificada do base64 capturado no network log).
 
-  DELETE FROM stock_movements; GET DIAGNOSTICS v_count = ROW_COUNT;
-  v_result := v_result || jsonb_build_object('stock_movements', v_count);
+### 3. Hipóteses ranqueadas (com onde olhar)
 
-  DELETE FROM notification_queue;
-  DELETE FROM notification_log;
-  DELETE FROM telegram_chat_state;
-  DELETE FROM telegram_undo_stack;
-  DELETE FROM data_retention_log;
-  DELETE FROM pin_attempt_log;
+| # | Hipótese | Arquivo a inspecionar |
+|---|---|---|
+| 1 | `order.total` ainda `null` quando o recibo é montado | `src/lib/global-order-runtime.ts` (caminho do `claim` → `buildPayload`) e `src/lib/receipt-layout.ts` |
+| 2 | Codepage ausente no header do pedido novo (`ESC t`) | `src/lib/thermal-printer.ts` (comparar header de `buildFullReceipt` vs `buildBillReceipt`) |
+| 3 | Falta de `GS V` (cut) no fim do payload do pedido novo | mesmo arquivo, função final de fechamento |
+| 4 | Atributos ESC (`ESC E 1` negrito) não-fechados antes de `ESC a` | `src/lib/receipt-layout.ts` linhas que misturam alinhamento + bold |
 
-  UPDATE inventory_items SET current_stock = 0, updated_at = now();
+### 4. Roteiro de diagnóstico que o Codex deve seguir
+1. Decodificar base64 dos dois payloads (novo vs fechar) e fazer **diff byte a byte**.
+2. Logar `order` completo no momento do `claim` antes de chamar `buildFullReceipt`.
+3. Rodar o bridge com `console.log(buffer.toString('hex'))` para confirmar o que chega.
+4. Testar manualmente via PowerShell:
+   ```powershell
+   $bytes = [Convert]::FromBase64String("<payload_novo>")
+   [System.IO.File]::WriteAllBytes("C:\temp\novo.bin", $bytes)
+   copy /b C:\temp\novo.bin USB001
+   ```
+   Se `novo.bin` não imprime mas `fechar.bin` imprime → bug é no payload, não no bridge.
 
-  RETURN v_result || jsonb_build_object('reset_at', now());
-END;
-$$;
-```
+### 5. Critério de aceite
+- Pedido novo do Palm imprime na térmica em ≤2s.
+- `Total: R$ X,XX` no recibo bate com soma dos itens.
+- `payload` do pedido novo passa no mesmo teste binário direto na porta USB.
 
-E uma função auxiliar `preview_operational_data()` que só faz `SELECT count(*)` de cada tabela (sem apagar) para alimentar o preview.
+### 6. Snippet de teste reproduzível (TypeScript)
+Um pequeno script que monta um pedido fake com 3 itens, chama o builder e compara o output com o esperado — para o Codex rodar via `vitest` e pegar a regressão.
 
-### 2. UI: novo card em `SystemTab.tsx`
+## Arquivos tocados
 
-- Card vermelho (`border-destructive`), ícone `Trash2`.
-- Botão chama `preview_operational_data()` → mostra modal com contagens.
-- Modal pede para digitar `APAGAR`.
-- Ao confirmar, chama `reset_operational_data()` → toast com resumo.
-- Invalida caches do React Query (`orders`, `cash_register`, `inventory`).
+- **Novo**: `docs/PROMPT_CODEX_BUG_IMPRESSAO_PEDIDO_NOVO.md` — único arquivo, pronto para você copiar e colar onde precisar.
 
-### 3. Arquivos tocados
-
-- `supabase/migrations/<timestamp>_reset_operational_data.sql` (novo)
-- `src/components/admin/SystemTab.tsx` (adiciona card)
-
-## O que NÃO vou mexer
-
-- Telegram webhook
-- Frontend Palm/Kitchen/PDV/Cashier
-- Cardápio, recipes, settings
-- Bridge de impressão
-
-## Resultado esperado
-
-Um botão único no Admin que devolve o sistema ao estado "zero operacional" em <2s, mantendo todo o cadastro. Seguro contra clique acidental (confirmação dupla + texto "APAGAR").
+Nada de código de produção é alterado neste passo — é só o prompt de diagnóstico.
 
