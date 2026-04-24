@@ -20,8 +20,10 @@ import {
   Save,
   Zap,
   Snail,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -39,6 +41,7 @@ import {
   type BridgePrinterInfo,
 } from "@/lib/thermal-printer";
 import { printReceipt } from "@/lib/print-receipt";
+import { loadPrintConfig, savePrintConfig } from "@/lib/print-config";
 
 const SAMPLE_ITEMS = [
   { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
