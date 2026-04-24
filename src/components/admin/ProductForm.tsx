@@ -11,7 +11,6 @@ import {
   norm,
 } from "@/lib/product-groups";
 import { Input } from "@/components/ui/input";
-import ProductRecipesPanel from "./ProductRecipesPanel";
 
 /** Normaliza apelido: lowercase, trim, remove acentos, colapsa espaços. */
 function normalizeAlias(s: string): string {
@@ -353,10 +352,6 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
             Como o garçom pode chamar este item por voz ou Telegram. Pressione Enter ou vírgula para adicionar.
           </p>
         </div>
-
-        {product && category === "refeicoes" && (
-          <ProductRecipesPanel productId={product.id} />
-        )}
 
         <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
           <span className="font-semibold">Ativo no cardápio</span>
