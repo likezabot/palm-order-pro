@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Printer, Send, User, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { reprintSenhaForOrder } from "@/lib/reprint-senha";
+import { enqueuePrintJob } from "@/lib/print-jobs";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
 import { calculateDelta } from "@/lib/order-delta";
@@ -197,6 +198,9 @@ const OrderReview = ({
           waiter_name: waiterName || null,
           item_count: cartItemCount,
         });
+        if (shouldPrint) {
+          await enqueuePrintJob(existingOrderId, "extra", { print_type: printType });
+        }
         onSuccess("");
         return;
       }
@@ -266,6 +270,9 @@ const OrderReview = ({
           created_at: createObj?.created_at,
           item_count: cartItemCount,
         });
+        if (shouldPrint) {
+          await enqueuePrintJob(newOrderId, "order", { senha: newSenha });
+        }
       }
       onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
     } catch (err: any) {

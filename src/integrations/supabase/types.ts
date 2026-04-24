@@ -486,6 +486,56 @@ export type Database = {
         }
         Relationships: []
       }
+      print_jobs: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          order_id: string
+          payload: Json | null
+          printed_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          job_type: string
+          last_error?: string | null
+          order_id: string
+          payload?: Json | null
+          printed_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          order_id?: string
+          payload?: Json | null
+          printed_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_jobs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_recipes: {
         Row: {
           created_at: string
@@ -797,7 +847,19 @@ export type Database = {
         Returns: string
       }
       claim_order_print: { Args: { p_order_id: string }; Returns: boolean }
+      claim_print_job: {
+        Args: never
+        Returns: {
+          attempts: number
+          created_at: string
+          id: string
+          job_type: string
+          order_id: string
+          payload: Json
+        }[]
+      }
       complete_order_print: { Args: { p_order_id: string }; Returns: undefined }
+      complete_print_job: { Args: { p_id: string }; Returns: undefined }
       consume_undo_token: {
         Args: { p_chat_id: number; p_token: string }
         Returns: Json
@@ -814,8 +876,16 @@ export type Database = {
         Returns: Json
       }
       defer_order_print: { Args: { p_order_id: string }; Returns: undefined }
+      enqueue_print_job: {
+        Args: { p_job_type: string; p_order_id: string; p_payload?: Json }
+        Returns: string
+      }
       fail_order_print: {
         Args: { p_error?: string; p_order_id: string }
+        Returns: undefined
+      }
+      fail_print_job: {
+        Args: { p_error?: string; p_id: string; p_max_attempts?: number }
         Returns: undefined
       }
       find_inventory_item_by_text: {
@@ -868,6 +938,10 @@ export type Database = {
         Returns: undefined
       }
       requeue_stuck_print_jobs: { Args: { p_seconds?: number }; Returns: Json }
+      requeue_stuck_print_jobs_v2: {
+        Args: { p_seconds?: number }
+        Returns: Json
+      }
       reset_operational_data: { Args: never; Returns: Json }
       reset_operational_data_period: {
         Args: { p_days?: number; p_reset_stock?: boolean }

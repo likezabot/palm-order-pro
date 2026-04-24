@@ -5,6 +5,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { printSenha } from "./print-receipt";
+import { enqueuePrintJob } from "./print-jobs";
 
 export interface ReprintResult {
   ok: boolean;
@@ -57,6 +58,9 @@ export async function reprintSenhaForOrder(orderId: string): Promise<ReprintResu
     total: Number(order.total) || 0,
     force: true,
   });
+
+  // Enfileira também como comando explícito para o .exe (não bloqueia)
+  await enqueuePrintJob(order.id, "manual", { senha, kind: "reprint_senha" });
 
   return { ok, reason: ok ? undefined : "Impressora indisponível ou modo browser." };
 }
