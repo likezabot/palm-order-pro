@@ -6,13 +6,38 @@
  *  - Teste mínimo: payload ESC/POS curtinho (ESC @ + 1 linha + corte)
  *  - Teste cupom completo: payload normal do site (cai no mesmo pipeline real)
  *
- * Mantém uma timeline local com até 20 eventos para diagnóstico ao vivo.
+ * Inclui também (bridge v2.1+): seletor da impressora do Windows e
+ * indicador do modo de impressão ativo (nativo vs PowerShell).
  */
-import { useState } from "react";
-import { Activity, Printer, Receipt, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Activity,
+  Printer,
+  Receipt,
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  Save,
+  Zap,
+  Snail,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { checkBridgeStatus, sendTestMinimal, type BridgeHealth } from "@/lib/thermal-printer";
+import {
+  checkBridgeStatus,
+  sendTestMinimal,
+  listBridgePrinters,
+  setBridgePrinter,
+  type BridgeHealth,
+  type BridgePrinterInfo,
+} from "@/lib/thermal-printer";
 import { printReceipt } from "@/lib/print-receipt";
 
 const SAMPLE_ITEMS = [
@@ -25,7 +50,7 @@ const SAMPLE_TOTAL = 74.5;
 type DiagEvent = {
   id: string;
   at: string;
-  kind: "health" | "minimal" | "full";
+  kind: "health" | "minimal" | "full" | "config";
   ok: boolean;
   latencyMs?: number;
   message: string;
@@ -36,6 +61,7 @@ const KIND_LABEL: Record<DiagEvent["kind"], string> = {
   health: "Health",
   minimal: "Teste mínimo",
   full: "Cupom completo",
+  config: "Config",
 };
 
 interface Props {
@@ -47,6 +73,13 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
   const [running, setRunning] = useState<DiagEvent["kind"] | null>(null);
   const [events, setEvents] = useState<DiagEvent[]>([]);
 
+  // bridge v2.1: lista de impressoras + estado do health
+  const [printers, setPrinters] = useState<BridgePrinterInfo[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<string>("");
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [savingPrinter, setSavingPrinter] = useState(false);
+  const [lastHealth, setLastHealth] = useState<BridgeHealth | null>(null);
+
   const push = (e: Omit<DiagEvent, "id" | "at">) => {
     setEvents((prev) =>
       [
@@ -56,11 +89,24 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
     );
   };
 
+  // Atualiza o health silenciosamente ao montar / quando bridgeUrl muda
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const status = await checkBridgeStatus(bridgeUrl);
+      if (!cancelled) setLastHealth(status);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bridgeUrl]);
+
   const runHealth = async () => {
     setRunning("health");
     try {
       // força bypass de cache passando timestamp na URL
       const status: BridgeHealth = await checkBridgeStatus(bridgeUrl + "?t=" + Date.now());
+      setLastHealth(status);
       push({
         kind: "health",
         ok: status.online && status.printer_connected,
@@ -127,6 +173,69 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
     }
   };
 
+  const fetchPrinters = async () => {
+    setLoadingPrinters(true);
+    try {
+      const r = await listBridgePrinters(bridgeUrl);
+      if (r.ok) {
+        setPrinters(r.printers);
+        // pré-seleciona a impressora atual da bridge se ainda não houver escolha
+        const current = lastHealth?.raw?.printer_name as string | undefined;
+        if (current && !selectedPrinter) setSelectedPrinter(current);
+        push({
+          kind: "config",
+          ok: true,
+          message: `Bridge listou ${r.printers.length} impressora(s)`,
+        });
+      } else {
+        push({
+          kind: "config",
+          ok: false,
+          message: r.error ?? "Bridge não suporta /printers (versão antiga?)",
+        });
+        toast({
+          title: "Não foi possível listar",
+          description: r.error ?? "Bridge precisa ser v2.1 ou superior.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
+  const savePrinter = async () => {
+    if (!selectedPrinter) return;
+    setSavingPrinter(true);
+    try {
+      const r = await setBridgePrinter(bridgeUrl, selectedPrinter);
+      push({
+        kind: "config",
+        ok: r.ok,
+        message: r.ok
+          ? `Impressora salva na bridge: ${selectedPrinter}`
+          : r.error ?? "Falha ao salvar impressora",
+      });
+      toast({
+        title: r.ok ? "Impressora salva" : "Falha ao salvar",
+        description: r.ok
+          ? "A bridge agora vai mandar os cupons para esta impressora."
+          : r.error ?? "Bridge recusou a configuração.",
+        variant: r.ok ? "default" : "destructive",
+      });
+      if (r.ok) {
+        // recarrega health pra refletir nova impressora
+        const status = await checkBridgeStatus(bridgeUrl + "?t=" + Date.now());
+        setLastHealth(status);
+      }
+    } finally {
+      setSavingPrinter(false);
+    }
+  };
+
+  const method = lastHealth?.raw?.printer_method as string | undefined;
+  const currentPrinter = lastHealth?.raw?.printer_name as string | undefined;
+
   return (
     <section className="space-y-3 p-4 rounded-lg border border-primary/30 bg-primary/5">
       <div className="flex items-center gap-2">
@@ -135,6 +244,27 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
           Diagnóstico da impressora
         </h3>
       </div>
+
+      {/* Modo da bridge (v2.1+) */}
+      {method && (
+        <div className="flex items-center justify-between gap-2 p-2 rounded border border-primary/20 bg-background/50">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Modo da bridge
+          </span>
+          {method === "spooler-native" ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/15 text-emerald-700 border border-emerald-500/30">
+              <Zap className="w-3 h-3" /> Nativo (rápido)
+            </span>
+          ) : method === "spooler-powershell" ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/15 text-amber-700 border border-amber-500/30">
+              <Snail className="w-3 h-3" /> PowerShell (estável)
+            </span>
+          ) : (
+            <span className="text-[10px] font-mono text-muted-foreground">{method}</span>
+          )}
+        </div>
+      )}
+
       <p className="text-[11px] text-muted-foreground leading-relaxed">
         Use os 3 testes em ordem para isolar o problema:
         <br />
@@ -171,6 +301,70 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
           <Receipt className={`w-4 h-4 ${running === "full" ? "animate-pulse" : ""}`} />
           3. CUPOM
         </Button>
+      </div>
+
+      {/* Seletor de impressora (bridge v2.1+) */}
+      <div className="space-y-2 pt-3 border-t border-primary/20">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Impressora do Windows
+          </span>
+          {currentPrinter && (
+            <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[60%]">
+              atual: {currentPrinter}
+            </span>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={fetchPrinters}
+            disabled={loadingPrinters}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingPrinters ? "animate-spin" : ""}`} />
+            Listar
+          </Button>
+          <Select
+            value={selectedPrinter}
+            onValueChange={setSelectedPrinter}
+            disabled={printers.length === 0}
+          >
+            <SelectTrigger className="flex-1 h-9 text-xs">
+              <SelectValue
+                placeholder={
+                  printers.length === 0
+                    ? "Clique em Listar primeiro"
+                    : "Escolha a impressora"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {printers.map((p) => (
+                <SelectItem key={p.name} value={p.name} className="text-xs">
+                  {p.name}
+                  {p.is_default ? " (padrão)" : ""}
+                  {p.status ? ` · ${p.status}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={savePrinter}
+            disabled={!selectedPrinter || savingPrinter || selectedPrinter === currentPrinter}
+          >
+            <Save className={`w-3.5 h-3.5 ${savingPrinter ? "animate-pulse" : ""}`} />
+            Salvar
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Requer bridge <strong>v2.1+</strong>. Define qual fila do Windows recebe os cupons —
+          a mesma usada pelo app de entregas pode ser compartilhada sem conflito.
+        </p>
       </div>
 
       {events.length > 0 && (

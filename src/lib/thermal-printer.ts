@@ -170,6 +170,71 @@ export async function checkBridgeStatus(
   }
 }
 
+// ============================================================
+// Bridge admin: lista/seleciona impressora do Windows via spooler
+// (bridge v2.1+). Falha silenciosa em bridges antigas.
+// ============================================================
+
+export interface BridgePrinterInfo {
+  name: string;
+  is_default?: boolean;
+  status?: string;
+}
+
+function bridgeBase(url: string): string {
+  return url.replace(/\/print$/, "").replace(/\/$/, "");
+}
+
+export async function listBridgePrinters(
+  url: string,
+): Promise<{ ok: boolean; printers: BridgePrinterInfo[]; error?: string }> {
+  try {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`${bridgeBase(url)}/printers`, {
+      signal: ctrl.signal,
+      cache: "no-cache",
+    });
+    clearTimeout(id);
+    if (!res.ok) return { ok: false, printers: [], error: `HTTP ${res.status}` };
+    const data = await res.json();
+    const list: BridgePrinterInfo[] = Array.isArray(data?.printers)
+      ? data.printers.map((p: any) =>
+          typeof p === "string" ? { name: p } : { name: p.name, is_default: p.is_default, status: p.status },
+        )
+      : [];
+    return { ok: true, printers: list };
+  } catch (e: any) {
+    return { ok: false, printers: [], error: e?.message ?? "indisponível" };
+  }
+}
+
+export async function setBridgePrinter(
+  url: string,
+  printerName: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`${bridgeBase(url)}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: ctrl.signal,
+      body: JSON.stringify({ printer_name: printerName }),
+    });
+    clearTimeout(id);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      return { ok: false, error: j?.error ?? `HTTP ${res.status}` };
+    }
+    // invalida cache de health pra reler estado
+    _bridgeStatusCache.clear();
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "indisponível" };
+  }
+}
+
 /**
  * Envia um payload mínimo de teste (ESC @ + linha + corte) direto pro bridge.
  * Útil para isolar problema: se isso não imprime, o problema é 100% bridge/USB,
