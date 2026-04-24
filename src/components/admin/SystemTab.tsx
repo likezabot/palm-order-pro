@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getAppVersion } from "@/lib/version-check";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import StuckPrintsPanel from "./StuckPrintsPanel";
 
 type RetentionLog = {
   id: number;
@@ -155,6 +156,7 @@ export const SystemTab = () => {
 
   return (
     <div className="max-w-2xl mx-auto py-4 space-y-6">
+      <StuckPrintsPanel />
       <div className="rounded-xl border-2 border-destructive/60 bg-destructive/5 p-5 space-y-4">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-destructive/15 p-2.5">

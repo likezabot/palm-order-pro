@@ -11,7 +11,8 @@ import {
   type VisibleSections,
 } from "@/lib/print-config";
 import { buildReceiptHtml, buildSenhaHtml, printReceipt, printSenha } from "@/lib/print-receipt";
-import { checkBridgeStatus } from "@/lib/thermal-printer";
+import { checkBridgeStatus, type BridgeHealth } from "@/lib/thermal-printer";
+import PrinterDiagnostics from "./PrinterDiagnostics";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -56,7 +57,7 @@ export default function PrintConfigPanel() {
   const { toast } = useToast();
   const [cfg, setCfg] = useState<PrintConfig>(loadPrintConfig);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("receipt");
-  const [bridgeStatus, setBridgeStatus] = useState<{ online: boolean; printer_connected: boolean; error?: string } | null>(null);
+  const [bridgeStatus, setBridgeStatus] = useState<BridgeHealth | null>(null);
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
@@ -351,6 +352,10 @@ export default function PrintConfigPanel() {
             </div>
           )}
         </section>
+
+        {cfg.printMode === "bridge" && (
+          <PrinterDiagnostics bridgeUrl={cfg.bridgeUrl} />
+        )}
 
         {/* Actions */}
         <div className="flex gap-2 pt-2">

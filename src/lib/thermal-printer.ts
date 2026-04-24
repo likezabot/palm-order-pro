@@ -105,9 +105,21 @@ const _bridgeStatusCache = new Map<
 >();
 const BRIDGE_STATUS_TTL_MS = 5_000;
 
+export interface BridgeHealth {
+  online: boolean;
+  printer_connected: boolean;
+  error?: string;
+  latencyMs?: number;
+  bridge_version?: string;
+  printer_count?: number;
+  printer_status?: string;
+  queue_depth?: number;
+  raw?: any;
+}
+
 export async function checkBridgeStatus(
   url: string
-): Promise<{ online: boolean; printer_connected: boolean; error?: string }> {
+): Promise<BridgeHealth> {
   const cached = _bridgeStatusCache.get(url);
   if (cached && Date.now() - cached.at < BRIDGE_STATUS_TTL_MS) {
     return cached.result;
@@ -115,9 +127,7 @@ export async function checkBridgeStatus(
 
   const healthUrl = url.replace(/\/print$/, "/health");
   const t0 = performance.now();
-  const cacheResult = (
-    result: { online: boolean; printer_connected: boolean; error?: string },
-  ) => {
+  const cacheResult = (result: BridgeHealth) => {
     _bridgeStatusCache.set(url, { at: Date.now(), result });
     return result;
   };
@@ -131,7 +141,7 @@ export async function checkBridgeStatus(
 
     if (!response.ok) {
       debugLog.warn("bridge", `health HTTP ${response.status} (${ms}ms)`, { url: healthUrl });
-      return cacheResult({ online: false, printer_connected: false, error: `HTTP ${response.status}` });
+      return cacheResult({ online: false, printer_connected: false, error: `HTTP ${response.status}`, latencyMs: ms });
     }
 
     const data = await response.json();
@@ -141,6 +151,12 @@ export async function checkBridgeStatus(
       online: true,
       printer_connected: printerOk,
       error: printerOk ? undefined : "Impressora USB nao detectada na ponte",
+      latencyMs: ms,
+      bridge_version: data.bridge_version,
+      printer_count: data.printer_count,
+      printer_status: data.printer_status,
+      queue_depth: data.queue_depth,
+      raw: data,
     });
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
@@ -149,7 +165,35 @@ export async function checkBridgeStatus(
       online: false,
       printer_connected: false,
       error: "Ponte local indisponivel (lp-bridge em localhost:9100)",
+      latencyMs: ms,
     });
+  }
+}
+
+/**
+ * Envia um payload mínimo de teste (ESC @ + linha + corte) direto pro bridge.
+ * Útil para isolar problema: se isso não imprime, o problema é 100% bridge/USB,
+ * não tem nada a ver com layout/payload do site.
+ */
+export async function sendTestMinimal(bridgeUrl: string): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  const b = new EscPosBuilder();
+  b.reset()
+    .align("center")
+    .bold(true)
+    .size(true, true)
+    .line("TESTE PLANO B")
+    .resetStyle()
+    .feed(1)
+    .line(new Date().toLocaleString("pt-BR"))
+    .feed(3)
+    .cut();
+  const payload = b.getPayload();
+  const t0 = performance.now();
+  try {
+    const ok = await sendToBridge(payload, bridgeUrl);
+    return { ok, latencyMs: Math.round(performance.now() - t0) };
+  } catch (e: any) {
+    return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
   }
 }
 
