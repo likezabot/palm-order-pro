@@ -19,7 +19,6 @@ import Kitchen from "./pages/Kitchen";
 // Rotas pesadas → lazy (Admin tem charts; PrintStation tem fila; Pdv tem realtime denso etc.).
 const Pdv = lazy(() => import("./pages/Pdv"));
 const PrintStation = lazy(() => import("./pages/PrintStation"));
-const Stock = lazy(() => import("./pages/Stock"));
 const ForceUpdate = lazy(() => import("./pages/ForceUpdate"));
 const InstallPalm = lazy(() => import("./pages/InstallPalm"));
 const InstallKitchen = lazy(() => import("./pages/InstallKitchen"));
@@ -52,7 +51,6 @@ const AnimatedRoutes = () => {
           />
           <Route path="/pdv" element={<Pdv />} />
           <Route path="/print-station" element={<PrintStation />} />
-          <Route path="/estoque" element={<Stock />} />
           <Route path="/atualizar" element={<ForceUpdate />} />
           <Route path="/instalar/palm" element={<InstallPalm />} />
           <Route path="/instalar/cozinha" element={<InstallKitchen />} />
