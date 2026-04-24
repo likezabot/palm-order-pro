@@ -304,11 +304,11 @@ export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground leading-relaxed">
-          Cole a URL completa (<code className="font-mono">/print</code> no final é opcional).
-          O sistema deriva automaticamente <code className="font-mono">/health</code>,{" "}
-          <code className="font-mono">/printers</code> e <code className="font-mono">/config</code>.
-          Use o IP do PC na rede Wi-Fi para acessar do celular —{" "}
-          <strong>nunca</strong> <code className="font-mono">localhost</code> em outro dispositivo.
+          <strong>Esta URL é salva apenas neste dispositivo.</strong> No PC use{" "}
+          <code className="font-mono">http://localhost:9100/print</code>; no celular use{" "}
+          <code className="font-mono">http://IP_DO_PC:9100/print</code>. O <code className="font-mono">/print</code> no final é opcional —
+          o sistema deriva <code className="font-mono">/health</code>, <code className="font-mono">/printers</code> e{" "}
+          <code className="font-mono">/config</code> automaticamente.
         </p>
         {lastHealth && (
           <div className="flex items-center justify-between gap-2 text-[10px] pt-1 border-t border-primary/10">
