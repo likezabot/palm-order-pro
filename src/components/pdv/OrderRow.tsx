@@ -115,16 +115,7 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
             {STATUS_LABEL[status] || status.toUpperCase()}
           </span>
-          {wasPrinted && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success border border-success/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-              <CheckCircle2 className="w-2.5 h-2.5" /> Impresso
-            </span>
-          )}
-          {printFailed && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-              <AlertTriangle className="w-2.5 h-2.5" /> Falha
-            </span>
-          )}
+          <PrintStatusBadge jobInfo={jobInfo} legacyStatus={order.print_status} />
         </div>
       </div>
 
