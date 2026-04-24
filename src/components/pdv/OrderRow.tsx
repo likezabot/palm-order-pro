@@ -1,7 +1,9 @@
 import { forwardRef, memo } from "react";
-import { Clock, CheckCircle2, Users, Package, Printer, Pencil, ChevronRight, AlertTriangle, DollarSign, UtensilsCrossed } from "lucide-react";
+import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed } from "lucide-react";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
+import { usePrintJobsStatus } from "@/hooks/use-print-jobs-status";
+import { PrintStatusBadge } from "@/components/pdv/PrintStatusBadge";
 import type { Order } from "@/lib/types";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -50,8 +52,8 @@ interface OrderRowProps {
 const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }, ref) => {
   // Cronômetro do TEMPO NA ETAPA ATUAL (updated_at)
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
-  const wasPrinted = order.print_status === "printed";
-  const printFailed = order.print_status === "failed";
+  const { get: getJobInfo } = usePrintJobsStatus();
+  const jobInfo = getJobInfo(order.id);
 
   const status = order.status || "new";
   const next = NEXT_STATUS[status];
@@ -113,16 +115,7 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
             {STATUS_LABEL[status] || status.toUpperCase()}
           </span>
-          {wasPrinted && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 text-success border border-success/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-              <CheckCircle2 className="w-2.5 h-2.5" /> Impresso
-            </span>
-          )}
-          {printFailed && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-              <AlertTriangle className="w-2.5 h-2.5" /> Falha
-            </span>
-          )}
+          <PrintStatusBadge jobInfo={jobInfo} legacyStatus={order.print_status} />
         </div>
       </div>
 
@@ -192,18 +185,4 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
 });
 OrderRowImpl.displayName = "OrderRow";
 
-export const OrderRow = memo(OrderRowImpl, (prev, next) => {
-  return (
-    prev.order.id === next.order.id &&
-    prev.order.updated_at === next.order.updated_at &&
-    prev.order.status === next.order.status &&
-    prev.order.print_status === next.order.print_status &&
-    prev.itemCount === next.itemCount &&
-    prev.selected === next.selected &&
-    prev.onAdvance === next.onAdvance &&
-    prev.onPrint === next.onPrint &&
-    prev.onEdit === next.onEdit &&
-    prev.onClose === next.onClose &&
-    prev.onSelect === next.onSelect
-  );
-}) as typeof OrderRowImpl;
+export const OrderRow = memo(OrderRowImpl) as typeof OrderRowImpl;
