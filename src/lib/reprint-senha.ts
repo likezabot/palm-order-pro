@@ -59,5 +59,8 @@ export async function reprintSenhaForOrder(orderId: string): Promise<ReprintResu
     force: true,
   });
 
+  // Enfileira também como comando explícito para o .exe (não bloqueia)
+  await enqueuePrintJob(order.id, "manual", { senha, kind: "reprint_senha" });
+
   return { ok, reason: ok ? undefined : "Impressora indisponível ou modo browser." };
 }
