@@ -169,17 +169,23 @@ export async function checkBridgeStatus(
     }
 
     const data = await response.json();
-    const printerOk = !!data.printer_connected;
-    debugLog[printerOk ? "success" : "warn"]("bridge", `health OK em ${ms}ms — printer_connected=${printerOk}`, { url: healthUrl });
+    // Compat: bridge v1.x usa printer_connected, v2.2 usa printer_ok / printer_ready.
+    const printerOk = !!(
+      data.printer_connected ??
+      data.printer_ok ??
+      data.printer_ready ??
+      (typeof data.printer_name === "string" && data.printer_name.length > 0)
+    );
+    debugLog[printerOk ? "success" : "warn"]("bridge", `health OK em ${ms}ms — printer=${printerOk}`, { url: healthUrl });
     return cacheResult({
       online: true,
       printer_connected: printerOk,
-      error: printerOk ? undefined : "Impressora USB nao detectada na ponte",
+      error: printerOk ? undefined : "Impressora nao detectada na ponte",
       latencyMs: ms,
       bridge_version: data.bridge_version,
       printer_count: data.printer_count,
       printer_status: data.printer_status,
-      queue_depth: data.queue_depth,
+      queue_depth: data.queue_depth ?? data.queue_size,
       raw: data,
     });
   } catch (e: any) {

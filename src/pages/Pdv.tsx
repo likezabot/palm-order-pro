@@ -90,11 +90,29 @@ const Pdv = () => {
 
   // Impressão MANUAL — reimpressão sob demanda
   const handlePrint = useCallback(async (order: Order) => {
-    const success = await manualPrintOrder(order);
-    if (!success) {
+    let result;
+    try {
+      result = await manualPrintOrder(order);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Erro inesperado ao imprimir", variant: "destructive" });
+      return;
+    }
+    if (result.ok && result.bridgeOk) {
+      toast({ title: "Cupom enviado para impressão!" });
+    } else if (result.ok && result.queued) {
+      toast({
+        title: "Enviado à central de impressão",
+        description: "Impressora local indisponível — entrou na fila.",
+      });
+    } else if (result.reason === "no_items") {
       toast({ title: "Sem itens para imprimir", variant: "destructive" });
     } else {
-      toast({ title: "Cupom enviado para impressão!" });
+      toast({
+        title: "Falha ao imprimir",
+        description: "Bridge local offline e fila indisponível. Verifique a ponte em Admin → Sistema.",
+        variant: "destructive",
+      });
     }
   }, [toast]);
 
