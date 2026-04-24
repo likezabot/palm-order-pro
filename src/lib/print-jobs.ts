@@ -32,13 +32,13 @@ export async function enqueuePrintJob(
       p_payload: payload ?? null,
     });
     if (error) {
-      debugLog.warn("print-jobs", `enqueue ${jobType} falhou`, error);
+      debugLog.warn("queue", `print-job enqueue ${jobType} falhou`, error);
       return null;
     }
-    debugLog.success("print-jobs", `enqueue ${jobType} ok pedido ${orderId}`);
+    debugLog.success("queue", `print-job ${jobType} criado pedido ${orderId}`);
     return (data as string) ?? null;
   } catch (e) {
-    debugLog.warn("print-jobs", `enqueue ${jobType} exceção`, e);
+    debugLog.warn("queue", `print-job enqueue ${jobType} exceção`, e);
     return null;
   }
 }
