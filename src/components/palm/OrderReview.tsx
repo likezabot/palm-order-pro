@@ -198,6 +198,9 @@ const OrderReview = ({
           waiter_name: waiterName || null,
           item_count: cartItemCount,
         });
+        if (shouldPrint) {
+          await enqueuePrintJob(existingOrderId, "extra", { print_type: printType });
+        }
         onSuccess("");
         return;
       }
