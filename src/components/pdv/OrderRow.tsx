@@ -52,8 +52,8 @@ interface OrderRowProps {
 const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }, ref) => {
   // Cronômetro do TEMPO NA ETAPA ATUAL (updated_at)
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
-  const wasPrinted = order.print_status === "printed";
-  const printFailed = order.print_status === "failed";
+  const { get: getJobInfo } = usePrintJobsStatus();
+  const jobInfo = getJobInfo(order.id);
 
   const status = order.status || "new";
   const next = NEXT_STATUS[status];
