@@ -270,6 +270,9 @@ const OrderReview = ({
           created_at: createObj?.created_at,
           item_count: cartItemCount,
         });
+        if (shouldPrint) {
+          await enqueuePrintJob(newOrderId, "order", { senha: newSenha });
+        }
       }
       onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
     } catch (err: any) {
