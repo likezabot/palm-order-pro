@@ -161,10 +161,11 @@ export async function checkBridgeStatus(
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
     debugLog.warn("bridge", `health falhou em ${ms}ms: ${e?.message ?? "indisponível"}`, { url: healthUrl });
+    const shown = healthUrl.replace(/^https?:\/\//, "").replace(/\/health$/, "");
     return cacheResult({
       online: false,
       printer_connected: false,
-      error: "Ponte local indisponivel (lp-bridge em localhost:9100)",
+      error: `Ponte local indisponivel (lp-bridge em ${shown})`,
       latencyMs: ms,
     });
   }

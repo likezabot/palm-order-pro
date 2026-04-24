@@ -5,6 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { supabase } from "@/integrations/supabase/client";
+import { loadPrintConfig } from "@/lib/print-config";
+
+/** Deriva URL base da bridge a partir do bridgeUrl salvo (que termina em /print). */
+function getBridgeBaseUrl(): string {
+  try {
+    const cfg = loadPrintConfig();
+    const raw = (cfg.bridgeUrl ?? "").trim();
+    if (!raw) return "http://localhost:9100";
+    return raw.replace(/\/print\/?$/, "").replace(/\/$/, "");
+  } catch {
+    return "http://localhost:9100";
+  }
+}
 
 const HISTORY_SIZE = 20;
 const POLL_INTERVAL_MS = 5_000;
@@ -46,7 +59,7 @@ async function pingPrinter(): Promise<{ latency: number | null; meta: PrinterMet
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    const res = await fetch("http://localhost:9100/health", {
+    const res = await fetch(`${getBridgeBaseUrl()}/health`, {
       signal: ctrl.signal,
       cache: "no-store",
     });
@@ -323,7 +336,7 @@ export default function NetworkTab() {
           extraStatus={
             <>
               <div>
-                Endpoint: <code className="font-mono">localhost:9100/health</code>
+                Endpoint: <code className="font-mono">{getBridgeBaseUrl().replace(/^https?:\/\//, "")}/health</code>
               </div>
               <div>
                 Impressoras detectadas:{" "}
