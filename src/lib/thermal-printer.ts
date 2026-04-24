@@ -117,6 +117,30 @@ export interface BridgeHealth {
   raw?: any;
 }
 
+function splitBridgeUrl(url: string) {
+  const trimmed = url.trim();
+  const match = trimmed.match(/^([^?#]*)(\?[^#]*)?(#.*)?$/);
+  return {
+    path: match?.[1] ?? trimmed,
+    query: match?.[2] ?? "",
+  };
+}
+
+function bridgeBase(url: string): string {
+  const { path } = splitBridgeUrl(url);
+  return path.replace(/\/(?:print|health)\/?$/, "").replace(/\/$/, "");
+}
+
+function bridgeHealthUrl(url: string): string {
+  const { query } = splitBridgeUrl(url);
+  return `${bridgeBase(url)}/health${query}`;
+}
+
+function bridgePrintUrl(url: string): string {
+  const { query } = splitBridgeUrl(url);
+  return `${bridgeBase(url)}/print${query}`;
+}
+
 export async function checkBridgeStatus(
   url: string
 ): Promise<BridgeHealth> {
@@ -125,7 +149,7 @@ export async function checkBridgeStatus(
     return cached.result;
   }
 
-  const healthUrl = url.replace(/\/print$/, "/health");
+  const healthUrl = bridgeHealthUrl(url);
   const t0 = performance.now();
   const cacheResult = (result: BridgeHealth) => {
     _bridgeStatusCache.set(url, { at: Date.now(), result });
@@ -161,7 +185,7 @@ export async function checkBridgeStatus(
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
     debugLog.warn("bridge", `health falhou em ${ms}ms: ${e?.message ?? "indisponível"}`, { url: healthUrl });
-    const shown = healthUrl.replace(/^https?:\/\//, "").replace(/\/health$/, "");
+    const shown = bridgeBase(healthUrl).replace(/^https?:\/\//, "");
     return cacheResult({
       online: false,
       printer_connected: false,
@@ -182,10 +206,6 @@ export interface BridgePrinterInfo {
   status?: string;
 }
 
-function bridgeBase(url: string): string {
-  return url.replace(/\/print$/, "").replace(/\/$/, "");
-}
-
 export async function listBridgePrinters(
   url: string,
 ): Promise<{ ok: boolean; printers: BridgePrinterInfo[]; error?: string }> {
@@ -199,11 +219,10 @@ export async function listBridgePrinters(
     clearTimeout(id);
     if (!res.ok) return { ok: false, printers: [], error: `HTTP ${res.status}` };
     const data = await res.json();
-    const list: BridgePrinterInfo[] = Array.isArray(data?.printers)
-      ? data.printers.map((p: any) =>
+    const source = Array.isArray(data) ? data : Array.isArray(data?.printers) ? data.printers : [];
+    const list: BridgePrinterInfo[] = source.map((p: any) =>
           typeof p === "string" ? { name: p } : { name: p.name, is_default: p.is_default, status: p.status },
-        )
-      : [];
+        );
     return { ok: true, printers: list };
   } catch (e: any) {
     return { ok: false, printers: [], error: e?.message ?? "indisponível" };
@@ -265,11 +284,12 @@ export async function sendTestMinimal(bridgeUrl: string): Promise<{ ok: boolean;
 
 export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
   const t0 = performance.now();
-  debugLog.info("print", `→ enviando ${payload.length} bytes para bridge`, { url });
+  const printUrl = bridgePrintUrl(url);
+  debugLog.info("print", `→ enviando ${payload.length} bytes para bridge`, { url: printUrl });
   const base64 = btoa(String.fromCharCode(...payload));
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(printUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -284,7 +304,7 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
 
     if (!response.ok) {
       const result = await response.json().catch(() => ({ error: "?" }));
-      debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${result.error ?? "?"}`, { url });
+      debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${result.error ?? "?"}`, { url: printUrl });
       return false;
     }
 
@@ -297,7 +317,7 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
     return false;
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
-    debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${e?.message ?? e}`, { url });
+    debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${e?.message ?? e}`, { url: printUrl });
     return false;
   }
 }
