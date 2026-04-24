@@ -280,6 +280,53 @@ export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
         </h3>
       </div>
 
+      {/* Editor da URL da Bridge — sempre visível, web e .exe */}
+      <div className="space-y-2 p-3 rounded border border-primary/30 bg-background">
+        <div className="flex items-center gap-2">
+          <Link2 className="w-3.5 h-3.5 text-primary" />
+          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            URL da Bridge
+          </Label>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={urlDraft}
+            onChange={(e) => setUrlDraft(e.target.value)}
+            placeholder="http://192.168.1.23:9100/print"
+            className="flex-1 font-mono text-xs h-9"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+          <Button size="sm" className="gap-2 font-bold" onClick={saveBridgeUrl}>
+            <Save className="w-3.5 h-3.5" /> Salvar e Testar
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Cole a URL completa (<code className="font-mono">/print</code> no final é opcional).
+          O sistema deriva automaticamente <code className="font-mono">/health</code>,{" "}
+          <code className="font-mono">/printers</code> e <code className="font-mono">/config</code>.
+          Use o IP do PC na rede Wi-Fi para acessar do celular —{" "}
+          <strong>nunca</strong> <code className="font-mono">localhost</code> em outro dispositivo.
+        </p>
+        {lastHealth && (
+          <div className="flex items-center justify-between gap-2 text-[10px] pt-1 border-t border-primary/10">
+            <span className="text-muted-foreground uppercase font-bold tracking-wider">Status</span>
+            {lastHealth.online ? (
+              <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
+                <CheckCircle2 className="w-3 h-3" /> ONLINE
+                {lastHealth.bridge_version ? ` · v${lastHealth.bridge_version}` : ""}
+                {lastHealth.latencyMs !== undefined ? ` · ${lastHealth.latencyMs}ms` : ""}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-rose-600 font-bold">
+                <AlertTriangle className="w-3 h-3" /> OFFLINE
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Modo da bridge (v2.1+) */}
       {method && (
         <div className="flex items-center justify-between gap-2 p-2 rounded border border-primary/20 bg-background/50">
