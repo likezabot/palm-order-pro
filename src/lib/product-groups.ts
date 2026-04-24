@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Product } from "@/lib/types";
-import type { InventoryItem } from "@/lib/inventory";
+
 
 /**
  * Generic product groups: a "group" turns a single trigger product card in PALM
@@ -107,16 +107,6 @@ export function resolveGroupMembers(
   });
 }
 
-export function resolveGroupInventory(
-  group: ProductGroup,
-  items: InventoryItem[],
-  products: Product[],
-): Array<{ name: string; product: Product | null; inventory: InventoryItem | null }> {
-  return resolveGroupMembers(group, products).map((m) => ({
-    ...m,
-    inventory: m.product ? items.find((i) => i.product_id === m.product!.id) ?? null : null,
-  }));
-}
 
 async function writeGroups(next: ProductGroup[]): Promise<void> {
   const value = JSON.stringify(next);

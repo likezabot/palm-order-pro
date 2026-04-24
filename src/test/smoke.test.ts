@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 describe("smoke: critical modules load", () => {
   it("loads pure libs", async () => {
     await expect(import("@/lib/utils")).resolves.toBeDefined();
-    await expect(import("@/lib/inventory")).resolves.toBeDefined();
+    
     await expect(import("@/lib/payment")).resolves.toBeDefined();
     await expect(import("@/lib/senha")).resolves.toBeDefined();
     await expect(import("@/lib/receipt-layout")).resolves.toBeDefined();
