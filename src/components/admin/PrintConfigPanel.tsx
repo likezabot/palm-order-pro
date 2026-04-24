@@ -353,9 +353,10 @@ export default function PrintConfigPanel() {
           )}
         </section>
 
-        {cfg.printMode === "bridge" && (
-          <PrinterDiagnostics bridgeUrl={cfg.bridgeUrl} />
-        )}
+        <PrinterDiagnostics
+          bridgeUrl={cfg.bridgeUrl}
+          onBridgeUrlChange={(url) => setCfg((c) => ({ ...c, bridgeUrl: url, printMode: "bridge" }))}
+        />
 
         {/* Actions */}
         <div className="flex gap-2 pt-2">

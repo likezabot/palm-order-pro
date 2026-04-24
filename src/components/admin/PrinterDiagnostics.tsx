@@ -20,8 +20,11 @@ import {
   Save,
   Zap,
   Snail,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -39,6 +42,7 @@ import {
   type BridgePrinterInfo,
 } from "@/lib/thermal-printer";
 import { printReceipt } from "@/lib/print-receipt";
+import { loadPrintConfig, savePrintConfig } from "@/lib/print-config";
 
 const SAMPLE_ITEMS = [
   { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
@@ -66,12 +70,17 @@ const KIND_LABEL: Record<DiagEvent["kind"], string> = {
 
 interface Props {
   bridgeUrl: string;
+  onBridgeUrlChange?: (url: string) => void;
 }
 
-export function PrinterDiagnostics({ bridgeUrl }: Props) {
+export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
   const { toast } = useToast();
   const [running, setRunning] = useState<DiagEvent["kind"] | null>(null);
   const [events, setEvents] = useState<DiagEvent[]>([]);
+
+  // Editor da URL da bridge (sincroniza com config global)
+  const [urlDraft, setUrlDraft] = useState(bridgeUrl);
+  useEffect(() => setUrlDraft(bridgeUrl), [bridgeUrl]);
 
   // bridge v2.1: lista de impressoras + estado do health
   const [printers, setPrinters] = useState<BridgePrinterInfo[]>([]);
@@ -100,6 +109,33 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
       cancelled = true;
     };
   }, [bridgeUrl]);
+
+  const saveBridgeUrl = () => {
+    const trimmed = urlDraft.trim();
+    if (!trimmed) {
+      toast({ title: "Informe a URL da bridge", variant: "destructive" });
+      return;
+    }
+    const cfg = loadPrintConfig();
+    savePrintConfig({ ...cfg, bridgeUrl: trimmed, printMode: "bridge" });
+    onBridgeUrlChange?.(trimmed);
+    push({ kind: "config", ok: true, message: `URL da bridge salva: ${trimmed}` });
+    toast({ title: "URL salva", description: "Rodando teste de Health…" });
+    // dispara health imediatamente
+    void (async () => {
+      const status = await checkBridgeStatus(trimmed + "?t=" + Date.now());
+      setLastHealth(status);
+      push({
+        kind: "health",
+        ok: status.online,
+        latencyMs: status.latencyMs,
+        message: status.online
+          ? `Online · v${status.bridge_version ?? "?"}`
+          : status.error ?? "Bridge offline",
+      });
+    })();
+  };
+
 
   const runHealth = async () => {
     setRunning("health");
@@ -243,6 +279,53 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
         <h3 className="text-sm font-bold uppercase tracking-wider">
           Diagnóstico da impressora
         </h3>
+      </div>
+
+      {/* Editor da URL da Bridge — sempre visível, web e .exe */}
+      <div className="space-y-2 p-3 rounded border border-primary/30 bg-background">
+        <div className="flex items-center gap-2">
+          <Link2 className="w-3.5 h-3.5 text-primary" />
+          <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            URL da Bridge
+          </Label>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={urlDraft}
+            onChange={(e) => setUrlDraft(e.target.value)}
+            placeholder="http://192.168.1.23:9100/print"
+            className="flex-1 font-mono text-xs h-9"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+          <Button size="sm" className="gap-2 font-bold" onClick={saveBridgeUrl}>
+            <Save className="w-3.5 h-3.5" /> Salvar e Testar
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Cole a URL completa (<code className="font-mono">/print</code> no final é opcional).
+          O sistema deriva automaticamente <code className="font-mono">/health</code>,{" "}
+          <code className="font-mono">/printers</code> e <code className="font-mono">/config</code>.
+          Use o IP do PC na rede Wi-Fi para acessar do celular —{" "}
+          <strong>nunca</strong> <code className="font-mono">localhost</code> em outro dispositivo.
+        </p>
+        {lastHealth && (
+          <div className="flex items-center justify-between gap-2 text-[10px] pt-1 border-t border-primary/10">
+            <span className="text-muted-foreground uppercase font-bold tracking-wider">Status</span>
+            {lastHealth.online ? (
+              <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
+                <CheckCircle2 className="w-3 h-3" /> ONLINE
+                {lastHealth.bridge_version ? ` · v${lastHealth.bridge_version}` : ""}
+                {lastHealth.latencyMs !== undefined ? ` · ${lastHealth.latencyMs}ms` : ""}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-rose-600 font-bold">
+                <AlertTriangle className="w-3 h-3" /> OFFLINE
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modo da bridge (v2.1+) */}
