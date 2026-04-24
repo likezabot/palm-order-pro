@@ -1,120 +1,75 @@
 
 
-# Auditoria de impressão + plano de ação
+# Prompt para o Codex: Bridge v2 com fila, singleton USB e status real
 
-## Diagnóstico do que existe hoje
+## Objetivo
 
-Pipeline atual (resumo):
+Gerar um único arquivo Markdown — `docs/PROMPT_CODEX_BRIDGE_V2.md` — pronto pra você copiar e colar no Codex Desktop. Esse prompt instrui o Codex a reescrever o `lp-bridge.js` (e empacotar de novo o `.exe`) corrigindo as 8 falhas identificadas na auditoria anterior.
 
-```text
-Palm/Pdv → INSERT/UPDATE em orders (print_status='pending')
-        → Realtime → global-order-runtime
-        → claim_order_print (RPC, atômica)
-        → autoPrintOrder/autoPrintUpdate (print-service)
-            ├─ build ESC/POS (thermal-printer)
-            ├─ POST http://localhost:9100/print  (bridge .exe)
-            ├─ sucesso → complete_order_print
-            └─ falha   → enqueue IndexedDB + defer_order_print
-        → print-queue-worker (15s) reenvia quando bridge volta
-```
+## O que o prompt vai conter
 
-### Pontos frágeis encontrados
+### 1. Contexto resumido
+- O que é a bridge hoje (Express + escpos-usb na porta 9100).
+- Sintoma observado em produção: imprime nos primeiros minutos, depois para silenciosamente. Bridge continua respondendo `200 OK` mesmo quando a impressora não imprime mais.
+- Causa raiz suspeita: nova instância USB por request → `LIBUSB_ERROR_BUSY` acumulando + `device.write` resolvendo antes da impressora terminar.
 
-1. **Bridge atual é “fire-and-forget”**. O `device.write()` do `escpos-usb` resolve o callback assim que o **buffer USB foi aceito**, não quando a impressora **terminou de imprimir**. Resultado: bridge devolve `success=true` mesmo quando a impressora engasgou, está sem papel ou está em erro de hardware.
-2. **`getUSBPrinter()` cria nova instância USB a cada request**. Em uso intenso isso causa `LIBUSB_ERROR_BUSY` intermitente (a impressora ainda não liberou a interface da request anterior). Esse é o padrão clássico de “imprime nos primeiros minutos e depois para”.
-3. **Sem fila no bridge**. Dois POSTs simultâneos (ex.: pedido + acréscimo de outro garçom) tentam abrir o mesmo device em paralelo → segundo falha silenciosamente OU corrompe o primeiro.
-4. **Sem timeout / sem `device.close()` em alguns paths de erro**. Se `device.open()` retorna erro, o handle USB pode ficar pendurado até o `.exe` reiniciar.
-5. **Sem watchdog de printer real**. `/health` só verifica se há *algum* dispositivo USB enumerado — não testa status da impressora (online/paper-out/cover-open via `DLE EOT`).
-6. **Web não consegue diferenciar “bridge OK + impressora travada”**. Hoje qualquer 200 do bridge marca o pedido como `printed`. Se o bridge mente, o pedido nunca é reimpresso automaticamente.
-7. **Sem log persistente do bridge**. Quando para, não há rastro pra diagnosticar.
-8. **Não existe botão de teste no Admin que envie um payload binário pequeno “puro”** (só o teste que monta cupom de exemplo e cai no mesmo pipeline).
+### 2. Especificação completa da v2
 
-## O que vou fazer
-
-### Parte 1 — Web (este projeto)
-
-**1.1 Botão de auto-diagnóstico em `Admin → Impressão`**
-Painel novo “Diagnóstico da Impressora” com 3 botões:
-- **Health avançado**: bate em `/health` e mostra latência, `printer_count`, `printer_status` (novo campo do bridge v2 que vamos pedir).
-- **Teste mínimo (1 linha + corte)**: envia ESC/POS curtinho — `ESC @` + “TESTE PLANO B\n” + `GS V`. Se isso não sair, problema é 100% bridge/USB, não payload.
-- **Teste cupom completo**: o que já existe (mantém).
-
-Mostra resultado de cada um em uma timeline com hora, latência e mensagem de erro.
-
-**1.2 Confirmar impressão real (handshake)**
-Mudar `sendToBridge` para tratar como sucesso só se a resposta tiver `printed_at` (timestamp de fim de escrita) **e** `printer_ok: true` (status físico da impressora). Se vier só `success:true` legado, tratar como “ambíguo” e deixar o watchdog decidir após 90s — se o pedido continuar em `printing`, requeue.
-
-**1.3 Watchdog mais agressivo + log de falha visível**
-- Reduzir `requeue_stuck_print_jobs` de 90s → 45s.
-- Adicionar painel “Pedidos travados em impressão” no Admin com botão *forçar reimprimir agora*.
-
-**1.4 Teste automatizado**
-Novo `src/lib/__tests__/print-pipeline.test.ts` cobrindo:
-- payload mínimo gerado tem `ESC @` no início e `GS V` no fim.
-- `autoPrintOrder` enfileira no IndexedDB quando bridge devolve 503.
-- `autoPrintUpdate` com `print_type='extra'` e `delta_items=null` cai no fallback (full).
-
-### Parte 2 — Bridge `.exe` (proposta a reescrever)
-
-**Sim, vale a pena reescrever.** O `lp-bridge.js` atual tem 117 linhas e ignora os problemas listados acima. Proposta de v2 (continua Node + Express, mantém compatibilidade com o endpoint `/print` atual):
-
-Arquitetura nova:
-
-```text
-POST /print
-  → enfileira no JobQueue (in-memory FIFO, 1 worker)
-  → responde imediato com {jobId, queued:true}
-GET /jobs/:id
-  → {status: queued|printing|done|error, printed_at, error}
-GET /health
-  → {online, printer_connected, printer_status: ok|paper_out|cover_open|offline,
-     queue_depth, last_print_at}
-GET /test
-  → imprime payload mínimo de teste, retorna jobId
-```
-
-Detalhes técnicos:
-
-- **Singleton USB**: abre device 1x no boot, mantém aberto, reabre só se erro fatal. Elimina o `LIBUSB_ERROR_BUSY`.
-- **Fila serializada**: 1 job por vez. Nada de paralelo no USB.
-- **Confirmação de status real**: lê `DLE EOT n` (Real-time status) antes e depois do write. Detecta paper-out, cover-open, offline. Reflete no `/health` e no response.
-- **Retry interno**: se write falhar com erro recuperável, tenta 2x com 500ms de intervalo antes de devolver erro.
-- **Timeout duro**: 8s por job. Se estourar, mata a transação, tenta resetar device.
-- **Log em arquivo**: `bridge.log` rotativo (1 dia), nível debug, com hex dump opcional do payload.
-- **Endpoint `/test`**: sem precisar do site, abrir `http://localhost:9100/test` no navegador → cupom de teste sai.
-- **Auto-recovery**: se 3 jobs falharem seguidos, reseta device USB (`device.close()` + reabre) automaticamente.
-- **Versão no `/health`**: `bridge_version: "2.0.0"` — site usa pra avisar quando estiver no v1 antigo.
-
-Arquivos do bridge:
+**Arquitetura nova** (mantém compatibilidade total com `POST /print` atual):
 
 ```text
 bridge/
-  lp-bridge.js           ← novo (entry point)
+  lp-bridge.js          ← entry point Express
   lib/
-    queue.js             ← FIFO worker
-    printer.js           ← singleton USB + status reading
-    logger.js            ← arquivo rotativo
-  package.json           ← +pino, +winston (log)
-  start-bridge.bat       ← inalterado
-  README.md              ← docs novas + endpoint /test
+    printer.js          ← singleton USB + leitura de status DLE EOT
+    queue.js            ← FIFO worker, 1 job por vez
+    logger.js           ← winston rotativo, bridge.log
+  package.json          ← +winston
+  start-bridge.bat      ← inalterado
 ```
 
-Empacotamento `.exe` continua via `pkg`/`nexe` (mesmo processo do atual).
+**Endpoints obrigatórios**:
+- `GET /health` → `{ online, bridge_version: "2.0.0", printer_connected, printer_status: "ok"|"paper_out"|"cover_open"|"offline", queue_depth, last_print_at, last_error }`
+- `POST /print` → mantém contrato atual (`{payload, format, source}`); responde `{ success, jobId, printed_at, printer_ok }` **só depois** do job terminar (fila serializa).
+- `GET /jobs/:id` → status do job.
+- `GET /test` → enfileira payload mínimo (`ESC @` + "TESTE BRIDGE v2\n\n\n" + `GS V`) e retorna jobId. Pra testar abrindo no navegador.
+- `GET /printers` → mantém igual.
 
-## Ordem de execução
+**Regras técnicas que o Codex precisa implementar**:
+1. **Singleton USB**: abre device 1x no boot e mantém. Reabre só em erro fatal (`LIBUSB_ERROR_NO_DEVICE`).
+2. **Fila FIFO in-memory**: 1 worker, processa um job por vez. Nada de paralelo.
+3. **Status físico real**: antes e depois do write, lê `DLE EOT 1` (printer status) e `DLE EOT 4` (paper sensor). Reflete em `printer_status`.
+4. **Retry interno**: 2 retries com 500ms se erro for recuperável (`LIBUSB_ERROR_BUSY`, `LIBUSB_ERROR_TIMEOUT`).
+5. **Timeout duro**: 8s por job. Se estourar, `device.close()` + reopen + erro pro caller.
+6. **Auto-recovery**: 3 erros seguidos → `device.close()` + reopen automático.
+7. **Log persistente**: winston em `%APPDATA%/lp-bridge/bridge.log`, rotativo diário, 7 dias de retenção, nível info por padrão e debug se `LP_BRIDGE_DEBUG=1`.
+8. **CORS**: mantém aberto pra qualquer origem (web em produção bate de fora do localhost).
+9. **Listen em `0.0.0.0:9100`**, não `127.0.0.1` — pra celular na mesma rede conseguir alcançar.
 
-1. **Aplicar Parte 1 no site** (botões de diagnóstico + watchdog 45s + teste binário mínimo + handshake opcional). Sem mexer no bridge ainda.
-2. Você roda os novos testes do Admin com o **bridge antigo** e me manda o resultado. Isso confirma se o problema vem do USB/bridge ou da web.
-3. Se confirmado, **gero o pacote completo do bridge v2** numa pasta `bridge-v2/` com todo o código novo + instruções de build do `.exe` para você passar pro Codex empacotar.
-4. Quando o v2 estiver rodando, o site detecta pelo `/health.bridge_version` e ativa os campos extras (status físico da impressora, queue depth, etc).
+### 3. Critérios de aceite (testes manuais que o Codex deve documentar no README)
 
-## Arquivos que vão ser tocados na Parte 1
+- Abrir `http://localhost:9100/test` no Chrome → sai cupom "TESTE BRIDGE v2".
+- Abrir `http://localhost:9100/health` → JSON com `bridge_version: "2.0.0"` e `printer_status` real.
+- Disparar 20 prints em loop via `curl` → todos saem em ordem, nenhum perdido.
+- Tirar papel da impressora → `/health` reporta `paper_out` em até 2s.
+- Desligar impressora → `/health` reporta `offline`, próximos jobs falham com erro claro.
+- Religar impressora → bridge volta sozinha, sem reiniciar `.exe`.
 
-- `src/components/admin/PrintConfigPanel.tsx` — adicionar seção “Diagnóstico”.
-- `src/lib/thermal-printer.ts` — função `sendTestMinimal()` e ajuste no parser do response do bridge.
-- `src/lib/global-order-runtime.ts` — watchdog 45s.
-- `src/components/admin/SystemTab.tsx` — painel “Pedidos travados em impressão”.
-- `src/lib/__tests__/print-pipeline.test.ts` — novo.
+### 4. Empacotamento `.exe`
 
-Bridge antigo continua funcionando. Nada quebra.
+Instruções pro Codex empacotar com `pkg`:
+```bash
+npm install -g pkg
+pkg lp-bridge.js --targets node18-win-x64 --output lp-bridge.exe
+```
+Lembrar de incluir `escpos-usb` nativo via `--public-packages "*"` se necessário.
+
+### 5. Compatibilidade com a v1
+A v2 mantém `POST /print` com mesmo body e response (`{success, error}`). Os campos novos (`jobId`, `printed_at`, `printer_ok`) são adicionais. Site funciona com qualquer versão; quando detectar `bridge_version >= 2.0.0` no `/health`, ativa os campos extras (já preparados no código web da Parte 1).
+
+## Arquivos tocados neste passo
+
+- **Novo**: `docs/PROMPT_CODEX_BRIDGE_V2.md` — único arquivo, pronto pra copiar e colar.
+
+Nenhum código de produção é alterado. Bridge antiga continua rodando até você gerar o novo `.exe`.
 
