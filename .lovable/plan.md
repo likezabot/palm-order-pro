@@ -1,75 +1,80 @@
 
 
-# Prompt para o Codex: Bridge v2 com fila, singleton USB e status real
+# Bridge v2.1 — imprimir via Spooler do Windows (sem Zadig)
 
-## Objetivo
+## Por que essa mudança
 
-Gerar um único arquivo Markdown — `docs/PROMPT_CODEX_BRIDGE_V2.md` — pronto pra você copiar e colar no Codex Desktop. Esse prompt instrui o Codex a reescrever o `lp-bridge.js` (e empacotar de novo o `.exe`) corrigindo as 8 falhas identificadas na auditoria anterior.
+A v2 falhou com `LIBUSB_ERROR_NOT_SUPPORTED` porque o Windows usa o driver nativo da impressora (`POS80_MeuSistema`), e `escpos-usb` exige WinUSB/libusb (que quebraria o app de entregas). Solução: parar de falar USB raw e enviar o ESC/POS direto pra **fila de impressão do Windows**, mesmo caminho que o app de entregas usa hoje.
 
-## O que o prompt vai conter
+## O que vou entregar
 
-### 1. Contexto resumido
-- O que é a bridge hoje (Express + escpos-usb na porta 9100).
-- Sintoma observado em produção: imprime nos primeiros minutos, depois para silenciosamente. Bridge continua respondendo `200 OK` mesmo quando a impressora não imprime mais.
-- Causa raiz suspeita: nova instância USB por request → `LIBUSB_ERROR_BUSY` acumulando + `device.write` resolvendo antes da impressora terminar.
+Um único arquivo: `docs/PROMPT_CODEX_BRIDGE_V2_1.md` — pronto pra colar no Codex Desktop. Esse prompt instrui o Codex a reescrever a camada de impressão da bridge.
 
-### 2. Especificação completa da v2
+## Especificação resumida da v2.1
 
-**Arquitetura nova** (mantém compatibilidade total com `POST /print` atual):
+**Stack nova:**
+- Remove: `escpos`, `escpos-usb`
+- Adiciona (primário): `@thiagoelg/node-printer` — envia buffer RAW pro spooler de uma impressora nomeada
+- Fallback automático: `child_process` + PowerShell (`Out-Printer` / `WritePrinter` via .NET) caso o binding nativo falhe no `pkg`
 
+**Arquitetura mantém o mesmo esqueleto da v2:**
 ```text
 bridge/
-  lp-bridge.js          ← entry point Express
+  lp-bridge.js          ← entry Express (igual)
   lib/
-    printer.js          ← singleton USB + leitura de status DLE EOT
-    queue.js            ← FIFO worker, 1 job por vez
-    logger.js           ← winston rotativo, bridge.log
-  package.json          ← +winston
-  start-bridge.bat      ← inalterado
+    printer.js          ← REESCRITO: spooler em vez de USB raw
+    queue.js            ← igual (FIFO 1 worker)
+    logger.js           ← igual (winston rotativo)
+  config.json           ← NOVO: { printer_name: "POS80_MeuSistema" }
 ```
 
-**Endpoints obrigatórios**:
-- `GET /health` → `{ online, bridge_version: "2.0.0", printer_connected, printer_status: "ok"|"paper_out"|"cover_open"|"offline", queue_depth, last_print_at, last_error }`
-- `POST /print` → mantém contrato atual (`{payload, format, source}`); responde `{ success, jobId, printed_at, printer_ok }` **só depois** do job terminar (fila serializa).
-- `GET /jobs/:id` → status do job.
-- `GET /test` → enfileira payload mínimo (`ESC @` + "TESTE BRIDGE v2\n\n\n" + `GS V`) e retorna jobId. Pra testar abrindo no navegador.
-- `GET /printers` → mantém igual.
+**Endpoints (mantém compatibilidade total com site):**
+- `GET /health` → adiciona `printer_name`, `printer_method: "spooler"`, `bridge_version: "2.1.0"`
+- `POST /print` → mesmo contrato; internamente chama spooler em vez de USB
+- `GET /printers` → agora lista impressoras **instaladas no Windows** (nomes como aparecem no Painel)
+- `POST /config` → NOVO: salva `printer_name` em `config.json`
+- `GET /test` → igual, usa a impressora configurada
 
-**Regras técnicas que o Codex precisa implementar**:
-1. **Singleton USB**: abre device 1x no boot e mantém. Reabre só em erro fatal (`LIBUSB_ERROR_NO_DEVICE`).
-2. **Fila FIFO in-memory**: 1 worker, processa um job por vez. Nada de paralelo.
-3. **Status físico real**: antes e depois do write, lê `DLE EOT 1` (printer status) e `DLE EOT 4` (paper sensor). Reflete em `printer_status`.
-4. **Retry interno**: 2 retries com 500ms se erro for recuperável (`LIBUSB_ERROR_BUSY`, `LIBUSB_ERROR_TIMEOUT`).
-5. **Timeout duro**: 8s por job. Se estourar, `device.close()` + reopen + erro pro caller.
-6. **Auto-recovery**: 3 erros seguidos → `device.close()` + reopen automático.
-7. **Log persistente**: winston em `%APPDATA%/lp-bridge/bridge.log`, rotativo diário, 7 dias de retenção, nível info por padrão e debug se `LP_BRIDGE_DEBUG=1`.
-8. **CORS**: mantém aberto pra qualquer origem (web em produção bate de fora do localhost).
-9. **Listen em `0.0.0.0:9100`**, não `127.0.0.1` — pra celular na mesma rede conseguir alcançar.
+**Regras técnicas:**
+1. **Nome configurável**: lê `config.json` no boot (default `"POS80_MeuSistema"`). Aceita override via `POST /config`.
+2. **Envio RAW**: `printer.printDirect({ data: buffer, printer: name, type: 'RAW' })` — o ESC/POS vai cru pro spooler, sem driver renderizando.
+3. **Fila serializada**: 1 job por vez (já existe na v2).
+4. **Status**: lê `printer.getPrinter(name)` → `status` retorna `IDLE`, `PRINTING`, `OFFLINE`, `PAPER_OUT`, etc. Reflete em `printer_status`.
+5. **Fallback PowerShell**: se `node-printer` falhar no boot, ativa modo PowerShell automaticamente (mais lento ~200ms mas zero dependência nativa). Loga qual modo está ativo.
+6. **Empacotamento `pkg`**: usa `--public-packages "*"` e copia `node_modules/@thiagoelg/node-printer/build/Release/` ao lado do `.exe`. Se der ruim, usa o caminho PowerShell que funciona em qualquer Windows.
+7. **Convivência com app de entregas**: ✅ confirmado — ambos usam o spooler, sem conflito de driver.
 
-### 3. Critérios de aceite (testes manuais que o Codex deve documentar no README)
+## Ajuste mínimo no site (mesmo passo)
 
-- Abrir `http://localhost:9100/test` no Chrome → sai cupom "TESTE BRIDGE v2".
-- Abrir `http://localhost:9100/health` → JSON com `bridge_version: "2.0.0"` e `printer_status` real.
-- Disparar 20 prints em loop via `curl` → todos saem em ordem, nenhum perdido.
-- Tirar papel da impressora → `/health` reporta `paper_out` em até 2s.
-- Desligar impressora → `/health` reporta `offline`, próximos jobs falham com erro claro.
-- Religar impressora → bridge volta sozinha, sem reiniciar `.exe`.
+Adicionar campo "Nome da Impressora no Windows" no painel **Admin → Impressão → Diagnóstico**, com:
+- Botão "Listar impressoras" (chama `/printers` da bridge)
+- Select com as impressoras detectadas
+- Botão "Salvar" (chama `POST /config` da bridge)
+- Default sugerido: `POS80_MeuSistema`
 
-### 4. Empacotamento `.exe`
+Arquivos tocados no site:
+- `src/components/admin/PrinterDiagnostics.tsx` — adicionar seção "Configuração da Impressora"
+- `src/lib/thermal-printer.ts` — funções `listBridgePrinters()` e `setBridgePrinter(name)`
 
-Instruções pro Codex empacotar com `pkg`:
-```bash
-npm install -g pkg
-pkg lp-bridge.js --targets node18-win-x64 --output lp-bridge.exe
-```
-Lembrar de incluir `escpos-usb` nativo via `--public-packages "*"` se necessário.
+## Critérios de aceite (no README do prompt)
 
-### 5. Compatibilidade com a v1
-A v2 mantém `POST /print` com mesmo body e response (`{success, error}`). Os campos novos (`jobId`, `printed_at`, `printer_ok`) são adicionais. Site funciona com qualquer versão; quando detectar `bridge_version >= 2.0.0` no `/health`, ativa os campos extras (já preparados no código web da Parte 1).
+- `lp-bridge-v2.1.exe` sobe sem erro de USB
+- `/health` retorna `printer_method: "spooler"` e `printer_name: "POS80_MeuSistema"`
+- `/test` no navegador → cupom sai pela mesma impressora que o app de entregas usa
+- 20 prints em loop saem em ordem
+- App de entregas continua imprimindo normal em paralelo (sem conflito)
+- Tirar papel → `/health` mostra `paper_out` (via status do spooler do Windows)
 
-## Arquivos tocados neste passo
+## Ordem de execução
 
-- **Novo**: `docs/PROMPT_CODEX_BRIDGE_V2.md` — único arquivo, pronto pra copiar e colar.
+1. Eu crio `docs/PROMPT_CODEX_BRIDGE_V2_1.md` (este passo)
+2. Você cola no Codex → gera bridge v2.1 + `.exe`
+3. Você roda o `.exe` novo → confirma `/health` e `/test`
+4. Eu ajusto o site pra ter o seletor de impressora (passo seguinte, separado)
 
-Nenhum código de produção é alterado. Bridge antiga continua rodando até você gerar o novo `.exe`.
+## Arquivos tocados agora
+
+- **Novo**: `docs/PROMPT_CODEX_BRIDGE_V2_1.md`
+
+Nenhum código de produção alterado. Bridge v1 continua rodando.
 
