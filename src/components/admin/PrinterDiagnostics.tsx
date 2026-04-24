@@ -69,12 +69,17 @@ const KIND_LABEL: Record<DiagEvent["kind"], string> = {
 
 interface Props {
   bridgeUrl: string;
+  onBridgeUrlChange?: (url: string) => void;
 }
 
-export function PrinterDiagnostics({ bridgeUrl }: Props) {
+export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
   const { toast } = useToast();
   const [running, setRunning] = useState<DiagEvent["kind"] | null>(null);
   const [events, setEvents] = useState<DiagEvent[]>([]);
+
+  // Editor da URL da bridge (sincroniza com config global)
+  const [urlDraft, setUrlDraft] = useState(bridgeUrl);
+  useEffect(() => setUrlDraft(bridgeUrl), [bridgeUrl]);
 
   // bridge v2.1: lista de impressoras + estado do health
   const [printers, setPrinters] = useState<BridgePrinterInfo[]>([]);
@@ -103,6 +108,33 @@ export function PrinterDiagnostics({ bridgeUrl }: Props) {
       cancelled = true;
     };
   }, [bridgeUrl]);
+
+  const saveBridgeUrl = () => {
+    const trimmed = urlDraft.trim();
+    if (!trimmed) {
+      toast({ title: "Informe a URL da bridge", variant: "destructive" });
+      return;
+    }
+    const cfg = loadPrintConfig();
+    savePrintConfig({ ...cfg, bridgeUrl: trimmed, printMode: "bridge" });
+    onBridgeUrlChange?.(trimmed);
+    push({ kind: "config", ok: true, message: `URL da bridge salva: ${trimmed}` });
+    toast({ title: "URL salva", description: "Rodando teste de Health…" });
+    // dispara health imediatamente
+    void (async () => {
+      const status = await checkBridgeStatus(trimmed + "?t=" + Date.now());
+      setLastHealth(status);
+      push({
+        kind: "health",
+        ok: status.online,
+        latencyMs: status.latencyMs,
+        message: status.online
+          ? `Online · v${status.bridge_version ?? "?"}`
+          : status.error ?? "Bridge offline",
+      });
+    })();
+  };
+
 
   const runHealth = async () => {
     setRunning("health");
