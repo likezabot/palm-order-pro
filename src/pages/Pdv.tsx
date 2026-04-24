@@ -16,6 +16,7 @@ import { Order, OrderItem } from "@/lib/types";
 import { manualPrintOrder, manualPrintDelta, manualPrintBill } from "@/lib/print-service";
 import { printCustomerReceipt } from "@/lib/print-receipt";
 import { loadPrintConfig } from "@/lib/print-config";
+import { enqueuePrintJob } from "@/lib/print-jobs";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useFeedback } from "@/hooks/use-feedback";
