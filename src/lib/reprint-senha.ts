@@ -5,6 +5,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { printSenha } from "./print-receipt";
+import { enqueuePrintJob } from "./print-jobs";
 
 export interface ReprintResult {
   ok: boolean;
