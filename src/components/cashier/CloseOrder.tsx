@@ -72,6 +72,10 @@ const CloseOrder = ({ order, onBack, onClosed }: Props) => {
 
       if (error) throw error;
 
+      if (shouldPrint) {
+        await enqueuePrintJob(order.id, "bill", { total });
+      }
+
       playFeedback("success");
       toast({ title: "Mesa fechada!" });
       cacheKeys.forEach((key) => queryClient.invalidateQueries({ queryKey: key as any }));
