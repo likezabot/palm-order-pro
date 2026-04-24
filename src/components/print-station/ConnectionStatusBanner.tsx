@@ -9,6 +9,12 @@ interface Props {
   bridgeUrl?: string;
 }
 
+function getHealthUrl(bridgeUrl: string): string {
+  const [rawPath, query = ""] = bridgeUrl.split("?");
+  const base = rawPath.replace(/\/(?:print|health)\/?$/, "").replace(/\/$/, "");
+  return `${base}/health${query ? `?${query}` : ""}`;
+}
+
 type OverallStatus = "all_ok" | "internet_off" | "realtime_off" | "bridge_off";
 
 /**
@@ -49,7 +55,7 @@ export default function ConnectionStatusBanner({ realtimeStatus, bridgeUrl }: Pr
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 4000);
-        const res = await fetch(`${bridgeUrl.replace(/\/$/, "")}/health`, {
+        const res = await fetch(getHealthUrl(bridgeUrl), {
           signal: ctrl.signal,
         });
         clearTimeout(t);
