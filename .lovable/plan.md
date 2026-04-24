@@ -1,80 +1,57 @@
 
 
-# Bridge v2.1 — imprimir via Spooler do Windows (sem Zadig)
+# Site v2.1 — Configurar IP da Bridge + Seletor de Impressora
 
-## Por que essa mudança
+## Por que
 
-A v2 falhou com `LIBUSB_ERROR_NOT_SUPPORTED` porque o Windows usa o driver nativo da impressora (`POS80_MeuSistema`), e `escpos-usb` exige WinUSB/libusb (que quebraria o app de entregas). Solução: parar de falar USB raw e enviar o ESC/POS direto pra **fila de impressão do Windows**, mesmo caminho que o app de entregas usa hoje.
+A bridge v2.1 está 100% funcional no PC, mas:
+1. Os dispositivos da rede (celular/tablet do garçom) não conseguem alcançá-la porque o site usa `localhost:9100` hardcoded.
+2. O nome da impressora ainda não pode ser trocado pela UI — precisa editar `config.json` na mão no PC.
 
-## O que vou entregar
+## O que vou fazer
 
-Um único arquivo: `docs/PROMPT_CODEX_BRIDGE_V2_1.md` — pronto pra colar no Codex Desktop. Esse prompt instrui o Codex a reescrever a camada de impressão da bridge.
+### 1. Configuração do IP da Bridge
 
-## Especificação resumida da v2.1
+**Local**: `src/lib/thermal-printer.ts`
+- Trocar URL hardcoded `http://localhost:9100` por leitura de `localStorage.getItem('bridge_url')` com fallback `http://localhost:9100`.
+- Função `setBridgeUrl(url)` salva no localStorage.
 
-**Stack nova:**
-- Remove: `escpos`, `escpos-usb`
-- Adiciona (primário): `@thiagoelg/node-printer` — envia buffer RAW pro spooler de uma impressora nomeada
-- Fallback automático: `child_process` + PowerShell (`Out-Printer` / `WritePrinter` via .NET) caso o binding nativo falhe no `pkg`
+**UI**: `src/components/admin/PrinterDiagnostics.tsx`
+- Nova seção "Endereço da Bridge" com:
+  - Input pré-preenchido com URL atual
+  - Placeholder mostrando `http://192.168.1.23:9100`
+  - Botão "Salvar e Testar" → salva + chama `/health`
+  - Texto explicativo: "Use o IP do PC onde o lp-bridge.exe está rodando"
 
-**Arquitetura mantém o mesmo esqueleto da v2:**
-```text
-bridge/
-  lp-bridge.js          ← entry Express (igual)
-  lib/
-    printer.js          ← REESCRITO: spooler em vez de USB raw
-    queue.js            ← igual (FIFO 1 worker)
-    logger.js           ← igual (winston rotativo)
-  config.json           ← NOVO: { printer_name: "POS80_MeuSistema" }
-```
+### 2. Seletor de Impressora
 
-**Endpoints (mantém compatibilidade total com site):**
-- `GET /health` → adiciona `printer_name`, `printer_method: "spooler"`, `bridge_version: "2.1.0"`
-- `POST /print` → mesmo contrato; internamente chama spooler em vez de USB
-- `GET /printers` → agora lista impressoras **instaladas no Windows** (nomes como aparecem no Painel)
-- `POST /config` → NOVO: salva `printer_name` em `config.json`
-- `GET /test` → igual, usa a impressora configurada
+**Local**: `src/lib/thermal-printer.ts`
+- `listBridgePrinters()` → `GET /printers`
+- `setBridgePrinter(name)` → `POST /config { printer_name }`
 
-**Regras técnicas:**
-1. **Nome configurável**: lê `config.json` no boot (default `"POS80_MeuSistema"`). Aceita override via `POST /config`.
-2. **Envio RAW**: `printer.printDirect({ data: buffer, printer: name, type: 'RAW' })` — o ESC/POS vai cru pro spooler, sem driver renderizando.
-3. **Fila serializada**: 1 job por vez (já existe na v2).
-4. **Status**: lê `printer.getPrinter(name)` → `status` retorna `IDLE`, `PRINTING`, `OFFLINE`, `PAPER_OUT`, etc. Reflete em `printer_status`.
-5. **Fallback PowerShell**: se `node-printer` falhar no boot, ativa modo PowerShell automaticamente (mais lento ~200ms mas zero dependência nativa). Loga qual modo está ativo.
-6. **Empacotamento `pkg`**: usa `--public-packages "*"` e copia `node_modules/@thiagoelg/node-printer/build/Release/` ao lado do `.exe`. Se der ruim, usa o caminho PowerShell que funciona em qualquer Windows.
-7. **Convivência com app de entregas**: ✅ confirmado — ambos usam o spooler, sem conflito de driver.
+**UI**: `src/components/admin/PrinterDiagnostics.tsx` (mesma seção)
+- Botão "Listar Impressoras" → popula um Select
+- Select com impressoras detectadas
+- Botão "Salvar Impressora" → chama `setBridgePrinter`
+- Mostra impressora atual lida do `/health`
 
-## Ajuste mínimo no site (mesmo passo)
+### 3. Indicador "qual modo está ativo"
 
-Adicionar campo "Nome da Impressora no Windows" no painel **Admin → Impressão → Diagnóstico**, com:
-- Botão "Listar impressoras" (chama `/printers` da bridge)
-- Select com as impressoras detectadas
-- Botão "Salvar" (chama `POST /config` da bridge)
-- Default sugerido: `POS80_MeuSistema`
+No painel já existente, mostrar:
+- `printer_method: spooler-powershell` → badge laranja "Modo PowerShell (lento mas estável)"
+- `printer_method: spooler-native` → badge verde "Modo Nativo (rápido)"
 
-Arquivos tocados no site:
-- `src/components/admin/PrinterDiagnostics.tsx` — adicionar seção "Configuração da Impressora"
-- `src/lib/thermal-printer.ts` — funções `listBridgePrinters()` e `setBridgePrinter(name)`
+## Arquivos tocados
 
-## Critérios de aceite (no README do prompt)
+- `src/lib/thermal-printer.ts` — adicionar `getBridgeUrl/setBridgeUrl/listBridgePrinters/setBridgePrinter`
+- `src/components/admin/PrinterDiagnostics.tsx` — nova seção "Configuração da Bridge"
 
-- `lp-bridge-v2.1.exe` sobe sem erro de USB
-- `/health` retorna `printer_method: "spooler"` e `printer_name: "POS80_MeuSistema"`
-- `/test` no navegador → cupom sai pela mesma impressora que o app de entregas usa
-- 20 prints em loop saem em ordem
-- App de entregas continua imprimindo normal em paralelo (sem conflito)
-- Tirar papel → `/health` mostra `paper_out` (via status do spooler do Windows)
+Nenhuma mudança no `.exe`, nada no Supabase, nada de migrations.
 
-## Ordem de execução
+## Critérios de aceite
 
-1. Eu crio `docs/PROMPT_CODEX_BRIDGE_V2_1.md` (este passo)
-2. Você cola no Codex → gera bridge v2.1 + `.exe`
-3. Você roda o `.exe` novo → confirma `/health` e `/test`
-4. Eu ajusto o site pra ter o seletor de impressora (passo seguinte, separado)
-
-## Arquivos tocados agora
-
-- **Novo**: `docs/PROMPT_CODEX_BRIDGE_V2_1.md`
-
-Nenhum código de produção alterado. Bridge v1 continua rodando.
+- Admin consegue trocar URL da bridge de `localhost:9100` pra `192.168.1.23:9100` e salvar
+- Após salvar, o `/health` no painel responde verde
+- Admin consegue listar impressoras e selecionar `POS80_MeuSistema` (ou outra)
+- Cupons de teste imprimem da palm/cozinha rodando no celular do garçom
 
