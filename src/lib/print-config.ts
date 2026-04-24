@@ -49,6 +49,14 @@ export interface PrintConfig {
 const STORAGE_KEY = "print_config";
 const DB_KEY = "print_config";
 
+/**
+ * Campos que NÃO devem ser sincronizados pelo banco — são por dispositivo.
+ * Ex.: o desktop usa http://localhost:9100/print e o celular usa http://IP:9100/print.
+ * Se sincronizássemos isso, um dispositivo quebraria o outro.
+ */
+const LOCAL_ONLY_KEYS = ["bridgeUrl", "printMode"] as const;
+type LocalOnlyKey = typeof LOCAL_ONLY_KEYS[number];
+
 const DEFAULT_VISIBLE: VisibleSections = {
   title: true,
   waiter: true,

@@ -1,80 +1,70 @@
+# Corrigir falha de impressão no desktop integrado
 
+## Problema identificado
+Há 3 falhas combinadas:
 
-# Prompt para o Codex testar a Bridge v2.1 + Site localmente
+1. A URL da bridge está sendo tratada como configuração global e sincronizada entre dispositivos. Isso faz `localhost` ou outro endereço “vazar” entre celular, web e desktop.
+2. O frontend ainda interpreta o `/health` com o formato antigo da bridge (`printer_connected`) e pode marcar a bridge como indisponível/inválida mesmo com a v2.2 rodando.
+3. A impressão manual no PDV está com bug de UI: `manualPrintOrder()` retorna um objeto, mas a tela trata isso como booleano e mostra sucesso mesmo quando a impressão falhou.
 
-Vou gerar um documento `docs/PROMPT_CODEX_TESTE_LOCAL_BRIDGE_V2_1.md` com instruções completas pro Codex (que tem acesso ao git e ao PC) executar o ciclo de teste end-to-end: bridge rodando + site apontando pro IP certo + impressão real saindo do celular.
+## O que vou implementar
 
-## O que o prompt vai conter
+### 1. Separar config compartilhada da config local do dispositivo
+Vou ajustar `src/lib/print-config.ts` para que:
+- layout do cupom continue sincronizado entre dispositivos
+- `bridgeUrl` fique local por dispositivo
+- `printMode` também possa permanecer local, evitando um device forçar o outro para modo bridge/browser
 
-### 1. Contexto (pra Codex entender o cenário)
-- Bridge v2.1 já compilada e rodando como `lp-bridge-v2.1.exe` em `spooler-powershell` mode
-- Site já tem UI de configuração de IP + seletor de impressora em **Admin → Sistema → Diagnóstico de Impressora**
-- Problema atual: precisa validar fim-a-fim que o celular do garçom (em `192.168.x.x`) consegue mandar cupom pra impressora `POS80_MeuSistema` no PC
+Isso evita que o desktop fique preso numa URL errada e evita que o celular receba `localhost`.
 
-### 2. Pré-checagem (Codex roda no PC)
-```powershell
-# Descobrir IP do PC na rede
-ipconfig | findstr IPv4
+### 2. Compatibilizar o frontend com a bridge v2.2
+Vou atualizar `src/lib/thermal-printer.ts` para aceitar os dois contratos de health:
+- legado: `printer_connected`
+- novo: `printer_ready`, `printer_name`, `printer_method`, `bridge_version`
 
-# Confirmar bridge viva
-Invoke-RestMethod http://localhost:9100/health
+Também vou melhorar a leitura de erro para distinguir:
+- bridge offline
+- bridge online sem impressora pronta
+- timeout/localhost inacessível
 
-# Confirmar bridge ouve em todas interfaces (não só localhost)
-netstat -ano | findstr :9100
-# Esperado: 0.0.0.0:9100 LISTENING
-```
+### 3. Corrigir o diagnóstico e a UX do admin
+Vou ajustar `src/components/admin/PrinterDiagnostics.tsx` e `src/components/admin/PrintConfigPanel.tsx` para:
+- mostrar claramente quando a URL é local do dispositivo
+- não sobrescrever a URL local com sync remoto
+- refletir corretamente o status da bridge v2.2
+- manter a mesma tela no web e no desktop, mas com comportamento de configuração local
 
-### 3. Liberar firewall (causa #1 de falha silenciosa)
-```powershell
-New-NetFirewallRule -DisplayName "LP Bridge 9100" `
-  -Direction Inbound -Protocol TCP -LocalPort 9100 -Action Allow
-```
+### 4. Corrigir a impressão manual que hoje dá falso positivo
+Vou corrigir `src/pages/Pdv.tsx` para tratar `ManualPrintResult` corretamente, igual ao fluxo já mais seguro do caixa.
 
-### 4. Teste de rede do celular
-- Celular abre `http://<IP_DO_PC>:9100/health` no navegador
-- Se responder JSON → rede OK
-- Se "não conseguiu conectar" → firewall ou rede Wi-Fi diferente
+Resultado esperado:
+- não exibir “Cupom enviado para impressão!” quando a bridge falhar
+- mostrar erro real ou status de fila
+- alinhar o comportamento do PDV com `src/pages/Cashier.tsx`
 
-### 5. Configuração no site (passo a passo na UI)
-1. Celular abre `https://palm-order-pro.lovable.app`
-2. Vai em **Admin** (PIN gerente) → aba **Sistema** → **Diagnóstico de Impressora**
-3. Seção **"Endereço da Bridge"**:
-   - Cola `http://<IP_DO_PC>:9100`
-   - Clica **Salvar e Testar** → deve ficar verde com versão `2.1.0`
-4. Seção **"Impressora"**:
-   - Clica **Listar Impressoras** → dropdown popula
-   - Seleciona `POS80_MeuSistema`
-   - Clica **Salvar Impressora**
-5. Clica **Imprimir Teste** → cupom sai no PC
+### 5. Garantir que a fila local respeite o novo health
+Vou validar `src/lib/print-queue-worker.ts` indiretamente via normalização do status, para que retries não parem por interpretar errado a resposta da bridge.
 
-### 6. Teste real de fluxo (palm → cozinha → impressora)
-- Abre **Palm** no celular
-- Cria pedido em qualquer mesa, adiciona 1 espeto
-- Confirma → cupom de cozinha deve sair automaticamente
+## Arquivos principais
+- `src/lib/print-config.ts`
+- `src/lib/thermal-printer.ts`
+- `src/components/admin/PrinterDiagnostics.tsx`
+- `src/components/admin/PrintConfigPanel.tsx`
+- `src/pages/Pdv.tsx`
 
-### 7. Diagnóstico se falhar
-Tabela com sintoma → causa → comando de check:
-- Site mostra "Bridge offline" → checar `bridgeUrl` no localStorage do celular: `localStorage.getItem('print_config_v1')`
-- `/health` responde mas `/print` falha → checar `printer_status` no `/health`
-- Cupom sai cortado / com lixo → modo `spooler-powershell` está ok pra texto puro, problema é encoding (CP860 vs UTF-8 no driver)
+## Resultado esperado
+Depois disso:
+- o desktop pode usar `http://localhost:9100/print` sem quebrar o celular
+- o celular pode usar `http://IP_DO_PC:9100/print` sem contaminar o desktop
+- o admin mostra o status real da bridge integrada v2.2
+- a impressão manual não vai mais mentir que imprimiu quando falhou
+- os testes Health / Mínimo / Cupom ficam coerentes com o que a bridge realmente respondeu
 
-### 8. Git: o que commitar se Codex precisar ajustar algo
-- Bridge: `bridge/lp-bridge.js`, `bridge/package.json`
-- Site: `src/lib/thermal-printer.ts`, `src/components/admin/PrinterDiagnostics.tsx`, `src/components/admin/NetworkTab.tsx`
-- Branch sugerida: `fix/bridge-v2.1-network-validation`
-- Lovable sincroniza automaticamente via GitHub bidirectional sync
+## Detalhes técnicos
+- Preservar localmente `bridgeUrl` e `printMode` ao fazer `syncPrintConfigFromDb()`
+- Normalizar health com algo como:
+  - `printer_connected ?? printer_ready ?? false`
+- Ler metadados novos do payload bruto (`bridge_version`, `printer_name`, `printer_method`)
+- Ajustar `Pdv.tsx` para verificar `result.ok`, `result.bridgeOk` e `result.queued` em vez de usar truthiness do objeto
 
-## Arquivo tocado
-
-- **Novo**: `docs/PROMPT_CODEX_TESTE_LOCAL_BRIDGE_V2_1.md`
-
-Nenhum código de produção alterado. Só documentação.
-
-## Critério de aceite
-
-- Codex consegue, seguindo o prompt sem fazer perguntas, validar os 7 passos e reportar de volta com:
-  - IP do PC usado
-  - Resposta do `/health` remoto
-  - Print do cupom que saiu (foto ou "saiu OK")
-  - Lista de erros encontrados, se houver
-
+Se você aprovar, eu implemento essas correções no frontend agora.
