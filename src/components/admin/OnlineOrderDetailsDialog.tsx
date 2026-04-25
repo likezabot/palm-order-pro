@@ -123,6 +123,7 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
   const [items, setItems] = useState<Item[]>([]);
   const [orderNote, setOrderNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
     if (!open || !orderId) {
