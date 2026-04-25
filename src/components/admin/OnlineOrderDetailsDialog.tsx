@@ -9,6 +9,9 @@ import {
   Store,
   UtensilsCrossed,
   User,
+  MessageCircle,
+  ArrowRight,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Dialog,
@@ -18,7 +21,23 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  buildWaMessage,
+  buildWaUrl,
+  shortOrderId,
+  WA_CONTEXT_LABEL,
+  type WaContext,
+} from "@/lib/online-order-messages";
 
 type Address = {
   street?: string | null;
