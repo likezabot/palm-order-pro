@@ -13,14 +13,31 @@ import {
   Eye,
   Search,
   CreditCard,
+  ArrowRight,
+  CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import OnlineOrderEditDialog from "./OnlineOrderEditDialog";
 import OnlineOrderDetailsDialog from "./OnlineOrderDetailsDialog";
+import {
+  buildWaMessage,
+  buildWaUrl,
+  shortOrderId,
+  WA_CONTEXT_LABEL,
+  type WaContext,
+} from "@/lib/online-order-messages";
 
 type DeliveryAddress = {
   street?: string | null;
@@ -95,7 +112,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 
 function shortId(id: string) {
-  return id.slice(0, 8).toUpperCase();
+  return shortOrderId(id);
 }
 
 function formatAddress(addr: DeliveryAddress): string {
@@ -133,18 +150,45 @@ async function copyToClipboard(text: string, label: string) {
   }
 }
 
-function openWhatsApp(phone: string, name: string | null) {
-  const digits = onlyDigits(phone);
-  if (!digits) {
+function openWhatsAppContext(opts: {
+  context: WaContext;
+  phone: string;
+  customerName: string | null;
+  shortId: string;
+}) {
+  const msg = buildWaMessage({
+    context: opts.context,
+    customerName: opts.customerName,
+    shortId: opts.shortId,
+  });
+  const url = buildWaUrl(opts.phone, msg);
+  if (!url) {
     toast.error("Telefone inválido");
     return;
   }
-  const intl = digits.length <= 11 ? `55${digits}` : digits;
-  const greeting = name ? `Olá, ${name}!` : "Olá!";
-  const url = `https://wa.me/${intl}?text=${encodeURIComponent(
-    `${greeting} Sobre seu pedido...`,
-  )}`;
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+const NEXT_STATUS: Record<string, { next: string; label: string } | null> = {
+  new: { next: "preparing", label: "Iniciar preparo" },
+  preparing: { next: "done", label: "Marcar pronto" },
+  done: { next: "paid", label: "Finalizar" },
+  paid: null,
+  cancelled: null,
+};
+
+async function advanceStatus(orderId: string, currentStatus: string) {
+  const next = NEXT_STATUS[currentStatus]?.next;
+  if (!next) return;
+  const { error } = await supabase.rpc("update_order_status" as any, {
+    p_order_id: orderId,
+    p_status: next,
+  });
+  if (error) {
+    toast.error(`Não foi possível avançar status: ${error.message}`);
+    return;
+  }
+  toast.success(`Pedido movido para "${STATUS_LABEL[next] ?? next}"`);
 }
 
 export default function OnlineOrdersTab() {
@@ -427,15 +471,43 @@ export default function OnlineOrdersTab() {
                           >
                             <Phone size={14} />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
-                            onClick={() => openWhatsApp(phone, o.customer_name_snapshot)}
-                            title="Abrir WhatsApp"
-                          >
-                            <MessageCircle size={14} />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
+                                title="WhatsApp do cliente"
+                              >
+                                <MessageCircle size={14} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuLabel>Mensagem pronta</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {(
+                                [
+                                  "received",
+                                  "preparing",
+                                  isDelivery ? "out_for_delivery" : "ready_pickup",
+                                ] as WaContext[]
+                              ).map((ctx) => (
+                                <DropdownMenuItem
+                                  key={ctx}
+                                  onClick={() =>
+                                    openWhatsAppContext({
+                                      context: ctx,
+                                      phone,
+                                      customerName: o.customer_name_snapshot,
+                                      shortId: shortId(o.id),
+                                    })
+                                  }
+                                >
+                                  {WA_CONTEXT_LABEL[ctx]}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </>
                       )}
                       {isDelivery && addrText && (
@@ -451,9 +523,25 @@ export default function OnlineOrdersTab() {
                       )}
                     </div>
 
+                    {/* Avançar status */}
+                    {NEXT_STATUS[o.status] && (
+                      <Button
+                        variant="default"
+                        className="w-full gap-2 h-11 font-bold"
+                        onClick={() => advanceStatus(o.id, o.status)}
+                      >
+                        {o.status === "done" ? (
+                          <CheckCircle2 size={16} />
+                        ) : (
+                          <ArrowRight size={16} />
+                        )}
+                        {NEXT_STATUS[o.status]?.label}
+                      </Button>
+                    )}
+
                     <Button
-                      variant="default"
-                      className="w-full gap-2 h-11 font-bold"
+                      variant="outline"
+                      className="w-full gap-2 h-10 font-bold"
                       onClick={() => setEditingId(o.id)}
                     >
                       <Pencil size={16} /> Editar pedido

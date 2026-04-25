@@ -9,6 +9,9 @@ import {
   Store,
   UtensilsCrossed,
   User,
+  MessageCircle,
+  ArrowRight,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Dialog,
@@ -18,7 +21,23 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  buildWaMessage,
+  buildWaUrl,
+  shortOrderId,
+  WA_CONTEXT_LABEL,
+  type WaContext,
+} from "@/lib/online-order-messages";
 
 type Address = {
   street?: string | null;
@@ -162,12 +181,59 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
     ? PAYMENT_LABEL[order.payment_method] ?? order.payment_method
     : null;
 
+  const sid = order ? shortOrderId(order.id) : "";
+  const phone = order?.customer_phone_snapshot ?? "";
+  const customerName = order?.customer_name_snapshot ?? null;
+  const nextMap: Record<string, { next: string; label: string } | null> = {
+    new: { next: "preparing", label: "Iniciar preparo" },
+    preparing: { next: "done", label: "Marcar pronto" },
+    done: { next: "paid", label: "Finalizar" },
+    paid: null,
+    cancelled: null,
+  };
+  const nextStep = order ? nextMap[order.status] : null;
+
+  async function handleAdvance() {
+    if (!order || !nextStep) return;
+    const { error } = await supabase.rpc("update_order_status" as any, {
+      p_order_id: order.id,
+      p_status: nextStep.next,
+    });
+    if (error) {
+      toast.error(`Não foi possível avançar status: ${error.message}`);
+      return;
+    }
+    toast.success(`Pedido movido para "${STATUS_LABEL[nextStep.next] ?? nextStep.next}"`);
+    setOrder({ ...order, status: nextStep.next });
+  }
+
+  function handleWhatsApp(ctx: WaContext) {
+    if (!phone) {
+      toast.error("Cliente sem telefone");
+      return;
+    }
+    const msg = buildWaMessage({
+      context: ctx,
+      customerName,
+      shortId: sid,
+    });
+    const url = buildWaUrl(phone, msg);
+    if (!url) {
+      toast.error("Telefone inválido");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
-            Detalhes do pedido
+            <span>Detalhes do pedido</span>
+            {order && (
+              <span className="font-mono text-base text-primary">#{sid}</span>
+            )}
             {order && (
               <Badge variant="outline" className="text-[10px] uppercase">
                 {STATUS_LABEL[order.status] ?? order.status}
@@ -180,6 +246,23 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
 
         {order && !loading && (
           <div className="space-y-4 text-sm">
+            {/* Destaque: tipo de serviço */}
+            <div
+              className={`flex items-center justify-between gap-2 rounded-xl border-2 px-3 py-2.5 ${
+                isDelivery
+                  ? "border-primary/40 bg-primary/10"
+                  : "border-success/40 bg-success/10"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon size={20} className={isDelivery ? "text-primary" : "text-success"} />
+                <span className="font-black uppercase text-sm">
+                  {SERVICE_LABEL[order.service_type] ?? order.service_type}
+                </span>
+              </div>
+              <span className="font-mono text-xs text-muted-foreground">#{sid}</span>
+            </div>
+
             {/* Cliente */}
             <section className="space-y-1.5">
               <h3 className="text-xs font-black uppercase text-muted-foreground">Cliente</h3>
@@ -195,13 +278,9 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
               )}
             </section>
 
-            {/* Tipo + horários */}
+            {/* Horários */}
             <section className="space-y-1.5">
-              <h3 className="text-xs font-black uppercase text-muted-foreground">Atendimento</h3>
-              <div className="flex items-center gap-2">
-                <Icon size={14} className="text-muted-foreground" />
-                <span className="font-semibold">{SERVICE_LABEL[order.service_type] ?? order.service_type}</span>
-              </div>
+              <h3 className="text-xs font-black uppercase text-muted-foreground">Horários</h3>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock size={14} />
                 Pedido feito às{" "}
@@ -251,12 +330,14 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
               </section>
             )}
 
-            {/* Observação */}
+            {/* Observação geral */}
             {orderNote && (
               <section className="space-y-1.5">
-                <h3 className="text-xs font-black uppercase text-muted-foreground">Observação</h3>
-                <div className="flex items-start gap-2 rounded-lg bg-muted/40 p-2">
-                  <StickyNote size={14} className="text-muted-foreground mt-0.5" />
+                <h3 className="text-xs font-black uppercase text-muted-foreground">
+                  Observação do cliente
+                </h3>
+                <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-2.5">
+                  <StickyNote size={14} className="text-warning mt-0.5 shrink-0" />
                   <span className="italic">{orderNote}</span>
                 </div>
               </section>
@@ -275,7 +356,10 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
                         {it.quantity}× {it.product_name}
                       </div>
                       {it.note && (
-                        <div className="text-xs italic text-muted-foreground">{it.note}</div>
+                        <div className="mt-0.5 inline-flex items-start gap-1 text-xs italic text-warning">
+                          <StickyNote size={11} className="mt-0.5 shrink-0" />
+                          {it.note}
+                        </div>
                       )}
                     </div>
                     <div className="text-right tabular-nums shrink-0">
@@ -305,6 +389,50 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
                 <span>Total</span>
                 <span>R$ {total.toFixed(2)}</span>
               </div>
+            </section>
+
+            {/* Ações */}
+            <section className="border-t border-border pt-3 space-y-2">
+              {nextStep && (
+                <Button
+                  className="w-full gap-2 h-11 font-bold"
+                  onClick={handleAdvance}
+                >
+                  {order.status === "done" ? (
+                    <CheckCircle2 size={16} />
+                  ) : (
+                    <ArrowRight size={16} />
+                  )}
+                  {nextStep.label}
+                </Button>
+              )}
+              {phone && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 h-11 font-bold text-success border-success/30 hover:bg-success/10"
+                    >
+                      <MessageCircle size={16} /> WhatsApp do cliente
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>Mensagem pronta</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {(
+                      [
+                        "received",
+                        "preparing",
+                        isDelivery ? "out_for_delivery" : "ready_pickup",
+                      ] as WaContext[]
+                    ).map((ctx) => (
+                      <DropdownMenuItem key={ctx} onClick={() => handleWhatsApp(ctx)}>
+                        {WA_CONTEXT_LABEL[ctx]}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </section>
           </div>
         )}
