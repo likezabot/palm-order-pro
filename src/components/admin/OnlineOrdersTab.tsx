@@ -15,6 +15,11 @@ import {
   CreditCard,
   ArrowRight,
   CheckCircle2,
+  Hash,
+  Copy,
+  DollarSign,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
