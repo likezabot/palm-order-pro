@@ -25,6 +25,8 @@ const InstallKitchen = lazy(() => import("./pages/InstallKitchen"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Admin = lazy(() => import("./pages/Admin"));
 const PublicMenu = lazy(() => import("./pages/PublicMenu"));
+const PublicCheckout = lazy(() => import("./pages/PublicCheckout"));
+const PublicOrderSuccess = lazy(() => import("./pages/PublicOrderSuccess"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">
@@ -56,6 +58,8 @@ const AnimatedRoutes = () => {
           <Route path="/instalar/palm" element={<InstallPalm />} />
           <Route path="/instalar/cozinha" element={<InstallKitchen />} />
           <Route path="/menu/:slug" element={<PublicMenu />} />
+          <Route path="/menu/:slug/checkout" element={<PublicCheckout />} />
+          <Route path="/menu/:slug/sucesso/:orderId" element={<PublicOrderSuccess />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
