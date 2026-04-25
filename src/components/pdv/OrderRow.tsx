@@ -48,9 +48,11 @@ interface OrderRowProps {
   onEdit?: (order: Order) => void;
   /** Quando status === "done", o que fazer (ex: abrir pagamento). Default = onSelect. */
   onClose?: (order: Order) => void;
+  /** Se true, marca o card como "novo / não visualizado" (entrega online). */
+  isUnseen?: boolean;
 }
 
-const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose }, ref) => {
+const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose, isUnseen }, ref) => {
   // Cronômetro do TEMPO NA ETAPA ATUAL (updated_at)
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const { get: getJobInfo } = usePrintJobsStatus();
