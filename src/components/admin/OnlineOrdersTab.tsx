@@ -227,6 +227,32 @@ export default function OnlineOrdersTab() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
+  const [advancingIds, setAdvancingIds] = useState<Set<string>>(new Set());
+
+  async function handleAdvance(orderId: string, currentStatus: string) {
+    const next = NEXT_STATUS[currentStatus]?.next;
+    if (!next) return;
+    if (advancingIds.has(orderId)) return;
+    setAdvancingIds((s) => {
+      const n = new Set(s);
+      n.add(orderId);
+      return n;
+    });
+    const { error } = await supabase.rpc("update_order_status" as any, {
+      p_order_id: orderId,
+      p_status: next,
+    });
+    if (error) {
+      dedupedToast("error", `Não foi possível avançar status: ${error.message}`);
+    } else {
+      dedupedToast("success", `Pedido movido para "${STATUS_LABEL[next] ?? next}"`);
+    }
+    setAdvancingIds((s) => {
+      const n = new Set(s);
+      n.delete(orderId);
+      return n;
+    });
+  }
 
   const ordersQuery = useQuery({
     queryKey: ["admin", "online-orders"],
