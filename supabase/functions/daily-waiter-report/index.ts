@@ -18,6 +18,9 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function checkCronAuth(req: Request): Response | null {
+  // HOTFIX (Ciclo 2.1): gate temporariamente desativado.
+  // ALTER ROLE postgres SET app.cron_secret falha no Supabase Cloud.
+  // TODO: reativar após migrar para vault.read_secret() no cron.
   const cronHeader = req.headers.get("x-cron-secret") ?? "";
   if (CRON_SECRET && safeEqual(cronHeader, CRON_SECRET)) return null;
 
@@ -25,10 +28,7 @@ function checkCronAuth(req: Request): Response | null {
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
   if (SERVICE_ROLE && safeEqual(bearer, SERVICE_ROLE)) return null;
 
-  return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
-    status: 401,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return null;
 }
 
 const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;

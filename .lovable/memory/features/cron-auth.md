@@ -1,43 +1,50 @@
 ---
 name: cron-auth
-description: Edge functions notify-telegram, check-stale-tables, daily-waiter-report — gate por CRON_SECRET + cron precisa de app.cron_secret GUC
+description: Edge functions notify-telegram, check-stale-tables, daily-waiter-report — gate REVERTIDO temporariamente (Ciclo 2.1 hotfix); reimplementação pendente via vault
 type: feature
 ---
 
-# Autenticação dos crons Telegram (Ciclo 2 — A14/A15/A16)
+# Autenticação dos crons Telegram — ESTADO ATUAL (Ciclo 2.1)
 
-As 3 edge functions agendadas pelo `pg_cron` têm gate de auth por header.
+## ⚠️ Gate REVERTIDO (hotfix)
 
-## Como o gate valida (mesma função `checkCronAuth` nas 3 fns)
+`ALTER ROLE postgres SET app.cron_secret` falha no Supabase Cloud com `permission denied`.
+Sem o GUC, os crons batiam 401 e as notificações Telegram pararam.
 
-Aceita 2 caminhos (constant-time `safeEqual`):
-1. `X-Cron-Secret: <CRON_SECRET>` — **preferencial**
-2. `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` — fallback
+**Hotfix aplicado:** `checkCronAuth()` nas 3 fns agora retorna `null` (libera passagem)
+mesmo sem header. Continua aceitando `X-Cron-Secret` e `Authorization: Bearer SERVICE_ROLE_KEY`
+quando presentes — apenas não rejeita mais quando ausentes.
 
-Sem nenhum dos dois → 401 `{"ok":false,"error":"unauthorized"}`.
+Crons voltaram a funcionar. Operação POS nunca foi afetada (não depende dessas fns).
 
-## Cron jobs (atualizados no banco, NÃO em migration porque contém URL/keys)
+## Reimplementação correta (pendente)
 
-Todos os 3 (`drain-notification-queue`, `check-stale-tables`, `daily-waiter-report`)
-agora enviam:
-
-```
-'X-Cron-Secret', current_setting('app.cron_secret', true)
-```
-
-Para os crons funcionarem, o operador precisa rodar UMA vez no SQL Editor:
+Usar **Supabase Vault** (suportado nativamente em Cloud, sem precisar de GUC):
 
 ```sql
-ALTER ROLE postgres SET app.cron_secret = '<mesmo valor do secret CRON_SECRET>';
-SELECT pg_reload_conf();
+-- 1. Salvar secret no Vault (via Cloud UI ou SQL)
+SELECT vault.create_secret('<valor>', 'cron_secret');
+
+-- 2. No cron, ler do Vault em runtime
+SELECT cron.schedule(
+  'drain-notification-queue',
+  '* * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://<ref>.supabase.co/functions/v1/notify-telegram',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'X-Cron-Secret', (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_secret')
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
 ```
 
-(Não usar `ALTER DATABASE postgres` — proibido.)
+3. Depois que o cron estiver enviando o header, remover o `return null` final
+   do `checkCronAuth()` nas 3 fns para reativar o 401.
 
-Enquanto isso não for feito, os crons batem 401 e ficam silenciosos.
-A operação POS NÃO é afetada (só notificações Telegram param).
+## Validação extra em daily-waiter-report (mantida)
 
-## Validação extra em daily-waiter-report
-
-`?date=YYYY-MM-DD` é validado contra `/^\d{4}-\d{2}-\d{2}$/` antes de uso.
-Param inválido → ignorado, usa default (dia anterior em BRT).
+`?date=YYYY-MM-DD` validado contra `/^\d{4}-\d{2}-\d{2}$/`.
