@@ -95,6 +95,7 @@ export default function PublicMyOrders() {
   const reorder = useCallback(
     (order: CustomerOrder) => {
       clear();
+      let added = 0;
       order.items.forEach((it) => {
         if (!it.product_id) return;
         const fakeProduct: PublicProduct = {
@@ -109,7 +110,13 @@ export default function PublicMyOrders() {
           display_order: 0,
         } as unknown as PublicProduct;
         add(fakeProduct, it.quantity, it.note ?? "");
+        added += it.quantity;
       });
+      if (added > 0) {
+        toast.success("Itens adicionados ao carrinho", {
+          description: `${added} ${added === 1 ? "item" : "itens"} prontos para revisar.`,
+        });
+      }
       navigate(`/menu/${slug}`);
     },
     [add, clear, navigate, slug],
