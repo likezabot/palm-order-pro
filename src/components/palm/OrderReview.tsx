@@ -383,17 +383,26 @@ const OrderReview = ({
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col gap-2 p-2">
-        {cart.map((item) => (
-          <CartItemRow
-            key={`${item.product.id}-${(item.waiter_name || "").trim().toUpperCase()}`}
-            item={item}
-            showWaiterTag={showWaiterTag}
-            fallbackWaiter={waiterName}
-            onUpdateQuantity={onUpdateQuantity}
-            onUpdateNote={onUpdateNote}
-            onRemove={onRemove}
-          />
-        ))}
+        {cart.map((item) => {
+          const meta = itemsMeta?.get(cartMetaKey(item.product.id, item.waiter_name));
+          const originalQty = meta?.originalQty ?? 0;
+          const addedQty = Math.max(0, item.quantity - originalQty);
+          return (
+            <CartItemRow
+              key={`${item.product.id}-${(item.waiter_name || "").trim().toUpperCase()}`}
+              item={item}
+              showWaiterTag={showWaiterTag}
+              fallbackWaiter={waiterName}
+              originalQty={originalQty}
+              addedQty={addedQty}
+              lastWaiter={meta?.lastWaiter}
+              lastAddedAt={meta?.lastAddedAt}
+              onUpdateQuantity={onUpdateQuantity}
+              onUpdateNote={onUpdateNote}
+              onRemove={onRemove}
+            />
+          );
+        })}
       </div>
 
       <OrderReviewFooter
