@@ -231,7 +231,7 @@ export default function OnlineOrderEditDialog({
               <span className="text-muted-foreground">Subtotal</span>
               <span className="tabular-nums">R$ {subtotal.toFixed(2)}</span>
             </div>
-            {fee > 0 && (
+            {orderInfo?.service_type === "delivery" && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Taxa de entrega</span>
                 <span className="tabular-nums">R$ {fee.toFixed(2)}</span>
