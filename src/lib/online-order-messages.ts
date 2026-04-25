@@ -25,20 +25,20 @@ export function buildWaMessage(opts: {
   restaurantName?: string;
   etaText?: string | null;
 }): string {
-  const greet = opts.customerName ? `Olá, ${opts.customerName}!` : "Olá!";
-  const code = `Pedido #${opts.shortId}`;
-  const r = opts.restaurantName ? ` ${opts.restaurantName}` : "";
+  const who = opts.customerName ? opts.customerName.split(" ")[0] : null;
+  const greet = who ? `Olá, ${who}!` : "Olá!";
+  const code = `pedido #${opts.shortId}`;
   switch (opts.context) {
     case "received":
-      return `${greet} Aqui é${r}. Recebemos seu ${code} e já vamos preparar. 🙌`;
+      return `${greet} Recebemos seu ${code}. Já vamos preparar. 🙌`;
     case "preparing":
-      return `${greet} Seu ${code} já está em preparo na cozinha. 👨‍🍳${
+      return `${greet} Seu ${code} entrou em preparo.${
         opts.etaText ? ` Previsão: ${opts.etaText}.` : ""
-      }`;
+      } 👨‍🍳`;
     case "ready_pickup":
-      return `${greet} Seu ${code} está pronto para retirada no balcão. 🛍️ Pode vir buscar!`;
+      return `${greet} Seu ${code} está pronto para retirada. 🛍️`;
     case "out_for_delivery":
-      return `${greet} Seu ${code} acabou de sair para entrega. 🛵 Chega já já!`;
+      return `${greet} Seu ${code} saiu para entrega. 🛵`;
   }
 }
 
