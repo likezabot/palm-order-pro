@@ -134,6 +134,13 @@ export function usePublicCart() {
   return { items, add, updateQty, remove, clear, itemCount, subtotal };
 }
 
+/** Taxa fixa de entrega aplicada apenas em service_type = 'delivery'. */
+export const DELIVERY_FEE_FIXED = 5.0;
+
+export function computeDeliveryFee(serviceType: ServiceType): number {
+  return serviceType === "delivery" ? DELIVERY_FEE_FIXED : 0;
+}
+
 export function newClientRequestId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

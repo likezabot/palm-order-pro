@@ -22,7 +22,14 @@ export const OrdersTab = ({ orders, onPrint, onEdit }: Props) => (
         >
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-black">Mesa {order.table_name}</h3>
+              <h3 className="text-lg font-black flex items-center gap-2">
+                {order.table_name}
+                {order.channel === "online" && (
+                  <span className="text-[10px] font-bold uppercase rounded-full bg-primary/10 text-primary px-2 py-0.5">
+                    Online
+                  </span>
+                )}
+              </h3>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-bold">
                 <Clock size={12} />
                 {new Date(order.created_at).toLocaleTimeString("pt-BR", {
