@@ -213,10 +213,18 @@ function openWhatsAppContext(opts: {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-const NEXT_STATUS: Record<string, { next: string; label: string } | null> = {
+const NEXT_STATUS: Record<string, { next: string; label: string; confirm?: string } | null> = {
   new: { next: "preparing", label: "Iniciar preparo" },
-  preparing: { next: "done", label: "Marcar pronto" },
-  done: { next: "paid", label: "Finalizar" },
+  preparing: {
+    next: "done",
+    label: "Marcar pronto",
+    confirm: "Marcar este pedido como Pronto?",
+  },
+  done: {
+    next: "paid",
+    label: "Finalizar",
+    confirm: "Finalizar este pedido? Esta ação encerra o atendimento.",
+  },
   paid: null,
   cancelled: null,
 };
@@ -230,9 +238,10 @@ export default function OnlineOrdersTab() {
   const [advancingIds, setAdvancingIds] = useState<Set<string>>(new Set());
 
   async function handleAdvance(orderId: string, currentStatus: string) {
-    const next = NEXT_STATUS[currentStatus]?.next;
-    if (!next) return;
+    const step = NEXT_STATUS[currentStatus];
+    if (!step) return;
     if (advancingIds.has(orderId)) return;
+    if (step.confirm && !window.confirm(step.confirm)) return;
     setAdvancingIds((s) => {
       const n = new Set(s);
       n.add(orderId);
@@ -240,12 +249,12 @@ export default function OnlineOrdersTab() {
     });
     const { error } = await supabase.rpc("update_order_status" as any, {
       p_order_id: orderId,
-      p_status: next,
+      p_status: step.next,
     });
     if (error) {
       dedupedToast("error", `Não foi possível avançar status: ${error.message}`);
     } else {
-      dedupedToast("success", `Pedido movido para "${STATUS_LABEL[next] ?? next}"`);
+      dedupedToast("success", `Pedido movido para "${STATUS_LABEL[step.next] ?? step.next}"`);
     }
     setAdvancingIds((s) => {
       const n = new Set(s);
