@@ -1,0 +1,1 @@
+UPDATE public.restaurants SET is_open_override = 'open' WHERE slug = 'plano-b-espetaria';
