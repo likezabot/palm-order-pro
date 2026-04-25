@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
+import { usePreviewMode } from "@/hooks/use-preview-mode";
 import {
   usePublicCart,
   newClientRequestId,
@@ -24,6 +25,7 @@ export default function PublicCheckout() {
   const nav = useNavigate();
   const { toast } = useToast();
   const cart = usePublicCart();
+  const isPreview = usePreviewMode();
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
@@ -65,6 +67,10 @@ export default function PublicCheckout() {
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
+    if (isPreview) {
+      toast({ title: "Modo preview", description: "Pedidos estão desativados nesta visualização." });
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await createPublicOrder({
