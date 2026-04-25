@@ -8,6 +8,12 @@ type Props = {
   onSelect: (slug: string) => void;
 };
 
+/**
+ * Navegação de categorias responsiva:
+ * - Em telas pequenas: wrap em flex-wrap (sem rolagem horizontal forçada).
+ * - Em telas maiores: pode usar scroll horizontal suave se houver muitas.
+ * - Sticky no topo quando rola.
+ */
 export default function CategoryNav({ categories, activeSlug, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
@@ -24,15 +30,23 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  if (!categories.length) return null;
+
   return (
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-20 -mx-4 mt-4 px-4 transition-all",
+        "sticky top-0 z-20 -mx-4 mt-3 px-4 transition-all",
         stuck ? "border-b border-border bg-background/95 backdrop-blur" : "bg-background",
       )}
     >
-      <div className="flex gap-2 overflow-x-auto py-2 scrollbar-thin">
+      <div
+        className={cn(
+          "flex flex-wrap gap-1.5 py-2",
+          // Em telas muito pequenas com muitas categorias, ainda permitimos
+          // overflow x sutil; mas o flex-wrap já evita rolagem horizontal feia.
+        )}
+      >
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
@@ -41,9 +55,10 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
-                "shrink-0 rounded-full px-4 py-2 text-sm font-bold uppercase tracking-wide transition-colors",
+                "shrink-0 rounded-full px-3 py-1.5 text-xs sm:text-sm font-semibold transition-colors",
+                "min-h-[36px]",
                 isActive
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-muted text-muted-foreground hover:bg-muted/70",
               )}
             >
