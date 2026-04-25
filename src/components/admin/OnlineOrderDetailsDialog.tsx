@@ -123,6 +123,7 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
   const [items, setItems] = useState<Item[]>([]);
   const [orderNote, setOrderNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
     if (!open || !orderId) {
@@ -194,17 +195,20 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
   const nextStep = order ? nextMap[order.status] : null;
 
   async function handleAdvance() {
-    if (!order || !nextStep) return;
+    if (!order || !nextStep || advancing) return;
+    setAdvancing(true);
     const { error } = await supabase.rpc("update_order_status" as any, {
       p_order_id: order.id,
       p_status: nextStep.next,
     });
     if (error) {
       toast.error(`Não foi possível avançar status: ${error.message}`);
+      setAdvancing(false);
       return;
     }
     toast.success(`Pedido movido para "${STATUS_LABEL[nextStep.next] ?? nextStep.next}"`);
     setOrder({ ...order, status: nextStep.next });
+    setAdvancing(false);
   }
 
   function handleWhatsApp(ctx: WaContext) {
@@ -397,13 +401,14 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
                 <Button
                   className="w-full gap-2 h-11 font-bold"
                   onClick={handleAdvance}
+                  disabled={advancing}
                 >
-                  {order.status === "done" ? (
+                  {advancing ? null : order.status === "done" ? (
                     <CheckCircle2 size={16} />
                   ) : (
                     <ArrowRight size={16} />
                   )}
-                  {nextStep.label}
+                  {advancing ? "Atualizando…" : nextStep.label}
                 </Button>
               )}
               {phone && (

@@ -15,6 +15,11 @@ import {
   CreditCard,
   ArrowRight,
   CheckCircle2,
+  Hash,
+  Copy,
+  DollarSign,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -141,13 +146,52 @@ async function fetchOnlineOrders(): Promise<OnlineOrder[]> {
   return (data ?? []) as OnlineOrder[];
 }
 
+const recentToasts = new Map<string, number>();
+function dedupedToast(kind: "success" | "error", msg: string) {
+  const key = `${kind}:${msg}`;
+  const now = Date.now();
+  const last = recentToasts.get(key) ?? 0;
+  if (now - last < 1500) return;
+  recentToasts.set(key, now);
+  if (kind === "success") toast.success(msg);
+  else toast.error(msg);
+}
+
 async function copyToClipboard(text: string, label: string) {
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(`${label} copiado`);
+    dedupedToast("success", `${label} copiado`);
   } catch {
-    toast.error("Não foi possível copiar");
+    dedupedToast("error", "Não foi possível copiar");
   }
+}
+
+function buildOrderSummary(o: OnlineOrder): string {
+  const sid = shortOrderId(o.id);
+  const lines: string[] = [];
+  lines.push(`Pedido #${sid}`);
+  if (o.customer_name_snapshot) lines.push(`Cliente: ${o.customer_name_snapshot}`);
+  if (o.customer_phone_snapshot) lines.push(`Tel: ${o.customer_phone_snapshot}`);
+  lines.push(`Tipo: ${SERVICE_LABEL[o.service_type] ?? o.service_type}`);
+  if (o.service_type === "delivery") {
+    const addr = formatAddress(o.delivery_address);
+    if (addr) lines.push(`Endereço: ${addr}`);
+  }
+  if (o.payment_method) {
+    const pay = PAYMENT_LABEL[o.payment_method] ?? o.payment_method;
+    const extra =
+      o.payment_method === "cash" && o.change_for != null
+        ? ` (troco p/ R$ ${Number(o.change_for).toFixed(2)})`
+        : "";
+    lines.push(`Pagamento: ${pay}${extra}`);
+  }
+  const fee = Number(o.delivery_fee ?? 0);
+  const total = Number(o.total ?? 0);
+  const subtotal = Math.max(0, total - fee);
+  lines.push(`Subtotal: R$ ${subtotal.toFixed(2)}`);
+  if (o.service_type === "delivery") lines.push(`Taxa: R$ ${fee.toFixed(2)}`);
+  lines.push(`Total: R$ ${total.toFixed(2)}`);
+  return lines.join("\n");
 }
 
 function openWhatsAppContext(opts: {
@@ -163,7 +207,7 @@ function openWhatsAppContext(opts: {
   });
   const url = buildWaUrl(opts.phone, msg);
   if (!url) {
-    toast.error("Telefone inválido");
+    dedupedToast("error", "Telefone inválido");
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
@@ -177,26 +221,38 @@ const NEXT_STATUS: Record<string, { next: string; label: string } | null> = {
   cancelled: null,
 };
 
-async function advanceStatus(orderId: string, currentStatus: string) {
-  const next = NEXT_STATUS[currentStatus]?.next;
-  if (!next) return;
-  const { error } = await supabase.rpc("update_order_status" as any, {
-    p_order_id: orderId,
-    p_status: next,
-  });
-  if (error) {
-    toast.error(`Não foi possível avançar status: ${error.message}`);
-    return;
-  }
-  toast.success(`Pedido movido para "${STATUS_LABEL[next] ?? next}"`);
-}
-
 export default function OnlineOrdersTab() {
   const qc = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
+  const [advancingIds, setAdvancingIds] = useState<Set<string>>(new Set());
+
+  async function handleAdvance(orderId: string, currentStatus: string) {
+    const next = NEXT_STATUS[currentStatus]?.next;
+    if (!next) return;
+    if (advancingIds.has(orderId)) return;
+    setAdvancingIds((s) => {
+      const n = new Set(s);
+      n.add(orderId);
+      return n;
+    });
+    const { error } = await supabase.rpc("update_order_status" as any, {
+      p_order_id: orderId,
+      p_status: next,
+    });
+    if (error) {
+      dedupedToast("error", `Não foi possível avançar status: ${error.message}`);
+    } else {
+      dedupedToast("success", `Pedido movido para "${STATUS_LABEL[next] ?? next}"`);
+    }
+    setAdvancingIds((s) => {
+      const n = new Set(s);
+      n.delete(orderId);
+      return n;
+    });
+  }
 
   const ordersQuery = useQuery({
     queryKey: ["admin", "online-orders"],
@@ -365,7 +421,15 @@ export default function OnlineOrdersTab() {
                 return (
                   <div
                     key={o.id}
-                    className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3"
+                    className={`rounded-xl border p-4 shadow-sm space-y-3 transition-colors ${
+                      o.status === "new"
+                        ? isDelivery
+                          ? "bg-primary/10 border-primary ring-2 ring-primary/40 shadow-md"
+                          : "bg-primary/5 border-primary/60"
+                        : isDelivery
+                          ? "bg-card border-primary/30"
+                          : "bg-card border-border"
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
@@ -379,6 +443,15 @@ export default function OnlineOrdersTab() {
                           >
                             {STATUS_LABEL[o.status] ?? o.status}
                           </Badge>
+                          {isDelivery && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] uppercase bg-primary/15 text-primary border-primary/40"
+                            >
+                              <Truck size={10} className="mr-1" />
+                              Delivery
+                            </Badge>
+                          )}
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
                           <Clock size={12} />
@@ -387,13 +460,28 @@ export default function OnlineOrdersTab() {
                             minute: "2-digit",
                           })}
                           <span className="opacity-60">•</span>
-                          <span className="font-mono">#{shortId(o.id)}</span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(shortId(o.id), "Nº do pedido")}
+                            className="font-mono inline-flex items-center gap-1 hover:text-foreground"
+                            title="Copiar nº do pedido"
+                          >
+                            <Hash size={10} />
+                            {shortId(o.id)}
+                          </button>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-primary font-black text-lg tabular-nums">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyToClipboard(`R$ ${Number(o.total ?? 0).toFixed(2)}`, "Total")
+                          }
+                          className="text-primary font-black text-lg tabular-nums hover:underline"
+                          title="Copiar total"
+                        >
                           R$ {Number(o.total ?? 0).toFixed(2)}
-                        </p>
+                        </button>
                       </div>
                     </div>
 
@@ -418,18 +506,28 @@ export default function OnlineOrdersTab() {
 
                     {/* Telefone */}
                     {phone && (
-                      <div className="flex items-center gap-1.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(phone, "Telefone")}
+                        className="flex items-center gap-1.5 text-xs hover:text-primary"
+                        title="Copiar telefone"
+                      >
                         <Phone size={12} className="text-muted-foreground" />
                         <span className="truncate">{phone}</span>
-                      </div>
+                      </button>
                     )}
 
                     {/* Endereço delivery */}
                     {isDelivery && addrText && (
-                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(addrText, "Endereço")}
+                        className="flex items-start gap-1.5 text-xs text-muted-foreground hover:text-foreground text-left w-full"
+                        title="Copiar endereço"
+                      >
                         <MapPin size={12} className="mt-0.5 shrink-0" />
                         <span className="line-clamp-2">{addrText}</span>
-                      </div>
+                      </button>
                     )}
 
                     {/* Totais */}
@@ -460,66 +558,79 @@ export default function OnlineOrdersTab() {
                       >
                         <Eye size={14} /> Detalhes
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 h-9"
+                        onClick={() => copyToClipboard(buildOrderSummary(o), "Resumo")}
+                        title="Copiar resumo do pedido"
+                      >
+                        <FileText size={14} />
+                      </Button>
                       {phone && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 h-9"
-                            onClick={() => copyToClipboard(phone, "Telefone")}
-                            title="Copiar telefone"
-                          >
-                            <Phone size={14} />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
-                                title="WhatsApp do cliente"
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
+                              title="WhatsApp do cliente"
+                            >
+                              <MessageCircle size={14} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuLabel>Abrir WhatsApp</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {(
+                              [
+                                "received",
+                                "preparing",
+                                isDelivery ? "out_for_delivery" : "ready_pickup",
+                              ] as WaContext[]
+                            ).map((ctx) => (
+                              <DropdownMenuItem
+                                key={`open-${ctx}`}
+                                onClick={() =>
+                                  openWhatsAppContext({
+                                    context: ctx,
+                                    phone,
+                                    customerName: o.customer_name_snapshot,
+                                    shortId: shortId(o.id),
+                                  })
+                                }
                               >
-                                <MessageCircle size={14} />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              <DropdownMenuLabel>Mensagem pronta</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {(
-                                [
-                                  "received",
-                                  "preparing",
-                                  isDelivery ? "out_for_delivery" : "ready_pickup",
-                                ] as WaContext[]
-                              ).map((ctx) => (
-                                <DropdownMenuItem
-                                  key={ctx}
-                                  onClick={() =>
-                                    openWhatsAppContext({
+                                {WA_CONTEXT_LABEL[ctx]}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Copiar mensagem</DropdownMenuLabel>
+                            {(
+                              [
+                                "received",
+                                "preparing",
+                                isDelivery ? "out_for_delivery" : "ready_pickup",
+                              ] as WaContext[]
+                            ).map((ctx) => (
+                              <DropdownMenuItem
+                                key={`copy-${ctx}`}
+                                onClick={() =>
+                                  copyToClipboard(
+                                    buildWaMessage({
                                       context: ctx,
-                                      phone,
                                       customerName: o.customer_name_snapshot,
                                       shortId: shortId(o.id),
-                                    })
-                                  }
-                                >
-                                  {WA_CONTEXT_LABEL[ctx]}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </>
-                      )}
-                      {isDelivery && addrText && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5 h-9"
-                          onClick={() => copyToClipboard(addrText, "Endereço")}
-                          title="Copiar endereço"
-                        >
-                          <MapPin size={14} />
-                        </Button>
+                                    }),
+                                    `Mensagem (${WA_CONTEXT_LABEL[ctx]})`,
+                                  )
+                                }
+                              >
+                                <Copy size={12} className="mr-2" />
+                                {WA_CONTEXT_LABEL[ctx]}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
 
@@ -528,14 +639,17 @@ export default function OnlineOrdersTab() {
                       <Button
                         variant="default"
                         className="w-full gap-2 h-11 font-bold"
-                        onClick={() => advanceStatus(o.id, o.status)}
+                        onClick={() => handleAdvance(o.id, o.status)}
+                        disabled={advancingIds.has(o.id)}
                       >
-                        {o.status === "done" ? (
+                        {advancingIds.has(o.id) ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : o.status === "done" ? (
                           <CheckCircle2 size={16} />
                         ) : (
                           <ArrowRight size={16} />
                         )}
-                        {NEXT_STATUS[o.status]?.label}
+                        {advancingIds.has(o.id) ? "Atualizando…" : NEXT_STATUS[o.status]?.label}
                       </Button>
                     )}
 
