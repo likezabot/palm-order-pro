@@ -26,6 +26,7 @@ export const usePalmCart = () => {
   const [originalTableName, setOriginalTableName] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [originalCart, setOriginalCart] = useState<CartItem[]>([]);
+  const [itemsMeta, setItemsMeta] = useState<Map<string, CartItemMeta>>(new Map());
   const [existingOrderId, setExistingOrderId] = useState<string | null>(null);
   const [orderVersion, setOrderVersion] = useState<number | null>(null);
   const [senha, setSenha] = useState("");
