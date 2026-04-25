@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useLocation, useSearchParams, Link } from "react-router-dom";
-import { CheckCircle2, Clock, ChefHat, Package, CreditCard, XCircle, AlertCircle, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Clock, ChefHat, Package, CreditCard, XCircle, AlertCircle, MessageCircle, type LucideIcon } from "lucide-react";
+
+const STORE_WHATSAPP = "5567992785811";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -216,6 +218,40 @@ export default function PublicOrderSuccess() {
             <span>{error}</span>
           </div>
         )}
+
+        {!cancelled && (() => {
+          const serviceText = info?.service_type ? (serviceLabel[info.service_type] ?? info.service_type) : "—";
+          const customerText = info?.customer_name ?? state && (loc.state as any)?.customer_name ?? "";
+          const totalText = `R$ ${Number(total).toFixed(2)}`;
+          const msg =
+            `Olá, Plano B Espetaria! Acabei de fazer um pedido pelo cardápio online.\n\n` +
+            `Pedido: #${shortId}\n` +
+            (customerText ? `Nome: ${customerText}\n` : "") +
+            `Tipo: ${serviceText}\n` +
+            `Total: ${totalText}\n\n` +
+            `Aguardo confirmação. Obrigado!`;
+          const waUrl = `https://wa.me/${STORE_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+          return (
+            <div className="rounded-2xl border border-success/30 bg-success/5 p-4 space-y-3">
+              <p className="text-sm text-foreground font-semibold text-center">
+                ✅ A Plano B já recebeu seu pedido.
+              </p>
+              <p className="text-xs text-muted-foreground text-center">
+                Se quiser, toque no botão abaixo para avisar a loja pelo WhatsApp.
+              </p>
+              <Button
+                asChild
+                size="lg"
+                className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold h-14 text-base"
+              >
+                <a href={waUrl} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="mr-2" size={22} />
+                  Enviar confirmação pelo WhatsApp
+                </a>
+              </Button>
+            </div>
+          );
+        })()}
 
         <div className="space-y-2">
           <Button asChild variant="outline" className="w-full">
