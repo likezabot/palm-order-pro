@@ -195,17 +195,20 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
   const nextStep = order ? nextMap[order.status] : null;
 
   async function handleAdvance() {
-    if (!order || !nextStep) return;
+    if (!order || !nextStep || advancing) return;
+    setAdvancing(true);
     const { error } = await supabase.rpc("update_order_status" as any, {
       p_order_id: order.id,
       p_status: nextStep.next,
     });
     if (error) {
       toast.error(`Não foi possível avançar status: ${error.message}`);
+      setAdvancing(false);
       return;
     }
     toast.success(`Pedido movido para "${STATUS_LABEL[nextStep.next] ?? nextStep.next}"`);
     setOrder({ ...order, status: nextStep.next });
+    setAdvancing(false);
   }
 
   function handleWhatsApp(ctx: WaContext) {
