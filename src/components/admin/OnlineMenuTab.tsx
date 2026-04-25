@@ -223,24 +223,18 @@ function EditDialog({
   const handleSave = async () => {
     setSaving(true);
     try {
+      const trimmedDesc = description.trim();
+      const trimmedImg = imageUrl.trim();
       await updateOnline(product.id, {
-        description: description.trim() || null,
-        image_url: imageUrl.trim() || null,
+        description: trimmedDesc || undefined,
+        image_url: trimmedImg || undefined,
         is_featured: isFeatured,
         is_available_online: isAvailable,
         is_sold_out: isSoldOut,
         display_order: displayOrder,
+        clear_description: !trimmedDesc,
+        clear_image_url: !trimmedImg,
       });
-      // workaround: COALESCE não permite limpar para null; faça um update direto se vazio
-      if (!description.trim() || !imageUrl.trim()) {
-        await supabase
-          .from("products")
-          .update({
-            description: description.trim() || null,
-            image_url: imageUrl.trim() || null,
-          })
-          .eq("id", product.id);
-      }
       toast.success("Salvo");
       onSaved();
     } catch (e: any) {
