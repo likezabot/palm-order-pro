@@ -186,8 +186,11 @@ export default function PublicMenu() {
         onRemove={cart.remove}
         onCheckout={() => {
           setCartOpen(false);
-          // Abre upsell antes do checkout; se não houver sugestão, vai direto
-          setUpsellOpen(true);
+          if (hasUpsellSuggestion) {
+            setUpsellOpen(true);
+          } else {
+            nav(`/menu/${slug}/checkout`);
+          }
         }}
       />
 
