@@ -162,6 +162,7 @@ export const usePalmCart = () => {
     playFeedback("notification");
     setCart([]);
     setOriginalCart([]);
+    setItemsMeta(new Map());
     setTableName("");
     setOriginalTableName("");
     setExistingOrderId(null);
@@ -178,6 +179,7 @@ export const usePalmCart = () => {
     originalTableName,
     cart,
     originalCart,
+    itemsMeta,
     existingOrderId,
     orderVersion,
     senha,
