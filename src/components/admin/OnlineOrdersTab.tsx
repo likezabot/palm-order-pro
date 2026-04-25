@@ -315,6 +315,18 @@ export default function OnlineOrdersTab() {
     for (const o of filtered) {
       if (g[o.status]) g[o.status].push(o);
     }
+    // Dentro de cada grupo: mais antigo primeiro.
+    // Em "new": delivery antes de pickup/dine_in.
+    const byOldest = (a: OnlineOrder, b: OnlineOrder) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    g.new.sort((a, b) => {
+      const ad = a.service_type === "delivery" ? 0 : 1;
+      const bd = b.service_type === "delivery" ? 0 : 1;
+      if (ad !== bd) return ad - bd;
+      return byOldest(a, b);
+    });
+    g.preparing.sort(byOldest);
+    g.done.sort(byOldest);
     return g;
   }, [filtered]);
 
