@@ -327,29 +327,37 @@ const Pdv = () => {
                   Entregas / Retiradas <span className="text-muted-foreground">({deliveryOrders.length})</span>
                 </h2>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {unseenOnlineDelivery.length > 0 && (
                   <>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active"
+                      role="status"
+                      aria-live="polite"
+                    >
                       🔔 {unseenOnlineDelivery.length} nova{unseenOnlineDelivery.length > 1 ? "s" : ""}
                     </span>
                     <button
+                      type="button"
                       onClick={muteSiren}
-                      title="Silenciar alerta sonoro"
-                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:bg-secondary active:scale-95 transition-all"
+                      title="Silenciar alerta sonoro desta(s) entrega(s)"
+                      aria-label="Silenciar alerta sonoro das entregas online novas"
+                      className="inline-flex items-center gap-1 min-h-[36px] rounded-lg border-2 border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     >
-                      <BellOff className="w-3.5 h-3.5" />
+                      <BellOff className="w-4 h-4" aria-hidden="true" />
                       Silenciar
                     </button>
                   </>
                 )}
                 {sirenNeedsUnlock && (
                   <button
+                    type="button"
                     onClick={unlockSiren}
-                    title="O navegador bloqueou o som — clique para liberar"
-                    className="inline-flex items-center gap-1 rounded-lg border border-warning bg-warning/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-warning hover:bg-warning/25 active:scale-95 transition-all animate-pulse-active"
+                    title="O navegador bloqueou o som — toque para liberar"
+                    aria-label="Ativar som de alertas (o navegador bloqueou o áudio)"
+                    className="inline-flex items-center gap-1.5 min-h-[40px] rounded-lg border-2 border-warning bg-warning px-3 py-1.5 text-xs font-black uppercase tracking-wide text-warning-foreground hover:brightness-110 active:scale-95 transition-all animate-pulse-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
-                    <VolumeX className="w-3.5 h-3.5" />
+                    <Volume2 className="w-4 h-4" aria-hidden="true" />
                     Ativar som de alertas
                   </button>
                 )}
@@ -503,36 +511,40 @@ const Pdv = () => {
 
               {/* Bloco de dados do cliente / entrega — só para pedidos online */}
               {isOnlineOrder(selectedOrder) && (
-                <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3 space-y-2 text-sm">
+                <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3 space-y-2 text-sm break-words">
                   {selectedOrder.customer_phone_snapshot && (
                     <div className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                      <a href={`tel:${selectedOrder.customer_phone_snapshot}`} className="font-mono font-semibold text-foreground hover:underline">
+                      <Phone className="w-4 h-4 text-orange-400 shrink-0" aria-hidden="true" />
+                      <a
+                        href={`tel:${selectedOrder.customer_phone_snapshot}`}
+                        className="font-mono font-semibold text-base text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                        aria-label={`Ligar para ${selectedOrder.customer_phone_snapshot}`}
+                      >
                         {selectedOrder.customer_phone_snapshot}
                       </a>
                     </div>
                   )}
                   {getOrderKind(selectedOrder) === "delivery" && selectedOrder.delivery_address && (
                     <div className="flex items-start gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
-                      <div className="text-foreground">
-                        <div className="font-semibold">
+                      <MapPin className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" aria-hidden="true" />
+                      <div className="text-foreground min-w-0 flex-1">
+                        <div className="font-semibold leading-snug">
                           {selectedOrder.delivery_address.street ?? ""}
                           {selectedOrder.delivery_address.number ? `, ${selectedOrder.delivery_address.number}` : ""}
                           {selectedOrder.delivery_address.complement ? ` — ${selectedOrder.delivery_address.complement}` : ""}
                         </div>
                         {selectedOrder.delivery_address.neighborhood && (
-                          <div className="text-muted-foreground">Bairro: <span className="text-foreground">{selectedOrder.delivery_address.neighborhood}</span></div>
+                          <div className="text-muted-foreground mt-0.5">Bairro: <span className="text-foreground font-medium">{selectedOrder.delivery_address.neighborhood}</span></div>
                         )}
                         {selectedOrder.delivery_address.reference && (
-                          <div className="text-muted-foreground italic">Ref: {selectedOrder.delivery_address.reference}</div>
+                          <div className="text-muted-foreground italic mt-0.5">Ref: {selectedOrder.delivery_address.reference}</div>
                         )}
                       </div>
                     </div>
                   )}
                   {selectedOrder.payment_method && (
-                    <div className="flex items-center gap-2">
-                      <Wallet className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <div className="flex items-start gap-2">
+                      <Wallet className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" aria-hidden="true" />
                       <span className="text-foreground">
                         Pagamento: <span className="font-bold uppercase">{selectedOrder.payment_method}</span>
                         {selectedOrder.change_for ? <span className="text-muted-foreground"> · troco para R$ {Number(selectedOrder.change_for).toFixed(2)}</span> : null}
