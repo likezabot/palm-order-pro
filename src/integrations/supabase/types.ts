@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      business_hours: {
+        Row: {
+          closes_at: string | null
+          created_at: string
+          id: string
+          is_closed: boolean
+          opens_at: string | null
+          restaurant_id: string
+          weekday: number
+        }
+        Insert: {
+          closes_at?: string | null
+          created_at?: string
+          id?: string
+          is_closed?: boolean
+          opens_at?: string | null
+          restaurant_id: string
+          weekday: number
+        }
+        Update: {
+          closes_at?: string | null
+          created_at?: string
+          id?: string
+          is_closed?: boolean
+          opens_at?: string | null
+          restaurant_id?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_hours_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_movements: {
         Row: {
           amount: number
@@ -89,6 +127,92 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      customer_addresses: {
+        Row: {
+          city: string | null
+          complement: string | null
+          created_at: string
+          customer_id: string
+          delivery_zone_id: string | null
+          id: string
+          is_default: boolean
+          label: string | null
+          neighborhood: string | null
+          number: string | null
+          reference: string | null
+          street: string | null
+          zip: string | null
+        }
+        Insert: {
+          city?: string | null
+          complement?: string | null
+          created_at?: string
+          customer_id: string
+          delivery_zone_id?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          neighborhood?: string | null
+          number?: string | null
+          reference?: string | null
+          street?: string | null
+          zip?: string | null
+        }
+        Update: {
+          city?: string | null
+          complement?: string | null
+          created_at?: string
+          customer_id?: string
+          delivery_zone_id?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          neighborhood?: string | null
+          number?: string | null
+          reference?: string | null
+          street?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_addresses_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          created_at: string
+          id: string
+          last_order_at: string | null
+          name: string | null
+          phone: string
+          total_orders: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_order_at?: string | null
+          name?: string | null
+          phone: string
+          total_orders?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_order_at?: string | null
+          name?: string | null
+          phone?: string
+          total_orders?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       daily_product_stats: {
         Row: {
@@ -216,6 +340,50 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_zones: {
+        Row: {
+          active: boolean
+          created_at: string
+          estimated_minutes: number
+          fee: number
+          id: string
+          match_neighborhoods: string[]
+          min_order: number
+          name: string
+          restaurant_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          estimated_minutes?: number
+          fee?: number
+          id?: string
+          match_neighborhoods?: string[]
+          min_order?: number
+          name: string
+          restaurant_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          estimated_minutes?: number
+          fee?: number
+          id?: string
+          match_neighborhoods?: string[]
+          min_order?: number
+          name?: string
+          restaurant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_zones_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_items: {
         Row: {
           aliases: string[]
@@ -290,6 +458,44 @@ export type Database = {
           source?: string
         }
         Relationships: []
+      }
+      menu_categories: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          restaurant_id: string
+          slug: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          restaurant_id: string
+          slug: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          restaurant_id?: string
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_categories_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_log: {
         Row: {
@@ -399,11 +605,51 @@ export type Database = {
           },
         ]
       }
+      order_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          from_status: string | null
+          id: number
+          note: string | null
+          order_id: string
+          to_status: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          from_status?: string | null
+          id?: number
+          note?: string | null
+          order_id: string
+          to_status: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          from_status?: string | null
+          id?: number
+          note?: string | null
+          order_id?: string
+          to_status?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           amount_paid: number | null
+          approved_at: string | null
+          approved_by: string | null
+          change_for: number | null
+          channel: string
           created_at: string
+          customer_id: string | null
+          customer_name_snapshot: string | null
+          customer_phone_snapshot: string | null
+          delivery_address: Json | null
+          delivery_fee: number
           delta_items: Json | null
+          estimated_ready_at: string | null
           id: string
           is_printed: boolean | null
           original_table_name: string | null
@@ -413,7 +659,10 @@ export type Database = {
           print_status: string
           print_type: string | null
           printed_at: string | null
+          public_token: string | null
+          rejected_reason: string | null
           served_at: string | null
+          service_type: string
           status: string
           table_name: string
           total: number | null
@@ -423,8 +672,18 @@ export type Database = {
         }
         Insert: {
           amount_paid?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
+          change_for?: number | null
+          channel?: string
           created_at?: string
+          customer_id?: string | null
+          customer_name_snapshot?: string | null
+          customer_phone_snapshot?: string | null
+          delivery_address?: Json | null
+          delivery_fee?: number
           delta_items?: Json | null
+          estimated_ready_at?: string | null
           id?: string
           is_printed?: boolean | null
           original_table_name?: string | null
@@ -434,7 +693,10 @@ export type Database = {
           print_status?: string
           print_type?: string | null
           printed_at?: string | null
+          public_token?: string | null
+          rejected_reason?: string | null
           served_at?: string | null
+          service_type?: string
           status?: string
           table_name: string
           total?: number | null
@@ -444,8 +706,18 @@ export type Database = {
         }
         Update: {
           amount_paid?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
+          change_for?: number | null
+          channel?: string
           created_at?: string
+          customer_id?: string | null
+          customer_name_snapshot?: string | null
+          customer_phone_snapshot?: string | null
+          delivery_address?: Json | null
+          delivery_fee?: number
           delta_items?: Json | null
+          estimated_ready_at?: string | null
           id?: string
           is_printed?: boolean | null
           original_table_name?: string | null
@@ -455,7 +727,10 @@ export type Database = {
           print_status?: string
           print_type?: string | null
           printed_at?: string | null
+          public_token?: string | null
+          rejected_reason?: string | null
           served_at?: string | null
+          service_type?: string
           status?: string
           table_name?: string
           total?: number | null
@@ -563,7 +838,12 @@ export type Database = {
           aliases: string[]
           category: string
           created_at: string
+          description: string | null
+          display_order: number
           id: string
+          image_url: string | null
+          is_available_online: boolean
+          is_featured: boolean
           name: string
           price: number
           stock_quantity: number | null
@@ -574,7 +854,12 @@ export type Database = {
           aliases?: string[]
           category: string
           created_at?: string
+          description?: string | null
+          display_order?: number
           id?: string
+          image_url?: string | null
+          is_available_online?: boolean
+          is_featured?: boolean
           name: string
           price: number
           stock_quantity?: number | null
@@ -585,7 +870,12 @@ export type Database = {
           aliases?: string[]
           category?: string
           created_at?: string
+          description?: string | null
+          display_order?: number
           id?: string
+          image_url?: string | null
+          is_available_online?: boolean
+          is_featured?: boolean
           name?: string
           price?: number
           stock_quantity?: number | null
@@ -614,6 +904,54 @@ export type Database = {
           name?: string
           pin_hash?: string | null
           role?: string
+        }
+        Relationships: []
+      }
+      restaurants: {
+        Row: {
+          created_at: string
+          default_prep_minutes: number
+          delivery_prep_buffer: number
+          description: string | null
+          hero_url: string | null
+          id: string
+          is_open_override: string
+          logo_url: string | null
+          name: string
+          pix_key: string | null
+          slug: string
+          updated_at: string
+          whatsapp_phone: string | null
+        }
+        Insert: {
+          created_at?: string
+          default_prep_minutes?: number
+          delivery_prep_buffer?: number
+          description?: string | null
+          hero_url?: string | null
+          id?: string
+          is_open_override?: string
+          logo_url?: string | null
+          name: string
+          pix_key?: string | null
+          slug: string
+          updated_at?: string
+          whatsapp_phone?: string | null
+        }
+        Update: {
+          created_at?: string
+          default_prep_minutes?: number
+          delivery_prep_buffer?: number
+          description?: string | null
+          hero_url?: string | null
+          id?: string
+          is_open_override?: string
+          logo_url?: string | null
+          name?: string
+          pix_key?: string | null
+          slug?: string
+          updated_at?: string
+          whatsapp_phone?: string | null
         }
         Relationships: []
       }
@@ -825,9 +1163,17 @@ export type Database = {
         }
         Returns: Json
       }
+      approve_online_order: {
+        Args: { p_approver: string; p_order_id: string }
+        Returns: undefined
+      }
       archive_and_purge_old_data:
         | { Args: { p_days_keep?: number }; Returns: Json }
         | { Args: { p_days_keep?: number; p_source?: string }; Returns: Json }
+      calculate_delivery_fee: {
+        Args: { p_neighborhood: string; p_restaurant_id: string }
+        Returns: Json
+      }
       cash_close: {
         Args: { p_final_amount: number; p_pin: string; p_register_id: string }
         Returns: undefined
@@ -875,6 +1221,20 @@ export type Database = {
         }
         Returns: Json
       }
+      create_public_order: {
+        Args: {
+          p_address: Json
+          p_change_for: number
+          p_customer_name: string
+          p_customer_phone: string
+          p_items: Json
+          p_note: string
+          p_payment_method: string
+          p_restaurant_slug: string
+          p_service_type: string
+        }
+        Returns: Json
+      }
       defer_order_print: { Args: { p_order_id: string }; Returns: undefined }
       enqueue_print_job: {
         Args: { p_job_type: string; p_order_id: string; p_payload?: Json }
@@ -912,6 +1272,18 @@ export type Database = {
         }
       }
       force_clear_orphan_prints: { Args: never; Returns: Json }
+      get_or_create_customer: {
+        Args: { p_name: string; p_phone: string }
+        Returns: string
+      }
+      get_public_order_status: {
+        Args: { p_order_id: string; p_token: string }
+        Returns: Json
+      }
+      is_restaurant_open: {
+        Args: { p_restaurant_id: string }
+        Returns: boolean
+      }
       merge_table_duplicates: { Args: { p_table_name: string }; Returns: Json }
       move_order_to_table: {
         Args: { p_order_id: string; p_target_table: string }
@@ -933,6 +1305,10 @@ export type Database = {
         Returns: Json
       }
       recover_stuck_prints: { Args: never; Returns: Json }
+      reject_online_order: {
+        Args: { p_approver: string; p_order_id: string; p_reason: string }
+        Returns: undefined
+      }
       rename_order_table: {
         Args: { p_new_name: string; p_order_id: string }
         Returns: undefined
