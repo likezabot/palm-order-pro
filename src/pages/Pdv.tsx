@@ -153,7 +153,7 @@ const Pdv = () => {
     [deliveryOrders, isSeen]
   );
   // Sirene ativa enquanto houver entrega online não visualizada
-  useSiren(unseenOnlineDelivery.length > 0);
+  const { needsUnlock: sirenNeedsUnlock, unlock: unlockSiren, mute: muteSiren } = useSiren(unseenOnlineDelivery.length > 0);
 
   // Toast forte quando uma NOVA entrega online aparece (1 vez por id)
   const announcedRef = useRef<Set<string>>(new Set());
