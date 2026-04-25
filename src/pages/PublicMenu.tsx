@@ -1,0 +1,151 @@
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import {
+  fetchRestaurantBySlug,
+  fetchBusinessHours,
+  fetchMenuCategories,
+  fetchPublicProducts,
+  isRestaurantOpen,
+  type PublicProduct,
+} from "@/lib/public-menu";
+import PublicMenuLayout from "@/components/public-menu/PublicMenuLayout";
+import MenuHero from "@/components/public-menu/MenuHero";
+import OpenStatusBadge from "@/components/public-menu/OpenStatusBadge";
+import HoursDialog from "@/components/public-menu/HoursDialog";
+import CategoryNav from "@/components/public-menu/CategoryNav";
+import ProductCard from "@/components/public-menu/ProductCard";
+import FeaturedCarousel from "@/components/public-menu/FeaturedCarousel";
+import ClosedOverlay from "@/components/public-menu/ClosedOverlay";
+
+export default function PublicMenu() {
+  const { slug } = useParams<{ slug: string }>();
+  const [hoursOpen, setHoursOpen] = useState(false);
+  const [activeCat, setActiveCat] = useState<string | null>(null);
+
+  const restaurantQuery = useQuery({
+    queryKey: ["pmenu", "restaurant", slug],
+    queryFn: () => fetchRestaurantBySlug(slug ?? ""),
+    enabled: !!slug,
+    staleTime: 60_000,
+  });
+
+  const restaurantId = restaurantQuery.data?.id;
+
+  const hoursQuery = useQuery({
+    queryKey: ["pmenu", "hours", restaurantId],
+    queryFn: () => fetchBusinessHours(restaurantId!),
+    enabled: !!restaurantId,
+    staleTime: 5 * 60_000,
+  });
+
+  const categoriesQuery = useQuery({
+    queryKey: ["pmenu", "categories", restaurantId],
+    queryFn: () => fetchMenuCategories(restaurantId!),
+    enabled: !!restaurantId,
+    staleTime: 5 * 60_000,
+  });
+
+  const productsQuery = useQuery({
+    queryKey: ["pmenu", "products"],
+    queryFn: fetchPublicProducts,
+    staleTime: 30_000,
+  });
+
+  const openQuery = useQuery({
+    queryKey: ["pmenu", "open", restaurantId],
+    queryFn: () => isRestaurantOpen(restaurantId!),
+    enabled: !!restaurantId,
+    refetchInterval: 60_000,
+  });
+
+  const products = productsQuery.data ?? [];
+  const categories = categoriesQuery.data ?? [];
+  const isOpen = !!openQuery.data;
+
+  const productsByCategory = useMemo(() => {
+    const map = new Map<string, PublicProduct[]>();
+    for (const p of products) {
+      const arr = map.get(p.category) ?? [];
+      arr.push(p);
+      map.set(p.category, arr);
+    }
+    return map;
+  }, [products]);
+
+  const featured = useMemo(() => products.filter((p) => p.is_featured && !p.is_sold_out), [products]);
+
+  useEffect(() => {
+    if (!activeCat && categories.length) setActiveCat(categories[0].slug);
+  }, [activeCat, categories]);
+
+  if (restaurantQuery.isLoading) {
+    return (
+      <PublicMenuLayout>
+        <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">Carregando…</div>
+      </PublicMenuLayout>
+    );
+  }
+  if (!restaurantQuery.data) {
+    return (
+      <PublicMenuLayout>
+        <div className="mx-auto mt-20 max-w-md px-4 text-center">
+          <h1 className="text-xl font-bold">Cardápio não encontrado</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Verifique o link ou tente novamente mais tarde.
+          </p>
+        </div>
+      </PublicMenuLayout>
+    );
+  }
+
+  return (
+    <PublicMenuLayout>
+      <MenuHero
+        restaurant={restaurantQuery.data}
+        rightSlot={<OpenStatusBadge open={isOpen} onClick={() => setHoursOpen(true)} />}
+      />
+
+      <div className="mx-auto max-w-3xl px-4">
+        {!isOpen && (
+          <div className="mt-4">
+            <ClosedOverlay />
+          </div>
+        )}
+
+        <FeaturedCarousel products={featured} />
+
+        <CategoryNav
+          categories={categories}
+          activeSlug={activeCat}
+          onSelect={(s) => {
+            setActiveCat(s);
+            const el = document.getElementById(`cat-${s}`);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
+
+        <div className="mt-4 space-y-8">
+          {categories.map((cat) => {
+            const items = (productsByCategory.get(cat.slug) ?? []).sort(
+              (a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name),
+            );
+            if (!items.length) return null;
+            return (
+              <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
+                <h2 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h2>
+                <div className="grid grid-cols-1 gap-3">
+                  {items.map((p) => (
+                    <ProductCard key={p.id} product={p} disabled={!isOpen} />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+
+      <HoursDialog open={hoursOpen} onOpenChange={setHoursOpen} hours={hoursQuery.data ?? []} />
+    </PublicMenuLayout>
+  );
+}
