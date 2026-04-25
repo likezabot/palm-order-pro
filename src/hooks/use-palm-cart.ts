@@ -3,6 +3,19 @@ import { CartItem } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useFeedback } from "@/hooks/use-feedback";
 
+export interface CartItemMeta {
+  /** Quantidade já enviada/persistida no banco (não pode ser removida). */
+  originalQty: number;
+  /** Garçom da última linha inserida para esse produto. */
+  lastWaiter?: string;
+  /** Timestamp ISO da última inserção. */
+  lastAddedAt?: string;
+}
+
+/** Chave estável p/ casar item do carrinho com meta (produto + garçom). */
+export const cartMetaKey = (productId: string, waiterName?: string) =>
+  `${productId}|${(waiterName || "").trim().toUpperCase()}`;
+
 /**
  * Hook que gerencia o carrinho do garçom (Palm) — adicionar/remover/atualizar itens,
  * carregar um pedido existente do banco, e calcular totais.
