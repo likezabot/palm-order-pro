@@ -316,18 +316,66 @@ const Pdv = () => {
 
       {/* Main content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_420px] overflow-hidden">
-        {/* Left: Order grid */}
-        <div className="overflow-y-auto p-3 sm:p-4 space-y-3 border-r border-border">
-          <h2 className="text-sm font-black text-muted-foreground uppercase tracking-wider">
-            Fila de Pedidos ({orders.length})
-          </h2>
-          {orders.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground text-lg">Aguardando pedidos...</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
-              {[...orders]
-                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                .map((order) => (
+        {/* Left: Order grid — DUAS SEÇÕES (MESAS / ENTREGAS) */}
+        <div className="overflow-y-auto p-3 sm:p-4 space-y-6 border-r border-border">
+          {/* SEÇÃO ENTREGAS */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2">
+                <Bike className="w-5 h-5 text-orange-400" />
+                <h2 className="text-sm font-black uppercase tracking-wider text-orange-400">
+                  Entregas / Retiradas <span className="text-muted-foreground">({deliveryOrders.length})</span>
+                </h2>
+              </div>
+              {unseenOnlineDelivery.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active">
+                  🔔 {unseenOnlineDelivery.length} nova{unseenOnlineDelivery.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+            {deliveryOrders.length === 0 ? (
+              <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
+                Nenhuma entrega/retirada no momento.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-fr">
+                {deliveryOrders.map((order) => (
+                  <OrderRow
+                    key={order.id}
+                    order={order}
+                    itemCount={itemsByOrderId.get(order.id) || 0}
+                    selected={selectedId === order.id}
+                    isUnseen={isOnlineOrder(order) && !isSeen(order.id)}
+                    onSelect={() => {
+                      markSeen(order.id);
+                      setSelectedId(order.id);
+                      setShowPayment(false);
+                    }}
+                    onAdvance={handleAdvance}
+                    onPrint={handlePrint}
+                    onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
+                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* SEÇÃO MESAS */}
+          <section className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <UtensilsCrossed className="w-5 h-5 text-purple-400" />
+              <h2 className="text-sm font-black uppercase tracking-wider text-purple-400">
+                Mesas / Balcão <span className="text-muted-foreground">({tablesOrders.length})</span>
+              </h2>
+            </div>
+            {tablesOrders.length === 0 ? (
+              <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
+                Nenhuma mesa aberta no momento.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
+                {tablesOrders.map((order) => (
                   <OrderRow
                     key={order.id}
                     order={order}
@@ -340,8 +388,9 @@ const Pdv = () => {
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
                   />
                 ))}
-            </div>
-          )}
+              </div>
+            )}
+          </section>
         </div>
 
         {/* Right: Detail panel */}
