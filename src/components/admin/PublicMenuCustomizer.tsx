@@ -247,8 +247,11 @@ function CustomizerInner({
         />
 
         <Tabs defaultValue="visual" className="w-full">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="visual">Visual</TabsTrigger>
+            <TabsTrigger value="hero">Home/Hero</TabsTrigger>
+            <TabsTrigger value="secoes">Seções</TabsTrigger>
+            <TabsTrigger value="paleta">Paleta</TabsTrigger>
             <TabsTrigger value="layout">Layout</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
             <TabsTrigger value="destaques">Destaques</TabsTrigger>
@@ -260,6 +263,18 @@ function CustomizerInner({
               settings={settings}
               onSaved={refresh}
             />
+          </TabsContent>
+
+          <TabsContent value="hero">
+            <HeroPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+          </TabsContent>
+
+          <TabsContent value="secoes">
+            <SectionsPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+          </TabsContent>
+
+          <TabsContent value="paleta">
+            <PalettePanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
           </TabsContent>
 
           <TabsContent value="layout">
