@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useLocation, Link } from "react-router-dom";
+import { useParams, useLocation, useSearchParams, Link } from "react-router-dom";
 import { CheckCircle2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,33 +10,36 @@ type LocState = {
   status?: string;
 };
 
+type StatusInfo = {
+  status: string;
+  total: number | null;
+  estimated_ready_at: string | null;
+  table_name?: string;
+};
+
 export default function PublicOrderSuccess() {
   const { slug, orderId } = useParams<{ slug: string; orderId: string }>();
   const loc = useLocation();
+  const [params] = useSearchParams();
+  const token = params.get("t");
   const state = (loc.state ?? {}) as LocState;
 
-  const [info, setInfo] = useState<{
-    status: string;
-    total: number | null;
-    estimated_ready_at: string | null;
-    table_name: string;
-  } | null>(null);
+  const [info, setInfo] = useState<StatusInfo | null>(null);
 
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderId || !token) return;
     let mounted = true;
     (async () => {
-      const { data } = await supabase
-        .from("orders")
-        .select("status, total, estimated_ready_at, table_name")
-        .eq("id", orderId)
-        .maybeSingle();
-      if (mounted && data) setInfo(data as any);
+      const { data } = await supabase.rpc("get_public_order_status" as any, {
+        p_order_id: orderId,
+        p_token: token,
+      });
+      if (mounted && data) setInfo(data as unknown as StatusInfo);
     })();
     return () => {
       mounted = false;
     };
-  }, [orderId]);
+  }, [orderId, token]);
 
   const eta = info?.estimated_ready_at ?? state.estimated_ready_at ?? null;
   const total = info?.total ?? state.total ?? 0;
@@ -45,7 +48,6 @@ export default function PublicOrderSuccess() {
 
   const statusLabel: Record<string, string> = {
     new: "Pedido recebido",
-    pending_approval: "Aguardando confirmação do restaurante",
     preparing: "Em preparo",
     done: "Pronto",
     paid: "Pago",
@@ -74,7 +76,7 @@ export default function PublicOrderSuccess() {
             <span className="text-sm text-muted-foreground">Status</span>
             <span className="font-semibold">{statusLabel[status] ?? status}</span>
           </div>
-          {total > 0 && (
+          {Number(total) > 0 && (
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Total</span>
               <span className="font-black brand-gradient-text">
