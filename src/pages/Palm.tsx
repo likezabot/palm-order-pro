@@ -110,6 +110,7 @@ const Palm = () => {
           waiterName={waiterName}
           cart={cart}
           originalCart={originalCart}
+          itemsMeta={itemsMeta}
           total={total}
           existingOrderId={existingOrderId}
           orderVersion={orderVersion}
