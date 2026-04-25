@@ -189,7 +189,7 @@ export default function OnlineOrderEditDialog({
                     size="icon"
                     variant="outline"
                     className="h-9 w-9"
-                    disabled={working === it.id || !isOnline}
+                    disabled={working === it.id || !canEdit}
                     onClick={() =>
                       updateItem(it.id, Math.max(0, it.quantity - 1))
                     }
@@ -203,7 +203,7 @@ export default function OnlineOrderEditDialog({
                     size="icon"
                     variant="outline"
                     className="h-9 w-9"
-                    disabled={working === it.id || !isOnline}
+                    disabled={working === it.id || !canEdit}
                     onClick={() => updateItem(it.id, it.quantity + 1)}
                   >
                     <Plus size={16} />
@@ -212,7 +212,7 @@ export default function OnlineOrderEditDialog({
                     size="icon"
                     variant="ghost"
                     className="h-9 w-9 text-destructive"
-                    disabled={working === it.id || !isOnline}
+                    disabled={working === it.id || !canEdit}
                     onClick={() => updateItem(it.id, 0)}
                     aria-label="Remover item"
                   >
