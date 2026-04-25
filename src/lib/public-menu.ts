@@ -130,6 +130,8 @@ export function weekdayLabel(weekday: number): string {
 // ============================================================
 // Public Menu Settings (somente apresentação visual)
 // ============================================================
+export type SectionKey = "hero" | "featured" | "categories" | "welcome";
+
 export type PublicMenuSettings = {
   restaurant_id: string;
   layout_mode: "list" | "grid";
@@ -142,6 +144,30 @@ export type PublicMenuSettings = {
   category_order: string[];
   hidden_category_slugs: string[];
   image_aspect: "square" | "wide" | "tall";
+  // Hero / Header
+  hero_title: string | null;
+  hero_subtitle: string | null;
+  hero_alignment: "left" | "center";
+  show_logo: boolean;
+  show_open_status_badge: boolean;
+  show_whatsapp_fab: boolean;
+  show_search_bar: boolean;
+  // Seções / Home
+  show_featured_section: boolean;
+  show_category_nav: boolean;
+  show_categories_section_title: boolean;
+  categories_section_title: string;
+  show_hero_banner_overlay: boolean;
+  show_welcome_message_card: boolean;
+  section_order: SectionKey[];
+  // Paleta / UI
+  background_color: string | null;
+  surface_color: string | null;
+  text_color: string | null;
+  muted_text_color: string | null;
+  button_style: "solid" | "outline" | "soft";
+  card_style: "flat" | "elevated";
+  radius_scale: "md" | "lg" | "xl";
 };
 
 export const DEFAULT_PUBLIC_MENU_SETTINGS: Omit<PublicMenuSettings, "restaurant_id"> = {
@@ -155,22 +181,45 @@ export const DEFAULT_PUBLIC_MENU_SETTINGS: Omit<PublicMenuSettings, "restaurant_
   category_order: [],
   hidden_category_slugs: [],
   image_aspect: "square",
+  hero_title: null,
+  hero_subtitle: null,
+  hero_alignment: "center",
+  show_logo: true,
+  show_open_status_badge: true,
+  show_whatsapp_fab: true,
+  show_search_bar: true,
+  show_featured_section: true,
+  show_category_nav: true,
+  show_categories_section_title: true,
+  categories_section_title: "Categorias",
+  show_hero_banner_overlay: true,
+  show_welcome_message_card: true,
+  section_order: ["hero", "featured", "categories", "welcome"],
+  background_color: null,
+  surface_color: null,
+  text_color: null,
+  muted_text_color: null,
+  button_style: "solid",
+  card_style: "elevated",
+  radius_scale: "lg",
 };
+
+const ALL_SETTINGS_COLUMNS =
+  "restaurant_id, layout_mode, accent_color, banner_url, welcome_message, show_descriptions, show_product_images, featured_style, category_order, hidden_category_slugs, image_aspect, hero_title, hero_subtitle, hero_alignment, show_logo, show_open_status_badge, show_whatsapp_fab, show_search_bar, show_featured_section, show_category_nav, show_categories_section_title, categories_section_title, show_hero_banner_overlay, show_welcome_message_card, section_order, background_color, surface_color, text_color, muted_text_color, button_style, card_style, radius_scale";
 
 export async function fetchPublicMenuSettings(
   restaurantId: string,
 ): Promise<PublicMenuSettings> {
   const { data, error } = await supabase
     .from("public_menu_settings" as any)
-    .select(
-      "restaurant_id, layout_mode, accent_color, banner_url, welcome_message, show_descriptions, show_product_images, featured_style, category_order, hidden_category_slugs, image_aspect",
-    )
+    .select(ALL_SETTINGS_COLUMNS)
     .eq("restaurant_id", restaurantId)
     .maybeSingle();
   if (error || !data) {
     return { restaurant_id: restaurantId, ...DEFAULT_PUBLIC_MENU_SETTINGS };
   }
-  return data as unknown as PublicMenuSettings;
+  // Merge com defaults para resiliência caso colunas novas venham null
+  return { ...DEFAULT_PUBLIC_MENU_SETTINGS, restaurant_id: restaurantId, ...(data as any) };
 }
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;

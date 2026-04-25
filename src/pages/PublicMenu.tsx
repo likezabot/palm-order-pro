@@ -10,10 +10,12 @@ import {
   isRestaurantOpen,
   hexToHslString,
   type PublicProduct,
+  type SectionKey,
 } from "@/lib/public-menu";
 import { usePublicCart } from "@/lib/public-cart";
 import { usePreviewMode } from "@/hooks/use-preview-mode";
 import { toast } from "sonner";
+import { Search } from "lucide-react";
 import PublicMenuLayout from "@/components/public-menu/PublicMenuLayout";
 import MenuHero from "@/components/public-menu/MenuHero";
 import OpenStatusBadge from "@/components/public-menu/OpenStatusBadge";
@@ -28,6 +30,8 @@ import CartDrawer from "@/components/public-menu/CartDrawer";
 import UpsellDialog from "@/components/public-menu/UpsellDialog";
 import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 
+const RADIUS_MAP = { md: "0.5rem", lg: "0.75rem", xl: "1rem" } as const;
+
 export default function PublicMenu() {
   const { slug } = useParams<{ slug: string }>();
   const nav = useNavigate();
@@ -38,6 +42,7 @@ export default function PublicMenu() {
   const [selected, setSelected] = useState<PublicProduct | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
@@ -88,23 +93,48 @@ export default function PublicMenu() {
   const settings = settingsQuery.data;
   const isOpen = !!openQuery.data;
 
-  // Aplica accent_color via CSS variable (escopado a esta página)
+  // Aplica paleta + radius via CSS variables (escopado a esta página via cleanup)
   useEffect(() => {
-    const hsl = settings?.accent_color ? hexToHslString(settings.accent_color) : null;
-    if (hsl) {
-      const root = document.documentElement;
-      const prev = root.style.getPropertyValue("--primary");
-      root.style.setProperty("--primary", hsl);
-      return () => {
-        if (prev) root.style.setProperty("--primary", prev);
-        else root.style.removeProperty("--primary");
-      };
-    }
-  }, [settings?.accent_color]);
+    if (!settings) return;
+    const root = document.documentElement;
+    const prev: Record<string, string> = {};
+    const apply = (key: string, hex: string | null | undefined) => {
+      if (!hex) return;
+      const hsl = hexToHslString(hex);
+      if (!hsl) return;
+      prev[key] = root.style.getPropertyValue(key);
+      root.style.setProperty(key, hsl);
+    };
+    apply("--primary", settings.accent_color);
+    apply("--background", settings.background_color);
+    apply("--card", settings.surface_color);
+    apply("--popover", settings.surface_color);
+    apply("--foreground", settings.text_color);
+    apply("--card-foreground", settings.text_color);
+    apply("--muted-foreground", settings.muted_text_color);
+
+    const radius = RADIUS_MAP[settings.radius_scale] ?? "0.75rem";
+    prev["--radius"] = root.style.getPropertyValue("--radius");
+    root.style.setProperty("--radius", radius);
+
+    return () => {
+      for (const [k, v] of Object.entries(prev)) {
+        if (v) root.style.setProperty(k, v);
+        else root.style.removeProperty(k);
+      }
+    };
+  }, [
+    settings?.accent_color,
+    settings?.background_color,
+    settings?.surface_color,
+    settings?.text_color,
+    settings?.muted_text_color,
+    settings?.radius_scale,
+    settings,
+  ]);
 
   const allCategories = categoriesQuery.data ?? [];
 
-  // Aplica ordem custom + oculta categorias conforme settings
   const categories = useMemo(() => {
     const hidden = new Set(settings?.hidden_category_slugs ?? []);
     const visible = allCategories.filter((c) => !hidden.has(c.slug));
@@ -117,15 +147,25 @@ export default function PublicMenu() {
     return [...visible].sort((a, b) => indexOf(a.slug) - indexOf(b.slug));
   }, [allCategories, settings?.category_order, settings?.hidden_category_slugs]);
 
+  const filteredProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q),
+    );
+  }, [products, search]);
+
   const productsByCategory = useMemo(() => {
     const map = new Map<string, PublicProduct[]>();
-    for (const p of products) {
+    for (const p of filteredProducts) {
       const arr = map.get(p.category) ?? [];
       arr.push(p);
       map.set(p.category, arr);
     }
     return map;
-  }, [products]);
+  }, [filteredProducts]);
 
   const featured = useMemo(
     () => products.filter((p) => p.is_featured && !p.is_sold_out),
@@ -142,12 +182,6 @@ export default function PublicMenu() {
   useEffect(() => {
     if (!activeCat && categories.length) setActiveCat(categories[0].slug);
   }, [activeCat, categories]);
-
-  const layoutMode = settings?.layout_mode ?? "list";
-  const featuredStyle = settings?.featured_style ?? "carousel";
-  const showImages = settings?.show_product_images ?? true;
-  const showDescriptions = settings?.show_descriptions ?? true;
-  const imageAspect = settings?.image_aspect ?? "square";
 
   const blockIfPreview = (action: () => void) => {
     if (isPreview) {
@@ -179,10 +213,138 @@ export default function PublicMenu() {
     );
   }
 
-  // Restaurant com banner override (somente visual)
   const restaurant = settings?.banner_url
     ? { ...restaurantQuery.data, hero_url: settings.banner_url }
     : restaurantQuery.data;
+
+  const layoutMode = settings?.layout_mode ?? "list";
+  const featuredStyle = settings?.featured_style ?? "carousel";
+  const showImages = settings?.show_product_images ?? true;
+  const showDescriptions = settings?.show_descriptions ?? true;
+  const imageAspect = settings?.image_aspect ?? "square";
+  const cardElevated = (settings?.card_style ?? "elevated") === "elevated";
+
+  const sectionOrder: SectionKey[] =
+    settings?.section_order && settings.section_order.length
+      ? settings.section_order
+      : ["hero", "featured", "categories", "welcome"];
+
+  const renderSection = (key: SectionKey) => {
+    switch (key) {
+      case "hero":
+        return (
+          <MenuHero
+            key="hero"
+            restaurant={restaurant}
+            title={settings?.hero_title}
+            subtitle={settings?.hero_subtitle}
+            alignment={settings?.hero_alignment ?? "center"}
+            showLogo={settings?.show_logo ?? true}
+            showOverlay={settings?.show_hero_banner_overlay ?? true}
+            rightSlot={
+              (settings?.show_open_status_badge ?? true) ? (
+                <OpenStatusBadge open={isOpen} onClick={() => setHoursOpen(true)} />
+              ) : null
+            }
+          />
+        );
+      case "welcome":
+        if (!(settings?.show_welcome_message_card ?? true)) return null;
+        if (!settings?.welcome_message) return null;
+        return (
+          <div key="welcome" className="mx-auto max-w-3xl px-4">
+            <p
+              className={`mt-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground ${
+                cardElevated ? "shadow-sm" : ""
+              }`}
+            >
+              {settings.welcome_message}
+            </p>
+          </div>
+        );
+      case "featured":
+        if (!(settings?.show_featured_section ?? true)) return null;
+        if (featuredStyle === "hidden") return null;
+        return (
+          <div key="featured" className="mx-auto max-w-3xl px-4">
+            <FeaturedCarousel products={featured} variant={featuredStyle} />
+          </div>
+        );
+      case "categories":
+        return (
+          <div key="categories" className="mx-auto max-w-3xl px-4">
+            {(settings?.show_search_bar ?? true) && (
+              <div className="mt-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar no cardápio…"
+                    className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Buscar"
+                  />
+                </div>
+              </div>
+            )}
+
+            {(settings?.show_category_nav ?? true) && (
+              <CategoryNav
+                categories={categories}
+                activeSlug={activeCat}
+                onSelect={(s) => {
+                  setActiveCat(s);
+                  const el = document.getElementById(`cat-${s}`);
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              />
+            )}
+
+            {(settings?.show_categories_section_title ?? true) && (
+              <h2 className="mt-4 text-base font-black uppercase tracking-wide text-muted-foreground">
+                {settings?.categories_section_title || "Categorias"}
+              </h2>
+            )}
+
+            <div className="mt-2 space-y-8">
+              {categories.map((cat) => {
+                const items = (productsByCategory.get(cat.slug) ?? []).sort(
+                  (a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name),
+                );
+                if (!items.length) return null;
+                return (
+                  <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
+                    <h3 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h3>
+                    <div
+                      className={
+                        layoutMode === "grid"
+                          ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
+                          : "grid grid-cols-1 gap-3"
+                      }
+                    >
+                      {items.map((p) => (
+                        <ProductCard
+                          key={p.id}
+                          product={p}
+                          disabled={!isOpen && !isPreview}
+                          layout={layoutMode}
+                          showImage={showImages}
+                          showDescription={showDescriptions}
+                          imageAspect={imageAspect}
+                          onClick={(prod) => setSelected(prod)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <PublicMenuLayout>
@@ -192,72 +354,15 @@ export default function PublicMenu() {
         </div>
       )}
 
-      <MenuHero
-        restaurant={restaurant}
-        rightSlot={<OpenStatusBadge open={isOpen} onClick={() => setHoursOpen(true)} />}
-      />
+      {sectionOrder.map(renderSection)}
 
-      <div className="mx-auto max-w-3xl px-4">
-        {settings?.welcome_message && (
-          <p className="mt-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
-            {settings.welcome_message}
-          </p>
-        )}
-
-        {!isOpen && !isPreview && (
+      {!isOpen && !isPreview && (
+        <div className="mx-auto max-w-3xl px-4">
           <div className="mt-4">
             <ClosedOverlay />
           </div>
-        )}
-
-        {featuredStyle !== "hidden" && (
-          <FeaturedCarousel products={featured} variant={featuredStyle} />
-        )}
-
-        <CategoryNav
-          categories={categories}
-          activeSlug={activeCat}
-          onSelect={(s) => {
-            setActiveCat(s);
-            const el = document.getElementById(`cat-${s}`);
-            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-        />
-
-        <div className="mt-4 space-y-8">
-          {categories.map((cat) => {
-            const items = (productsByCategory.get(cat.slug) ?? []).sort(
-              (a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name),
-            );
-            if (!items.length) return null;
-            return (
-              <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
-                <h2 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h2>
-                <div
-                  className={
-                    layoutMode === "grid"
-                      ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
-                      : "grid grid-cols-1 gap-3"
-                  }
-                >
-                  {items.map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      disabled={!isOpen && !isPreview}
-                      layout={layoutMode}
-                      showImage={showImages}
-                      showDescription={showDescriptions}
-                      imageAspect={imageAspect}
-                      onClick={(prod) => setSelected(prod)}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
         </div>
-      </div>
+      )}
 
       <HoursDialog open={hoursOpen} onOpenChange={setHoursOpen} hours={hoursQuery.data ?? []} />
 
@@ -313,7 +418,7 @@ export default function PublicMenu() {
         />
       )}
 
-      {!isPreview && (
+      {!isPreview && (settings?.show_whatsapp_fab ?? true) && (
         <WhatsAppFab
           phone={restaurantQuery.data.whatsapp_phone}
           restaurantName={restaurantQuery.data.name}

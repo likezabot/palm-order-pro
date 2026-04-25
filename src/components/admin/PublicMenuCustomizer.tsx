@@ -53,13 +53,18 @@ import { CSS } from "@dnd-kit/utilities";
 
 
 
-async function callUpdateSettings(
-  restaurantId: string,
-  patch: Partial<PublicMenuSettings> & {
-    clear_banner_url?: boolean;
-    clear_welcome_message?: boolean;
-  },
-) {
+type UpdatePatch = Partial<PublicMenuSettings> & {
+  clear_banner_url?: boolean;
+  clear_welcome_message?: boolean;
+  clear_hero_title?: boolean;
+  clear_hero_subtitle?: boolean;
+  clear_background_color?: boolean;
+  clear_surface_color?: boolean;
+  clear_text_color?: boolean;
+  clear_muted_text_color?: boolean;
+};
+
+async function callUpdateSettings(restaurantId: string, patch: UpdatePatch) {
   const { error } = await supabase.rpc("admin_update_public_menu_settings" as any, {
     p_restaurant_id: restaurantId,
     p_layout_mode: patch.layout_mode ?? null,
@@ -74,6 +79,33 @@ async function callUpdateSettings(
     p_image_aspect: patch.image_aspect ?? null,
     p_clear_banner_url: patch.clear_banner_url ?? false,
     p_clear_welcome_message: patch.clear_welcome_message ?? false,
+    p_hero_title: patch.hero_title ?? null,
+    p_hero_subtitle: patch.hero_subtitle ?? null,
+    p_hero_alignment: patch.hero_alignment ?? null,
+    p_show_logo: patch.show_logo ?? null,
+    p_show_open_status_badge: patch.show_open_status_badge ?? null,
+    p_show_whatsapp_fab: patch.show_whatsapp_fab ?? null,
+    p_show_search_bar: patch.show_search_bar ?? null,
+    p_show_featured_section: patch.show_featured_section ?? null,
+    p_show_category_nav: patch.show_category_nav ?? null,
+    p_show_categories_section_title: patch.show_categories_section_title ?? null,
+    p_categories_section_title: patch.categories_section_title ?? null,
+    p_show_hero_banner_overlay: patch.show_hero_banner_overlay ?? null,
+    p_show_welcome_message_card: patch.show_welcome_message_card ?? null,
+    p_section_order: patch.section_order ?? null,
+    p_background_color: patch.background_color ?? null,
+    p_surface_color: patch.surface_color ?? null,
+    p_text_color: patch.text_color ?? null,
+    p_muted_text_color: patch.muted_text_color ?? null,
+    p_button_style: patch.button_style ?? null,
+    p_card_style: patch.card_style ?? null,
+    p_radius_scale: patch.radius_scale ?? null,
+    p_clear_hero_title: patch.clear_hero_title ?? false,
+    p_clear_hero_subtitle: patch.clear_hero_subtitle ?? false,
+    p_clear_background_color: patch.clear_background_color ?? false,
+    p_clear_surface_color: patch.clear_surface_color ?? false,
+    p_clear_text_color: patch.clear_text_color ?? false,
+    p_clear_muted_text_color: patch.clear_muted_text_color ?? false,
   });
   if (error) throw error;
 }
@@ -215,8 +247,11 @@ function CustomizerInner({
         />
 
         <Tabs defaultValue="visual" className="w-full">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="visual">Visual</TabsTrigger>
+            <TabsTrigger value="hero">Home/Hero</TabsTrigger>
+            <TabsTrigger value="secoes">Seções</TabsTrigger>
+            <TabsTrigger value="paleta">Paleta</TabsTrigger>
             <TabsTrigger value="layout">Layout</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
             <TabsTrigger value="destaques">Destaques</TabsTrigger>
@@ -228,6 +263,18 @@ function CustomizerInner({
               settings={settings}
               onSaved={refresh}
             />
+          </TabsContent>
+
+          <TabsContent value="hero">
+            <HeroPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+          </TabsContent>
+
+          <TabsContent value="secoes">
+            <SectionsPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+          </TabsContent>
+
+          <TabsContent value="paleta">
+            <PalettePanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
           </TabsContent>
 
           <TabsContent value="layout">
@@ -878,5 +925,355 @@ function FeaturedQuickPanel({ onChanged }: { onChanged: () => void }) {
         ))}
       </div>
     </section>
+  );
+}
+
+// ============================================================
+// Hero / Home
+// ============================================================
+function HeroPanel({
+  restaurantId,
+  settings,
+  onSaved,
+}: {
+  restaurantId: string;
+  settings: PublicMenuSettings;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(settings.hero_title ?? "");
+  const [subtitle, setSubtitle] = useState(settings.hero_subtitle ?? "");
+  const [alignment, setAlignment] = useState<PublicMenuSettings["hero_alignment"]>(settings.hero_alignment);
+  const [showLogo, setShowLogo] = useState(settings.show_logo);
+  const [showBadge, setShowBadge] = useState(settings.show_open_status_badge);
+  const [showSearch, setShowSearch] = useState(settings.show_search_bar);
+  const [showWA, setShowWA] = useState(settings.show_whatsapp_fab);
+  const [showOverlay, setShowOverlay] = useState(settings.show_hero_banner_overlay);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setTitle(settings.hero_title ?? "");
+    setSubtitle(settings.hero_subtitle ?? "");
+    setAlignment(settings.hero_alignment);
+    setShowLogo(settings.show_logo);
+    setShowBadge(settings.show_open_status_badge);
+    setShowSearch(settings.show_search_bar);
+    setShowWA(settings.show_whatsapp_fab);
+    setShowOverlay(settings.show_hero_banner_overlay);
+  }, [settings]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const t = title.trim();
+      const s = subtitle.trim();
+      await callUpdateSettings(restaurantId, {
+        hero_title: t || undefined,
+        hero_subtitle: s || undefined,
+        clear_hero_title: !t,
+        clear_hero_subtitle: !s,
+        hero_alignment: alignment,
+        show_logo: showLogo,
+        show_open_status_badge: showBadge,
+        show_search_bar: showSearch,
+        show_whatsapp_fab: showWA,
+        show_hero_banner_overlay: showOverlay,
+      });
+      toast.success("Salvo");
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4 rounded-xl border border-border bg-card p-4">
+      <div>
+        <Label className="text-xs">Título do hero (opcional)</Label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="Ex: Plano B Espetaria" />
+        <p className="mt-1 text-xs text-muted-foreground">{title.length}/80 — vazio usa nome do restaurante.</p>
+      </div>
+      <div>
+        <Label className="text-xs">Subtítulo do hero (opcional)</Label>
+        <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} maxLength={160} placeholder="Ex: Espetinhos artesanais e cerveja gelada" />
+        <p className="mt-1 text-xs text-muted-foreground">{subtitle.length}/160</p>
+      </div>
+      <div>
+        <Label className="text-xs">Alinhamento</Label>
+        <Select value={alignment} onValueChange={(v) => setAlignment(v as any)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="center">Centralizado</SelectItem>
+            <SelectItem value="left">À esquerda</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center justify-between"><Label htmlFor="hl">Mostrar logo</Label><Switch id="hl" checked={showLogo} onCheckedChange={setShowLogo} /></div>
+      <div className="flex items-center justify-between"><Label htmlFor="hb">Badge aberto/fechado</Label><Switch id="hb" checked={showBadge} onCheckedChange={setShowBadge} /></div>
+      <div className="flex items-center justify-between"><Label htmlFor="hs">Barra de busca</Label><Switch id="hs" checked={showSearch} onCheckedChange={setShowSearch} /></div>
+      <div className="flex items-center justify-between"><Label htmlFor="hw">Botão flutuante WhatsApp</Label><Switch id="hw" checked={showWA} onCheckedChange={setShowWA} /></div>
+      <div className="flex items-center justify-between"><Label htmlFor="ho">Overlay escuro no banner</Label><Switch id="ho" checked={showOverlay} onCheckedChange={setShowOverlay} /></div>
+      <Button onClick={save} disabled={saving} className="w-full">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar hero"}
+      </Button>
+    </section>
+  );
+}
+
+// ============================================================
+// Seções da Home (toggles + ordem)
+// ============================================================
+const ALL_SECTIONS: { key: "hero" | "featured" | "categories" | "welcome"; label: string }[] = [
+  { key: "hero", label: "Hero (capa)" },
+  { key: "featured", label: "Destaques" },
+  { key: "categories", label: "Categorias" },
+  { key: "welcome", label: "Mensagem de boas-vindas" },
+];
+
+function SectionsPanel({
+  restaurantId,
+  settings,
+  onSaved,
+}: {
+  restaurantId: string;
+  settings: PublicMenuSettings;
+  onSaved: () => void;
+}) {
+  const [showFeatured, setShowFeatured] = useState(settings.show_featured_section);
+  const [showCatNav, setShowCatNav] = useState(settings.show_category_nav);
+  const [showCatTitle, setShowCatTitle] = useState(settings.show_categories_section_title);
+  const [catTitle, setCatTitle] = useState(settings.categories_section_title);
+  const [showWelcome, setShowWelcome] = useState(settings.show_welcome_message_card);
+  const [order, setOrder] = useState<PublicMenuSettings["section_order"]>(() => {
+    const known = new Set(ALL_SECTIONS.map((s) => s.key));
+    const filtered = (settings.section_order ?? []).filter((s) => known.has(s));
+    const missing = ALL_SECTIONS.map((s) => s.key).filter((k) => !filtered.includes(k));
+    return [...filtered, ...missing];
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setShowFeatured(settings.show_featured_section);
+    setShowCatNav(settings.show_category_nav);
+    setShowCatTitle(settings.show_categories_section_title);
+    setCatTitle(settings.categories_section_title);
+    setShowWelcome(settings.show_welcome_message_card);
+  }, [settings]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setOrder((items) => {
+      const o = items.indexOf(String(active.id) as any);
+      const n = items.indexOf(String(over.id) as any);
+      return arrayMove(items, o, n);
+    });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await callUpdateSettings(restaurantId, {
+        show_featured_section: showFeatured,
+        show_category_nav: showCatNav,
+        show_categories_section_title: showCatTitle,
+        categories_section_title: catTitle.trim() || "Categorias",
+        show_welcome_message_card: showWelcome,
+        section_order: order,
+      });
+      toast.success("Salvo");
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4 rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between"><Label htmlFor="sf">Seção de destaques</Label><Switch id="sf" checked={showFeatured} onCheckedChange={setShowFeatured} /></div>
+      <div className="flex items-center justify-between"><Label htmlFor="sn">Navegação de categorias</Label><Switch id="sn" checked={showCatNav} onCheckedChange={setShowCatNav} /></div>
+      <div className="flex items-center justify-between"><Label htmlFor="sct">Título da seção de categorias</Label><Switch id="sct" checked={showCatTitle} onCheckedChange={setShowCatTitle} /></div>
+      {showCatTitle && (
+        <div>
+          <Label className="text-xs">Texto do título</Label>
+          <Input value={catTitle} maxLength={40} onChange={(e) => setCatTitle(e.target.value)} placeholder="Categorias" />
+        </div>
+      )}
+      <div className="flex items-center justify-between"><Label htmlFor="sw">Card de boas-vindas</Label><Switch id="sw" checked={showWelcome} onCheckedChange={setShowWelcome} /></div>
+
+      <div>
+        <Label className="text-xs">Ordem dos blocos da home</Label>
+        <p className="mb-2 text-xs text-muted-foreground">Arraste para reordenar.</p>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={order} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {order.map((k) => {
+                const meta = ALL_SECTIONS.find((s) => s.key === k);
+                if (!meta) return null;
+                return <SortableSectionRow key={k} id={k} label={meta.label} />;
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
+
+      <Button onClick={save} disabled={saving} className="w-full">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar seções"}
+      </Button>
+    </section>
+  );
+}
+
+function SortableSectionRow({ id, label }: { id: string; label: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 rounded-lg border border-border bg-background p-3">
+      <button type="button" className="cursor-grab text-muted-foreground" {...attributes} {...listeners} aria-label="Arrastar">
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <span className="flex-1 text-sm font-bold">{label}</span>
+    </div>
+  );
+}
+
+// ============================================================
+// Paleta / UI
+// ============================================================
+function PalettePanel({
+  restaurantId,
+  settings,
+  onSaved,
+}: {
+  restaurantId: string;
+  settings: PublicMenuSettings;
+  onSaved: () => void;
+}) {
+  const [bg, setBg] = useState(settings.background_color ?? "");
+  const [surface, setSurface] = useState(settings.surface_color ?? "");
+  const [text, setText] = useState(settings.text_color ?? "");
+  const [muted, setMuted] = useState(settings.muted_text_color ?? "");
+  const [btn, setBtn] = useState<PublicMenuSettings["button_style"]>(settings.button_style);
+  const [card, setCard] = useState<PublicMenuSettings["card_style"]>(settings.card_style);
+  const [radius, setRadius] = useState<PublicMenuSettings["radius_scale"]>(settings.radius_scale);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setBg(settings.background_color ?? "");
+    setSurface(settings.surface_color ?? "");
+    setText(settings.text_color ?? "");
+    setMuted(settings.muted_text_color ?? "");
+    setBtn(settings.button_style);
+    setCard(settings.card_style);
+    setRadius(settings.radius_scale);
+  }, [settings]);
+
+  const validateOrEmpty = (v: string) => !v || isValidHex(v);
+  const allValid =
+    validateOrEmpty(bg) && validateOrEmpty(surface) && validateOrEmpty(text) && validateOrEmpty(muted);
+
+  const save = async () => {
+    if (!allValid) {
+      toast.error("Cor inválida");
+      return;
+    }
+    setSaving(true);
+    try {
+      await callUpdateSettings(restaurantId, {
+        background_color: bg.trim() || undefined,
+        surface_color: surface.trim() || undefined,
+        text_color: text.trim() || undefined,
+        muted_text_color: muted.trim() || undefined,
+        clear_background_color: !bg.trim(),
+        clear_surface_color: !surface.trim(),
+        clear_text_color: !text.trim(),
+        clear_muted_text_color: !muted.trim(),
+        button_style: btn,
+        card_style: card,
+        radius_scale: radius,
+      });
+      toast.success("Salvo");
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4 rounded-xl border border-border bg-card p-4">
+      <ColorRow label="Cor de fundo" value={bg} onChange={setBg} />
+      <ColorRow label="Cor da superfície/cards" value={surface} onChange={setSurface} />
+      <ColorRow label="Cor do texto principal" value={text} onChange={setText} />
+      <ColorRow label="Cor do texto secundário" value={muted} onChange={setMuted} />
+
+      <div>
+        <Label className="text-xs">Estilo de botão</Label>
+        <Select value={btn} onValueChange={(v) => setBtn(v as any)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="solid">Sólido</SelectItem>
+            <SelectItem value="outline">Contorno</SelectItem>
+            <SelectItem value="soft">Suave</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label className="text-xs">Estilo de card</Label>
+        <Select value={card} onValueChange={(v) => setCard(v as any)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="elevated">Elevado (com sombra)</SelectItem>
+            <SelectItem value="flat">Plano</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label className="text-xs">Arredondamento</Label>
+        <Select value={radius} onValueChange={(v) => setRadius(v as any)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="md">Médio</SelectItem>
+            <SelectItem value="lg">Grande</SelectItem>
+            <SelectItem value="xl">Extra grande</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Button onClick={save} disabled={saving || !allValid} className="w-full">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar paleta"}
+      </Button>
+    </section>
+  );
+}
+
+function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const valid = !value || isValidHex(value);
+  return (
+    <div>
+      <Label className="text-xs">{label}</Label>
+      <div className="mt-1 flex items-center gap-2">
+        <input
+          type="color"
+          value={isValidHex(value) ? value : "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-14 cursor-pointer rounded-md border border-border bg-background"
+        />
+        <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="(usar padrão)" maxLength={7} className="font-mono" />
+        {value && (
+          <Button variant="ghost" size="sm" onClick={() => onChange("")}>Limpar</Button>
+        )}
+      </div>
+      {!valid && <p className="mt-1 text-xs text-destructive">Use #RRGGBB ou #RGB.</p>}
+    </div>
   );
 }
