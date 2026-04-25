@@ -28,8 +28,9 @@ export default function MenuHero({
 
   return (
     <header className="relative">
+      {/* Hero compacto: 28 mobile, 44 sm+ */}
       <div
-        className="relative h-40 w-full bg-gradient-to-br from-primary/30 via-background to-background sm:h-56"
+        className="relative h-28 w-full bg-gradient-to-br from-primary/30 via-background to-background sm:h-44"
         style={
           restaurant.hero_url
             ? { backgroundImage: `url(${restaurant.hero_url})`, backgroundSize: "cover", backgroundPosition: "center" }
@@ -42,38 +43,43 @@ export default function MenuHero({
         )}
       </div>
       <div className="mx-auto max-w-3xl px-4">
-        <div className={`-mt-10 flex items-end gap-4 ${isCenter ? "sm:justify-center sm:text-center" : ""}`}>
+        <div className={`-mt-8 flex items-end gap-3 ${isCenter ? "sm:justify-center sm:text-center" : ""}`}>
           {showLogo && (
-            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-4 border-background bg-card shadow-lg sm:h-24 sm:w-24">
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border-4 border-background bg-card shadow-lg sm:h-20 sm:w-20">
               {restaurant.logo_url ? (
                 <img src={restaurant.logo_url} alt={restaurant.name} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-primary text-2xl font-black text-primary-foreground">
+                <div className="flex h-full w-full items-center justify-center bg-primary text-xl font-black text-primary-foreground">
                   {restaurant.name.charAt(0)}
                 </div>
               )}
             </div>
           )}
           <div className={`min-w-0 flex-1 pb-1 ${isCenter ? "sm:text-center" : ""}`}>
-            <h1 className="truncate text-2xl font-black leading-tight sm:text-3xl">{displayTitle}</h1>
+            <h1 className="truncate text-xl font-black leading-tight sm:text-2xl">{displayTitle}</h1>
             {displaySub && (
-              <p className="line-clamp-2 text-sm text-muted-foreground">{displaySub}</p>
+              <p className="line-clamp-1 text-xs sm:text-sm text-muted-foreground">{displaySub}</p>
             )}
           </div>
+          {rightSlot && !isCenter && (
+            <div className="pb-1 shrink-0">{rightSlot}</div>
+          )}
         </div>
-        {prep > 0 && (
-          <div className={`mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${isCenter ? "sm:justify-center" : ""}`}>
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
-              <Clock size={12} aria-hidden /> Preparo ~{prep} min
-            </span>
-            {deliveryTotal > prep && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
-                <Clock size={12} aria-hidden /> Entrega ~{deliveryTotal} min
+        {(prep > 0 || (rightSlot && isCenter)) && (
+          <div className={`mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground ${isCenter ? "sm:justify-center" : ""}`}>
+            {prep > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
+                <Clock size={11} aria-hidden /> ~{prep} min
               </span>
             )}
+            {deliveryTotal > prep && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
+                <Clock size={11} aria-hidden /> entrega ~{deliveryTotal} min
+              </span>
+            )}
+            {rightSlot && isCenter && <div>{rightSlot}</div>}
           </div>
         )}
-        {rightSlot && <div className={`mt-3 ${isCenter ? "sm:flex sm:justify-center" : ""}`}>{rightSlot}</div>}
       </div>
     </header>
   );
