@@ -42,7 +42,12 @@ async function fetchProducts(): Promise<ProductOnline[]> {
   return (data ?? []) as ProductOnline[];
 }
 
-async function updateOnline(id: string, patch: Partial<ProductOnline>) {
+type UpdateOnlinePatch = Partial<ProductOnline> & {
+  clear_description?: boolean;
+  clear_image_url?: boolean;
+};
+
+async function updateOnline(id: string, patch: UpdateOnlinePatch) {
   const { error } = await supabase.rpc("admin_update_product_online" as any, {
     p_id: id,
     p_description: patch.description ?? null,
@@ -51,6 +56,8 @@ async function updateOnline(id: string, patch: Partial<ProductOnline>) {
     p_is_available_online: patch.is_available_online ?? null,
     p_is_sold_out: patch.is_sold_out ?? null,
     p_display_order: patch.display_order ?? null,
+    p_clear_description: patch.clear_description ?? false,
+    p_clear_image_url: patch.clear_image_url ?? false,
   });
   if (error) throw error;
 }
