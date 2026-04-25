@@ -14,6 +14,7 @@ export type Restaurant = {
   whatsapp_phone: string | null;
   is_open_override: "auto" | "open" | "closed";
   default_prep_minutes: number;
+  delivery_prep_buffer: number;
 };
 
 export type BusinessHour = {
