@@ -6,10 +6,14 @@ import {
   fetchBusinessHours,
   fetchMenuCategories,
   fetchPublicProducts,
+  fetchPublicMenuSettings,
   isRestaurantOpen,
+  hexToHslString,
   type PublicProduct,
 } from "@/lib/public-menu";
 import { usePublicCart } from "@/lib/public-cart";
+import { usePreviewMode } from "@/hooks/use-preview-mode";
+import { toast } from "sonner";
 import PublicMenuLayout from "@/components/public-menu/PublicMenuLayout";
 import MenuHero from "@/components/public-menu/MenuHero";
 import OpenStatusBadge from "@/components/public-menu/OpenStatusBadge";
@@ -28,6 +32,7 @@ export default function PublicMenu() {
   const { slug } = useParams<{ slug: string }>();
   const nav = useNavigate();
   const cart = usePublicCart();
+  const isPreview = usePreviewMode();
   const [hoursOpen, setHoursOpen] = useState(false);
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [selected, setSelected] = useState<PublicProduct | null>(null);
@@ -42,6 +47,14 @@ export default function PublicMenu() {
   });
 
   const restaurantId = restaurantQuery.data?.id;
+
+  const settingsQuery = useQuery({
+    queryKey: ["pmenu", "settings", restaurantId],
+    queryFn: () => fetchPublicMenuSettings(restaurantId!),
+    enabled: !!restaurantId,
+    staleTime: isPreview ? 0 : 30_000,
+    refetchInterval: isPreview ? 2_000 : false,
+  });
 
   const hoursQuery = useQuery({
     queryKey: ["pmenu", "hours", restaurantId],
@@ -60,7 +73,8 @@ export default function PublicMenu() {
   const productsQuery = useQuery({
     queryKey: ["pmenu", "products"],
     queryFn: fetchPublicProducts,
-    staleTime: 30_000,
+    staleTime: isPreview ? 0 : 30_000,
+    refetchInterval: isPreview ? 3_000 : false,
   });
 
   const openQuery = useQuery({
@@ -71,8 +85,37 @@ export default function PublicMenu() {
   });
 
   const products = productsQuery.data ?? [];
-  const categories = categoriesQuery.data ?? [];
+  const settings = settingsQuery.data;
   const isOpen = !!openQuery.data;
+
+  // Aplica accent_color via CSS variable (escopado a esta página)
+  useEffect(() => {
+    const hsl = settings?.accent_color ? hexToHslString(settings.accent_color) : null;
+    if (hsl) {
+      const root = document.documentElement;
+      const prev = root.style.getPropertyValue("--primary");
+      root.style.setProperty("--primary", hsl);
+      return () => {
+        if (prev) root.style.setProperty("--primary", prev);
+        else root.style.removeProperty("--primary");
+      };
+    }
+  }, [settings?.accent_color]);
+
+  const allCategories = categoriesQuery.data ?? [];
+
+  // Aplica ordem custom + oculta categorias conforme settings
+  const categories = useMemo(() => {
+    const hidden = new Set(settings?.hidden_category_slugs ?? []);
+    const visible = allCategories.filter((c) => !hidden.has(c.slug));
+    const order = settings?.category_order ?? [];
+    if (!order.length) return visible;
+    const indexOf = (s: string) => {
+      const i = order.indexOf(s);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    return [...visible].sort((a, b) => indexOf(a.slug) - indexOf(b.slug));
+  }, [allCategories, settings?.category_order, settings?.hidden_category_slugs]);
 
   const productsByCategory = useMemo(() => {
     const map = new Map<string, PublicProduct[]>();
@@ -84,7 +127,10 @@ export default function PublicMenu() {
     return map;
   }, [products]);
 
-  const featured = useMemo(() => products.filter((p) => p.is_featured && !p.is_sold_out), [products]);
+  const featured = useMemo(
+    () => products.filter((p) => p.is_featured && !p.is_sold_out),
+    [products],
+  );
 
   const hasUpsellSuggestion = useMemo(() => {
     const cartIds = new Set(cart.items.map((c) => c.product_id));
@@ -97,10 +143,26 @@ export default function PublicMenu() {
     if (!activeCat && categories.length) setActiveCat(categories[0].slug);
   }, [activeCat, categories]);
 
+  const layoutMode = settings?.layout_mode ?? "list";
+  const featuredStyle = settings?.featured_style ?? "carousel";
+  const showImages = settings?.show_product_images ?? true;
+  const showDescriptions = settings?.show_descriptions ?? true;
+  const imageAspect = settings?.image_aspect ?? "square";
+
+  const blockIfPreview = (action: () => void) => {
+    if (isPreview) {
+      toast.info("Modo preview: ações de pedido estão desativadas.");
+      return;
+    }
+    action();
+  };
+
   if (restaurantQuery.isLoading) {
     return (
       <PublicMenuLayout>
-        <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">Carregando…</div>
+        <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+          Carregando…
+        </div>
       </PublicMenuLayout>
     );
   }
@@ -117,21 +179,40 @@ export default function PublicMenu() {
     );
   }
 
+  // Restaurant com banner override (somente visual)
+  const restaurant = settings?.banner_url
+    ? { ...restaurantQuery.data, hero_url: settings.banner_url }
+    : restaurantQuery.data;
+
   return (
     <PublicMenuLayout>
+      {isPreview && (
+        <div className="sticky top-0 z-50 bg-amber-500/90 px-4 py-2 text-center text-xs font-bold text-amber-950 backdrop-blur">
+          Modo preview — pedidos desativados
+        </div>
+      )}
+
       <MenuHero
-        restaurant={restaurantQuery.data}
+        restaurant={restaurant}
         rightSlot={<OpenStatusBadge open={isOpen} onClick={() => setHoursOpen(true)} />}
       />
 
       <div className="mx-auto max-w-3xl px-4">
-        {!isOpen && (
+        {settings?.welcome_message && (
+          <p className="mt-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
+            {settings.welcome_message}
+          </p>
+        )}
+
+        {!isOpen && !isPreview && (
           <div className="mt-4">
             <ClosedOverlay />
           </div>
         )}
 
-        <FeaturedCarousel products={featured} />
+        {featuredStyle !== "hidden" && (
+          <FeaturedCarousel products={featured} variant={featuredStyle} />
+        )}
 
         <CategoryNav
           categories={categories}
@@ -152,12 +233,22 @@ export default function PublicMenu() {
             return (
               <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
                 <h2 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h2>
-                <div className="grid grid-cols-1 gap-3">
+                <div
+                  className={
+                    layoutMode === "grid"
+                      ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
+                      : "grid grid-cols-1 gap-3"
+                  }
+                >
                   {items.map((p) => (
                     <ProductCard
                       key={p.id}
                       product={p}
-                      disabled={!isOpen}
+                      disabled={!isOpen && !isPreview}
+                      layout={layoutMode}
+                      showImage={showImages}
+                      showDescription={showDescriptions}
+                      imageAspect={imageAspect}
                       onClick={(prod) => setSelected(prod)}
                     />
                   ))}
@@ -174,7 +265,11 @@ export default function PublicMenu() {
         product={selected}
         open={!!selected}
         onClose={() => setSelected(null)}
-        onAdd={(p, qty, note) => cart.add(p, qty, note)}
+        onAdd={(p, qty, note) =>
+          blockIfPreview(() => {
+            cart.add(p, qty, note);
+          })
+        }
       />
 
       <CartDrawer
@@ -184,14 +279,16 @@ export default function PublicMenu() {
         subtotal={cart.subtotal}
         onUpdateQty={cart.updateQty}
         onRemove={cart.remove}
-        onCheckout={() => {
-          setCartOpen(false);
-          if (hasUpsellSuggestion) {
-            setUpsellOpen(true);
-          } else {
-            nav(`/menu/${slug}/checkout`);
-          }
-        }}
+        onCheckout={() =>
+          blockIfPreview(() => {
+            setCartOpen(false);
+            if (hasUpsellSuggestion) {
+              setUpsellOpen(true);
+            } else {
+              nav(`/menu/${slug}/checkout`);
+            }
+          })
+        }
       />
 
       <UpsellDialog
@@ -199,14 +296,16 @@ export default function PublicMenu() {
         onOpenChange={setUpsellOpen}
         allProducts={products}
         cartItems={cart.items}
-        onAdd={(p) => cart.add(p, 1, "")}
-        onContinue={() => {
-          setUpsellOpen(false);
-          nav(`/menu/${slug}/checkout`);
-        }}
+        onAdd={(p) => blockIfPreview(() => cart.add(p, 1, ""))}
+        onContinue={() =>
+          blockIfPreview(() => {
+            setUpsellOpen(false);
+            nav(`/menu/${slug}/checkout`);
+          })
+        }
       />
 
-      {isOpen && (
+      {isOpen && !isPreview && (
         <PublicCartFab
           itemCount={cart.itemCount}
           total={cart.subtotal}
@@ -214,10 +313,12 @@ export default function PublicMenu() {
         />
       )}
 
-      <WhatsAppFab
-        phone={restaurantQuery.data.whatsapp_phone}
-        restaurantName={restaurantQuery.data.name}
-      />
+      {!isPreview && (
+        <WhatsAppFab
+          phone={restaurantQuery.data.whatsapp_phone}
+          restaurantName={restaurantQuery.data.name}
+        />
+      )}
     </PublicMenuLayout>
   );
 }
