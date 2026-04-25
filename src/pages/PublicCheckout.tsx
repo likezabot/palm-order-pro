@@ -285,12 +285,20 @@ export default function PublicCheckout() {
           />
         </section>
 
-        <section className="rounded-xl border border-border p-4">
+        <section className="rounded-xl border border-border p-4 space-y-1.5">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Itens</span>
-            <span>{cart.itemCount}</span>
+            <span className="text-muted-foreground">Subtotal ({cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"})</span>
+            <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
           </div>
-          <div className="mt-1 flex justify-between text-lg font-bold">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">
+              Taxa de entrega {serviceType !== "delivery" && "(não se aplica)"}
+            </span>
+            <span className={serviceType === "delivery" ? "font-medium" : "text-muted-foreground"}>
+              {serviceType === "delivery" ? `R$ ${DELIVERY_FEE_FIXED.toFixed(2)}` : "R$ 0,00"}
+            </span>
+          </div>
+          <div className="mt-2 flex justify-between border-t border-border pt-2 text-lg font-bold">
             <span>Total</span>
             <span className="brand-gradient-text">R$ {total.toFixed(2)}</span>
           </div>
