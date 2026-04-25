@@ -186,10 +186,18 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
   const sid = order ? shortOrderId(order.id) : "";
   const phone = order?.customer_phone_snapshot ?? "";
   const customerName = order?.customer_name_snapshot ?? null;
-  const nextMap: Record<string, { next: string; label: string } | null> = {
+  const nextMap: Record<string, { next: string; label: string; confirm?: string } | null> = {
     new: { next: "preparing", label: "Iniciar preparo" },
-    preparing: { next: "done", label: "Marcar pronto" },
-    done: { next: "paid", label: "Finalizar" },
+    preparing: {
+      next: "done",
+      label: "Marcar pronto",
+      confirm: "Marcar este pedido como Pronto?",
+    },
+    done: {
+      next: "paid",
+      label: "Finalizar",
+      confirm: "Finalizar este pedido? Esta ação encerra o atendimento.",
+    },
     paid: null,
     cancelled: null,
   };
@@ -197,6 +205,7 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
 
   async function handleAdvance() {
     if (!order || !nextStep || advancing) return;
+    if (nextStep.confirm && !window.confirm(nextStep.confirm)) return;
     setAdvancing(true);
     const { error } = await supabase.rpc("update_order_status" as any, {
       p_order_id: order.id,
@@ -208,7 +217,7 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
       return;
     }
     toast.success(`Pedido movido para "${STATUS_LABEL[nextStep.next] ?? nextStep.next}"`);
-    setOrder({ ...order, status: nextStep.next });
+    setOrder({ ...order, status: nextStep.next, updated_at: new Date().toISOString() });
     setAdvancing(false);
   }
 
