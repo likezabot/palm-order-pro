@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   fetchPublicMenuSettings,
   fetchMenuCategories,
-  fetchRestaurantBySlug,
+  fetchCurrentRestaurant,
   isValidHex,
   isValidSlug,
   type PublicMenuSettings,
@@ -51,7 +51,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const RESTAURANT_SLUG_DEFAULT = "plano-b";
+
 
 async function callUpdateSettings(
   restaurantId: string,
@@ -81,12 +81,12 @@ async function callUpdateSettings(
 export default function PublicMenuCustomizer() {
   const qc = useQueryClient();
   const [slugInput, setSlugInput] = useState("");
+  const [seeding, setSeeding] = useState(false);
 
   const restQuery = useQuery({
-    queryKey: ["pmc", "restaurant", RESTAURANT_SLUG_DEFAULT],
-    queryFn: () => fetchRestaurantBySlug(RESTAURANT_SLUG_DEFAULT),
+    queryKey: ["pmc", "restaurant", "current"],
+    queryFn: () => fetchCurrentRestaurant(),
   });
-  // se o slug do banco for diferente de "plano-b", buscar por id depois? Mantemos: o restaurante atual é o que vem.
   const restaurant = restQuery.data;
 
   useEffect(() => {
@@ -102,24 +102,55 @@ export default function PublicMenuCustomizer() {
   }
 
   if (!restaurant) {
+    const seed = async () => {
+      setSeeding(true);
+      try {
+        const { error } = await supabase
+          .from("restaurants" as any)
+          .insert({ name: "Meu Restaurante", slug: `restaurante-${Date.now().toString(36)}` });
+        if (error) throw error;
+        toast.success("Restaurante inicial criado");
+        qc.invalidateQueries({ queryKey: ["pmc"] });
+      } catch (e: any) {
+        toast.error(e?.message ?? "Não foi possível criar o restaurante");
+      } finally {
+        setSeeding(false);
+      }
+    };
     return (
-      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-        Não foi possível carregar o restaurante. Verifique o cadastro inicial.
+      <div className="rounded-lg border border-border bg-card p-6 text-center">
+        <p className="text-sm font-bold">Nenhum restaurante cadastrado</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Para personalizar o cardápio público, é preciso ter pelo menos um restaurante criado.
+        </p>
+        <Button className="mt-4" onClick={seed} disabled={seeding}>
+          {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar restaurante inicial"}
+        </Button>
       </div>
     );
   }
 
+  const hasValidSlug = !!restaurant.slug && isValidSlug(restaurant.slug);
+
   return (
-    <CustomizerInner
-      restaurantId={restaurant.id}
-      currentSlug={restaurant.slug}
-      slugInput={slugInput}
-      setSlugInput={setSlugInput}
-      onSlugSaved={() => {
-        qc.invalidateQueries({ queryKey: ["pmc"] });
-        qc.invalidateQueries({ queryKey: ["pmenu"] });
-      }}
-    />
+    <>
+      {!hasValidSlug && (
+        <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
+          O slug deste restaurante está vazio ou inválido. Defina um slug válido em
+          <strong> Link & QR Code </strong> abaixo para o link público funcionar.
+        </div>
+      )}
+      <CustomizerInner
+        restaurantId={restaurant.id}
+        currentSlug={restaurant.slug ?? ""}
+        slugInput={slugInput}
+        setSlugInput={setSlugInput}
+        onSlugSaved={() => {
+          qc.invalidateQueries({ queryKey: ["pmc"] });
+          qc.invalidateQueries({ queryKey: ["pmenu"] });
+        }}
+      />
+    </>
   );
 }
 
