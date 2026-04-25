@@ -1,29 +1,83 @@
-# Salvar os dois prompts de reconstrução
 
-Vou criar dois arquivos em `docs/`:
+# Configurações do Cardápio Online
 
-## 1. `docs/PROMPT_LOVABLE_NOVO_PROJETO.md`
-Prompt completo para colar em uma **nova sessão Lovable** e reconstruir o app web do zero, já com as correções aprendidas:
-- Stack React 18 + Vite + TS + Tailwind + shadcn + Lovable Cloud, dark theme #0D0D0D / #E25822, Inter, PWA, sem auth.
-- 5 módulos: Home, Palm (garçom), Kitchen (kanban), Cashier, Admin.
-- Schema completo: products, orders, order_items, cash_register, cash_movements, inventory_items, inventory_movements, settings, agregados diários, notification_queue.
-- RPCs SECURITY DEFINER: create_order, update_order_items, update_order_status, rename_order_table, merge_table_duplicates, claim/complete/defer_order_print, recover_stuck_prints, force_clear_orphan_prints, cash_open/close/movement_add, verify_manager_pin.
-- Triggers de estoque automático e reset de served_at.
-- Seed do cardápio (Refeições, Espetos, Bebidas, Cervejas) com preços reais.
-- **Camada de impressão correta desde o dia 1**: `LOCAL_ONLY_KEYS = ['bridgeUrl','printMode']` nunca sincronizam via DB; `checkBridgeStatus` aceita formato legado e v2.2; fila IndexedDB; worker tick 15s; `manualPrintOrder` retorna `{ok, bridgeOk, queued, error}` e PDV/Cashier checam corretamente.
-- PWA com sw.js network-first, manifest standalone.
-- Critério de aceite explícito.
+Adicionar uma sub-aba dentro da aba **Online** do Admin para configurar tudo que envolve a operação online do restaurante. Hoje a aba Online só tem o gerenciamento de produtos — essas configurações ficam só no banco e não têm UI.
 
-## 2. `docs/PROMPT_CODEX_BRIDGE_ELECTRON_FINAL.md`
-Prompt completo para o **Codex** gerar **um único instalador Windows** (.exe) que substitui bridge.exe + console preto:
-- Estrutura `desktop/` com main.cjs, preload.cjs, bridge/server.cjs, bridge/printer.cjs, bridge/config.cjs, assets, build/installer.nsh.
-- package.json com electron 31 + electron-builder 24, target nsis x64, oneClick=false.
-- main.cjs: Express na 9100, BrowserWindow → palm-order-pro.lovable.app/admin, Tray (Abrir, Status, Reiniciar Bridge, Logs, Iniciar com Windows, Sair), close→hide, singleInstanceLock, ping de status 30s.
-- bridge/server.cjs: `/health` (cache 5s, formato v2.2 com bridge_version, printer_ok, printer_ready, printer_name, printer_method), `/printers`, `/config` GET+POST em %APPDATA%, `/test`, `/print` (base64 → tempfile .bin → PowerShell Out-Printer → unlink).
-- bridge/printer.cjs: spawn powershell.exe NoProfile NonInteractive windowsHide com Get-Content -Encoding Byte | Out-Printer -Name.
-- build/installer.nsh: netsh advfirewall add/delete rule porta 9100 no install/uninstall.
-- Comandos de build gerando `dist/Plano B Fast Order Setup 2.2.0.exe`.
-- Critério de aceite: 2 cliques, sem console preto, bandeja funcional, close→hide, firewall automático, "Iniciar com Windows" persistente, diagnóstico mostra "PONTE ONLINE v2.2.0".
-- NÃO MEXER: código React do palm-order-pro nem Supabase.
+## Escopo (somente UI + chamadas a RPCs novas)
 
-Depois de salvos, basta abrir cada arquivo em `docs/`, copiar e colar no destino correspondente.
+Não mexer em: `.exe`, bridge, `print_jobs`, `create_public_order`, Palm, PDV, Cozinha, Caixa, Telegram.
+
+## 1. Reestruturar a aba Online
+
+Em `OnlineMenuTab.tsx`, envolver o conteúdo em um `Tabs` interno com duas abas:
+
+- **Cardápio** — o conteúdo atual (produtos online).
+- **Configurações** — novo painel `OnlineSettingsPanel`.
+
+## 2. Novo componente `OnlineSettingsPanel.tsx`
+
+Quatro seções (cards) carregadas a partir de `restaurants`, `business_hours` e `delivery_zones` (slug `plano-b-espetaria`).
+
+### 2.1 Status da loja
+- Select `is_open_override`: **Automático (segue horários)** / **Forçar aberto** / **Forçar fechado**.
+- Mostra ao lado um badge ao vivo do `is_restaurant_open` (RPC já existente).
+
+### 2.2 Dados públicos
+- Nome, descrição, WhatsApp, URL do logo, URL do hero, chave PIX.
+- Upload de logo/hero usando o bucket `product-images` já configurado (mesmo padrão do EditDialog atual).
+
+### 2.3 Horários de funcionamento
+- Lista fixa de 7 linhas (Domingo → Sábado) usando `weekdayLabel` de `src/lib/public-menu.ts`.
+- Cada linha: switch **Aberto/Fechado** + dois `Input type="time"` (abre / fecha).
+- Validação leve: se aberto, `closes_at > opens_at`.
+- Botão **Salvar horários** faz upsert em lote.
+
+### 2.4 Tempo de preparo
+- `default_prep_minutes` (input numérico).
+- `delivery_prep_buffer` (input numérico, minutos extras para entrega).
+
+### 2.5 Zonas de entrega
+- Lista de `delivery_zones` com: nome, taxa, pedido mínimo, tempo estimado, bairros (chips separados por vírgula em `match_neighborhoods`), switch ativo.
+- Botões **Adicionar zona**, **Editar**, **Remover**.
+- Importante: hoje não há nenhuma zona cadastrada — sem isso o checkout de entrega bloqueia. Esse painel resolve.
+
+## 3. Backend — novas RPCs (migration)
+
+Como todas as tabelas envolvidas têm RLS bloqueando escrita pública, criar funções `SECURITY DEFINER` (mesmo padrão de `admin_update_product_online` já usado):
+
+- `admin_update_restaurant(p_id uuid, p_name, p_description, p_whatsapp_phone, p_logo_url, p_hero_url, p_pix_key, p_is_open_override, p_default_prep_minutes, p_delivery_prep_buffer)` — campos opcionais, só atualiza os passados.
+- `admin_upsert_business_hours(p_restaurant_id uuid, p_hours jsonb)` — recebe array `[{weekday, opens_at, closes_at, is_closed}]` e faz upsert em lote.
+- `admin_upsert_delivery_zone(p_id uuid|null, p_restaurant_id, p_name, p_fee, p_min_order, p_estimated_minutes, p_match_neighborhoods text[], p_active)` — insert quando `p_id` nulo, update caso contrário.
+- `admin_delete_delivery_zone(p_id uuid)`.
+
+Validações dentro das funções: `closes_at > opens_at` quando `is_closed=false`, `fee >= 0`, `min_order >= 0`, `estimated_minutes > 0`, normalizar bairros (`trim`+`lower`).
+
+Sem alterações em colunas — schema atual já cobre tudo.
+
+## 4. Carregamento de dados no front
+
+Hooks com TanStack Query:
+- `["admin", "online-settings", "restaurant"]` → `restaurants` (single).
+- `["admin", "online-settings", "hours"]` → `business_hours` ordenado por weekday.
+- `["admin", "online-settings", "zones"]` → `delivery_zones` por restaurant.
+
+Após cada mutação, `invalidateQueries` da chave correspondente + toast de sucesso/erro.
+
+## 5. Critérios de aceite
+
+- Aba Online passa a ter sub-abas **Cardápio** / **Configurações**.
+- Em Configurações dá para: alternar status manual da loja, editar dados públicos, ajustar 7 dias de horários, definir tempos de preparo e gerenciar zonas de entrega.
+- Mudanças refletem no `/menu/plano-b-espetaria` (status, horários no `HoursDialog`, hero/logo) e desbloqueiam delivery quando uma zona com o bairro do cliente é cadastrada.
+- Nenhuma alteração em fluxo de impressão, Palm, PDV, Cozinha, Caixa, Telegram, bridge ou `.exe`.
+
+## Arquivos
+
+**Novos**
+- `src/components/admin/OnlineSettingsPanel.tsx`
+- `src/components/admin/online-settings/HoursEditor.tsx`
+- `src/components/admin/online-settings/DeliveryZonesEditor.tsx`
+- `src/components/admin/online-settings/RestaurantInfoEditor.tsx`
+- `supabase/migrations/<timestamp>_admin_online_settings_rpcs.sql`
+
+**Editados**
+- `src/components/admin/OnlineMenuTab.tsx` — envelopa conteúdo atual em `Tabs` (Cardápio + Configurações).
