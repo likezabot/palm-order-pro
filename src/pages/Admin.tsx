@@ -25,6 +25,7 @@ import OrdersTab from "@/components/admin/OrdersTab";
 import SystemTab from "@/components/admin/SystemTab";
 import NetworkTab from "@/components/admin/NetworkTab";
 import OnlineMenuTab from "@/components/admin/OnlineMenuTab";
+import OnlineOrdersTab from "@/components/admin/OnlineOrdersTab";
 import { manualPrintOrder } from "@/lib/print-service";
 
 const Admin = () => {
