@@ -53,13 +53,18 @@ import { CSS } from "@dnd-kit/utilities";
 
 
 
-async function callUpdateSettings(
-  restaurantId: string,
-  patch: Partial<PublicMenuSettings> & {
-    clear_banner_url?: boolean;
-    clear_welcome_message?: boolean;
-  },
-) {
+type UpdatePatch = Partial<PublicMenuSettings> & {
+  clear_banner_url?: boolean;
+  clear_welcome_message?: boolean;
+  clear_hero_title?: boolean;
+  clear_hero_subtitle?: boolean;
+  clear_background_color?: boolean;
+  clear_surface_color?: boolean;
+  clear_text_color?: boolean;
+  clear_muted_text_color?: boolean;
+};
+
+async function callUpdateSettings(restaurantId: string, patch: UpdatePatch) {
   const { error } = await supabase.rpc("admin_update_public_menu_settings" as any, {
     p_restaurant_id: restaurantId,
     p_layout_mode: patch.layout_mode ?? null,
@@ -74,6 +79,33 @@ async function callUpdateSettings(
     p_image_aspect: patch.image_aspect ?? null,
     p_clear_banner_url: patch.clear_banner_url ?? false,
     p_clear_welcome_message: patch.clear_welcome_message ?? false,
+    p_hero_title: patch.hero_title ?? null,
+    p_hero_subtitle: patch.hero_subtitle ?? null,
+    p_hero_alignment: patch.hero_alignment ?? null,
+    p_show_logo: patch.show_logo ?? null,
+    p_show_open_status_badge: patch.show_open_status_badge ?? null,
+    p_show_whatsapp_fab: patch.show_whatsapp_fab ?? null,
+    p_show_search_bar: patch.show_search_bar ?? null,
+    p_show_featured_section: patch.show_featured_section ?? null,
+    p_show_category_nav: patch.show_category_nav ?? null,
+    p_show_categories_section_title: patch.show_categories_section_title ?? null,
+    p_categories_section_title: patch.categories_section_title ?? null,
+    p_show_hero_banner_overlay: patch.show_hero_banner_overlay ?? null,
+    p_show_welcome_message_card: patch.show_welcome_message_card ?? null,
+    p_section_order: patch.section_order ?? null,
+    p_background_color: patch.background_color ?? null,
+    p_surface_color: patch.surface_color ?? null,
+    p_text_color: patch.text_color ?? null,
+    p_muted_text_color: patch.muted_text_color ?? null,
+    p_button_style: patch.button_style ?? null,
+    p_card_style: patch.card_style ?? null,
+    p_radius_scale: patch.radius_scale ?? null,
+    p_clear_hero_title: patch.clear_hero_title ?? false,
+    p_clear_hero_subtitle: patch.clear_hero_subtitle ?? false,
+    p_clear_background_color: patch.clear_background_color ?? false,
+    p_clear_surface_color: patch.clear_surface_color ?? false,
+    p_clear_text_color: patch.clear_text_color ?? false,
+    p_clear_muted_text_color: patch.clear_muted_text_color ?? false,
   });
   if (error) throw error;
 }
