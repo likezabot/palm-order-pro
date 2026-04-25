@@ -5,6 +5,7 @@ import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { enqueuePrintJob } from "@/lib/print-jobs";
 import { supabase } from "@/integrations/supabase/client";
 import { CartItem } from "@/lib/types";
+import { CartItemMeta, cartMetaKey } from "@/hooks/use-palm-cart";
 import { calculateDelta } from "@/lib/order-delta";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
@@ -27,6 +28,7 @@ interface Props {
   waiterName: string;
   cart: CartItem[];
   originalCart?: CartItem[];
+  itemsMeta?: Map<string, CartItemMeta>;
   total: number;
   existingOrderId?: string | null;
   orderVersion?: number | null;
@@ -46,7 +48,7 @@ type SendState = "idle" | "sending" | "success" | "error";
 const SEND_TIMEOUT_MS = 20000;
 
 const OrderReview = ({
-  tableName, originalTableName, waiterName, cart, originalCart = [], total, existingOrderId, orderVersion, senha, onBack,
+  tableName, originalTableName, waiterName, cart, originalCart = [], itemsMeta, total, existingOrderId, orderVersion, senha, onBack,
   onUpdateQuantity, onUpdateNote, onRemove, onSuccess, onCloseAccount, onRedirectToExisting,
   customerName, onCustomerNameChange,
 }: Props) => {
