@@ -112,7 +112,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 
 function shortId(id: string) {
-  return id.slice(0, 8).toUpperCase();
+  return shortOrderId(id);
 }
 
 function formatAddress(addr: DeliveryAddress): string {
@@ -150,18 +150,45 @@ async function copyToClipboard(text: string, label: string) {
   }
 }
 
-function openWhatsApp(phone: string, name: string | null) {
-  const digits = onlyDigits(phone);
-  if (!digits) {
+function openWhatsAppContext(opts: {
+  context: WaContext;
+  phone: string;
+  customerName: string | null;
+  shortId: string;
+}) {
+  const msg = buildWaMessage({
+    context: opts.context,
+    customerName: opts.customerName,
+    shortId: opts.shortId,
+  });
+  const url = buildWaUrl(opts.phone, msg);
+  if (!url) {
     toast.error("Telefone inválido");
     return;
   }
-  const intl = digits.length <= 11 ? `55${digits}` : digits;
-  const greeting = name ? `Olá, ${name}!` : "Olá!";
-  const url = `https://wa.me/${intl}?text=${encodeURIComponent(
-    `${greeting} Sobre seu pedido...`,
-  )}`;
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+const NEXT_STATUS: Record<string, { next: string; label: string } | null> = {
+  new: { next: "preparing", label: "Iniciar preparo" },
+  preparing: { next: "done", label: "Marcar pronto" },
+  done: { next: "paid", label: "Finalizar" },
+  paid: null,
+  cancelled: null,
+};
+
+async function advanceStatus(orderId: string, currentStatus: string) {
+  const next = NEXT_STATUS[currentStatus]?.next;
+  if (!next) return;
+  const { error } = await supabase.rpc("update_order_status" as any, {
+    p_order_id: orderId,
+    p_status: next,
+  });
+  if (error) {
+    toast.error(`Não foi possível avançar status: ${error.message}`);
+    return;
+  }
+  toast.success(`Pedido movido para "${STATUS_LABEL[next] ?? next}"`);
 }
 
 export default function OnlineOrdersTab() {
