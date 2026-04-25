@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
+import { usePreviewMode } from "@/hooks/use-preview-mode";
 import {
   usePublicCart,
   newClientRequestId,
@@ -24,6 +25,7 @@ export default function PublicCheckout() {
   const nav = useNavigate();
   const { toast } = useToast();
   const cart = usePublicCart();
+  const isPreview = usePreviewMode();
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
@@ -65,6 +67,10 @@ export default function PublicCheckout() {
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
+    if (isPreview) {
+      toast({ title: "Modo preview", description: "Pedidos estão desativados nesta visualização." });
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await createPublicOrder({
@@ -116,6 +122,11 @@ export default function PublicCheckout() {
 
   return (
     <div className="min-h-screen bg-background pb-32">
+      {isPreview && (
+        <div className="bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground">
+          Modo preview — pedidos desativados
+        </div>
+      )}
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <button
           onClick={() => nav(`/menu/${slug}`)}

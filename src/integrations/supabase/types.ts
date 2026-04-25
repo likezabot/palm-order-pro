@@ -910,6 +910,62 @@ export type Database = {
         }
         Relationships: []
       }
+      public_menu_settings: {
+        Row: {
+          accent_color: string
+          banner_url: string | null
+          category_order: string[]
+          created_at: string
+          featured_style: string
+          hidden_category_slugs: string[]
+          image_aspect: string
+          layout_mode: string
+          restaurant_id: string
+          show_descriptions: boolean
+          show_product_images: boolean
+          updated_at: string
+          welcome_message: string | null
+        }
+        Insert: {
+          accent_color?: string
+          banner_url?: string | null
+          category_order?: string[]
+          created_at?: string
+          featured_style?: string
+          hidden_category_slugs?: string[]
+          image_aspect?: string
+          layout_mode?: string
+          restaurant_id: string
+          show_descriptions?: boolean
+          show_product_images?: boolean
+          updated_at?: string
+          welcome_message?: string | null
+        }
+        Update: {
+          accent_color?: string
+          banner_url?: string | null
+          category_order?: string[]
+          created_at?: string
+          featured_style?: string
+          hidden_category_slugs?: string[]
+          image_aspect?: string
+          layout_mode?: string
+          restaurant_id?: string
+          show_descriptions?: boolean
+          show_product_images?: boolean
+          updated_at?: string
+          welcome_message?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "public_menu_settings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: true
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurants: {
         Row: {
           created_at: string
@@ -1128,6 +1184,10 @@ export type Database = {
         Args: { p_key: string; p_pin: string; p_value: string }
         Returns: undefined
       }
+      admin_toggle_product_featured: {
+        Args: { p_is_featured: boolean; p_product_id: string }
+        Returns: undefined
+      }
       admin_update_product_online:
         | {
             Args: {
@@ -1155,6 +1215,24 @@ export type Database = {
             }
             Returns: undefined
           }
+      admin_update_public_menu_settings: {
+        Args: {
+          p_accent_color?: string
+          p_banner_url?: string
+          p_category_order?: string[]
+          p_clear_banner_url?: boolean
+          p_clear_welcome_message?: boolean
+          p_featured_style?: string
+          p_hidden_category_slugs?: string[]
+          p_image_aspect?: string
+          p_layout_mode?: string
+          p_restaurant_id: string
+          p_show_descriptions?: boolean
+          p_show_product_images?: boolean
+          p_welcome_message?: string
+        }
+        Returns: undefined
+      }
       admin_update_restaurant: {
         Args: {
           p_default_prep_minutes?: number
@@ -1168,6 +1246,10 @@ export type Database = {
           p_pix_key?: string
           p_whatsapp_phone?: string
         }
+        Returns: undefined
+      }
+      admin_update_restaurant_slug: {
+        Args: { p_new_slug: string; p_restaurant_id: string }
         Returns: undefined
       }
       admin_upsert_business_hours: {

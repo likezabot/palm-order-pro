@@ -107,3 +107,92 @@ export function formatHour(t: string | null): string {
 export function weekdayLabel(weekday: number): string {
   return WEEKDAY_LABELS[weekday] ?? "";
 }
+
+// ============================================================
+// Public Menu Settings (somente apresentação visual)
+// ============================================================
+export type PublicMenuSettings = {
+  restaurant_id: string;
+  layout_mode: "list" | "grid";
+  accent_color: string;
+  banner_url: string | null;
+  welcome_message: string | null;
+  show_descriptions: boolean;
+  show_product_images: boolean;
+  featured_style: "carousel" | "grid" | "hidden";
+  category_order: string[];
+  hidden_category_slugs: string[];
+  image_aspect: "square" | "wide" | "tall";
+};
+
+export const DEFAULT_PUBLIC_MENU_SETTINGS: Omit<PublicMenuSettings, "restaurant_id"> = {
+  layout_mode: "list",
+  accent_color: "#E25822",
+  banner_url: null,
+  welcome_message: null,
+  show_descriptions: true,
+  show_product_images: true,
+  featured_style: "carousel",
+  category_order: [],
+  hidden_category_slugs: [],
+  image_aspect: "square",
+};
+
+export async function fetchPublicMenuSettings(
+  restaurantId: string,
+): Promise<PublicMenuSettings> {
+  const { data, error } = await supabase
+    .from("public_menu_settings" as any)
+    .select(
+      "restaurant_id, layout_mode, accent_color, banner_url, welcome_message, show_descriptions, show_product_images, featured_style, category_order, hidden_category_slugs, image_aspect",
+    )
+    .eq("restaurant_id", restaurantId)
+    .maybeSingle();
+  if (error || !data) {
+    return { restaurant_id: restaurantId, ...DEFAULT_PUBLIC_MENU_SETTINGS };
+  }
+  return data as unknown as PublicMenuSettings;
+}
+
+const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+export function isValidHex(v: string): boolean {
+  return HEX_RE.test(v);
+}
+
+const SLUG_RE = /^[a-z0-9-]+$/;
+export function isValidSlug(v: string): boolean {
+  return SLUG_RE.test(v) && v.length >= 2 && v.length <= 60;
+}
+
+/** Converte #RRGGBB ou #RGB para "h s% l%" usado nas CSS variables. */
+export function hexToHslString(hex: string): string | null {
+  if (!isValidHex(hex)) return null;
+  let h = hex.slice(1);
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  let H = 0,
+    S = 0;
+  const L = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    S = L > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        H = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        H = (b - r) / d + 2;
+        break;
+      case b:
+        H = (r - g) / d + 4;
+        break;
+    }
+    H /= 6;
+  }
+  return `${Math.round(H * 360)} ${Math.round(S * 100)}% ${Math.round(L * 100)}%`;
+}
+
