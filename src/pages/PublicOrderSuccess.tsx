@@ -221,7 +221,7 @@ export default function PublicOrderSuccess() {
 
         {!cancelled && (() => {
           const serviceText = info?.service_type ? (serviceLabel[info.service_type] ?? info.service_type) : "—";
-          const customerText = info?.customer_name ?? state && (loc.state as any)?.customer_name ?? "";
+          const customerText = info?.customer_name ?? (loc.state as any)?.customer_name ?? "";
           const totalText = `R$ ${Number(total).toFixed(2)}`;
           const msg =
             `Olá, Plano B Espetaria! Acabei de fazer um pedido pelo cardápio online.\n\n` +
