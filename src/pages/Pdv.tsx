@@ -320,18 +320,40 @@ const Pdv = () => {
         <div className="overflow-y-auto p-3 sm:p-4 space-y-6 border-r border-border">
           {/* SEÇÃO ENTREGAS */}
           <section className="space-y-3">
-            <div className="flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center justify-between gap-2 px-1 flex-wrap">
               <div className="flex items-center gap-2">
                 <Bike className="w-5 h-5 text-orange-400" />
                 <h2 className="text-sm font-black uppercase tracking-wider text-orange-400">
                   Entregas / Retiradas <span className="text-muted-foreground">({deliveryOrders.length})</span>
                 </h2>
               </div>
-              {unseenOnlineDelivery.length > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active">
-                  🔔 {unseenOnlineDelivery.length} nova{unseenOnlineDelivery.length > 1 ? "s" : ""}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {unseenOnlineDelivery.length > 0 && (
+                  <>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active">
+                      🔔 {unseenOnlineDelivery.length} nova{unseenOnlineDelivery.length > 1 ? "s" : ""}
+                    </span>
+                    <button
+                      onClick={muteSiren}
+                      title="Silenciar alerta sonoro"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:bg-secondary active:scale-95 transition-all"
+                    >
+                      <BellOff className="w-3.5 h-3.5" />
+                      Silenciar
+                    </button>
+                  </>
+                )}
+                {sirenNeedsUnlock && (
+                  <button
+                    onClick={unlockSiren}
+                    title="O navegador bloqueou o som — clique para liberar"
+                    className="inline-flex items-center gap-1 rounded-lg border border-warning bg-warning/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-warning hover:bg-warning/25 active:scale-95 transition-all animate-pulse-active"
+                  >
+                    <VolumeX className="w-3.5 h-3.5" />
+                    Ativar som de alertas
+                  </button>
+                )}
+              </div>
             </div>
             {deliveryOrders.length === 0 ? (
               <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
