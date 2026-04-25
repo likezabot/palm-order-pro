@@ -32,6 +32,7 @@ export default function PublicMenu() {
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [selected, setSelected] = useState<PublicProduct | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [upsellOpen, setUpsellOpen] = useState(false);
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
