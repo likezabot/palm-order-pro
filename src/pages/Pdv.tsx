@@ -132,17 +132,43 @@ const Pdv = () => {
     return map;
   }, [allItems]);
 
-  const groupedOrders = useMemo(() => {
-    const groups: Record<"new" | "preparing" | "done", Order[]> = { new: [], preparing: [], done: [] };
+  // Separa em MESAS (dine_in/balcão) e ENTREGAS (delivery + pickup)
+  const { tablesOrders, deliveryOrders } = useMemo(() => {
+    const tablesOrders: Order[] = [];
+    const deliveryOrders: Order[] = [];
     for (const o of orders) {
-      const k = (o.status as "new" | "preparing" | "done");
-      if (groups[k]) groups[k].push(o);
+      if (getOrderGroup(o) === "delivery") deliveryOrders.push(o);
+      else tablesOrders.push(o);
     }
-    (Object.keys(groups) as Array<keyof typeof groups>).forEach((k) => {
-      groups[k].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    });
-    return groups;
+    const byCreated = (a: Order, b: Order) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    tablesOrders.sort(byCreated);
+    deliveryOrders.sort(byCreated);
+    return { tablesOrders, deliveryOrders };
   }, [orders]);
+
+  // Pedidos online de entrega não visualizados → disparam sirene
+  const { isSeen, markSeen } = useSeenOrders();
+  const unseenOnlineDelivery = useMemo(
+    () => deliveryOrders.filter((o) => isOnlineOrder(o) && !isSeen(o.id)),
+    [deliveryOrders, isSeen]
+  );
+  // Sirene ativa enquanto houver entrega online não visualizada
+  useSiren(unseenOnlineDelivery.length > 0);
+
+  // Toast forte quando uma NOVA entrega online aparece (1 vez por id)
+  const announcedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const o of unseenOnlineDelivery) {
+      if (announcedRef.current.has(o.id)) continue;
+      announcedRef.current.add(o.id);
+      const who = o.customer_name_snapshot || "cliente";
+      const kind = getOrderKind(o);
+      toast({
+        title: `🚨 Nova ${KIND_LABEL[kind]} ONLINE — ${who}`,
+        description: `Toque no card para confirmar e parar o alerta.`,
+      });
+    }
+  }, [unseenOnlineDelivery, toast]);
 
   // Som curto quando pedido entra em "Prontos p/ Pagamento" (status done)
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
