@@ -460,10 +460,66 @@ const Pdv = () => {
           ) : (
             /* Order details */
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">{formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}</h2>
-                {cfg && <Badge className={cfg.color}>{cfg.label}</Badge>}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h2 className="text-xl font-bold">
+                  {isOnlineOrder(selectedOrder) && selectedOrder.customer_name_snapshot
+                    ? selectedOrder.customer_name_snapshot
+                    : formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}
+                </h2>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {isOnlineOrder(selectedOrder) && (
+                    <Badge className="bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                      <Wifi className="w-3 h-3 mr-1" />ONLINE
+                    </Badge>
+                  )}
+                  <Badge className="bg-secondary text-foreground">
+                    {KIND_LABEL[getOrderKind(selectedOrder)]}
+                  </Badge>
+                  {cfg && <Badge className={cfg.color}>{cfg.label}</Badge>}
+                </div>
               </div>
+
+              {/* Bloco de dados do cliente / entrega — só para pedidos online */}
+              {isOnlineOrder(selectedOrder) && (
+                <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3 space-y-2 text-sm">
+                  {selectedOrder.customer_phone_snapshot && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                      <a href={`tel:${selectedOrder.customer_phone_snapshot}`} className="font-mono font-semibold text-foreground hover:underline">
+                        {selectedOrder.customer_phone_snapshot}
+                      </a>
+                    </div>
+                  )}
+                  {getOrderKind(selectedOrder) === "delivery" && selectedOrder.delivery_address && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
+                      <div className="text-foreground">
+                        <div className="font-semibold">
+                          {selectedOrder.delivery_address.street ?? ""}
+                          {selectedOrder.delivery_address.number ? `, ${selectedOrder.delivery_address.number}` : ""}
+                          {selectedOrder.delivery_address.complement ? ` — ${selectedOrder.delivery_address.complement}` : ""}
+                        </div>
+                        {selectedOrder.delivery_address.neighborhood && (
+                          <div className="text-muted-foreground">Bairro: <span className="text-foreground">{selectedOrder.delivery_address.neighborhood}</span></div>
+                        )}
+                        {selectedOrder.delivery_address.reference && (
+                          <div className="text-muted-foreground italic">Ref: {selectedOrder.delivery_address.reference}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {selectedOrder.payment_method && (
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                      <span className="text-foreground">
+                        Pagamento: <span className="font-bold uppercase">{selectedOrder.payment_method}</span>
+                        {selectedOrder.change_for ? <span className="text-muted-foreground"> · troco para R$ {Number(selectedOrder.change_for).toFixed(2)}</span> : null}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="text-sm text-muted-foreground space-y-1">
                 <div>Garçom: <span className="text-foreground font-semibold">{selectedOrder.waiter_name || "—"}</span></div>
                 <div>Horário: <span className="text-foreground font-semibold">
