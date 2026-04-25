@@ -114,7 +114,8 @@ export default function OnlineOrderEditDialog({
       return;
     }
     toast({
-      title: newQty === 0 ? "Item removido" : "Item atualizado",
+      title: newQty === 0 ? "✓ Item removido do pedido" : "✓ Quantidade atualizada",
+      description: newQty === 0 ? "O total foi recalculado automaticamente." : undefined,
     });
     await load();
     onUpdated?.();
