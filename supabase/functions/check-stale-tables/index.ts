@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 function safeEqual(a: string, b: string): boolean {
   if (!a || !b || a.length !== b.length) return false;
@@ -16,14 +17,17 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function checkCronAuth(req: Request): Response | null {
-  const provided = req.headers.get("x-cron-secret") ?? "";
-  if (!CRON_SECRET || !safeEqual(provided, CRON_SECRET)) {
-    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  return null;
+  const cronHeader = req.headers.get("x-cron-secret") ?? "";
+  if (CRON_SECRET && safeEqual(cronHeader, CRON_SECRET)) return null;
+
+  const auth = req.headers.get("authorization") ?? "";
+  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
+  if (SERVICE_ROLE && safeEqual(bearer, SERVICE_ROLE)) return null;
+
+  return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
