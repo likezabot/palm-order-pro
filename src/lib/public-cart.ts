@@ -48,6 +48,7 @@ export type CheckoutPayload = {
 
 export type CreateOrderResult = {
   id: string;
+  public_token: string | null;
   idempotent: boolean;
   status: string;
   auto_approved: boolean;
