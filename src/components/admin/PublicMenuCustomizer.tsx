@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   fetchPublicMenuSettings,
   fetchMenuCategories,
-  fetchRestaurantBySlug,
+  fetchCurrentRestaurant,
   isValidHex,
   isValidSlug,
   type PublicMenuSettings,
