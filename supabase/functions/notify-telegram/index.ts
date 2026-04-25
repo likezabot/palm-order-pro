@@ -3,8 +3,29 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
+
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+
+// Comparação constant-time para evitar timing attacks
+function safeEqual(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+function checkCronAuth(req: Request): Response | null {
+  const provided = req.headers.get("x-cron-secret") ?? "";
+  if (!CRON_SECRET || !safeEqual(provided, CRON_SECRET)) {
+    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  return null;
+}
 
 const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -270,6 +291,8 @@ async function processQueue(): Promise<{ processed: number; sent: number }> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const unauthorized = checkCronAuth(req);
+  if (unauthorized) return unauthorized;
   try {
     const result = await processQueue();
     return new Response(JSON.stringify({ ok: true, ...result }), {
