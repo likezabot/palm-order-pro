@@ -276,6 +276,10 @@ const Admin = () => {
           <OnlineMenuTab />
         </TabsContent>
 
+        <TabsContent value="online-orders" className="flex-1 p-4 mt-0 bg-white border-t">
+          <OnlineOrdersTab />
+        </TabsContent>
+
         <TabsContent value="print" className="flex-1 p-4 mt-0 bg-white border-t">
           <div className="max-w-2xl mx-auto py-4">
             <PrintConfigPanel />
