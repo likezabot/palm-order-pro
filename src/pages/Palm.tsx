@@ -27,6 +27,7 @@ const Palm = () => {
     originalTableName,
     cart,
     originalCart,
+    itemsMeta,
     existingOrderId,
     orderVersion,
     senha,
@@ -109,6 +110,7 @@ const Palm = () => {
           waiterName={waiterName}
           cart={cart}
           originalCart={originalCart}
+          itemsMeta={itemsMeta}
           total={total}
           existingOrderId={existingOrderId}
           orderVersion={orderVersion}
