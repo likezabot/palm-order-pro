@@ -21,6 +21,8 @@ import ClosedOverlay from "@/components/public-menu/ClosedOverlay";
 import ProductDetailSheet from "@/components/public-menu/ProductDetailSheet";
 import PublicCartFab from "@/components/public-menu/PublicCartFab";
 import CartDrawer from "@/components/public-menu/CartDrawer";
+import UpsellDialog from "@/components/public-menu/UpsellDialog";
+import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 
 export default function PublicMenu() {
   const { slug } = useParams<{ slug: string }>();
