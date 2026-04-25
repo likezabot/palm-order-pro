@@ -45,6 +45,8 @@ export default function OnlineOrderEditDialog({
     total: number;
     table_name: string;
     channel: string;
+    status: string;
+    service_type: string;
   } | null>(null);
   const { toast } = useToast();
 
@@ -53,20 +55,22 @@ export default function OnlineOrderEditDialog({
     setLoading(true);
     const { data: order } = await supabase
       .from("orders")
-      .select("table_name, channel, delivery_fee, total")
+      .select("table_name, channel, delivery_fee, total, status, service_type")
       .eq("id", orderId)
       .maybeSingle();
     const { data: rows } = await supabase
       .from("order_items")
       .select("id, product_name, product_price, quantity, subtotal, note")
       .eq("order_id", orderId);
-    setItems((rows ?? []) as OrderItem[]);
+    setItems(((rows ?? []) as OrderItem[]).filter((it) => it.product_name !== "__order_note__"));
     if (order) {
       setOrderInfo({
         delivery_fee: Number(order.delivery_fee ?? 0),
         total: Number(order.total ?? 0),
         table_name: order.table_name,
         channel: order.channel,
+        status: order.status,
+        service_type: order.service_type,
       });
     }
     setLoading(false);
