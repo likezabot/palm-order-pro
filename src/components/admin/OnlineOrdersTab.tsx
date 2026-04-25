@@ -13,14 +13,31 @@ import {
   Eye,
   Search,
   CreditCard,
+  ArrowRight,
+  CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import OnlineOrderEditDialog from "./OnlineOrderEditDialog";
 import OnlineOrderDetailsDialog from "./OnlineOrderDetailsDialog";
+import {
+  buildWaMessage,
+  buildWaUrl,
+  shortOrderId,
+  WA_CONTEXT_LABEL,
+  type WaContext,
+} from "@/lib/online-order-messages";
 
 type DeliveryAddress = {
   street?: string | null;
