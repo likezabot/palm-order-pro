@@ -52,7 +52,9 @@ export default function PublicCheckout() {
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
 
-  const total = cart.subtotal;
+  const subtotal = cart.subtotal;
+  const deliveryFee = computeDeliveryFee(serviceType);
+  const total = subtotal + deliveryFee;
   const canSubmit = useMemo(() => {
     if (cart.items.length === 0) return false;
     if (!name.trim()) return false;
