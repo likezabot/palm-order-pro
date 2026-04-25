@@ -51,7 +51,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const RESTAURANT_SLUG_DEFAULT = "plano-b";
+
 
 async function callUpdateSettings(
   restaurantId: string,
