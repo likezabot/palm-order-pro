@@ -37,6 +37,7 @@ export const usePalmCart = () => {
     setSenha("");
     setCart([]);
     setOriginalCart([]);
+    setItemsMeta(new Map());
     setExistingOrderId(orderId ?? null);
     setOrderVersion(null);
 
@@ -57,15 +58,27 @@ export const usePalmCart = () => {
       }
     }
 
+    // Buscamos também id e created_at p/ identificar a "última inserção" por produto.
     const { data: items } = await supabase
       .from("order_items")
-      .select("product_id, product_name, product_price, quantity, note, waiter_name")
+      .select("id, product_id, product_name, product_price, quantity, note, waiter_name")
       .eq("order_id", orderId);
 
+    // Buscamos timestamps separadamente do orders.created_at como aproximação
+    // (order_items não tem created_at direto, então usamos id como ordem cronológica:
+    // UUIDs gen_random_uuid não são ordenáveis, então usamos a ordem de retorno + orders.created_at).
+    // Mais simples: pegar created_at do pedido pai como fallback e a ordem do array como cronologia.
+    const { data: orderTs } = await supabase
+      .from("orders")
+      .select("created_at, updated_at")
+      .eq("id", orderId)
+      .single();
+
     if (items && items.length > 0) {
-      // Dedupe linhas iguais (mesmo product_id+note+waiter) somando quantidade,
-      // para evitar "1x Coca por João" + "1x Coca por João" duplicado vindo do banco.
       const dedupeMap = new Map<string, CartItem>();
+      const metaMap = new Map<string, CartItemMeta>();
+      const lastTs = orderTs?.updated_at || orderTs?.created_at || new Date().toISOString();
+
       for (const item of items) {
         const rawWaiter = (item as any).waiter_name;
         const waiter = rawWaiter ? String(rawWaiter).trim() : undefined;
@@ -91,10 +104,20 @@ export const usePalmCart = () => {
             waiter_name: waiter,
           });
         }
+
+        // Meta agregada por (productId + waiter) — pega o último garçom visto.
+        const mKey = cartMetaKey(productId, waiter);
+        const prevMeta = metaMap.get(mKey);
+        metaMap.set(mKey, {
+          originalQty: (prevMeta?.originalQty || 0) + item.quantity,
+          lastWaiter: waiter || prevMeta?.lastWaiter,
+          lastAddedAt: lastTs,
+        });
       }
       const loadedCart: CartItem[] = Array.from(dedupeMap.values());
       setCart(loadedCart);
       setOriginalCart(loadedCart.map((i) => ({ ...i, product: { ...i.product } })));
+      setItemsMeta(metaMap);
       setExistingOrderId(orderId);
     }
   }, []);
