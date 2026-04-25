@@ -8,8 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, Image as ImageIcon, Star, Eye, EyeOff, Ban, Settings } from "lucide-react";
+import { Loader2, Image as ImageIcon, Star, Eye, EyeOff, Ban, Settings, Palette } from "lucide-react";
 import OnlineSettingsPanel from "./OnlineSettingsPanel";
+import PublicMenuCustomizer from "./PublicMenuCustomizer";
 
 type ProductOnline = {
   id: string;
@@ -69,12 +70,18 @@ export default function OnlineMenuTab() {
     <Tabs defaultValue="menu" className="w-full">
       <TabsList className="mb-4">
         <TabsTrigger value="menu" className="font-bold">Cardápio</TabsTrigger>
+        <TabsTrigger value="customize" className="font-bold gap-1.5">
+          <Palette className="h-4 w-4" /> Personalizar
+        </TabsTrigger>
         <TabsTrigger value="settings" className="font-bold gap-1.5">
           <Settings className="h-4 w-4" /> Configurações
         </TabsTrigger>
       </TabsList>
       <TabsContent value="menu">
         <OnlineMenuList />
+      </TabsContent>
+      <TabsContent value="customize">
+        <PublicMenuCustomizer />
       </TabsContent>
       <TabsContent value="settings">
         <OnlineSettingsPanel />
