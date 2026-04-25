@@ -19,6 +19,19 @@ export interface CartItem {
 export type OrderPrintType = "extra" | "full" | "bill";
 export type OrderPrintStatus = "pending" | "printing" | "printed" | "failed" | "queued";
 
+export type OrderChannel = "palm" | "online" | "pdv" | string;
+export type OrderServiceType = "dine_in" | "delivery" | "pickup" | string;
+
+export interface OrderDeliveryAddress {
+  street?: string | null;
+  number?: string | null;
+  neighborhood?: string | null;
+  complement?: string | null;
+  reference?: string | null;
+  city?: string | null;
+  zip?: string | null;
+}
+
 export interface Order {
   id: string;
   table_name: string;
@@ -38,6 +51,16 @@ export interface Order {
   print_last_error?: string | null;
   version?: number;
   served_at?: string | null;
+  // Online / delivery fields
+  channel?: OrderChannel;
+  service_type?: OrderServiceType;
+  customer_name_snapshot?: string | null;
+  customer_phone_snapshot?: string | null;
+  delivery_address?: OrderDeliveryAddress | null;
+  delivery_fee?: number | null;
+  change_for?: number | null;
+  estimated_ready_at?: string | null;
+  public_token?: string | null;
 }
 
 export interface OrderItem {
