@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchRestaurantBySlug,
@@ -9,6 +9,7 @@ import {
   isRestaurantOpen,
   type PublicProduct,
 } from "@/lib/public-menu";
+import { usePublicCart } from "@/lib/public-cart";
 import PublicMenuLayout from "@/components/public-menu/PublicMenuLayout";
 import MenuHero from "@/components/public-menu/MenuHero";
 import OpenStatusBadge from "@/components/public-menu/OpenStatusBadge";
@@ -17,11 +18,18 @@ import CategoryNav from "@/components/public-menu/CategoryNav";
 import ProductCard from "@/components/public-menu/ProductCard";
 import FeaturedCarousel from "@/components/public-menu/FeaturedCarousel";
 import ClosedOverlay from "@/components/public-menu/ClosedOverlay";
+import ProductDetailSheet from "@/components/public-menu/ProductDetailSheet";
+import PublicCartFab from "@/components/public-menu/PublicCartFab";
+import CartDrawer from "@/components/public-menu/CartDrawer";
 
 export default function PublicMenu() {
   const { slug } = useParams<{ slug: string }>();
+  const nav = useNavigate();
+  const cart = usePublicCart();
   const [hoursOpen, setHoursOpen] = useState(false);
   const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [selected, setSelected] = useState<PublicProduct | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
@@ -136,7 +144,12 @@ export default function PublicMenu() {
                 <h2 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h2>
                 <div className="grid grid-cols-1 gap-3">
                   {items.map((p) => (
-                    <ProductCard key={p.id} product={p} disabled={!isOpen} />
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      disabled={!isOpen}
+                      onClick={(prod) => setSelected(prod)}
+                    />
                   ))}
                 </div>
               </section>
@@ -146,6 +159,34 @@ export default function PublicMenu() {
       </div>
 
       <HoursDialog open={hoursOpen} onOpenChange={setHoursOpen} hours={hoursQuery.data ?? []} />
+
+      <ProductDetailSheet
+        product={selected}
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        onAdd={(p, qty, note) => cart.add(p, qty, note)}
+      />
+
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        items={cart.items}
+        subtotal={cart.subtotal}
+        onUpdateQty={cart.updateQty}
+        onRemove={cart.remove}
+        onCheckout={() => {
+          setCartOpen(false);
+          nav(`/menu/${slug}/checkout`);
+        }}
+      />
+
+      {isOpen && (
+        <PublicCartFab
+          itemCount={cart.itemCount}
+          total={cart.subtotal}
+          onClick={() => setCartOpen(true)}
+        />
+      )}
     </PublicMenuLayout>
   );
 }
