@@ -1,3 +1,4 @@
+import { Clock } from "lucide-react";
 import { type Restaurant } from "@/lib/public-menu";
 
 type Props = {
@@ -6,6 +7,8 @@ type Props = {
 };
 
 export default function MenuHero({ restaurant, rightSlot }: Props) {
+  const prep = restaurant.default_prep_minutes ?? 0;
+  const deliveryTotal = prep + ((restaurant as any).delivery_prep_buffer ?? 0);
   return (
     <header className="relative">
       <div
