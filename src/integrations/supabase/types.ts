@@ -1107,6 +1107,7 @@ export type Database = {
         Args: { p_pin: string; p_updates: Json }
         Returns: number
       }
+      admin_delete_delivery_zone: { Args: { p_id: string }; Returns: undefined }
       admin_delete_product: {
         Args: { p_id: string; p_pin: string }
         Returns: undefined
@@ -1154,6 +1155,38 @@ export type Database = {
             }
             Returns: undefined
           }
+      admin_update_restaurant: {
+        Args: {
+          p_default_prep_minutes?: number
+          p_delivery_prep_buffer?: number
+          p_description?: string
+          p_hero_url?: string
+          p_id: string
+          p_is_open_override?: string
+          p_logo_url?: string
+          p_name?: string
+          p_pix_key?: string
+          p_whatsapp_phone?: string
+        }
+        Returns: undefined
+      }
+      admin_upsert_business_hours: {
+        Args: { p_hours: Json; p_restaurant_id: string }
+        Returns: undefined
+      }
+      admin_upsert_delivery_zone: {
+        Args: {
+          p_active: boolean
+          p_estimated_minutes: number
+          p_fee: number
+          p_id: string
+          p_match_neighborhoods: string[]
+          p_min_order: number
+          p_name: string
+          p_restaurant_id: string
+        }
+        Returns: string
+      }
       admin_upsert_inventory_item: {
         Args: {
           p_aliases?: string[]

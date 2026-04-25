@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, Image as ImageIcon, Star, Eye, EyeOff, Ban } from "lucide-react";
+import { Loader2, Image as ImageIcon, Star, Eye, EyeOff, Ban, Settings } from "lucide-react";
+import OnlineSettingsPanel from "./OnlineSettingsPanel";
 
 type ProductOnline = {
   id: string;
@@ -63,6 +65,25 @@ async function updateOnline(id: string, patch: UpdateOnlinePatch) {
 }
 
 export default function OnlineMenuTab() {
+  return (
+    <Tabs defaultValue="menu" className="w-full">
+      <TabsList className="mb-4">
+        <TabsTrigger value="menu" className="font-bold">Cardápio</TabsTrigger>
+        <TabsTrigger value="settings" className="font-bold gap-1.5">
+          <Settings className="h-4 w-4" /> Configurações
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="menu">
+        <OnlineMenuList />
+      </TabsContent>
+      <TabsContent value="settings">
+        <OnlineSettingsPanel />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+function OnlineMenuList() {
   const qc = useQueryClient();
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["admin", "online-menu"],
