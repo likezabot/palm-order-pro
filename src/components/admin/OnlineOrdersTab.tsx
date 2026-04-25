@@ -421,7 +421,15 @@ export default function OnlineOrdersTab() {
                 return (
                   <div
                     key={o.id}
-                    className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3"
+                    className={`rounded-xl border p-4 shadow-sm space-y-3 transition-colors ${
+                      o.status === "new"
+                        ? isDelivery
+                          ? "bg-primary/10 border-primary ring-2 ring-primary/40 shadow-md"
+                          : "bg-primary/5 border-primary/60"
+                        : isDelivery
+                          ? "bg-card border-primary/30"
+                          : "bg-card border-border"
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
@@ -435,6 +443,15 @@ export default function OnlineOrdersTab() {
                           >
                             {STATUS_LABEL[o.status] ?? o.status}
                           </Badge>
+                          {isDelivery && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] uppercase bg-primary/15 text-primary border-primary/40"
+                            >
+                              <Truck size={10} className="mr-1" />
+                              Delivery
+                            </Badge>
+                          )}
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
                           <Clock size={12} />
@@ -443,13 +460,28 @@ export default function OnlineOrdersTab() {
                             minute: "2-digit",
                           })}
                           <span className="opacity-60">•</span>
-                          <span className="font-mono">#{shortId(o.id)}</span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(shortId(o.id), "Nº do pedido")}
+                            className="font-mono inline-flex items-center gap-1 hover:text-foreground"
+                            title="Copiar nº do pedido"
+                          >
+                            <Hash size={10} />
+                            {shortId(o.id)}
+                          </button>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-primary font-black text-lg tabular-nums">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyToClipboard(`R$ ${Number(o.total ?? 0).toFixed(2)}`, "Total")
+                          }
+                          className="text-primary font-black text-lg tabular-nums hover:underline"
+                          title="Copiar total"
+                        >
                           R$ {Number(o.total ?? 0).toFixed(2)}
-                        </p>
+                        </button>
                       </div>
                     </div>
 
@@ -474,18 +506,28 @@ export default function OnlineOrdersTab() {
 
                     {/* Telefone */}
                     {phone && (
-                      <div className="flex items-center gap-1.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(phone, "Telefone")}
+                        className="flex items-center gap-1.5 text-xs hover:text-primary"
+                        title="Copiar telefone"
+                      >
                         <Phone size={12} className="text-muted-foreground" />
                         <span className="truncate">{phone}</span>
-                      </div>
+                      </button>
                     )}
 
                     {/* Endereço delivery */}
                     {isDelivery && addrText && (
-                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(addrText, "Endereço")}
+                        className="flex items-start gap-1.5 text-xs text-muted-foreground hover:text-foreground text-left w-full"
+                        title="Copiar endereço"
+                      >
                         <MapPin size={12} className="mt-0.5 shrink-0" />
                         <span className="line-clamp-2">{addrText}</span>
-                      </div>
+                      </button>
                     )}
 
                     {/* Totais */}
@@ -516,66 +558,79 @@ export default function OnlineOrdersTab() {
                       >
                         <Eye size={14} /> Detalhes
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 h-9"
+                        onClick={() => copyToClipboard(buildOrderSummary(o), "Resumo")}
+                        title="Copiar resumo do pedido"
+                      >
+                        <FileText size={14} />
+                      </Button>
                       {phone && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 h-9"
-                            onClick={() => copyToClipboard(phone, "Telefone")}
-                            title="Copiar telefone"
-                          >
-                            <Phone size={14} />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
-                                title="WhatsApp do cliente"
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
+                              title="WhatsApp do cliente"
+                            >
+                              <MessageCircle size={14} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuLabel>Abrir WhatsApp</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {(
+                              [
+                                "received",
+                                "preparing",
+                                isDelivery ? "out_for_delivery" : "ready_pickup",
+                              ] as WaContext[]
+                            ).map((ctx) => (
+                              <DropdownMenuItem
+                                key={`open-${ctx}`}
+                                onClick={() =>
+                                  openWhatsAppContext({
+                                    context: ctx,
+                                    phone,
+                                    customerName: o.customer_name_snapshot,
+                                    shortId: shortId(o.id),
+                                  })
+                                }
                               >
-                                <MessageCircle size={14} />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              <DropdownMenuLabel>Mensagem pronta</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {(
-                                [
-                                  "received",
-                                  "preparing",
-                                  isDelivery ? "out_for_delivery" : "ready_pickup",
-                                ] as WaContext[]
-                              ).map((ctx) => (
-                                <DropdownMenuItem
-                                  key={ctx}
-                                  onClick={() =>
-                                    openWhatsAppContext({
+                                {WA_CONTEXT_LABEL[ctx]}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Copiar mensagem</DropdownMenuLabel>
+                            {(
+                              [
+                                "received",
+                                "preparing",
+                                isDelivery ? "out_for_delivery" : "ready_pickup",
+                              ] as WaContext[]
+                            ).map((ctx) => (
+                              <DropdownMenuItem
+                                key={`copy-${ctx}`}
+                                onClick={() =>
+                                  copyToClipboard(
+                                    buildWaMessage({
                                       context: ctx,
-                                      phone,
                                       customerName: o.customer_name_snapshot,
                                       shortId: shortId(o.id),
-                                    })
-                                  }
-                                >
-                                  {WA_CONTEXT_LABEL[ctx]}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </>
-                      )}
-                      {isDelivery && addrText && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5 h-9"
-                          onClick={() => copyToClipboard(addrText, "Endereço")}
-                          title="Copiar endereço"
-                        >
-                          <MapPin size={14} />
-                        </Button>
+                                    }),
+                                    `Mensagem (${WA_CONTEXT_LABEL[ctx]})`,
+                                  )
+                                }
+                              >
+                                <Copy size={12} className="mr-2" />
+                                {WA_CONTEXT_LABEL[ctx]}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
 
@@ -584,14 +639,17 @@ export default function OnlineOrdersTab() {
                       <Button
                         variant="default"
                         className="w-full gap-2 h-11 font-bold"
-                        onClick={() => advanceStatus(o.id, o.status)}
+                        onClick={() => handleAdvance(o.id, o.status)}
+                        disabled={advancingIds.has(o.id)}
                       >
-                        {o.status === "done" ? (
+                        {advancingIds.has(o.id) ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : o.status === "done" ? (
                           <CheckCircle2 size={16} />
                         ) : (
                           <ArrowRight size={16} />
                         )}
-                        {NEXT_STATUS[o.status]?.label}
+                        {advancingIds.has(o.id) ? "Atualizando…" : NEXT_STATUS[o.status]?.label}
                       </Button>
                     )}
 
