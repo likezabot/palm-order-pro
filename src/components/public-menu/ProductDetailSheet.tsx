@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import type { PublicProduct } from "@/lib/public-menu";
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
   onClose: () => void;
   onAdd: (product: PublicProduct, qty: number, note: string) => void;
 }
+
+const QUICK_QUANTITIES = [1, 2, 3, 5, 10];
 
 export default function ProductDetailSheet({ product, open, onClose, onAdd }: Props) {
   const [qty, setQty] = useState(1);
@@ -30,10 +33,14 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
 
   if (!product) return null;
   const blocked = product.is_sold_out;
+  const lineTotal = product.price * qty;
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl p-0">
+      <SheetContent
+        side="bottom"
+        className="max-h-[94vh] overflow-y-auto rounded-t-2xl p-0"
+      >
         <button
           onClick={onClose}
           aria-label="Fechar"
@@ -52,61 +59,100 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
           </div>
         )}
         <SheetHeader className="px-5 pt-4 text-left">
-          <SheetTitle className="text-2xl">{product.name}</SheetTitle>
+          <SheetTitle className="text-2xl leading-tight">{product.name}</SheetTitle>
           {product.description && (
             <p className="text-sm text-muted-foreground">{product.description}</p>
           )}
         </SheetHeader>
 
-        <div className="px-5 pb-6 pt-3 space-y-4">
+        <div
+          className="px-5 pt-3 pb-6 space-y-4"
+          style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}
+        >
           <p className="text-2xl font-black brand-gradient-text">
             R$ {product.price.toFixed(2)}
           </p>
 
+          {/* Atalhos rápidos */}
+          <div>
+            <div className="text-xs font-bold uppercase text-muted-foreground mb-2">
+              Quantidade
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_QUANTITIES.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setQty(q)}
+                  aria-pressed={qty === q}
+                  className={cn(
+                    "min-w-[52px] h-11 rounded-xl px-3 text-base font-bold tabular-nums transition-colors border-2",
+                    qty === q
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-secondary text-foreground hover:bg-muted",
+                  )}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Stepper grande -/+ */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-2xl bg-secondary p-1.5">
+              <button
+                onClick={() => setQty((q) => Math.max(1, q - 1))}
+                className="flex h-12 w-12 items-center justify-center rounded-xl bg-background active:scale-95 transition-transform"
+                aria-label="Diminuir"
+              >
+                <Minus size={22} />
+              </button>
+              <span className="w-10 text-center text-xl font-black tabular-nums">
+                {qty}
+              </span>
+              <button
+                onClick={() => setQty((q) => Math.min(99, q + 1))}
+                className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground active:scale-95 transition-transform"
+                aria-label="Aumentar"
+              >
+                <Plus size={22} />
+              </button>
+            </div>
+            <div className="flex-1 text-right">
+              <div className="text-xs uppercase text-muted-foreground">Total</div>
+              <div className="text-lg font-black">R$ {lineTotal.toFixed(2)}</div>
+            </div>
+          </div>
+
+          {/* Observação */}
           <div>
             <label className="text-xs font-bold uppercase text-muted-foreground">
-              Observação
+              Observação (opcional)
             </label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 200))}
-              placeholder="Ex: sem cebola, ponto da carne, etc."
+              placeholder="Ex: sem cebola, bem passado, etc."
               className="mt-1 resize-none"
               rows={2}
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 rounded-full bg-secondary p-1">
-              <button
-                onClick={() => setQty((q) => Math.max(1, q - 1))}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-background"
-                aria-label="Diminuir"
-              >
-                <Minus size={18} />
-              </button>
-              <span className="w-6 text-center text-lg font-bold tabular-nums">{qty}</span>
-              <button
-                onClick={() => setQty((q) => Math.min(99, q + 1))}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
-                aria-label="Aumentar"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-
-            <Button
-              size="lg"
-              disabled={blocked}
-              onClick={() => {
-                onAdd(product, qty, note.trim());
-                onClose();
-              }}
-              className="flex-1 h-14 text-base font-bold"
-            >
-              {blocked ? "Indisponível" : `Adicionar R$ ${(product.price * qty).toFixed(2)}`}
-            </Button>
-          </div>
+          {/* CTA */}
+          <Button
+            size="lg"
+            disabled={blocked}
+            onClick={() => {
+              onAdd(product, qty, note.trim());
+              onClose();
+            }}
+            className="w-full h-14 text-base font-bold"
+          >
+            {blocked
+              ? "Indisponível"
+              : `Adicionar ${qty} • R$ ${lineTotal.toFixed(2)}`}
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
