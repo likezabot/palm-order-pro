@@ -844,6 +844,7 @@ export type Database = {
           image_url: string | null
           is_available_online: boolean
           is_featured: boolean
+          is_sold_out: boolean
           name: string
           price: number
           stock_quantity: number | null
@@ -860,6 +861,7 @@ export type Database = {
           image_url?: string | null
           is_available_online?: boolean
           is_featured?: boolean
+          is_sold_out?: boolean
           name: string
           price: number
           stock_quantity?: number | null
@@ -876,6 +878,7 @@ export type Database = {
           image_url?: string | null
           is_available_online?: boolean
           is_featured?: boolean
+          is_sold_out?: boolean
           name?: string
           price?: number
           stock_quantity?: number | null
