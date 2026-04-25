@@ -292,29 +292,56 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
               )}
             </section>
 
-            {/* Horários */}
+            {/* Histórico */}
             <section className="space-y-1.5">
-              <h3 className="text-xs font-black uppercase text-muted-foreground">Horários</h3>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock size={14} />
-                Pedido feito às{" "}
-                {new Date(order.created_at).toLocaleString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-              {order.estimated_ready_at && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Clock size={14} />
-                  Previsão:{" "}
-                  {new Date(order.estimated_ready_at).toLocaleTimeString("pt-BR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              )}
+              <h3 className="text-xs font-black uppercase text-muted-foreground">Histórico</h3>
+              <ol className="relative border-l-2 border-border ml-1.5 pl-3 space-y-2">
+                <li className="relative">
+                  <span className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-muted-foreground" />
+                  <div className="text-xs text-muted-foreground">Criado</div>
+                  <div className="text-sm">
+                    {new Date(order.created_at).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </li>
+                <li className="relative">
+                  <span className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-primary" />
+                  <div className="text-xs text-muted-foreground">Status atual</div>
+                  <div className="text-sm font-semibold">
+                    {STATUS_LABEL[order.status] ?? order.status}
+                  </div>
+                </li>
+                {order.updated_at && order.updated_at !== order.created_at && (
+                  <li className="relative">
+                    <span className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-success" />
+                    <div className="text-xs text-muted-foreground">Última atualização</div>
+                    <div className="text-sm">
+                      {new Date(order.updated_at).toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </li>
+                )}
+                {order.estimated_ready_at && (
+                  <li className="relative">
+                    <span className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-warning" />
+                    <div className="text-xs text-muted-foreground">Previsão</div>
+                    <div className="text-sm">
+                      {new Date(order.estimated_ready_at).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </li>
+                )}
+              </ol>
             </section>
 
             {/* Endereço */}
