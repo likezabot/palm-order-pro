@@ -38,6 +38,18 @@ export default function MenuHero({ restaurant, rightSlot }: Props) {
             )}
           </div>
         </div>
+        {prep > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+              <Clock size={12} aria-hidden /> Preparo ~{prep} min
+            </span>
+            {deliveryTotal > prep && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+                <Clock size={12} aria-hidden /> Entrega ~{deliveryTotal} min
+              </span>
+            )}
+          </div>
+        )}
         {rightSlot && <div className="mt-3">{rightSlot}</div>}
       </div>
     </header>
