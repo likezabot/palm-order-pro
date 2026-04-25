@@ -27,6 +27,7 @@ const Palm = () => {
     originalTableName,
     cart,
     originalCart,
+    itemsMeta,
     existingOrderId,
     orderVersion,
     senha,
