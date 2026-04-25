@@ -401,13 +401,14 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
                 <Button
                   className="w-full gap-2 h-11 font-bold"
                   onClick={handleAdvance}
+                  disabled={advancing}
                 >
-                  {order.status === "done" ? (
+                  {advancing ? null : order.status === "done" ? (
                     <CheckCircle2 size={16} />
                   ) : (
                     <ArrowRight size={16} />
                   )}
-                  {nextStep.label}
+                  {advancing ? "Atualizando…" : nextStep.label}
                 </Button>
               )}
               {phone && (
