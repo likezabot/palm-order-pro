@@ -913,46 +913,109 @@ export type Database = {
       public_menu_settings: {
         Row: {
           accent_color: string
+          background_color: string | null
           banner_url: string | null
+          button_style: string
+          card_style: string
+          categories_section_title: string
           category_order: string[]
           created_at: string
           featured_style: string
+          hero_alignment: string
+          hero_subtitle: string | null
+          hero_title: string | null
           hidden_category_slugs: string[]
           image_aspect: string
           layout_mode: string
+          muted_text_color: string | null
+          radius_scale: string
           restaurant_id: string
+          section_order: string[]
+          show_categories_section_title: boolean
+          show_category_nav: boolean
           show_descriptions: boolean
+          show_featured_section: boolean
+          show_hero_banner_overlay: boolean
+          show_logo: boolean
+          show_open_status_badge: boolean
           show_product_images: boolean
+          show_search_bar: boolean
+          show_welcome_message_card: boolean
+          show_whatsapp_fab: boolean
+          surface_color: string | null
+          text_color: string | null
           updated_at: string
           welcome_message: string | null
         }
         Insert: {
           accent_color?: string
+          background_color?: string | null
           banner_url?: string | null
+          button_style?: string
+          card_style?: string
+          categories_section_title?: string
           category_order?: string[]
           created_at?: string
           featured_style?: string
+          hero_alignment?: string
+          hero_subtitle?: string | null
+          hero_title?: string | null
           hidden_category_slugs?: string[]
           image_aspect?: string
           layout_mode?: string
+          muted_text_color?: string | null
+          radius_scale?: string
           restaurant_id: string
+          section_order?: string[]
+          show_categories_section_title?: boolean
+          show_category_nav?: boolean
           show_descriptions?: boolean
+          show_featured_section?: boolean
+          show_hero_banner_overlay?: boolean
+          show_logo?: boolean
+          show_open_status_badge?: boolean
           show_product_images?: boolean
+          show_search_bar?: boolean
+          show_welcome_message_card?: boolean
+          show_whatsapp_fab?: boolean
+          surface_color?: string | null
+          text_color?: string | null
           updated_at?: string
           welcome_message?: string | null
         }
         Update: {
           accent_color?: string
+          background_color?: string | null
           banner_url?: string | null
+          button_style?: string
+          card_style?: string
+          categories_section_title?: string
           category_order?: string[]
           created_at?: string
           featured_style?: string
+          hero_alignment?: string
+          hero_subtitle?: string | null
+          hero_title?: string | null
           hidden_category_slugs?: string[]
           image_aspect?: string
           layout_mode?: string
+          muted_text_color?: string | null
+          radius_scale?: string
           restaurant_id?: string
+          section_order?: string[]
+          show_categories_section_title?: boolean
+          show_category_nav?: boolean
           show_descriptions?: boolean
+          show_featured_section?: boolean
+          show_hero_banner_overlay?: boolean
+          show_logo?: boolean
+          show_open_status_badge?: boolean
           show_product_images?: boolean
+          show_search_bar?: boolean
+          show_welcome_message_card?: boolean
+          show_whatsapp_fab?: boolean
+          surface_color?: string | null
+          text_color?: string | null
           updated_at?: string
           welcome_message?: string | null
         }
@@ -1215,24 +1278,70 @@ export type Database = {
             }
             Returns: undefined
           }
-      admin_update_public_menu_settings: {
-        Args: {
-          p_accent_color?: string
-          p_banner_url?: string
-          p_category_order?: string[]
-          p_clear_banner_url?: boolean
-          p_clear_welcome_message?: boolean
-          p_featured_style?: string
-          p_hidden_category_slugs?: string[]
-          p_image_aspect?: string
-          p_layout_mode?: string
-          p_restaurant_id: string
-          p_show_descriptions?: boolean
-          p_show_product_images?: boolean
-          p_welcome_message?: string
-        }
-        Returns: undefined
-      }
+      admin_update_public_menu_settings:
+        | {
+            Args: {
+              p_accent_color?: string
+              p_banner_url?: string
+              p_category_order?: string[]
+              p_clear_banner_url?: boolean
+              p_clear_welcome_message?: boolean
+              p_featured_style?: string
+              p_hidden_category_slugs?: string[]
+              p_image_aspect?: string
+              p_layout_mode?: string
+              p_restaurant_id: string
+              p_show_descriptions?: boolean
+              p_show_product_images?: boolean
+              p_welcome_message?: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_accent_color?: string
+              p_background_color?: string
+              p_banner_url?: string
+              p_button_style?: string
+              p_card_style?: string
+              p_categories_section_title?: string
+              p_category_order?: string[]
+              p_clear_background_color?: boolean
+              p_clear_banner_url?: boolean
+              p_clear_hero_subtitle?: boolean
+              p_clear_hero_title?: boolean
+              p_clear_muted_text_color?: boolean
+              p_clear_surface_color?: boolean
+              p_clear_text_color?: boolean
+              p_clear_welcome_message?: boolean
+              p_featured_style?: string
+              p_hero_alignment?: string
+              p_hero_subtitle?: string
+              p_hero_title?: string
+              p_hidden_category_slugs?: string[]
+              p_image_aspect?: string
+              p_layout_mode?: string
+              p_muted_text_color?: string
+              p_radius_scale?: string
+              p_restaurant_id: string
+              p_section_order?: string[]
+              p_show_categories_section_title?: boolean
+              p_show_category_nav?: boolean
+              p_show_descriptions?: boolean
+              p_show_featured_section?: boolean
+              p_show_hero_banner_overlay?: boolean
+              p_show_logo?: boolean
+              p_show_open_status_badge?: boolean
+              p_show_product_images?: boolean
+              p_show_search_bar?: boolean
+              p_show_welcome_message_card?: boolean
+              p_show_whatsapp_fab?: boolean
+              p_surface_color?: string
+              p_text_color?: string
+              p_welcome_message?: string
+            }
+            Returns: undefined
+          }
       admin_update_restaurant: {
         Args: {
           p_default_prep_minutes?: number
