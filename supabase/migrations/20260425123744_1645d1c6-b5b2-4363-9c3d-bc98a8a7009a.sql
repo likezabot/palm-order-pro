@@ -1,0 +1,1 @@
+UPDATE public.products SET is_sold_out = true WHERE id = 'f860b627-8bc1-4cf4-9971-196de0b77bff';
