@@ -1271,6 +1271,7 @@ export type Database = {
             Args: {
               p_address: Json
               p_change_for: number
+              p_client_request_id?: string
               p_customer_name: string
               p_customer_phone: string
               p_items: Json

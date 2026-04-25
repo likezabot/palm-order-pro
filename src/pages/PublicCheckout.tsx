@@ -89,7 +89,8 @@ export default function PublicCheckout() {
       });
 
       cart.clear();
-      nav(`/menu/${slug}/sucesso/${result.id}`, {
+      const tokenParam = result.public_token ? `?t=${result.public_token}` : "";
+      nav(`/menu/${slug}/sucesso/${result.id}${tokenParam}`, {
         replace: true,
         state: {
           estimated_ready_at: result.estimated_ready_at,
@@ -100,10 +101,14 @@ export default function PublicCheckout() {
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "");
       let friendly = "Não foi possível enviar o pedido. Tente novamente.";
-      if (msg.includes("customer_phone_invalid")) friendly = "Telefone inválido.";
-      else if (msg.includes("customer_name_required")) friendly = "Informe seu nome.";
-      else if (msg.includes("address_required")) friendly = "Endereço é obrigatório para entrega.";
-      else if (msg.includes("items_required")) friendly = "Carrinho vazio.";
+      if (msg.includes("restaurant_closed")) friendly = "A loja está fechada no momento.";
+      else if (msg.includes("neighborhood_not_served")) friendly = "Não entregamos nesse bairro.";
+      else if (msg.includes("product_unavailable")) friendly = "Um item do carrinho ficou indisponível. Revise o pedido.";
+      else if (msg.includes("invalid_phone")) friendly = "Telefone inválido.";
+      else if (msg.includes("invalid_name")) friendly = "Informe seu nome.";
+      else if (msg.includes("invalid_address")) friendly = "Endereço é obrigatório para entrega.";
+      else if (msg.includes("empty_cart")) friendly = "Carrinho vazio.";
+      else if (msg.includes("invalid_quantity")) friendly = "Quantidade inválida em algum item.";
       toast({ title: "Erro ao enviar pedido", description: friendly, variant: "destructive" });
       setSubmitting(false);
     }
