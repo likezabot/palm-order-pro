@@ -62,6 +62,7 @@ type OrderInfo = {
   customer_phone_snapshot: string | null;
   delivery_address: Address;
   created_at: string;
+  updated_at: string | null;
   estimated_ready_at: string | null;
 };
 
