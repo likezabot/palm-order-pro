@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useLocation, useSearchParams, Link } from "react-router-dom";
-import { CheckCircle2, Clock, ChefHat, Package, CreditCard, XCircle, AlertCircle, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Clock, ChefHat, Package, CreditCard, XCircle, AlertCircle, MessageCircle, type LucideIcon } from "lucide-react";
+
+const STORE_WHATSAPP = "5567992785811";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
