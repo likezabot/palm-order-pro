@@ -86,6 +86,13 @@ export default function PublicMenu() {
 
   const featured = useMemo(() => products.filter((p) => p.is_featured && !p.is_sold_out), [products]);
 
+  const hasUpsellSuggestion = useMemo(() => {
+    const cartIds = new Set(cart.items.map((c) => c.product_id));
+    return products.some(
+      (p) => p.active && p.is_available_online && !p.is_sold_out && !cartIds.has(p.id),
+    );
+  }, [products, cart.items]);
+
   useEffect(() => {
     if (!activeCat && categories.length) setActiveCat(categories[0].slug);
   }, [activeCat, categories]);
