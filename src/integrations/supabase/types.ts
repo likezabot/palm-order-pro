@@ -1127,18 +1127,33 @@ export type Database = {
         Args: { p_key: string; p_pin: string; p_value: string }
         Returns: undefined
       }
-      admin_update_product_online: {
-        Args: {
-          p_description?: string
-          p_display_order?: number
-          p_id: string
-          p_image_url?: string
-          p_is_available_online?: boolean
-          p_is_featured?: boolean
-          p_is_sold_out?: boolean
-        }
-        Returns: undefined
-      }
+      admin_update_product_online:
+        | {
+            Args: {
+              p_description?: string
+              p_display_order?: number
+              p_id: string
+              p_image_url?: string
+              p_is_available_online?: boolean
+              p_is_featured?: boolean
+              p_is_sold_out?: boolean
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_clear_description?: boolean
+              p_clear_image_url?: boolean
+              p_description?: string
+              p_display_order?: number
+              p_id: string
+              p_image_url?: string
+              p_is_available_online?: boolean
+              p_is_featured?: boolean
+              p_is_sold_out?: boolean
+            }
+            Returns: undefined
+          }
       admin_upsert_inventory_item: {
         Args: {
           p_aliases?: string[]
