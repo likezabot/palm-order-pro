@@ -471,15 +471,43 @@ export default function OnlineOrdersTab() {
                           >
                             <Phone size={14} />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
-                            onClick={() => openWhatsApp(phone, o.customer_name_snapshot)}
-                            title="Abrir WhatsApp"
-                          >
-                            <MessageCircle size={14} />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 h-9 text-success border-success/30 hover:bg-success/10"
+                                title="WhatsApp do cliente"
+                              >
+                                <MessageCircle size={14} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuLabel>Mensagem pronta</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {(
+                                [
+                                  "received",
+                                  "preparing",
+                                  isDelivery ? "out_for_delivery" : "ready_pickup",
+                                ] as WaContext[]
+                              ).map((ctx) => (
+                                <DropdownMenuItem
+                                  key={ctx}
+                                  onClick={() =>
+                                    openWhatsAppContext({
+                                      context: ctx,
+                                      phone,
+                                      customerName: o.customer_name_snapshot,
+                                      shortId: shortId(o.id),
+                                    })
+                                  }
+                                >
+                                  {WA_CONTEXT_LABEL[ctx]}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </>
                       )}
                       {isDelivery && addrText && (
@@ -495,9 +523,25 @@ export default function OnlineOrdersTab() {
                       )}
                     </div>
 
+                    {/* Avançar status */}
+                    {NEXT_STATUS[o.status] && (
+                      <Button
+                        variant="default"
+                        className="w-full gap-2 h-11 font-bold"
+                        onClick={() => advanceStatus(o.id, o.status)}
+                      >
+                        {o.status === "done" ? (
+                          <CheckCircle2 size={16} />
+                        ) : (
+                          <ArrowRight size={16} />
+                        )}
+                        {NEXT_STATUS[o.status]?.label}
+                      </Button>
+                    )}
+
                     <Button
-                      variant="default"
-                      className="w-full gap-2 h-11 font-bold"
+                      variant="outline"
+                      className="w-full gap-2 h-10 font-bold"
                       onClick={() => setEditingId(o.id)}
                     >
                       <Pencil size={16} /> Editar pedido
