@@ -146,13 +146,52 @@ async function fetchOnlineOrders(): Promise<OnlineOrder[]> {
   return (data ?? []) as OnlineOrder[];
 }
 
+const recentToasts = new Map<string, number>();
+function dedupedToast(kind: "success" | "error", msg: string) {
+  const key = `${kind}:${msg}`;
+  const now = Date.now();
+  const last = recentToasts.get(key) ?? 0;
+  if (now - last < 1500) return;
+  recentToasts.set(key, now);
+  if (kind === "success") toast.success(msg);
+  else toast.error(msg);
+}
+
 async function copyToClipboard(text: string, label: string) {
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(`${label} copiado`);
+    dedupedToast("success", `${label} copiado`);
   } catch {
-    toast.error("Não foi possível copiar");
+    dedupedToast("error", "Não foi possível copiar");
   }
+}
+
+function buildOrderSummary(o: OnlineOrder): string {
+  const sid = shortOrderId(o.id);
+  const lines: string[] = [];
+  lines.push(`Pedido #${sid}`);
+  if (o.customer_name_snapshot) lines.push(`Cliente: ${o.customer_name_snapshot}`);
+  if (o.customer_phone_snapshot) lines.push(`Tel: ${o.customer_phone_snapshot}`);
+  lines.push(`Tipo: ${SERVICE_LABEL[o.service_type] ?? o.service_type}`);
+  if (o.service_type === "delivery") {
+    const addr = formatAddress(o.delivery_address);
+    if (addr) lines.push(`Endereço: ${addr}`);
+  }
+  if (o.payment_method) {
+    const pay = PAYMENT_LABEL[o.payment_method] ?? o.payment_method;
+    const extra =
+      o.payment_method === "cash" && o.change_for != null
+        ? ` (troco p/ R$ ${Number(o.change_for).toFixed(2)})`
+        : "";
+    lines.push(`Pagamento: ${pay}${extra}`);
+  }
+  const fee = Number(o.delivery_fee ?? 0);
+  const total = Number(o.total ?? 0);
+  const subtotal = Math.max(0, total - fee);
+  lines.push(`Subtotal: R$ ${subtotal.toFixed(2)}`);
+  if (o.service_type === "delivery") lines.push(`Taxa: R$ ${fee.toFixed(2)}`);
+  lines.push(`Total: R$ ${total.toFixed(2)}`);
+  return lines.join("\n");
 }
 
 function openWhatsAppContext(opts: {
@@ -168,7 +207,7 @@ function openWhatsAppContext(opts: {
   });
   const url = buildWaUrl(opts.phone, msg);
   if (!url) {
-    toast.error("Telefone inválido");
+    dedupedToast("error", "Telefone inválido");
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
@@ -181,20 +220,6 @@ const NEXT_STATUS: Record<string, { next: string; label: string } | null> = {
   paid: null,
   cancelled: null,
 };
-
-async function advanceStatus(orderId: string, currentStatus: string) {
-  const next = NEXT_STATUS[currentStatus]?.next;
-  if (!next) return;
-  const { error } = await supabase.rpc("update_order_status" as any, {
-    p_order_id: orderId,
-    p_status: next,
-  });
-  if (error) {
-    toast.error(`Não foi possível avançar status: ${error.message}`);
-    return;
-  }
-  toast.success(`Pedido movido para "${STATUS_LABEL[next] ?? next}"`);
-}
 
 export default function OnlineOrdersTab() {
   const qc = useQueryClient();
