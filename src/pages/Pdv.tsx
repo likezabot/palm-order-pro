@@ -327,29 +327,37 @@ const Pdv = () => {
                   Entregas / Retiradas <span className="text-muted-foreground">({deliveryOrders.length})</span>
                 </h2>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {unseenOnlineDelivery.length > 0 && (
                   <>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active"
+                      role="status"
+                      aria-live="polite"
+                    >
                       🔔 {unseenOnlineDelivery.length} nova{unseenOnlineDelivery.length > 1 ? "s" : ""}
                     </span>
                     <button
+                      type="button"
                       onClick={muteSiren}
-                      title="Silenciar alerta sonoro"
-                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:bg-secondary active:scale-95 transition-all"
+                      title="Silenciar alerta sonoro desta(s) entrega(s)"
+                      aria-label="Silenciar alerta sonoro das entregas online novas"
+                      className="inline-flex items-center gap-1 min-h-[36px] rounded-lg border-2 border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     >
-                      <BellOff className="w-3.5 h-3.5" />
+                      <BellOff className="w-4 h-4" aria-hidden="true" />
                       Silenciar
                     </button>
                   </>
                 )}
                 {sirenNeedsUnlock && (
                   <button
+                    type="button"
                     onClick={unlockSiren}
-                    title="O navegador bloqueou o som — clique para liberar"
-                    className="inline-flex items-center gap-1 rounded-lg border border-warning bg-warning/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-warning hover:bg-warning/25 active:scale-95 transition-all animate-pulse-active"
+                    title="O navegador bloqueou o som — toque para liberar"
+                    aria-label="Ativar som de alertas (o navegador bloqueou o áudio)"
+                    className="inline-flex items-center gap-1.5 min-h-[40px] rounded-lg border-2 border-warning bg-warning px-3 py-1.5 text-xs font-black uppercase tracking-wide text-warning-foreground hover:brightness-110 active:scale-95 transition-all animate-pulse-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
-                    <VolumeX className="w-3.5 h-3.5" />
+                    <Volume2 className="w-4 h-4" aria-hidden="true" />
                     Ativar som de alertas
                   </button>
                 )}
