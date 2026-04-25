@@ -14,6 +14,7 @@ export type Restaurant = {
   whatsapp_phone: string | null;
   is_open_override: "auto" | "open" | "closed";
   default_prep_minutes: number;
+  delivery_prep_buffer: number;
 };
 
 export type BusinessHour = {
@@ -48,7 +49,7 @@ export type PublicProduct = {
 export async function fetchRestaurantBySlug(slug: string): Promise<Restaurant | null> {
   const { data, error } = await supabase
     .from("restaurants" as any)
-    .select("id, slug, name, logo_url, hero_url, description, whatsapp_phone, is_open_override, default_prep_minutes")
+    .select("id, slug, name, logo_url, hero_url, description, whatsapp_phone, is_open_override, default_prep_minutes, delivery_prep_buffer")
     .eq("slug", slug)
     .maybeSingle();
   if (error) return null;

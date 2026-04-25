@@ -21,6 +21,8 @@ import ClosedOverlay from "@/components/public-menu/ClosedOverlay";
 import ProductDetailSheet from "@/components/public-menu/ProductDetailSheet";
 import PublicCartFab from "@/components/public-menu/PublicCartFab";
 import CartDrawer from "@/components/public-menu/CartDrawer";
+import UpsellDialog from "@/components/public-menu/UpsellDialog";
+import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 
 export default function PublicMenu() {
   const { slug } = useParams<{ slug: string }>();
@@ -30,6 +32,7 @@ export default function PublicMenu() {
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [selected, setSelected] = useState<PublicProduct | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [upsellOpen, setUpsellOpen] = useState(false);
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
@@ -82,6 +85,13 @@ export default function PublicMenu() {
   }, [products]);
 
   const featured = useMemo(() => products.filter((p) => p.is_featured && !p.is_sold_out), [products]);
+
+  const hasUpsellSuggestion = useMemo(() => {
+    const cartIds = new Set(cart.items.map((c) => c.product_id));
+    return products.some(
+      (p) => p.active && p.is_available_online && !p.is_sold_out && !cartIds.has(p.id),
+    );
+  }, [products, cart.items]);
 
   useEffect(() => {
     if (!activeCat && categories.length) setActiveCat(categories[0].slug);
@@ -176,6 +186,22 @@ export default function PublicMenu() {
         onRemove={cart.remove}
         onCheckout={() => {
           setCartOpen(false);
+          if (hasUpsellSuggestion) {
+            setUpsellOpen(true);
+          } else {
+            nav(`/menu/${slug}/checkout`);
+          }
+        }}
+      />
+
+      <UpsellDialog
+        open={upsellOpen}
+        onOpenChange={setUpsellOpen}
+        allProducts={products}
+        cartItems={cart.items}
+        onAdd={(p) => cart.add(p, 1, "")}
+        onContinue={() => {
+          setUpsellOpen(false);
           nav(`/menu/${slug}/checkout`);
         }}
       />
@@ -187,6 +213,11 @@ export default function PublicMenu() {
           onClick={() => setCartOpen(true)}
         />
       )}
+
+      <WhatsAppFab
+        phone={restaurantQuery.data.whatsapp_phone}
+        restaurantName={restaurantQuery.data.name}
+      />
     </PublicMenuLayout>
   );
 }

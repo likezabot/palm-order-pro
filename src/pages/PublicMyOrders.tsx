@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Search, Phone, ChevronRight, RotateCw, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,6 +95,7 @@ export default function PublicMyOrders() {
   const reorder = useCallback(
     (order: CustomerOrder) => {
       clear();
+      let added = 0;
       order.items.forEach((it) => {
         if (!it.product_id) return;
         const fakeProduct: PublicProduct = {
@@ -108,7 +110,13 @@ export default function PublicMyOrders() {
           display_order: 0,
         } as unknown as PublicProduct;
         add(fakeProduct, it.quantity, it.note ?? "");
+        added += it.quantity;
       });
+      if (added > 0) {
+        toast.success("Itens adicionados ao carrinho", {
+          description: `${added} ${added === 1 ? "item" : "itens"} prontos para revisar.`,
+        });
+      }
       navigate(`/menu/${slug}`);
     },
     [add, clear, navigate, slug],
