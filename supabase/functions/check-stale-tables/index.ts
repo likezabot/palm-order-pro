@@ -3,8 +3,32 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
+
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+function safeEqual(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+function checkCronAuth(req: Request): Response | null {
+  const cronHeader = req.headers.get("x-cron-secret") ?? "";
+  if (CRON_SECRET && safeEqual(cronHeader, CRON_SECRET)) return null;
+
+  const auth = req.headers.get("authorization") ?? "";
+  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
+  if (SERVICE_ROLE && safeEqual(bearer, SERVICE_ROLE)) return null;
+
+  return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -76,6 +100,8 @@ async function run() {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const unauthorized = checkCronAuth(req);
+  if (unauthorized) return unauthorized;
   try {
     const result = await run();
     return new Response(JSON.stringify(result), {

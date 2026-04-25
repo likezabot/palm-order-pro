@@ -17,3 +17,4 @@ Never re-add auth or tighten RLS without explicit user confirmation.
 - [Telegram bot](mem://features/telegram-bot) — Voice + text commands, multi-message per table, identified Undo
 - [Telegram notifications](mem://features/telegram-notifications) — Queue-based notifications via notify-telegram
 - [Security policy](mem://preferences/security) — RLS intentionally public; what IS in scope to harden
+- [Cron auth](mem://features/cron-auth) — Gate por X-Cron-Secret/Service Role nos 3 crons Telegram
