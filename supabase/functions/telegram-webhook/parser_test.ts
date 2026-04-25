@@ -31,7 +31,8 @@ const opts = { sanitizeOps: false, sanitizeResources: false };
 
 // ─────────────── Helpers ───────────────
 function expectAdd(input: string, table: string, qty: number, productSubstring: string) {
-  const r = parseCommand(input) as Extract<Command, { kind: "ADD" }>;
+  // deno-lint-ignore no-explicit-any
+  const r = parseCommand(input) as any;
   assertEquals(r.kind, "ADD", `[${input}] esperado ADD, recebido ${r.kind}`);
   assertEquals(r.table, table, `[${input}] mesa esperada ${table}, recebida ${r.table}`);
   assertEquals(r.qty, qty, `[${input}] qty esperada ${qty}, recebida ${r.qty}`);
@@ -41,7 +42,8 @@ function expectAdd(input: string, table: string, qty: number, productSubstring: 
   );
 }
 function expectRemove(input: string, table: string, qty: number, productSubstring: string) {
-  const r = parseCommand(input) as Extract<Command, { kind: "REMOVE" }>;
+  // deno-lint-ignore no-explicit-any
+  const r = parseCommand(input) as any;
   assertEquals(r.kind, "REMOVE", `[${input}] esperado REMOVE, recebido ${r.kind}`);
   assertEquals(r.table, table);
   assertEquals(r.qty, qty);
