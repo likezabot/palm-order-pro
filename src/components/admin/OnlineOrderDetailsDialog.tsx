@@ -140,7 +140,7 @@ export default function OnlineOrderDetailsDialog({ open, onOpenChange, orderId }
         supabase
           .from("orders")
           .select(
-            "id, table_name, status, service_type, payment_method, change_for, total, delivery_fee, customer_name_snapshot, customer_phone_snapshot, delivery_address, created_at, estimated_ready_at",
+            "id, table_name, status, service_type, payment_method, change_for, total, delivery_fee, customer_name_snapshot, customer_phone_snapshot, delivery_address, created_at, updated_at, estimated_ready_at",
           )
           .eq("id", orderId)
           .maybeSingle(),
