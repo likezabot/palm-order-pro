@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useLocation, useSearchParams, Link } from "react-router-dom";
-import { CheckCircle2, Clock, ChefHat, Package, CreditCard, XCircle, AlertCircle } from "lucide-react";
+import { CheckCircle2, Clock, ChefHat, Package, CreditCard, XCircle, AlertCircle, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -30,7 +30,7 @@ type StatusInfo = {
 type Step = {
   key: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   reachedAt?: string | null;
 };
 
