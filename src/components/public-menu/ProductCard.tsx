@@ -5,19 +5,24 @@ import { cn } from "@/lib/utils";
 type Props = {
   product: PublicProduct;
   disabled?: boolean;
+  onClick?: (p: PublicProduct) => void;
 };
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export default function ProductCard({ product, disabled }: Props) {
+export default function ProductCard({ product, disabled, onClick }: Props) {
   const isBlocked = disabled || product.is_sold_out;
+  const interactive = !isBlocked && !!onClick;
+  const Tag: any = interactive ? "button" : "article";
   return (
-    <article
+    <Tag
+      type={interactive ? "button" : undefined}
+      onClick={interactive ? () => onClick!(product) : undefined}
       className={cn(
-        "flex gap-3 rounded-xl border border-border bg-card p-3 transition-colors",
-        isBlocked ? "opacity-60" : "hover:border-primary/40",
+        "flex w-full text-left gap-3 rounded-xl border border-border bg-card p-3 transition-colors",
+        isBlocked ? "opacity-60 cursor-not-allowed" : "hover:border-primary/40 active:scale-[0.99]",
       )}
     >
       <div className="min-w-0 flex-1">
@@ -42,6 +47,6 @@ export default function ProductCard({ product, disabled }: Props) {
           <div className="flex h-full w-full items-center justify-center text-3xl">🍢</div>
         )}
       </div>
-    </article>
+    </Tag>
   );
 }
