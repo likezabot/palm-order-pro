@@ -60,6 +60,8 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
 
   const status = order.status || "new";
   const next = NEXT_STATUS[status];
+  const kind = getOrderKind(order);
+  const online = isOnlineOrder(order);
 
   // Urgência baseada em tempo na etapa atual
   const stageMs = Date.now() - new Date(order.updated_at || order.created_at).getTime();
@@ -67,11 +69,13 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
   const isCritical = stageMin >= 25;
   const isAlert = !isCritical && stageMin >= 10;
 
-  const borderAccent = isCritical
-    ? "border-l-destructive"
-    : isAlert
-      ? "border-l-warning"
-      : "border-l-transparent";
+  const borderAccent = isUnseen
+    ? "border-l-orange-500"
+    : isCritical
+      ? "border-l-destructive"
+      : isAlert
+        ? "border-l-warning"
+        : "border-l-transparent";
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -82,6 +86,13 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
     return `${statusText} há ${elapsed}`;
   };
 
+  // Título: cliente para online; mesa/balcão para os demais.
+  const title = online && order.customer_name_snapshot
+    ? order.customer_name_snapshot
+    : formatTableLabel(order.table_name, order.original_table_name);
+
+  const KindIcon = kind === "delivery" ? Bike : kind === "pickup" ? ShoppingBag : null;
+
   return (
     <div
       ref={ref}
@@ -89,17 +100,31 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
       className={`relative flex flex-col p-3 rounded-xl border-l-4 border-2 ${borderAccent} transition-all cursor-pointer ${
         selected
           ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.3)]"
-          : isCritical
-            ? "border-destructive/40 bg-destructive/5 animate-pulse-active"
-            : "border-border bg-card hover:border-primary/40 hover:shadow-md"
+          : isUnseen
+            ? "border-orange-500/60 bg-orange-500/10 ring-2 ring-orange-500/40 animate-pulse-active"
+            : isCritical
+              ? "border-destructive/40 bg-destructive/5 animate-pulse-active"
+              : "border-border bg-card hover:border-primary/40 hover:shadow-md"
       }`}
-      style={isCritical ? ({ ["--pulse-color" as any]: "hsl(var(--destructive) / 0.35)" } as React.CSSProperties) : undefined}
+      style={
+        isUnseen
+          ? ({ ["--pulse-color" as any]: "hsl(24 95% 53% / 0.45)" } as React.CSSProperties)
+          : isCritical
+            ? ({ ["--pulse-color" as any]: "hsl(var(--destructive) / 0.35)" } as React.CSSProperties)
+            : undefined
+      }
     >
-      {/* Header: Mesa + Status */}
+      {isUnseen && (
+        <span className="absolute -top-2 -right-2 z-10 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-lg">
+          NOVO
+        </span>
+      )}
+
+      {/* Header: Título + Status */}
       <div className="flex items-start justify-between gap-2 min-w-0">
         <div className="min-w-0 flex-1">
           <div className="font-black text-xl leading-tight break-words flex items-center gap-1.5">
-            <span>{formatTableLabel(order.table_name, order.original_table_name)}</span>
+            <span className="truncate">{title}</span>
             {order.served_at && (
               <span
                 className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-success/15 text-success border border-success/30 shrink-0"
@@ -110,9 +135,24 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
               </span>
             )}
           </div>
-          {order.original_table_name && order.table_name !== order.original_table_name && order.table_name !== "BALCÃO" && (
-            <div className="text-[10px] font-bold text-muted-foreground">(Mesa {order.original_table_name})</div>
-          )}
+          {/* Sub-linha: badges de tipo + canal */}
+          <div className="mt-1 flex items-center gap-1 flex-wrap">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${KIND_BADGE_CLASS[kind]}`}>
+              {KindIcon && <KindIcon className="w-3 h-3" />}
+              {KIND_LABEL[kind]}
+            </span>
+            {online && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-orange-400">
+                <Wifi className="w-3 h-3" />
+                ONLINE
+              </span>
+            )}
+            {online && order.customer_name_snapshot && (
+              <span className="text-[10px] font-bold text-muted-foreground">
+                {formatTableLabel(order.table_name, order.original_table_name)}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
