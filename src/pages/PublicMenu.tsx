@@ -179,6 +179,19 @@ export default function PublicMenu() {
         onRemove={cart.remove}
         onCheckout={() => {
           setCartOpen(false);
+          // Abre upsell antes do checkout; se não houver sugestão, vai direto
+          setUpsellOpen(true);
+        }}
+      />
+
+      <UpsellDialog
+        open={upsellOpen}
+        onOpenChange={setUpsellOpen}
+        allProducts={products}
+        cartItems={cart.items}
+        onAdd={(p) => cart.add(p, 1, "")}
+        onContinue={() => {
+          setUpsellOpen(false);
           nav(`/menu/${slug}/checkout`);
         }}
       />
@@ -190,6 +203,11 @@ export default function PublicMenu() {
           onClick={() => setCartOpen(true)}
         />
       )}
+
+      <WhatsAppFab
+        phone={restaurantQuery.data.whatsapp_phone}
+        restaurantName={restaurantQuery.data.name}
+      />
     </PublicMenuLayout>
   );
 }
