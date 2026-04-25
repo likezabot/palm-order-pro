@@ -106,6 +106,29 @@ export default function PublicCheckout() {
           estimated_ready_at: result.estimated_ready_at,
           total: result.total,
           status: result.status,
+          customer_name: name.trim(),
+          customer_phone: phone,
+          service_type: serviceType,
+          payment_method: paymentMethod,
+          delivery_fee: deliveryFee,
+          subtotal,
+          note: note.trim(),
+          items: cart.items.map((it) => ({
+            product_name: it.product_name,
+            quantity: it.quantity,
+            product_price: it.product_price,
+            note: it.note,
+          })),
+          address:
+            serviceType === "delivery"
+              ? {
+                  street: street.trim(),
+                  number: number.trim(),
+                  neighborhood: neighborhood.trim(),
+                  complement: complement.trim() || undefined,
+                  reference: reference.trim() || undefined,
+                }
+              : null,
         },
       });
     } catch (e: any) {
