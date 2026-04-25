@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -24,6 +24,9 @@ import { formatTableLabel } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderRow } from "@/components/pdv/OrderRow";
 import { PrintSettingsDialog } from "@/components/pdv/PrintSettingsDialog";
+import { useSeenOrders } from "@/hooks/use-seen-orders";
+import { useSiren } from "@/hooks/use-siren";
+import { getOrderGroup, getOrderKind, isOnlineOrder, KIND_LABEL } from "@/lib/order-classification";
 
 import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
