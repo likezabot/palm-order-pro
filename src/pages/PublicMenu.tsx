@@ -187,7 +187,7 @@ export default function PublicMenu() {
   return (
     <PublicMenuLayout>
       {isPreview && (
-        <div className="sticky top-0 z-50 bg-amber-500/90 px-4 py-2 text-center text-xs font-bold text-amber-950 backdrop-blur">
+        <div className="sticky top-0 z-50 bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground backdrop-blur">
           Modo preview — pedidos desativados
         </div>
       )}
