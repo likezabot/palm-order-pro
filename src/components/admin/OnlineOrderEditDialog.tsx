@@ -45,6 +45,8 @@ export default function OnlineOrderEditDialog({
     total: number;
     table_name: string;
     channel: string;
+    status: string;
+    service_type: string;
   } | null>(null);
   const { toast } = useToast();
 
@@ -53,20 +55,22 @@ export default function OnlineOrderEditDialog({
     setLoading(true);
     const { data: order } = await supabase
       .from("orders")
-      .select("table_name, channel, delivery_fee, total")
+      .select("table_name, channel, delivery_fee, total, status, service_type")
       .eq("id", orderId)
       .maybeSingle();
     const { data: rows } = await supabase
       .from("order_items")
       .select("id, product_name, product_price, quantity, subtotal, note")
       .eq("order_id", orderId);
-    setItems((rows ?? []) as OrderItem[]);
+    setItems(((rows ?? []) as OrderItem[]).filter((it) => it.product_name !== "__order_note__"));
     if (order) {
       setOrderInfo({
         delivery_fee: Number(order.delivery_fee ?? 0),
         total: Number(order.total ?? 0),
         table_name: order.table_name,
         channel: order.channel,
+        status: order.status,
+        service_type: order.service_type,
       });
     }
     setLoading(false);
@@ -110,16 +114,25 @@ export default function OnlineOrderEditDialog({
       return;
     }
     toast({
-      title: newQty === 0 ? "Item removido" : "Item atualizado",
+      title: newQty === 0 ? "✓ Item removido do pedido" : "✓ Quantidade atualizada",
+      description: newQty === 0 ? "O total foi recalculado automaticamente." : undefined,
     });
     await load();
     onUpdated?.();
   };
 
   const subtotal = items.reduce((s, it) => s + it.subtotal, 0);
-  const fee = orderInfo?.delivery_fee ?? 0;
+  const fee = orderInfo?.service_type === "delivery" ? (orderInfo?.delivery_fee ?? 0) : 0;
   const total = subtotal + fee;
   const isOnline = orderInfo?.channel === "online";
+  const isLocked = orderInfo?.status === "paid" || orderInfo?.status === "cancelled";
+  const canEdit = isOnline && !isLocked;
+  const lockedReason =
+    orderInfo?.status === "paid"
+      ? "Pedido já foi finalizado/pago — não pode mais ser editado."
+      : orderInfo?.status === "cancelled"
+        ? "Pedido foi cancelado — edição bloqueada."
+        : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -136,8 +149,14 @@ export default function OnlineOrderEditDialog({
         </DialogHeader>
 
         {!isOnline && orderInfo && (
-          <div className="rounded-lg bg-warning/10 text-warning-foreground p-3 text-sm">
+          <div className="rounded-lg bg-warning/10 text-warning-foreground p-3 text-sm border border-warning/30">
             Esta edição rápida é apenas para pedidos do cardápio online.
+          </div>
+        )}
+
+        {lockedReason && (
+          <div className="rounded-lg bg-destructive/10 text-destructive p-3 text-sm border border-destructive/30 font-semibold">
+            {lockedReason}
           </div>
         )}
 
@@ -171,7 +190,7 @@ export default function OnlineOrderEditDialog({
                     size="icon"
                     variant="outline"
                     className="h-9 w-9"
-                    disabled={working === it.id || !isOnline}
+                    disabled={working === it.id || !canEdit}
                     onClick={() =>
                       updateItem(it.id, Math.max(0, it.quantity - 1))
                     }
@@ -185,7 +204,7 @@ export default function OnlineOrderEditDialog({
                     size="icon"
                     variant="outline"
                     className="h-9 w-9"
-                    disabled={working === it.id || !isOnline}
+                    disabled={working === it.id || !canEdit}
                     onClick={() => updateItem(it.id, it.quantity + 1)}
                   >
                     <Plus size={16} />
@@ -194,7 +213,7 @@ export default function OnlineOrderEditDialog({
                     size="icon"
                     variant="ghost"
                     className="h-9 w-9 text-destructive"
-                    disabled={working === it.id || !isOnline}
+                    disabled={working === it.id || !canEdit}
                     onClick={() => updateItem(it.id, 0)}
                     aria-label="Remover item"
                   >
@@ -212,7 +231,7 @@ export default function OnlineOrderEditDialog({
               <span className="text-muted-foreground">Subtotal</span>
               <span className="tabular-nums">R$ {subtotal.toFixed(2)}</span>
             </div>
-            {fee > 0 && (
+            {orderInfo?.service_type === "delivery" && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Taxa de entrega</span>
                 <span className="tabular-nums">R$ {fee.toFixed(2)}</span>
