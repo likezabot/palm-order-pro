@@ -211,6 +211,12 @@ const Admin = () => {
               <Globe className="w-4 h-4" /> <span className="hidden sm:inline">Cardápio </span>Online
             </TabsTrigger>
             <TabsTrigger
+              value="online-orders"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
+            >
+              <ShoppingCart className="w-4 h-4" /> <span className="hidden sm:inline">Pedidos </span>Online
+            </TabsTrigger>
+            <TabsTrigger
               value="orders"
               className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
