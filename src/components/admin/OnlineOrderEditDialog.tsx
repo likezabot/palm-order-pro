@@ -121,9 +121,17 @@ export default function OnlineOrderEditDialog({
   };
 
   const subtotal = items.reduce((s, it) => s + it.subtotal, 0);
-  const fee = orderInfo?.delivery_fee ?? 0;
+  const fee = orderInfo?.service_type === "delivery" ? (orderInfo?.delivery_fee ?? 0) : 0;
   const total = subtotal + fee;
   const isOnline = orderInfo?.channel === "online";
+  const isLocked = orderInfo?.status === "paid" || orderInfo?.status === "cancelled";
+  const canEdit = isOnline && !isLocked;
+  const lockedReason =
+    orderInfo?.status === "paid"
+      ? "Pedido já foi finalizado/pago — não pode mais ser editado."
+      : orderInfo?.status === "cancelled"
+        ? "Pedido foi cancelado — edição bloqueada."
+        : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -140,8 +148,14 @@ export default function OnlineOrderEditDialog({
         </DialogHeader>
 
         {!isOnline && orderInfo && (
-          <div className="rounded-lg bg-warning/10 text-warning-foreground p-3 text-sm">
+          <div className="rounded-lg bg-warning/10 text-warning-foreground p-3 text-sm border border-warning/30">
             Esta edição rápida é apenas para pedidos do cardápio online.
+          </div>
+        )}
+
+        {lockedReason && (
+          <div className="rounded-lg bg-destructive/10 text-destructive p-3 text-sm border border-destructive/30 font-semibold">
+            {lockedReason}
           </div>
         )}
 
