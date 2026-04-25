@@ -46,11 +46,30 @@ export type PublicProduct = {
   active: boolean;
 };
 
+const RESTAURANT_COLUMNS =
+  "id, slug, name, logo_url, hero_url, description, whatsapp_phone, is_open_override, default_prep_minutes, delivery_prep_buffer";
+
 export async function fetchRestaurantBySlug(slug: string): Promise<Restaurant | null> {
   const { data, error } = await supabase
     .from("restaurants" as any)
-    .select("id, slug, name, logo_url, hero_url, description, whatsapp_phone, is_open_override, default_prep_minutes, delivery_prep_buffer")
+    .select(RESTAURANT_COLUMNS)
     .eq("slug", slug)
+    .maybeSingle();
+  if (error) return null;
+  return data as unknown as Restaurant | null;
+}
+
+/**
+ * Carrega o restaurante "atual" do sistema sem depender de slug fixo.
+ * Estratégia: pega o mais antigo (created_at asc). Em projetos single-tenant
+ * (caso atual), isso garante o único restaurante existente.
+ */
+export async function fetchCurrentRestaurant(): Promise<Restaurant | null> {
+  const { data, error } = await supabase
+    .from("restaurants" as any)
+    .select(RESTAURANT_COLUMNS)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (error) return null;
   return data as unknown as Restaurant | null;
