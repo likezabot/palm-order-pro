@@ -129,7 +129,7 @@ export default function ProductCard({
         <div className="flex shrink-0 items-center gap-2">
           <p className="text-sm font-black text-primary">{formatBRL(product.price)}</p>
           {showQuickAdd && (
-            <QuickAddButton onClick={() => onQuickAdd!(product)} size="sm" />
+            <QuickAddButton onClick={() => onQuickAdd!(product)} size="sm" productName={product.name} />
           )}
         </div>
       </Tag>
@@ -175,7 +175,7 @@ export default function ProductCard({
               {formatBRL(product.price)}
             </p>
             {showQuickAdd && (
-              <QuickAddButton onClick={() => onQuickAdd!(product)} />
+              <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />
             )}
           </div>
         </div>
@@ -205,7 +205,7 @@ export default function ProductCard({
         )}
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-lg font-black text-primary leading-none">{formatBRL(product.price)}</p>
-          {showQuickAdd && <QuickAddButton onClick={() => onQuickAdd!(product)} />}
+          {showQuickAdd && <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />}
         </div>
       </div>
       {effectiveShowImage && (
