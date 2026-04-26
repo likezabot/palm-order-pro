@@ -168,6 +168,16 @@ export type PublicMenuSettings = {
   button_style: "solid" | "outline" | "soft";
   card_style: "flat" | "elevated";
   radius_scale: "md" | "lg" | "xl";
+  // Overrides por categoria (chave = slug da categoria)
+  category_overrides: Record<string, CategoryOverride>;
+};
+
+export type CategoryLayout = "list" | "grid-2" | "grid-3";
+export type CategoryCardStyle = "compact" | "detailed";
+export type CategoryOverride = {
+  layout?: CategoryLayout;
+  image_aspect?: "square" | "wide" | "tall";
+  card_style?: CategoryCardStyle;
 };
 
 export const DEFAULT_PUBLIC_MENU_SETTINGS: Omit<PublicMenuSettings, "restaurant_id"> = {
