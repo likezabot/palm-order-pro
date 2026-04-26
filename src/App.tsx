@@ -62,6 +62,7 @@ const AnimatedRoutes = () => {
           <Route path="/menu/:slug/checkout" element={<PublicCheckout />} />
           <Route path="/menu/:slug/sucesso/:orderId" element={<PublicOrderSuccess />} />
           <Route path="/menu/:slug/pedidos" element={<PublicMyOrders />} />
+          <Route path="/checkout" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
