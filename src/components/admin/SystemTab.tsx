@@ -205,17 +205,7 @@ export const SystemTab = () => {
           </div>
         </div>
 
-        <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border bg-background">
-          <input
-            type="checkbox"
-            checked={resetStock}
-            onChange={(e) => setResetStock(e.target.checked)}
-            className="w-5 h-5 accent-destructive"
-          />
-          <span className="text-sm font-medium text-foreground">
-            Zerar estoque atual de todos os itens
-          </span>
-        </label>
+
 
         <Button
           onClick={handleResetTestData}
