@@ -106,6 +106,10 @@ export default function LoyaltySection({
                 </span>
               )}
             </div>
+            <p className="text-[11px] text-muted-foreground">
+              Saldo vinculado ao WhatsApp:{" "}
+              <strong className="font-mono">{phoneDigits}</strong>
+            </p>
 
             {status.rewards.length > 0 ? (
               <div className="space-y-2">
