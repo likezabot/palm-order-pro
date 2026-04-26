@@ -117,13 +117,22 @@ export function overlayAlphaForWhiteText(
   const currentL = relativeLuminance(grayChannel, grayChannel, grayChannel);
   if (contrastRatio(whiteL, currentL) >= targetRatio) return minAlpha;
 
+  // Verifica se nem o teto consegue atingir o alvo → devolve o teto
+  // (e quem chamar pode logar warn). Isso evita que a busca binária
+  // retorne um valor intermediário enganoso quando nenhuma α passa.
+  const ceilingL = composedLuminance(baseRGB, overlayRGB, maxAlpha);
+  if (contrastRatio(whiteL, ceilingL) < targetRatio) return maxAlpha;
+
+  // Busca binária com pequena margem de segurança (0.05) para compensar
+  // aproximação cinza-equivalente ↔ cor real e flutuação de pixels da foto.
+  const safeTarget = targetRatio + 0.05;
   let lo = minAlpha;
   let hi = maxAlpha;
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
     const L = composedLuminance(baseRGB, overlayRGB, mid);
     const ratio = contrastRatio(whiteL, L);
-    if (ratio >= targetRatio) hi = mid;
+    if (ratio >= safeTarget) hi = mid;
     else lo = mid;
   }
   return Math.min(maxAlpha, Math.max(minAlpha, hi));
