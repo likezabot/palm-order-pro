@@ -47,7 +47,7 @@ export const usePalmCart = () => {
       .from("orders")
       .select("version, table_name, original_table_name")
       .eq("id", orderId)
-      .single();
+      .maybeSingle();
     if (orderData) {
       setOrderVersion(orderData.version);
       if (orderData.original_table_name) {
