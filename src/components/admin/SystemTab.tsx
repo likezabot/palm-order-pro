@@ -170,10 +170,8 @@ export const SystemTab = () => {
               Limpar dados de teste
             </h3>
             <p className="text-sm text-slate-600 mt-1">
-              Apaga pedidos, caixas, movimentos de estoque, notificações e
-              estado do Telegram <b>do período escolhido</b>. <b>Mantém</b>{" "}
-              cardápio, cadastro de itens, receitas, vínculos do Telegram e
-              configurações.
+              Apaga pedidos, caixas, notificações e estado do Telegram <b>do período escolhido</b>.{" "}
+              <b>Mantém</b> cardápio, vínculos do Telegram e configurações.
             </p>
           </div>
         </div>
