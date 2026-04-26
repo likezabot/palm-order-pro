@@ -123,7 +123,7 @@ export default function PublicMyOrders() {
   );
 
   return (
-    <div className="min-h-screen bg-background px-5 py-6 max-w-2xl mx-auto">
+    <div className="public-menu-theme min-h-screen bg-background px-5 py-6 max-w-2xl mx-auto">
       <header className="mb-6">
         <Link to={`/menu/${slug}`} className="text-sm text-muted-foreground hover:text-foreground">
           ← Voltar ao cardápio
