@@ -22,6 +22,7 @@ import {
 } from "@/lib/public-cart";
 import { fetchRestaurantBySlug } from "@/lib/public-menu";
 import { logError, extractErrorCode } from "@/lib/error-log";
+import LoyaltySection from "@/components/public-menu/LoyaltySection";
 
 export default function PublicCheckout() {
   const { slug } = useParams<{ slug: string }>();
@@ -48,6 +49,7 @@ export default function PublicCheckout() {
   const [complement, setComplement] = useState("");
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
+  const [loyaltyRewardId, setLoyaltyRewardId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // client_request_id estável durante a sessão de checkout
@@ -98,6 +100,7 @@ export default function PublicCheckout() {
         note: note.trim() || undefined,
         items: cart.items,
         client_request_id: requestId,
+        loyalty_reward_id: loyaltyRewardId,
       });
 
       cart.clear();
@@ -145,6 +148,10 @@ export default function PublicCheckout() {
       else if (msg.includes("invalid_address")) friendly = "Endereço é obrigatório para entrega.";
       else if (msg.includes("empty_cart")) friendly = "Carrinho vazio.";
       else if (msg.includes("invalid_quantity")) friendly = "Quantidade inválida em algum item.";
+      else if (msg.includes("insufficient_points")) friendly = "Você não tem pontos suficientes para esse brinde.";
+      else if (msg.includes("reward_inactive")) friendly = "Esse brinde não está mais disponível.";
+      else if (msg.includes("min_subtotal_not_met")) friendly = "Pedido abaixo do mínimo exigido para esse brinde.";
+      else if (msg.includes("loyalty_disabled")) friendly = "Programa de fidelidade indisponível no momento.";
       else if (msg.includes("not unique") || msg.includes("PGRST203")) friendly = "Erro temporário do servidor. Tente novamente.";
 
       void logError({
@@ -295,6 +302,14 @@ export default function PublicCheckout() {
             </div>
           )}
         </section>
+
+        <LoyaltySection
+          phone={phone}
+          restaurantSlug={slug ?? ""}
+          subtotal={subtotal}
+          selectedRewardId={loyaltyRewardId}
+          onChange={setLoyaltyRewardId}
+        />
 
         <section className="space-y-3">
           <h2 className="text-sm font-bold uppercase text-muted-foreground">Observação</h2>

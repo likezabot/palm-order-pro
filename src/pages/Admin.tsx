@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert, Link2 } from "lucide-react";
+import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert, Link2, Gift } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
@@ -28,6 +28,7 @@ import NetworkTab from "@/components/admin/NetworkTab";
 import OnlineMenuTab from "@/components/admin/OnlineMenuTab";
 import OnlineOrdersTab from "@/components/admin/OnlineOrdersTab";
 import RoutesTab from "@/components/admin/RoutesTab";
+import LoyaltyTab from "@/components/admin/LoyaltyTab";
 import { manualPrintOrder } from "@/lib/print-service";
 
 const Admin = () => {
@@ -279,6 +280,12 @@ const Admin = () => {
               <Activity className="w-4 h-4" /> Rede
             </TabsTrigger>
             <TabsTrigger
+              value="loyalty"
+              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
+            >
+              <Gift className="w-4 h-4" /> Fidelidade
+            </TabsTrigger>
+            <TabsTrigger
               value="routes"
               className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
@@ -342,6 +349,10 @@ const Admin = () => {
 
         <TabsContent value="routes" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
           <RoutesTab />
+        </TabsContent>
+
+        <TabsContent value="loyalty" className="flex-1 p-4 mt-0 bg-white border-t">
+          <LoyaltyTab />
         </TabsContent>
       </Tabs>
     </div>

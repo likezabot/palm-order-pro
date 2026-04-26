@@ -32,6 +32,7 @@ import UpsellDialog from "@/components/public-menu/UpsellDialog";
 import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 import TopSellersSection from "@/components/public-menu/TopSellersSection";
 import PublicGroupVariantSheet from "@/components/public-menu/PublicGroupVariantSheet";
+import LoyaltyBanner from "@/components/public-menu/LoyaltyBanner";
 import { usePublicProductGroups, buildCategoryEntries } from "@/lib/public-menu-groups";
 import type { ProductGroup } from "@/lib/product-groups";
 
@@ -450,6 +451,7 @@ export default function PublicMenu() {
         </div>
       )}
 
+      <LoyaltyBanner />
       {sectionOrder.map(renderSection)}
 
       {!isOpen && !isPreview && (

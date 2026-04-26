@@ -453,6 +453,142 @@ export type Database = {
         }
         Relationships: []
       }
+      loyalty_accounts: {
+        Row: {
+          balance: number
+          created_at: string
+          last_customer_name: string | null
+          phone: string
+          total_earned: number
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          last_customer_name?: string | null
+          phone: string
+          total_earned?: number
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          last_customer_name?: string | null
+          phone?: string
+          total_earned?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      loyalty_rewards: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          min_order_subtotal: number
+          points_cost: number
+          product_id: string | null
+          restaurant_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id?: string
+          min_order_subtotal?: number
+          points_cost: number
+          product_id?: string | null
+          restaurant_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          min_order_subtotal?: number
+          points_cost?: number
+          product_id?: string | null
+          restaurant_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_rewards_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_rewards_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_transactions: {
+        Row: {
+          admin_note: string | null
+          created_at: string
+          id: string
+          kind: string
+          order_id: string | null
+          phone: string
+          points: number
+          reward_id: string | null
+        }
+        Insert: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          order_id?: string | null
+          phone: string
+          points: number
+          reward_id?: string | null
+        }
+        Update: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          order_id?: string | null
+          phone?: string
+          points?: number
+          reward_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_transactions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_transactions_phone_fkey"
+            columns: ["phone"]
+            isOneToOne: false
+            referencedRelation: "loyalty_accounts"
+            referencedColumns: ["phone"]
+          },
+          {
+            foreignKeyName: "loyalty_transactions_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "loyalty_rewards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_categories: {
         Row: {
           active: boolean
@@ -1157,6 +1293,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _loyalty_setting_bool: {
+        Args: { p_default: boolean; p_key: string }
+        Returns: boolean
+      }
+      _loyalty_setting_numeric: {
+        Args: { p_default: number; p_key: string }
+        Returns: number
+      }
       _require_manager_pin: { Args: { p_pin: string }; Returns: undefined }
       admin_bulk_set_active: {
         Args: { p_active: boolean; p_ids: string[]; p_pin: string }
@@ -1174,6 +1318,40 @@ export type Database = {
       admin_edit_online_order_item: {
         Args: { p_item_id: string; p_new_quantity: number; p_order_id: string }
         Returns: Json
+      }
+      admin_loyalty_adjust: {
+        Args: { p_note: string; p_phone: string; p_points: number }
+        Returns: Json
+      }
+      admin_loyalty_delete_reward: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      admin_loyalty_list_rewards: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
+      }
+      admin_loyalty_search_customer: {
+        Args: { p_phone: string }
+        Returns: Json
+      }
+      admin_loyalty_set_enabled: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      admin_loyalty_top_customers: { Args: { p_limit?: number }; Returns: Json }
+      admin_loyalty_upsert_reward: {
+        Args: {
+          p_active: boolean
+          p_display_name: string
+          p_id: string
+          p_min_order_subtotal: number
+          p_points_cost: number
+          p_product_id?: string
+          p_restaurant_id: string
+          p_sort_order: number
+        }
+        Returns: string
       }
       admin_reorder_products: {
         Args: { p_ids: string[]; p_orders: number[] }
@@ -1460,21 +1638,38 @@ export type Database = {
         }
         Returns: Json
       }
-      create_public_order: {
-        Args: {
-          p_address: Json
-          p_change_for: number
-          p_client_request_id: string
-          p_customer_name: string
-          p_customer_phone: string
-          p_items: Json
-          p_note: string
-          p_payment_method: string
-          p_restaurant_slug: string
-          p_service_type: string
-        }
-        Returns: Json
-      }
+      create_public_order:
+        | {
+            Args: {
+              p_address: Json
+              p_change_for: number
+              p_client_request_id: string
+              p_customer_name: string
+              p_customer_phone: string
+              p_items: Json
+              p_note: string
+              p_payment_method: string
+              p_restaurant_slug: string
+              p_service_type: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_address: Json
+              p_change_for: number
+              p_client_request_id: string
+              p_customer_name: string
+              p_customer_phone: string
+              p_items: Json
+              p_loyalty_reward_id?: string
+              p_note: string
+              p_payment_method: string
+              p_restaurant_slug: string
+              p_service_type: string
+            }
+            Returns: Json
+          }
       defer_order_print: { Args: { p_order_id: string }; Returns: undefined }
       enqueue_print_job: {
         Args: { p_job_type: string; p_order_id: string; p_payload?: Json }
@@ -1495,6 +1690,14 @@ export type Database = {
         Args: { p_name: string; p_phone: string }
         Returns: string
       }
+      get_public_loyalty_status: {
+        Args: {
+          p_order_subtotal?: number
+          p_phone: string
+          p_restaurant_slug: string
+        }
+        Returns: Json
+      }
       get_public_order_status: {
         Args: { p_order_id: string; p_token: string }
         Returns: Json
@@ -1508,6 +1711,7 @@ export type Database = {
         Args: { p_order_id: string; p_target_table: string }
         Returns: undefined
       }
+      normalize_phone: { Args: { p_phone: string }; Returns: string }
       normalize_waiter_name: { Args: { p_name: string }; Returns: string }
       pay_order: {
         Args: {
