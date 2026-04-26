@@ -31,7 +31,6 @@ export const SystemTab = () => {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetPeriod, setResetPeriod] = useState<"today" | "7d" | "30d" | "all">("today");
-  const [resetStock, setResetStock] = useState(true);
 
   const loadLogs = async () => {
     setLoadingLogs(true);
