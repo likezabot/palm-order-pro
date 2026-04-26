@@ -372,7 +372,7 @@ export default function PublicMenu() {
             )}
 
             {(settings?.show_categories_section_title ?? true) && (
-              <h2 className="mt-4 text-base font-black uppercase tracking-wide text-muted-foreground">
+              <h2 className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
                 {settings?.categories_section_title || "Categorias"}
               </h2>
             )}
