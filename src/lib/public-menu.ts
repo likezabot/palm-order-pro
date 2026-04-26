@@ -99,13 +99,20 @@ export async function fetchMenuCategories(restaurantId: string): Promise<MenuCat
 export async function fetchPublicProducts(): Promise<PublicProduct[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, category, description, image_url, is_featured, is_available_online, is_sold_out, display_order, active")
+    .select(
+      "id, name, price, category, description, image_url, is_featured, is_available_online, is_sold_out, is_sold_out_online, display_order, active",
+    )
     .eq("active", true)
     .eq("is_available_online", true)
     .order("display_order")
     .order("name");
   if (error) return [];
-  return (data ?? []) as unknown as PublicProduct[];
+  // No cardápio público, "esgotado" combina os dois sinais (salão OU online).
+  // Isso permite que o admin esgote independentemente em cada canal.
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    is_sold_out: Boolean(row.is_sold_out) || Boolean(row.is_sold_out_online),
+  })) as unknown as PublicProduct[];
 }
 
 /**
