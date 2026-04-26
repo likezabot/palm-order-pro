@@ -46,6 +46,7 @@ const SOURCES = [
   "realtime",
   "print",
   "health-check",
+  "auto_heal",
   "other",
 ] as const;
 const SEVERITIES = ["all", "error", "warning", "info"] as const;
