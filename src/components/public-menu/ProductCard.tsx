@@ -16,7 +16,12 @@ type Props = {
   onClick?: (p: PublicProduct) => void;
   /** Quando informado, mostra botão "Adicionar" inline que adiciona 1 unidade direto. */
   onQuickAdd?: (p: PublicProduct) => void;
+  /** Sobrescreve o texto do preço (ex.: "a partir de R$ 5,00" para card de grupo). */
+  priceLabel?: string;
+  /** Mostra um chevron "›" indicando que o card abre algo (popup de variantes). */
+  trailingHint?: boolean;
 };
+
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
