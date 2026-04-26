@@ -264,6 +264,10 @@ export default function PublicOrderSuccess() {
     ? `https://wa.me/${restaurantWa}?text=${encodeURIComponent(waMessage)}`
     : `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
 
+  if (!orderId || !token) {
+    return <Navigate to={slug ? `/menu/${slug}` : "/"} replace />;
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center px-4 py-6 sm:py-8">
       <div className="w-full max-w-md space-y-5">
