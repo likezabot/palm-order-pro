@@ -550,13 +550,18 @@ const Pdv = () => {
                 >
                   VOLTAR
                 </button>
-                <button
-                  onClick={() => setShowPayConfirm(true)}
-                  disabled={sending}
-                  className="flex-1 rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
-                >
-                  {sending ? "PROCESSANDO..." : "✅ FECHAR MESA"}
-                </button>
+                <div className="flex-1 flex flex-col gap-1">
+                  <button
+                    onClick={() => setShowPayConfirm(true)}
+                    disabled={sending || (amountPaidInSplit > 0 && amountPaidInSplit < total - 0.01)}
+                    className="w-full rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
+                  >
+                    {sending ? "PROCESSANDO..." : "✅ FECHAR MESA"}
+                  </button>
+                  {amountPaidInSplit > 0 && amountPaidInSplit < total - 0.01 && (
+                    <span className="text-[10px] text-destructive font-bold text-center uppercase">Aguardando quitação total</span>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
