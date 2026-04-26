@@ -293,7 +293,7 @@ export default function ErrorLogPanel() {
                 </div>
                 {isOpen && (
                   <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">
-                    {JSON.stringify(r.context ?? {}, null, 2)}
+                    {safeStringifyContext(r.context)}
                   </pre>
                 )}
               </li>
