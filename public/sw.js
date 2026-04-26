@@ -3,6 +3,8 @@ const BUILD_STAMP = "__BUILD_STAMP__";
 const CACHE_NAME = `plano-b-${BUILD_STAMP}`;
 
 const ASSETS = [
+  "/",
+  "/index.html",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png"
