@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import KanbanColumn from "@/components/kitchen/KanbanColumn";
 import { useFeedback } from "@/hooks/use-feedback";
+import { useToast } from "@/hooks/use-toast";
 
 
 const SOUND_KEY = "kitchen-sound-enabled";
@@ -14,6 +15,7 @@ const Kitchen = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { playFeedback } = useFeedback();
+  const { toast } = useToast();
   const prevCountRef = useRef(0);
   const [pulseNew, setPulseNew] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
