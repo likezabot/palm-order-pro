@@ -477,9 +477,36 @@ const Pdv = () => {
             /* Payment flow */
             <div className="space-y-4">
               <h2 className="text-xl font-bold">Fechar Conta — {formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}</h2>
-              <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
-                <span>TOTAL</span>
-                <span className="text-primary">R$ {total.toFixed(2)}</span>
+              
+              <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+                <div className="flex justify-between items-center text-lg font-bold">
+                  <span>TOTAL DA CONTA</span>
+                  <span className="text-primary text-xl">R$ {total.toFixed(2)}</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowSplitModal(true)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-primary/50 bg-primary/5 p-3 text-sm font-bold text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <Split size={18} /> DIVIDIR CONTA
+                  </button>
+                </div>
+
+                {amountPaidInSplit > 0 && (
+                  <div className="space-y-2 border-t border-dashed border-border pt-3">
+                    <div className="flex justify-between text-sm font-semibold text-success">
+                      <span>VALOR JÁ PAGO</span>
+                      <span>R$ {amountPaidInSplit.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-base font-black text-foreground">
+                      <span>SALDO RESTANTE</span>
+                      <span className={total - amountPaidInSplit > 0 ? "text-destructive" : "text-success"}>
+                        R$ {Math.max(0, total - amountPaidInSplit).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Customer data section */}
