@@ -94,8 +94,22 @@ const Admin = () => {
     refetchInterval: 30_000,
   });
 
-  const { orderMap, productsByCategory, handleDragEnd, handleResetOrder } =
-    useProductOrder(products);
+  // Contagem leve de erros não resolvidos das últimas 24h para badge na aba "Erros"
+  const { data: unresolvedErrors = 0 } = useQuery({
+    queryKey: ["admin-unresolved-errors-count"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count, error } = await supabase
+        .from("error_log" as never)
+        .select("*", { count: "exact", head: true })
+        .eq("resolved", false)
+        .gte("occurred_at", since);
+      if (error) return 0;
+      return count ?? 0;
+    },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
