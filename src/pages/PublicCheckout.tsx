@@ -387,7 +387,7 @@ export default function PublicCheckout() {
           />
         </section>
 
-        <section className="rounded-xl border border-border p-4 space-y-1.5">
+        <section className="rounded-xl border border-border bg-card p-4 space-y-1.5">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Subtotal ({cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"})</span>
             <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
@@ -400,6 +400,15 @@ export default function PublicCheckout() {
               {serviceType === "delivery" ? `R$ ${DELIVERY_FEE_FIXED.toFixed(2)}` : "R$ 0,00"}
             </span>
           </div>
+          {selectedReward && (
+            <div className="flex justify-between text-sm pt-1 border-t border-dashed border-border/60">
+              <span className="flex items-center gap-1.5 text-primary font-semibold">
+                <Gift size={13} />
+                Brinde: {selectedReward.display_name}
+              </span>
+              <span className="font-medium text-primary">R$ 0,00</span>
+            </div>
+          )}
           <div className="mt-2 flex justify-between border-t border-border pt-2 text-lg font-bold">
             <span>Total</span>
             <span className="brand-gradient-text">R$ {total.toFixed(2)}</span>
@@ -417,7 +426,11 @@ export default function PublicCheckout() {
           disabled={!canSubmit || submitting}
           onClick={handleSubmit}
         >
-          {submitting ? "Enviando..." : `Confirmar pedido • R$ ${total.toFixed(2)}`}
+          {submitting
+            ? "Enviando..."
+            : selectedReward
+              ? `Confirmar pedido com brinde • R$ ${total.toFixed(2)}`
+              : `Confirmar pedido • R$ ${total.toFixed(2)}`}
         </Button>
       </div>
     </div>
