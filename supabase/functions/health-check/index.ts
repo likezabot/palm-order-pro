@@ -313,9 +313,6 @@ async function autoHealRecurring(supabase: any): Promise<string[]> {
 }
 
 
-  return applied;
-}
-
 async function applyFixFunctionNotUnique(
   supabase: any,
 ): Promise<{ ok: boolean; message: string }> {
