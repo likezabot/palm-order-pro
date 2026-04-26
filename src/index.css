@@ -220,6 +220,95 @@
   }
 }
 
+/* ============================================================
+   Tema escopado do Cardápio Público
+   Aplicado APENAS dentro de .public-menu-theme (PublicMenuLayout).
+   Não afeta admin, palm, kitchen, cashier ou impressão.
+   Paleta gastronômica: laranja queimado, mostarda, lima,
+   off-white, marrom escuro.
+   ============================================================ */
+.public-menu-theme {
+  --background: 36 41% 96%;          /* #F9F5EF off-white */
+  --foreground: 15 26% 19%;          /* #3D2B24 marrom escuro */
+
+  --card: 0 0% 100%;
+  --card-foreground: 15 26% 19%;
+
+  --surface-elevated: 36 30% 93%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 15 26% 19%;
+
+  --primary: 14 78% 49%;             /* #E24E1B laranja queimado */
+  --primary-foreground: 0 0% 100%;
+  --primary-glow: 20 90% 55%;
+
+  --secondary: 36 30% 93%;
+  --secondary-foreground: 15 26% 19%;
+
+  --muted: 36 25% 92%;
+  --muted-foreground: 15 18% 32%;
+
+  --accent: 44 100% 48%;             /* #F7B500 mostarda */
+  --accent-foreground: 15 26% 19%;
+
+  --destructive: 0 72% 48%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 145 56% 41%;            /* #2FA060 lima */
+  --success-foreground: 0 0% 100%;
+
+  --warning: 44 100% 45%;
+  --warning-foreground: 15 26% 19%;
+
+  --border: 36 20% 86%;
+  --input: 36 20% 86%;
+  --ring: 14 78% 49%;
+
+  --brand-gradient: linear-gradient(135deg, hsl(14 78% 49%) 0%, hsl(44 100% 48%) 100%);
+  --shadow-soft: 0 2px 10px -2px hsl(15 30% 15% / 0.10);
+  --shadow-card: 0 10px 28px -10px hsl(15 30% 15% / 0.18), 0 2px 4px hsl(15 30% 15% / 0.06);
+  --shadow-glow-primary: 0 0 28px hsl(14 78% 49% / 0.30);
+
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.005em;
+}
+
+/* Tipografia mais apetitosa para títulos do cardápio */
+.public-menu-theme h1,
+.public-menu-theme h2,
+.public-menu-theme h3 {
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
+/* Preço e CTAs com peso forte */
+.public-menu-theme .text-primary {
+  color: hsl(var(--primary));
+}
+
+/* Variante escura preserva legibilidade caso usuário esteja em .dark */
+.dark .public-menu-theme {
+  --background: 15 28% 10%;
+  --foreground: 36 30% 94%;
+  --card: 15 24% 14%;
+  --card-foreground: 36 30% 94%;
+  --surface-elevated: 15 22% 17%;
+  --popover: 15 24% 14%;
+  --popover-foreground: 36 30% 94%;
+  --primary: 14 82% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 15 20% 18%;
+  --secondary-foreground: 36 30% 94%;
+  --muted: 15 20% 18%;
+  --muted-foreground: 36 20% 75%;
+  --accent: 44 96% 55%;
+  --accent-foreground: 15 26% 12%;
+  --border: 15 18% 24%;
+  --input: 15 18% 24%;
+  --ring: 14 82% 55%;
+}
+
 @keyframes mesa-pulse {
   0%, 100% { 
     box-shadow: 0 0 0 0 var(--pulse-color, rgba(239, 68, 68, 0.4));

@@ -269,7 +269,7 @@ export default function PublicOrderSuccess() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center px-4 py-6 sm:py-8">
+    <div className="public-menu-theme min-h-screen bg-background flex flex-col items-center px-4 py-6 sm:py-8">
       <div className="w-full max-w-md space-y-5">
         {/* Header de sucesso */}
         <div className="text-center space-y-3">

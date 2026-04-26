@@ -169,7 +169,7 @@ export default function PublicCheckout() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className="public-menu-theme min-h-screen bg-background pb-32">
       {isPreview && (
         <div className="bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground">
           Modo preview — pedidos desativados
