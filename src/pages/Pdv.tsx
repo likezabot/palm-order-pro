@@ -425,7 +425,7 @@ const Pdv = () => {
                       markSeen(order.id);
                       setSelectedId(order.id);
                       setShowPayment(false);
-                      setAmountPaidInSplit(0);
+                      setPaymentsHistory([]);
                     }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
