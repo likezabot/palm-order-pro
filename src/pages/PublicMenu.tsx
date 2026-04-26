@@ -32,7 +32,8 @@ import UpsellDialog from "@/components/public-menu/UpsellDialog";
 import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 import TopSellersSection from "@/components/public-menu/TopSellersSection";
 import PublicGroupVariantSheet from "@/components/public-menu/PublicGroupVariantSheet";
-import LoyaltyBanner from "@/components/public-menu/LoyaltyBanner";
+import LoyaltyCTACard from "@/components/public-menu/LoyaltyCTACard";
+import GiftFab from "@/components/public-menu/GiftFab";
 import { usePublicProductGroups, buildCategoryEntries } from "@/lib/public-menu-groups";
 import type { ProductGroup } from "@/lib/product-groups";
 
@@ -451,7 +452,7 @@ export default function PublicMenu() {
         </div>
       )}
 
-      <LoyaltyBanner />
+      <LoyaltyCTACard />
       {sectionOrder.map(renderSection)}
 
       {!isOpen && !isPreview && (
@@ -522,6 +523,8 @@ export default function PublicMenu() {
           restaurantName={restaurantQuery.data.name}
         />
       )}
+
+      {!isPreview && <GiftFab />}
 
       <PublicGroupVariantSheet
         open={!!openGroup}
