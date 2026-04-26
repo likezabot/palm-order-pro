@@ -327,8 +327,8 @@ const Pdv = () => {
             const getStatus = () => {
               if (isOffline || internet === "offline") return { label: "SEM INTERNET", color: "bg-destructive text-destructive-foreground" };
               if (realtime !== "online") return { label: "SEM REALTIME", color: "bg-warning text-warning-foreground" };
-              if (!bridgeStatus.online) return { label: "PONTE OFF", color: "bg-warning text-warning-foreground" };
-              if (!bridgeStatus.printerOnline) return { label: "IMP. OFF", color: "bg-warning text-warning-foreground" };
+              if (!bridgeStatus.online) return { label: "BRIDGE OFFLINE", color: "bg-warning text-warning-foreground" };
+              if (!bridgeStatus.printerOnline) return { label: "IMPRESSORA OFFLINE", color: "bg-warning text-warning-foreground" };
               return { label: "ONLINE", color: "bg-success text-success-foreground" };
             };
             const s = getStatus();
