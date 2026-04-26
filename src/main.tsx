@@ -37,6 +37,25 @@ debugLog.info(
 // Se houver atualização, ela limpa caches em background e recarrega.
 checkAndUpdateVersion();
 
+// Verificação de consistência do banco (assinatura/unicidade das RPCs).
+// Roda no boot do app — uma vez por aba a cada 10 minutos — e registra
+// qualquer divergência em public.error_log via edge function.
+(async () => {
+  try {
+    const KEY = "plb_db_consistency_last_run";
+    const last = Number(sessionStorage.getItem(KEY) ?? 0);
+    if (Date.now() - last < 10 * 60_000) return;
+    sessionStorage.setItem(KEY, String(Date.now()));
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { error } = await supabase.functions.invoke("db-consistency-check", {
+      body: { trigger: "app-boot" },
+    });
+    if (error) debugLog.warn("system", "db-consistency-check failed", { error: error.message });
+  } catch (e) {
+    debugLog.warn("system", "db-consistency-check threw", { error: String(e) });
+  }
+})();
+
 // Renderiza imediatamente — não esperamos nada.
 createRoot(document.getElementById("root")!).render(<App />);
 
