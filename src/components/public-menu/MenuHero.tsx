@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import {
   contrastRatio,
   overlayAlphaForWhiteText,
-  relativeLuminance,
   sampleImageLuminance,
 } from "@/lib/wcag-contrast";
 
