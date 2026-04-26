@@ -455,11 +455,11 @@ const Pdv = () => {
                     order={order}
                     itemCount={itemsByOrderId.get(order.id) || 0}
                     selected={selectedId === order.id}
-                    onSelect={() => { setSelectedId(order.id); setShowPayment(false); }}
+                    onSelect={() => { setSelectedId(order.id); setShowPayment(false); setAmountPaidInSplit(0); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
                     onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
-                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
+                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setAmountPaidInSplit(0); }}
                   />
                 ))}
               </div>
