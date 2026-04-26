@@ -298,6 +298,14 @@ export default function PublicMenu() {
         return (
           <div key="featured" className="mx-auto max-w-3xl px-4">
             <FeaturedCarousel products={featured} variant={featuredStyle} />
+            {topSellers.length > 0 && (
+              <TopSellersSection
+                products={topSellers}
+                disabled={!isOpen && !isPreview}
+                onSelect={(p) => setSelected(p)}
+                onQuickAdd={quickAdd}
+              />
+            )}
           </div>
         );
       case "categories":
@@ -373,6 +381,7 @@ export default function PublicMenu() {
                           imageAspect={catAspect}
                           cardStyle={catCardStyle}
                           onClick={(prod) => setSelected(prod)}
+                          onQuickAdd={quickAdd}
                         />
                       ))}
                     </div>
