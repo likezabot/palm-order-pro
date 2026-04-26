@@ -135,6 +135,7 @@ export default function PublicCheckout() {
       });
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "");
+      const code = extractErrorCode(e);
       let friendly = "Não foi possível enviar o pedido. Tente novamente.";
       if (msg.includes("restaurant_closed")) friendly = "A loja está fechada no momento.";
       else if (msg.includes("neighborhood_not_served")) friendly = "Não entregamos nesse bairro.";
@@ -144,6 +145,24 @@ export default function PublicCheckout() {
       else if (msg.includes("invalid_address")) friendly = "Endereço é obrigatório para entrega.";
       else if (msg.includes("empty_cart")) friendly = "Carrinho vazio.";
       else if (msg.includes("invalid_quantity")) friendly = "Quantidade inválida em algum item.";
+      else if (msg.includes("not unique") || msg.includes("PGRST203")) friendly = "Erro temporário do servidor. Tente novamente.";
+
+      void logError({
+        source: "public_checkout",
+        message: msg || "erro desconhecido no checkout",
+        code,
+        context: {
+          slug,
+          service_type: serviceType,
+          payment_method: paymentMethod,
+          item_count: cart.itemCount,
+          total,
+          error_details: e?.details ?? null,
+          error_hint: e?.hint ?? null,
+          error_status: e?.status ?? null,
+        },
+      });
+
       toast({ title: "Erro ao enviar pedido", description: friendly, variant: "destructive" });
       setSubmitting(false);
     }
