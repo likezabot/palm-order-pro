@@ -520,6 +520,16 @@ export default function PublicMenu() {
           restaurantName={restaurantQuery.data.name}
         />
       )}
+
+      <PublicGroupVariantSheet
+        open={!!openGroup}
+        onOpenChange={(o) => { if (!o) setOpenGroup(null); }}
+        group={openGroup?.group ?? null}
+        trigger={openGroup?.trigger ?? null}
+        variants={openGroup?.variants ?? []}
+        onAdd={(p) => blockIfPreview(() => cart.add(p, 1, ""))}
+        disabled={!isOpen && !isPreview}
+      />
     </PublicMenuLayout>
   );
 }
