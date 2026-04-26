@@ -64,14 +64,20 @@ function QuickAddButton({
       aria-live="polite"
       aria-pressed={justAdded}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all",
+        "inline-flex shrink-0 items-center justify-center rounded-full text-primary-foreground transition-all",
+        "shadow-[0_6px_16px_-4px_hsl(var(--primary)/0.55)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         dim,
         disabled
           ? "opacity-40 cursor-not-allowed"
-          : "hover:brightness-110 active:scale-90",
-        justAdded && "scale-110 bg-success",
+          : "hover:brightness-110 hover:shadow-[0_8px_22px_-4px_hsl(var(--primary)/0.7)] active:scale-90",
+        justAdded && "scale-110",
       )}
+      style={{
+        background: justAdded
+          ? "linear-gradient(135deg, hsl(var(--success)) 0%, hsl(var(--success)/0.85) 100%)"
+          : "var(--brand-gradient)",
+      }}
     >
       {justAdded ? (
         <Check className="h-5 w-5" aria-hidden="true" />
@@ -142,10 +148,11 @@ export default function ProductCard({
         type={interactive ? "button" : undefined}
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
-          "group relative flex w-full flex-col text-left overflow-hidden rounded-2xl border border-border bg-card transition-all",
+          "group relative flex w-full flex-col text-left overflow-hidden rounded-2xl border border-border/60 bg-card transition-all duration-300",
+          "shadow-[var(--shadow-warm)]",
           isBlocked
             ? "opacity-60 cursor-not-allowed"
-            : "hover:border-primary/50 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99]",
+            : "hover:border-primary/40 hover:shadow-[0_18px_40px_-16px_hsl(18_60%_25%/0.28),0_0_24px_-4px_hsl(var(--primary)/0.18)] hover:-translate-y-1 active:scale-[0.99]",
         )}
       >
         {effectiveShowImage && (
@@ -171,7 +178,7 @@ export default function ProductCard({
             <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
           )}
           <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-            <p className="text-lg font-black text-primary leading-none">
+            <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">
               {formatBRL(product.price)}
             </p>
             {showQuickAdd && (
@@ -189,10 +196,11 @@ export default function ProductCard({
       type={interactive ? "button" : undefined}
       onClick={interactive ? () => onClick!(product) : undefined}
       className={cn(
-        "group relative flex w-full text-left gap-3 rounded-2xl border border-border bg-card p-3 transition-all",
+        "group relative flex w-full text-left gap-3 rounded-2xl border border-border/60 bg-card p-3 transition-all duration-300",
+        "shadow-[var(--shadow-warm)]",
         isBlocked
           ? "opacity-60 cursor-not-allowed"
-          : "hover:border-primary/50 hover:shadow-md active:scale-[0.99]",
+          : "hover:border-primary/40 hover:shadow-[0_16px_36px_-16px_hsl(18_60%_25%/0.28),0_0_20px_-4px_hsl(var(--primary)/0.15)] hover:-translate-y-0.5 active:scale-[0.99]",
       )}
     >
       <div className="min-w-0 flex-1">
@@ -204,7 +212,7 @@ export default function ProductCard({
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
         )}
         <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-lg font-black text-primary leading-none">{formatBRL(product.price)}</p>
+          <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">{formatBRL(product.price)}</p>
           {showQuickAdd && <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />}
         </div>
       </div>

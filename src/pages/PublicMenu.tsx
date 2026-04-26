@@ -347,12 +347,12 @@ export default function PublicMenu() {
             {(settings?.show_search_bar ?? true) && (
               <div className="mt-3">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/70" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Buscar no cardápio…"
-                    className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-11 w-full rounded-full border border-border/70 bg-card pl-10 pr-4 text-sm font-medium shadow-[var(--shadow-soft)] outline-none transition-all placeholder:text-muted-foreground/70 focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/20"
                     aria-label="Buscar"
                   />
                 </div>
