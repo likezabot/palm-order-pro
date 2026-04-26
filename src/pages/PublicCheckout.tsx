@@ -81,12 +81,13 @@ export default function PublicCheckout() {
   const phoneDigits = normalizePhoneClient(phone);
   const phoneOk = phoneDigits.length >= 10;
   const loyaltyQuery = useQuery({
-    queryKey: ["loyalty-status", slug, phoneDigits, subtotal],
+    queryKey: ["loyalty-status", slug, phoneDigits, subtotal, serviceType],
     queryFn: () =>
       fetchLoyaltyStatus({
         phone: phoneDigits,
         restaurantSlug: slug ?? "",
         orderSubtotal: subtotal,
+        serviceType,
       }),
     enabled: phoneOk && !!slug,
     staleTime: 10_000,
@@ -216,6 +217,8 @@ export default function PublicCheckout() {
       else if (msg.includes("invalid_quantity")) friendly = "Quantidade inválida em algum item.";
       else if (msg.includes("insufficient_points")) friendly = "Você não tem pontos suficientes para esse brinde.";
       else if (msg.includes("reward_inactive")) friendly = "Esse brinde não está mais disponível.";
+      else if (msg.includes("reward_pickup_only")) friendly = "Resgate de brindes disponível apenas para retirada.";
+      else if (msg.includes("reward_below_min_points")) friendly = "Esse brinde precisa de no mínimo 100 pontos.";
       else if (msg.includes("min_subtotal_not_met")) friendly = "Pedido abaixo do mínimo exigido para esse brinde.";
       else if (msg.includes("loyalty_disabled")) friendly = "Programa de fidelidade indisponível no momento.";
       else if (msg.includes("not unique") || msg.includes("PGRST203")) friendly = "Erro temporário do servidor. Tente novamente.";
@@ -373,6 +376,7 @@ export default function PublicCheckout() {
           phone={phone}
           restaurantSlug={slug ?? ""}
           subtotal={subtotal}
+          serviceType={serviceType}
           selectedRewardId={loyaltyRewardId}
           onChange={setLoyaltyRewardId}
         />

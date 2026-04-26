@@ -148,7 +148,9 @@ export default function PublicLoyalty() {
           </div>
           <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
             Ganhe <strong className="text-foreground">1 ponto a cada R$ 1</strong> em pedidos
-            online de retirada ou entrega. Use seus pontos para resgatar brindes no checkout.
+            online de <strong className="text-foreground">retirada</strong>. Pedidos de
+            entrega não acumulam pontos. Pontos entram quando o pedido é finalizado.
+            Máximo 1 brinde por pedido.
           </p>
         </section>
 

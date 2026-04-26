@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Plus, Trash2, Search, Sparkles, Phone } from "lucide-react";
+import { Gift, Plus, Trash2, Search, Sparkles, Phone, AlertTriangle, Truck } from "lucide-react";
 
 type Reward = {
   id: string;
@@ -147,7 +147,7 @@ export default function LoyaltyTab() {
   }>({
     id: null,
     display_name: "",
-    points_cost: "10",
+    points_cost: "100",
     min_order_subtotal: "0",
     sort_order: "0",
     active: true,
@@ -158,7 +158,7 @@ export default function LoyaltyTab() {
     setForm({
       id: null,
       display_name: "",
-      points_cost: "10",
+      points_cost: "100",
       min_order_subtotal: "0",
       sort_order: "0",
       active: true,
@@ -172,21 +172,42 @@ export default function LoyaltyTab() {
       toast({ title: "Nome obrigatório", variant: "destructive" });
       return;
     }
+    const points = Number(form.points_cost) || 0;
+    const minSub = Number(form.min_order_subtotal) || 0;
+    if (points < 100) {
+      toast({
+        title: "Pontuação mínima para brinde é 100 pontos",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (minSub > 80) {
+      toast({
+        title: "Compra mínima máxima é R$ 80,00",
+        variant: "destructive",
+      });
+      return;
+    }
     const { error } = await supabase.rpc(
       "admin_loyalty_upsert_reward" as never,
       {
         p_id: form.id,
         p_restaurant_id: restaurantId,
         p_display_name: form.display_name.trim(),
-        p_points_cost: Number(form.points_cost) || 0,
-        p_min_order_subtotal: Number(form.min_order_subtotal) || 0,
+        p_points_cost: points,
+        p_min_order_subtotal: minSub,
         p_active: form.active,
         p_sort_order: Number(form.sort_order) || 0,
         p_product_id: form.product_id || null,
       } as never,
     );
     if (error) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      let friendly = error.message;
+      if (friendly.includes("points_cost_min_100"))
+        friendly = "Pontuação mínima para brinde é 100 pontos";
+      else if (friendly.includes("min_subtotal_max_80"))
+        friendly = "Compra mínima máxima é R$ 80,00";
+      toast({ title: "Erro ao salvar", description: friendly, variant: "destructive" });
       return;
     }
     resetForm();
@@ -271,7 +292,7 @@ export default function LoyaltyTab() {
           <div>
             <div className="font-bold">Programa de Fidelidade</div>
             <div className="text-xs text-muted-foreground">
-              1 ponto por R$ 1 em pedidos online (retirada/entrega)
+              1 ponto por R$ 1 — somente em pedidos online de retirada
             </div>
           </div>
         </div>
@@ -279,6 +300,24 @@ export default function LoyaltyTab() {
           checked={!!enabledQuery.data}
           onCheckedChange={toggleEnabled}
         />
+      </div>
+
+      <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 flex gap-3">
+        <Truck className="text-warning shrink-0 mt-0.5" size={18} />
+        <p className="text-xs text-foreground/90 leading-relaxed">
+          <strong>Somente pedidos online de retirada geram pontos.</strong> Entregas e
+          mesa não acumulam pontos. Itens marcados como casco/retornável e brindes
+          também não pontuam.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3">
+        <AlertTriangle className="text-primary shrink-0 mt-0.5" size={18} />
+        <p className="text-xs text-foreground/90 leading-relaxed">
+          <strong>Resgate mínimo:</strong> 100 pontos por brinde.{" "}
+          <strong>Compra mínima máxima:</strong> R$ 80,00 por brinde. Máximo de 1 brinde
+          por pedido.
+        </p>
       </div>
 
       <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3">
@@ -302,7 +341,7 @@ export default function LoyaltyTab() {
             disabled={seeding || !restaurantId}
           >
             <Sparkles size={14} className="mr-1" />
-            {seeding ? "Criando…" : "Criar brindes padrão"}
+            {seeding ? "Atualizando…" : "Criar/atualizar brindes recomendados"}
           </Button>
         </div>
         <div className="rounded-xl border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -315,18 +354,20 @@ export default function LoyaltyTab() {
             />
           </div>
           <div>
-            <Label>Custo (pontos)</Label>
+            <Label>Custo (pontos) — mínimo 100</Label>
             <Input
               type="number"
+              min={100}
               value={form.points_cost}
               onChange={(e) => setForm({ ...form, points_cost: e.target.value })}
             />
           </div>
           <div>
-            <Label>Pedido mínimo (R$)</Label>
+            <Label>Pedido mínimo (R$) — máximo 80</Label>
             <Input
               type="number"
               step="0.01"
+              max={80}
               value={form.min_order_subtotal}
               onChange={(e) => setForm({ ...form, min_order_subtotal: e.target.value })}
             />
@@ -371,30 +412,44 @@ export default function LoyaltyTab() {
           {(rewardsQuery.data ?? []).length === 0 && (
             <div className="p-4 text-sm text-muted-foreground">Nenhum brinde cadastrado.</div>
           )}
-          {(rewardsQuery.data ?? []).map((r) => (
-            <div key={r.id} className="p-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-semibold truncate">
-                  {r.display_name}{" "}
-                  {!r.active && <span className="text-xs text-muted-foreground">(inativo)</span>}
+          {[...(rewardsQuery.data ?? [])]
+            .sort((a, b) => {
+              if (a.active !== b.active) return a.active ? -1 : 1;
+              return a.sort_order - b.sort_order;
+            })
+            .map((r) => (
+              <div key={r.id} className="p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold truncate flex items-center gap-2">
+                    <span className="text-xs font-mono text-muted-foreground">#{r.sort_order}</span>
+                    <span className="truncate">{r.display_name}</span>
+                    {r.active ? (
+                      <span className="text-[10px] font-bold uppercase rounded-full border border-success/40 bg-success/10 text-success px-2 py-0.5">
+                        Ativo
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase rounded-full border border-border bg-muted text-muted-foreground px-2 py-0.5">
+                        Oculto
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}
+                    {r.product_name && ` · vinc. ${r.product_name} (R$ ${Number(r.product_price ?? 0).toFixed(2)})`}
+                    {r.effective_cost_per_point !== null &&
+                      ` · custo efetivo R$ ${r.effective_cost_per_point.toFixed(2)}/pt`}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}
-                  {r.product_name && ` · vinc. ${r.product_name} (R$ ${Number(r.product_price ?? 0).toFixed(2)})`}
-                  {r.effective_cost_per_point !== null &&
-                    ` · custo efetivo R$ ${r.effective_cost_per_point.toFixed(2)}/pt`}
+                <div className="flex gap-2 shrink-0">
+                  <Button size="sm" variant="outline" onClick={() => editReward(r)}>
+                    Editar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => deleteReward(r.id)}>
+                    <Trash2 size={14} />
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <Button size="sm" variant="outline" onClick={() => editReward(r)}>
-                  Editar
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => deleteReward(r.id)}>
-                  <Trash2 size={14} />
-                </Button>
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       </section>
 

@@ -39,6 +39,7 @@ export async function fetchLoyaltyStatus(args: {
   phone: string;
   restaurantSlug: string;
   orderSubtotal: number;
+  serviceType?: "pickup" | "delivery" | "dine_in";
 }): Promise<LoyaltyStatus> {
   const phone = normalizePhoneClient(args.phone);
   if (!phone || phone.length < 10) return EMPTY;
@@ -49,6 +50,7 @@ export async function fetchLoyaltyStatus(args: {
         p_phone: phone,
         p_restaurant_slug: args.restaurantSlug,
         p_order_subtotal: args.orderSubtotal,
+        p_service_type: args.serviceType ?? "pickup",
       } as never,
     );
     if (error) throw error;
@@ -83,6 +85,9 @@ export async function fetchLoyaltyEnabled(): Promise<boolean> {
 
 export function blockedReasonText(reason: string | null): string | null {
   if (!reason) return null;
+  if (reason === "pickup_only") {
+    return "Disponível apenas na retirada";
+  }
   if (reason.startsWith("missing_points:")) {
     const n = reason.split(":")[1];
     return `Faltam ${n} pontos`;

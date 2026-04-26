@@ -1691,14 +1691,24 @@ export type Database = {
         Args: { p_name: string; p_phone: string }
         Returns: string
       }
-      get_public_loyalty_status: {
-        Args: {
-          p_order_subtotal?: number
-          p_phone: string
-          p_restaurant_slug: string
-        }
-        Returns: Json
-      }
+      get_public_loyalty_status:
+        | {
+            Args: {
+              p_order_subtotal?: number
+              p_phone: string
+              p_restaurant_slug: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_order_subtotal?: number
+              p_phone: string
+              p_restaurant_slug: string
+              p_service_type?: string
+            }
+            Returns: Json
+          }
       get_public_order_status: {
         Args: { p_order_id: string; p_token: string }
         Returns: Json
