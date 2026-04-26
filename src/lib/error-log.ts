@@ -77,13 +77,15 @@ function shouldSkip(key: string): boolean {
 }
 
 export async function logError(input: LogErrorInput): Promise<void> {
+  if (__plbLogging) return; // proteção anti-loop: não loga durante log
+  __plbLogging = true;
   try {
     const message = String(input.message ?? "").slice(0, 2000);
     const code = input.code ?? extractErrorCode(message);
     const dedupeKey = `${input.source}|${code || ""}|${message.slice(0, 120)}`;
     if (shouldSkip(dedupeKey)) return;
 
-    const ctx: Record<string, unknown> = {
+    let ctx: Record<string, unknown> = {
       ...(input.context || {}),
       url: typeof window !== "undefined" ? window.location.href : undefined,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
@@ -94,6 +96,22 @@ export async function logError(input: LogErrorInput): Promise<void> {
       ts_client: new Date().toISOString(),
     };
 
+    // Trunca contexto se virar gigante (proteção contra payloads malformados)
+    try {
+      const serialized = JSON.stringify(ctx);
+      if (serialized.length > MAX_CONTEXT_BYTES) {
+        ctx = {
+          _truncated: true,
+          _original_size: serialized.length,
+          preview: serialized.slice(0, MAX_CONTEXT_BYTES),
+          url: ctx.url,
+          ts_client: ctx.ts_client,
+        };
+      }
+    } catch {
+      ctx = { _unserializable: true, url: ctx.url, ts_client: ctx.ts_client };
+    }
+
     await supabase.from("error_log" as any).insert({
       source: input.source,
       severity: input.severity ?? "error",
@@ -103,6 +121,8 @@ export async function logError(input: LogErrorInput): Promise<void> {
     });
   } catch {
     // silencioso por design
+  } finally {
+    __plbLogging = false;
   }
 }
 
