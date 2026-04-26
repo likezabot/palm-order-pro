@@ -402,6 +402,7 @@ function EditDialog({
   const [isFeatured, setIsFeatured] = useState(product.is_featured);
   const [isAvailable, setIsAvailable] = useState(product.is_available_online);
   const [isSoldOut, setIsSoldOut] = useState(product.is_sold_out);
+  const [isSoldOutOnline, setIsSoldOutOnline] = useState(product.is_sold_out_online);
   const [displayOrder, setDisplayOrder] = useState(product.display_order);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
