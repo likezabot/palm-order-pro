@@ -7,6 +7,11 @@ import { debugLog } from "./lib/debug-logger";
 import { startConnectivityMonitor } from "./lib/connectivity-monitor";
 import { startGlobalOrderRuntime } from "./lib/global-order-runtime";
 import { queryClient } from "./lib/query-client";
+import { installGlobalErrorCapture } from "./lib/error-log";
+
+// Captura global de erros — TODO erro JS, promise rejeitada e console.error
+// vai automaticamente para o repositório `error_log`. Idempotente.
+installGlobalErrorCapture();
 
 // Anti-flash: aplica tema salvo antes do React montar.
 // Default = light. Só ativa dark se o usuário trocou manualmente (chave v2).
