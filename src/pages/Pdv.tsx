@@ -275,7 +275,7 @@ const Pdv = () => {
 
     if (shouldPrint) {
       const printConfig = loadPrintConfig();
-      const items = allItems.filter((i) => i.order_id === selectedOrder.id);
+      const items = selectedItems;
       if (items.length > 0 && printConfig.printMode === "bridge") {
         const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
         await printCustomerReceipt(
