@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import UpdateBanner from "@/components/UpdateBanner";
 import ConnectivityBanner from "@/components/ConnectivityBanner";
 import AdminErrorBoundary from "@/components/admin/AdminErrorBoundary";
+import StaffGate from "@/components/StaffGate";
 // Index, Palm e Kitchen são leves e abertos com mais frequência → import direto.
 import Index from "./pages/Index";
 import Palm from "./pages/Palm";
@@ -43,29 +44,34 @@ const AnimatedRoutes = () => {
         <Routes location={location}>
           {/* Raiz mostra o cardápio público para clientes (link compartilhado no WhatsApp) */}
           <Route path="/" element={<Navigate to="/menu/plano-b-espetaria" replace />} />
-          {/* Tela interna de seleção (Atendimento/PDV/Cozinha/Admin) — uso da equipe */}
-          <Route path="/home" element={<Index />} />
-          <Route path="/palm" element={<Palm />} />
-          <Route path="/kitchen" element={<Kitchen />} />
-          <Route path="/cashier" element={<Pdv />} />
-          <Route
-            path="/admin"
-            element={
-              <AdminErrorBoundary>
-                <Admin />
-              </AdminErrorBoundary>
-            }
-          />
-          <Route path="/pdv" element={<Pdv />} />
-          <Route path="/print-station" element={<PrintStation />} />
-          <Route path="/atualizar" element={<ForceUpdate />} />
-          <Route path="/instalar/palm" element={<InstallPalm />} />
-          <Route path="/instalar/cozinha" element={<InstallKitchen />} />
+          {/* Rotas públicas (clientes) — sem PIN */}
           <Route path="/menu/:slug" element={<PublicMenu />} />
           <Route path="/menu/:slug/checkout" element={<PublicCheckout />} />
           <Route path="/menu/:slug/sucesso/:orderId" element={<PublicOrderSuccess />} />
           <Route path="/menu/:slug/pedidos" element={<PublicMyOrders />} />
           <Route path="/checkout" element={<Navigate to="/" replace />} />
+
+          {/* Rotas internas — protegidas por PIN da equipe */}
+          <Route path="/home" element={<StaffGate><Index /></StaffGate>} />
+          <Route path="/palm" element={<StaffGate><Palm /></StaffGate>} />
+          <Route path="/kitchen" element={<StaffGate><Kitchen /></StaffGate>} />
+          <Route path="/cashier" element={<StaffGate><Pdv /></StaffGate>} />
+          <Route
+            path="/admin"
+            element={
+              <StaffGate>
+                <AdminErrorBoundary>
+                  <Admin />
+                </AdminErrorBoundary>
+              </StaffGate>
+            }
+          />
+          <Route path="/pdv" element={<StaffGate><Pdv /></StaffGate>} />
+          <Route path="/print-station" element={<StaffGate><PrintStation /></StaffGate>} />
+          <Route path="/atualizar" element={<StaffGate><ForceUpdate /></StaffGate>} />
+          <Route path="/instalar/palm" element={<StaffGate><InstallPalm /></StaffGate>} />
+          <Route path="/instalar/cozinha" element={<StaffGate><InstallKitchen /></StaffGate>} />
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
