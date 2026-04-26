@@ -258,18 +258,11 @@ const Pdv = () => {
 
     playFeedback("click");
 
-    let error;
-    if (next === "done") {
-      // Se for para PRONTO, atualizamos também o timestamp de servido/pronto
-      const { error: err } = await supabase
-        .from("orders")
-        .update({ status: next, served_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq("id", order.id);
-      error = err;
-    } else {
-      const { error: err } = await supabase.rpc("update_order_status", { p_order_id: order.id, p_status: next });
-      error = err;
-    }
+    const { error: err } = await supabase.rpc("update_order_status", { 
+      p_order_id: order.id, 
+      p_status: next 
+    });
+    error = err;
 
     if (error) {
       // Rollback em caso de erro
