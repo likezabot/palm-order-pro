@@ -30,13 +30,11 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
     if (servingId) return;
     playFeedback("click");
     setServingId(orderId);
-    const { error } = await supabase
-      .from("orders")
-      .update({ 
-        served_at: currentlyServed ? null : new Date().toISOString(),
-        status: currentlyServed ? "preparing" : "done"
-      })
-      .eq("id", orderId);
+    const nextStatus = currentlyServed ? "preparing" : "done";
+    const { error } = await supabase.rpc("update_order_status", {
+      p_order_id: orderId,
+      p_status: nextStatus
+    });
     setServingId(null);
     if (error) {
       toast({
