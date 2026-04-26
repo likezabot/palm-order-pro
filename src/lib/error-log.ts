@@ -24,6 +24,9 @@ export type ErrorSource =
   | "print"
   | "global"
   | "console"
+  | "fetch"
+  | "xhr"
+  | "webusb"
   | "other";
 
 export type ErrorSeverity = "error" | "warning" | "info";
