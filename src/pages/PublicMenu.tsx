@@ -91,6 +91,12 @@ export default function PublicMenu() {
     refetchInterval: 60_000,
   });
 
+  const topSellersQuery = useQuery({
+    queryKey: ["pmenu", "top-sellers"],
+    queryFn: () => fetchTopSellerProductIds(7),
+    staleTime: 5 * 60_000,
+  });
+
   const products = productsQuery.data ?? [];
   const settings = settingsQuery.data;
   const isOpen = !!openQuery.data;
