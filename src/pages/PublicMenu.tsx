@@ -7,6 +7,7 @@ import {
   fetchMenuCategories,
   fetchPublicProducts,
   fetchPublicMenuSettings,
+  fetchTopSellerProductIds,
   isRestaurantOpen,
   hexToHslString,
   type PublicProduct,
@@ -29,6 +30,7 @@ import PublicCartFab from "@/components/public-menu/PublicCartFab";
 import CartDrawer from "@/components/public-menu/CartDrawer";
 import UpsellDialog from "@/components/public-menu/UpsellDialog";
 import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
+import TopSellersSection from "@/components/public-menu/TopSellersSection";
 
 const RADIUS_MAP = { md: "0.5rem", lg: "0.75rem", xl: "1rem" } as const;
 
