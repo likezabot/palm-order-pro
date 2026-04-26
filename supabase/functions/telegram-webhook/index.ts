@@ -692,6 +692,24 @@ export function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
 
+  // ─── MÓDULO DE ESTOQUE REMOVIDO ───
+  // Intercepta qualquer comando relacionado a estoque/inventário antes do parser específico.
+  // Os tipos STOCK_* e o wizard `gerenciar estoque` deixaram de funcionar — devolvemos UNKNOWN
+  // pra que o usuário receba "comando não reconhecido" em vez de erro de RPC inexistente.
+  if (
+    /^(?:gerenciar\s+estoque|menu\s+estoque|wizard\s+estoque|contagem)$/.test(text) ||
+    /^(?:lista\s+estoque|listar\s+estoque|estoque\s+(?:completo|todo|tudo|geral|critico|crítico|baixo|zerado|acabando|em\s+falta)|inventario|inventário|tudo\s+do\s+estoque|todos\s+(?:os\s+)?itens|itens\s+(?:do\s+)?estoque)$/.test(text) ||
+    /^(?:estoque|criticos|críticos|alertas?(?:\s+(?:de\s+)?estoque)?|o\s+que\s+(?:ta|esta)\s+acabando|o\s+que\s+falta|falta(?:ndo)?\s+(?:o\s+)?que|precisa\s+repor|lista\s+critica)$/.test(text) ||
+    /^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)\b/.test(text) ||
+    /^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|quebrou|quebrei|descartei|descartar|perdi|perda)\b/.test(text) ||
+    /^(?:ajuste|ajustar|contei|contar|setar|setei|set|marca(?:r)?|tem)\s+/.test(text) ||
+    /^(?:acabou|terminou|sem|esgotou|zerou)\s+/.test(text) ||
+    /^(?:estoque|saldo|quanto\s+tem(?:\s+de)?|qtd|quantidade(?:\s+de)?|ver\s+estoque|consulta(?:r)?\s+estoque)\s+/.test(text) ||
+    /^quanta?\s+\S+\s+tem\??$/.test(text)
+  ) {
+    return { kind: "UNKNOWN" } as Command;
+  }
+
   if (/^(?:\/start|\/help|ajuda|help|comandos?|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite|\?+|o\s+que\s+(?:faz|voce\s+faz)|como\s+usar|me\s+ajuda|socorro)$/.test(text)) {
     return { kind: "HELP" };
   }
