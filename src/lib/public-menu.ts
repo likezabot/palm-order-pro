@@ -212,10 +212,11 @@ export const DEFAULT_PUBLIC_MENU_SETTINGS: Omit<PublicMenuSettings, "restaurant_
   button_style: "solid",
   card_style: "elevated",
   radius_scale: "lg",
+  category_overrides: {},
 };
 
 const ALL_SETTINGS_COLUMNS =
-  "restaurant_id, layout_mode, accent_color, banner_url, welcome_message, show_descriptions, show_product_images, featured_style, category_order, hidden_category_slugs, image_aspect, hero_title, hero_subtitle, hero_alignment, show_logo, show_open_status_badge, show_whatsapp_fab, show_search_bar, show_featured_section, show_category_nav, show_categories_section_title, categories_section_title, show_hero_banner_overlay, show_welcome_message_card, section_order, background_color, surface_color, text_color, muted_text_color, button_style, card_style, radius_scale";
+  "restaurant_id, layout_mode, accent_color, banner_url, welcome_message, show_descriptions, show_product_images, featured_style, category_order, hidden_category_slugs, image_aspect, hero_title, hero_subtitle, hero_alignment, show_logo, show_open_status_badge, show_whatsapp_fab, show_search_bar, show_featured_section, show_category_nav, show_categories_section_title, categories_section_title, show_hero_banner_overlay, show_welcome_message_card, section_order, background_color, surface_color, text_color, muted_text_color, button_style, card_style, radius_scale, category_overrides";
 
 export async function fetchPublicMenuSettings(
   restaurantId: string,
