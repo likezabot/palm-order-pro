@@ -119,9 +119,7 @@ export const SystemTab = () => {
         `${p.order_items ?? 0} itens`,
         `${p.cash_register ?? 0} caixas`,
         `${p.cash_movements ?? 0} mov. caixa`,
-        `${p.inventory_movements ?? 0} mov. estoque`,
         `${p.notification_queue ?? 0} notif. pendentes`,
-        resetStock ? `${p.inventory_items_with_stock ?? 0} itens terão estoque zerado` : "estoque NÃO será zerado",
       ].join("\n• ");
 
       const confirmed = window.prompt(
