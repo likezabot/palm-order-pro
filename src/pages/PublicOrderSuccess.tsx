@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useLocation, useSearchParams, Link } from "react-router-dom";
+import { useParams, useLocation, useSearchParams, Link, Navigate } from "react-router-dom";
 import {
   CheckCircle2,
   Clock,
@@ -263,6 +263,10 @@ export default function PublicOrderSuccess() {
   const waUrl = restaurantWa
     ? `https://wa.me/${restaurantWa}?text=${encodeURIComponent(waMessage)}`
     : `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
+
+  if (!orderId || !token) {
+    return <Navigate to={slug ? `/menu/${slug}` : "/"} replace />;
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center px-4 py-6 sm:py-8">

@@ -28,14 +28,16 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((names) =>
       Promise.all(
         names
-          // Apaga TUDO que não for o cache estático atual.
-          // Isso inclui os caches legados `plano-b-api-*` que faziam
-          // stale-while-revalidate em chamadas REST do Supabase e
-          // causavam dados desatualizados no PWA instalado.
           .filter((n) => n !== CACHE_NAME)
-          .map((n) => caches.delete(n))
+          .map((n) => {
+            console.log("SW: cleaning old cache", n);
+            return caches.delete(n);
+          })
       )
-    ).then(() => self.clients.claim())
+    ).then(() => {
+      console.log("SW: activated and claiming clients");
+      return self.clients.claim();
+    })
   );
 });
 

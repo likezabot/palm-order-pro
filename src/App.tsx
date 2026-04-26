@@ -3,7 +3,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { queryPersister, shouldPersistQuery } from "@/lib/query-persister";
 import { queryClient } from "@/lib/query-client";
 import { getAppVersionAsync } from "@/lib/version-check";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -62,6 +62,7 @@ const AnimatedRoutes = () => {
           <Route path="/menu/:slug/checkout" element={<PublicCheckout />} />
           <Route path="/menu/:slug/sucesso/:orderId" element={<PublicOrderSuccess />} />
           <Route path="/menu/:slug/pedidos" element={<PublicMyOrders />} />
+          <Route path="/checkout" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
