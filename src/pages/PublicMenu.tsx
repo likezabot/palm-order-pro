@@ -451,6 +451,7 @@ export default function PublicMenu() {
         </div>
       )}
 
+      <LoyaltyBanner />
       {sectionOrder.map(renderSection)}
 
       {!isOpen && !isPreview && (
