@@ -1335,6 +1335,7 @@ export type Database = {
         Args: { p_phone: string }
         Returns: Json
       }
+      admin_loyalty_seed_default_rewards: { Args: never; Returns: Json }
       admin_loyalty_set_enabled: {
         Args: { p_enabled: boolean }
         Returns: undefined
