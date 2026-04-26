@@ -403,21 +403,9 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  let action = url.searchParams.get("action");
-  let fix = url.searchParams.get("fix");
-  let triggeredBy = req.headers.get("x-trigger") || url.searchParams.get("trigger") || "manual";
-
-  // Aceitar action/fix/trigger também no body JSON (para supabase.functions.invoke)
-  if ((req.method === "POST" || req.method === "PUT" || req.method === "PATCH") && !fix && !action) {
-    try {
-      const body = await req.clone().json();
-      if (body && typeof body === "object") {
-        if (!fix && typeof (body as any).fix === "string") fix = (body as any).fix;
-        if (!action && typeof (body as any).action === "string") action = (body as any).action;
-        if (typeof (body as any).trigger === "string") triggeredBy = (body as any).trigger;
-      }
-    } catch { /* body não-JSON: tudo bem */ }
-  }
+  const action = url.searchParams.get("action");
+  const fix = url.searchParams.get("fix");
+  const triggeredBy = req.headers.get("x-trigger") || url.searchParams.get("trigger") || "manual";
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 

@@ -168,6 +168,16 @@ export type PublicMenuSettings = {
   button_style: "solid" | "outline" | "soft";
   card_style: "flat" | "elevated";
   radius_scale: "md" | "lg" | "xl";
+  // Overrides por categoria (chave = slug da categoria)
+  category_overrides: Record<string, CategoryOverride>;
+};
+
+export type CategoryLayout = "list" | "grid-2" | "grid-3";
+export type CategoryCardStyle = "compact" | "detailed";
+export type CategoryOverride = {
+  layout?: CategoryLayout;
+  image_aspect?: "square" | "wide" | "tall";
+  card_style?: CategoryCardStyle;
 };
 
 export const DEFAULT_PUBLIC_MENU_SETTINGS: Omit<PublicMenuSettings, "restaurant_id"> = {
@@ -202,10 +212,11 @@ export const DEFAULT_PUBLIC_MENU_SETTINGS: Omit<PublicMenuSettings, "restaurant_
   button_style: "solid",
   card_style: "elevated",
   radius_scale: "lg",
+  category_overrides: {},
 };
 
 const ALL_SETTINGS_COLUMNS =
-  "restaurant_id, layout_mode, accent_color, banner_url, welcome_message, show_descriptions, show_product_images, featured_style, category_order, hidden_category_slugs, image_aspect, hero_title, hero_subtitle, hero_alignment, show_logo, show_open_status_badge, show_whatsapp_fab, show_search_bar, show_featured_section, show_category_nav, show_categories_section_title, categories_section_title, show_hero_banner_overlay, show_welcome_message_card, section_order, background_color, surface_color, text_color, muted_text_color, button_style, card_style, radius_scale";
+  "restaurant_id, layout_mode, accent_color, banner_url, welcome_message, show_descriptions, show_product_images, featured_style, category_order, hidden_category_slugs, image_aspect, hero_title, hero_subtitle, hero_alignment, show_logo, show_open_status_badge, show_whatsapp_fab, show_search_bar, show_featured_section, show_category_nav, show_categories_section_title, categories_section_title, show_hero_banner_overlay, show_welcome_message_card, section_order, background_color, surface_color, text_color, muted_text_color, button_style, card_style, radius_scale, category_overrides";
 
 export async function fetchPublicMenuSettings(
   restaurantId: string,
@@ -219,7 +230,11 @@ export async function fetchPublicMenuSettings(
     return { restaurant_id: restaurantId, ...DEFAULT_PUBLIC_MENU_SETTINGS };
   }
   // Merge com defaults para resiliência caso colunas novas venham null
-  return { ...DEFAULT_PUBLIC_MENU_SETTINGS, restaurant_id: restaurantId, ...(data as any) };
+  const merged = { ...DEFAULT_PUBLIC_MENU_SETTINGS, restaurant_id: restaurantId, ...(data as any) };
+  if (!merged.category_overrides || typeof merged.category_overrides !== "object") {
+    merged.category_overrides = {};
+  }
+  return merged;
 }
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;

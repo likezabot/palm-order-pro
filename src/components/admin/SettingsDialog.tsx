@@ -33,7 +33,7 @@ export const SettingsDialog = ({ autoPrint, onAutoPrintChange }: Props) => {
       .from("settings")
       .select("value")
       .eq("key", "table_count")
-      .maybeSingle()
+      .single()
       .then(({ data }) => {
         if (data) setTableCount(Number(data.value));
       });

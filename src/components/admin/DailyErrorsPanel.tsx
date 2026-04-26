@@ -63,17 +63,6 @@ function startOfTodayIso() {
   return d.toISOString();
 }
 
-function safeStringifyContext(ctx: unknown): string {
-  if (ctx == null) return "{}";
-  if (typeof ctx === "string") return ctx.slice(0, 20_000);
-  try {
-    const s = JSON.stringify(ctx, null, 2);
-    return s.length > 20_000 ? s.slice(0, 20_000) + "\n…(truncado)" : s;
-  } catch {
-    try { return String(ctx).slice(0, 20_000); } catch { return "[contexto não serializável]"; }
-  }
-}
-
 export default function DailyErrorsPanel() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -225,21 +214,27 @@ export default function DailyErrorsPanel() {
     if (!row.code) return;
     const fixKey = KNOWN_FIXES[row.code];
     if (!fixKey) return;
-    if (fixing) return;
     setFixing(row.id);
     try {
-      const { data, error } = await supabase.functions.invoke("health-check", {
-        body: { fix: fixKey, trigger: "manual-fix-daily" },
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/health-check?fix=${encodeURIComponent(fixKey)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
       });
-      if (error) throw error;
-      const ok = (data as any)?.ok;
-      const msg = ((data as any)?.message as string) ?? ((data as any)?.error as string);
-      if (ok === false) throw new Error(msg || "Falha na correção");
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok || !json?.ok) {
+        throw new Error(
+          (json?.message as string) || (json?.error as string) || `HTTP ${res.status}`,
+        );
+      }
       await markResolved(row.id, `Auto-correção aplicada: ${fixKey}`);
-      toast({ title: "Correção aplicada", description: msg ?? "OK" });
+      toast({ title: "Correção aplicada", description: (json.message as string) ?? "OK" });
     } catch (e) {
-      const m = e instanceof Error ? e.message : String(e);
-      toast({ title: "Falha na correção", description: m, variant: "destructive" });
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Falha na correção", description: msg, variant: "destructive" });
     } finally {
       setFixing(null);
     }
@@ -426,7 +421,7 @@ export default function DailyErrorsPanel() {
                 </div>
                 {isOpen && (
                   <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">
-                    {safeStringifyContext(r.context)}
+                    {JSON.stringify(r.context ?? {}, null, 2)}
                   </pre>
                 )}
               </li>

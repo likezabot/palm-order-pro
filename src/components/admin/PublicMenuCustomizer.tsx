@@ -106,6 +106,7 @@ async function callUpdateSettings(restaurantId: string, patch: UpdatePatch) {
     p_clear_surface_color: patch.clear_surface_color ?? false,
     p_clear_text_color: patch.clear_text_color ?? false,
     p_clear_muted_text_color: patch.clear_muted_text_color ?? false,
+    p_category_overrides: patch.category_overrides ?? null,
   });
   if (error) throw error;
 }
@@ -254,6 +255,7 @@ function CustomizerInner({
             <TabsTrigger value="paleta">Paleta</TabsTrigger>
             <TabsTrigger value="layout">Layout</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
+            <TabsTrigger value="por-categoria">Por categoria</TabsTrigger>
             <TabsTrigger value="destaques">Destaques</TabsTrigger>
           </TabsList>
 
@@ -287,6 +289,15 @@ function CustomizerInner({
 
           <TabsContent value="categorias">
             <CategoriesPanel
+              restaurantId={restaurantId}
+              settings={settings}
+              categories={categories}
+              onSaved={refresh}
+            />
+          </TabsContent>
+
+          <TabsContent value="por-categoria">
+            <PerCategoryPanel
               restaurantId={restaurantId}
               settings={settings}
               categories={categories}
@@ -1274,6 +1285,357 @@ function ColorRow({ label, value, onChange }: { label: string; value: string; on
         )}
       </div>
       {!valid && <p className="mt-1 text-xs text-destructive">Use #RRGGBB ou #RGB.</p>}
+    </div>
+  );
+}
+
+// ============================================================
+// Personalização POR CATEGORIA (layout, imagem, card, ordem dos produtos)
+// ============================================================
+type PerCatLayout = "default" | "list" | "grid-2" | "grid-3";
+type PerCatAspect = "default" | "square" | "wide" | "tall";
+type PerCatStyle = "default" | "compact" | "detailed";
+
+function PerCategoryPanel({
+  restaurantId,
+  settings,
+  categories,
+  onSaved,
+}: {
+  restaurantId: string;
+  settings: PublicMenuSettings;
+  categories: { id: string; slug: string; name: string }[];
+  onSaved: () => void;
+}) {
+  const [overrides, setOverrides] = useState<PublicMenuSettings["category_overrides"]>(
+    () => ({ ...(settings.category_overrides ?? {}) }),
+  );
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setOverrides({ ...(settings.category_overrides ?? {}) });
+  }, [settings.category_overrides]);
+
+  const visibleCats = useMemo(() => {
+    const hidden = new Set(settings.hidden_category_slugs ?? []);
+    return categories.filter((c) => !hidden.has(c.slug));
+  }, [categories, settings.hidden_category_slugs]);
+
+  const updateCat = (
+    slug: string,
+    patch: Partial<{ layout: PerCatLayout; image_aspect: PerCatAspect; card_style: PerCatStyle }>,
+  ) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      const current = { ...(next[slug] ?? {}) } as any;
+      if (patch.layout !== undefined) {
+        if (patch.layout === "default") delete current.layout;
+        else current.layout = patch.layout;
+      }
+      if (patch.image_aspect !== undefined) {
+        if (patch.image_aspect === "default") delete current.image_aspect;
+        else current.image_aspect = patch.image_aspect;
+      }
+      if (patch.card_style !== undefined) {
+        if (patch.card_style === "default") delete current.card_style;
+        else current.card_style = patch.card_style;
+      }
+      if (Object.keys(current).length === 0) delete next[slug];
+      else next[slug] = current;
+      return next;
+    });
+  };
+
+  const resetCat = (slug: string) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      delete next[slug];
+      return next;
+    });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await callUpdateSettings(restaurantId, { category_overrides: overrides });
+      toast.success("Personalização por categoria salva");
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao salvar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <p className="text-xs text-muted-foreground">
+        Defina layout, tamanho da imagem e estilo do card por categoria. Use{" "}
+        <strong>"Padrão"</strong> para herdar a configuração global da aba <em>Layout</em>.
+      </p>
+
+      {visibleCats.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          Nenhuma categoria visível encontrada.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visibleCats.map((cat) => {
+            const ov = overrides[cat.slug] ?? {};
+            const customCount =
+              (ov.layout ? 1 : 0) + (ov.image_aspect ? 1 : 0) + (ov.card_style ? 1 : 0);
+            return (
+              <details
+                key={cat.id}
+                className="group rounded-lg border border-border bg-background"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-bold">
+                  <span className="flex items-center gap-2">
+                    <span>{cat.name}</span>
+                    {customCount > 0 && (
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+                        {customCount} personalização{customCount > 1 ? "ões" : ""}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground group-open:hidden">Expandir</span>
+                  <span className="hidden text-xs text-muted-foreground group-open:inline">
+                    Recolher
+                  </span>
+                </summary>
+
+                <div className="space-y-3 border-t border-border p-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div>
+                      <Label className="text-xs">Layout</Label>
+                      <Select
+                        value={(ov.layout ?? "default") as string}
+                        onValueChange={(v) => updateCat(cat.slug, { layout: v as PerCatLayout })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Usar padrão</SelectItem>
+                          <SelectItem value="list">Lista (linhas)</SelectItem>
+                          <SelectItem value="grid-2">Grade 2 colunas</SelectItem>
+                          <SelectItem value="grid-3">Grade 3 colunas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Proporção da imagem</Label>
+                      <Select
+                        value={(ov.image_aspect ?? "default") as string}
+                        onValueChange={(v) =>
+                          updateCat(cat.slug, { image_aspect: v as PerCatAspect })
+                        }
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Usar padrão</SelectItem>
+                          <SelectItem value="square">Quadrada (1:1)</SelectItem>
+                          <SelectItem value="wide">Larga (16:9)</SelectItem>
+                          <SelectItem value="tall">Alta (3:4)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Estilo do card</Label>
+                      <Select
+                        value={(ov.card_style ?? "default") as string}
+                        onValueChange={(v) =>
+                          updateCat(cat.slug, { card_style: v as PerCatStyle })
+                        }
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Usar padrão</SelectItem>
+                          <SelectItem value="detailed">Detalhado (com foto)</SelectItem>
+                          <SelectItem value="compact">Compacto (só nome+preço)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => resetCat(cat.slug)}
+                      disabled={customCount === 0}
+                    >
+                      Resetar esta categoria
+                    </Button>
+                  </div>
+
+                  <CategoryProductsReorder categorySlug={cat.slug} onSaved={onSaved} />
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      )}
+
+      <Button onClick={save} disabled={saving} className="w-full">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar personalização por categoria"}
+      </Button>
+    </section>
+  );
+}
+
+function CategoryProductsReorder({
+  categorySlug,
+  onSaved,
+}: {
+  categorySlug: string;
+  onSaved: () => void;
+}) {
+  const qc = useQueryClient();
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ["pmc", "cat-products", categorySlug],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, display_order, image_url")
+        .eq("active", true)
+        .eq("category", categorySlug)
+        .order("display_order", { ascending: true })
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const [order, setOrder] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setOrder(products.map((p: any) => p.id));
+  }, [products]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setOrder((items) => {
+      const o = items.indexOf(String(active.id));
+      const n = items.indexOf(String(over.id));
+      return arrayMove(items, o, n);
+    });
+  };
+
+  const byId = useMemo(
+    () => new Map(products.map((p: any) => [p.id, p])),
+    [products],
+  );
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const ids = order;
+      const orders = order.map((_, i) => i);
+      const { error } = await supabase.rpc("admin_reorder_products" as any, {
+        p_ids: ids,
+        p_orders: orders,
+      });
+      if (error) throw error;
+      toast.success("Ordem dos produtos salva");
+      qc.invalidateQueries({ queryKey: ["pmc", "cat-products", categorySlug] });
+      qc.invalidateQueries({ queryKey: ["pmenu", "products"] });
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao salvar ordem");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+        <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Carregando produtos…
+      </div>
+    );
+  }
+
+  if (products.length === 0) {
+    return (
+      <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+        Nenhum produto ativo nesta categoria.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-border bg-card p-2">
+      <p className="text-xs font-bold uppercase text-muted-foreground">Ordem dos produtos</p>
+      <p className="text-xs text-muted-foreground">Arraste para reordenar.</p>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+          <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+            {order.map((id) => {
+              const p: any = byId.get(id);
+              if (!p) return null;
+              return <SortableProductRow key={id} id={id} name={p.name} imageUrl={p.image_url} />;
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
+      <Button onClick={save} disabled={saving} size="sm" className="w-full">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar ordem"}
+      </Button>
+    </div>
+  );
+}
+
+function SortableProductRow({
+  id,
+  name,
+  imageUrl,
+}: {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 rounded-md border border-border bg-background p-2"
+    >
+      <button
+        type="button"
+        className="cursor-grab text-muted-foreground"
+        {...attributes}
+        {...listeners}
+        aria-label="Arrastar"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-muted">
+        {imageUrl ? (
+          <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs">🍢</div>
+        )}
+      </div>
+      <span className="flex-1 truncate text-sm">{name}</span>
     </div>
   );
 }

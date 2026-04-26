@@ -47,7 +47,7 @@ export const usePalmCart = () => {
       .from("orders")
       .select("version, table_name, original_table_name")
       .eq("id", orderId)
-      .maybeSingle();
+      .single();
     if (orderData) {
       setOrderVersion(orderData.version);
       if (orderData.original_table_name) {
@@ -72,7 +72,7 @@ export const usePalmCart = () => {
       .from("orders")
       .select("created_at, updated_at")
       .eq("id", orderId)
-      .maybeSingle();
+      .single();
 
     if (items && items.length > 0) {
       const dedupeMap = new Map<string, CartItem>();

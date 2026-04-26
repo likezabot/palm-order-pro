@@ -892,6 +892,7 @@ export type Database = {
           card_style: string
           categories_section_title: string
           category_order: string[]
+          category_overrides: Json
           created_at: string
           featured_style: string
           hero_alignment: string
@@ -928,6 +929,7 @@ export type Database = {
           card_style?: string
           categories_section_title?: string
           category_order?: string[]
+          category_overrides?: Json
           created_at?: string
           featured_style?: string
           hero_alignment?: string
@@ -964,6 +966,7 @@ export type Database = {
           card_style?: string
           categories_section_title?: string
           category_order?: string[]
+          category_overrides?: Json
           created_at?: string
           featured_style?: string
           hero_alignment?: string
@@ -1169,6 +1172,10 @@ export type Database = {
         Args: { p_item_id: string; p_new_quantity: number; p_order_id: string }
         Returns: Json
       }
+      admin_reorder_products: {
+        Args: { p_ids: string[]; p_orders: number[] }
+        Returns: undefined
+      }
       admin_set_setting: {
         Args: { p_key: string; p_pin: string; p_value: string }
         Returns: undefined
@@ -1232,6 +1239,52 @@ export type Database = {
               p_card_style?: string
               p_categories_section_title?: string
               p_category_order?: string[]
+              p_clear_background_color?: boolean
+              p_clear_banner_url?: boolean
+              p_clear_hero_subtitle?: boolean
+              p_clear_hero_title?: boolean
+              p_clear_muted_text_color?: boolean
+              p_clear_surface_color?: boolean
+              p_clear_text_color?: boolean
+              p_clear_welcome_message?: boolean
+              p_featured_style?: string
+              p_hero_alignment?: string
+              p_hero_subtitle?: string
+              p_hero_title?: string
+              p_hidden_category_slugs?: string[]
+              p_image_aspect?: string
+              p_layout_mode?: string
+              p_muted_text_color?: string
+              p_radius_scale?: string
+              p_restaurant_id: string
+              p_section_order?: string[]
+              p_show_categories_section_title?: boolean
+              p_show_category_nav?: boolean
+              p_show_descriptions?: boolean
+              p_show_featured_section?: boolean
+              p_show_hero_banner_overlay?: boolean
+              p_show_logo?: boolean
+              p_show_open_status_badge?: boolean
+              p_show_product_images?: boolean
+              p_show_search_bar?: boolean
+              p_show_welcome_message_card?: boolean
+              p_show_whatsapp_fab?: boolean
+              p_surface_color?: string
+              p_text_color?: string
+              p_welcome_message?: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_accent_color?: string
+              p_background_color?: string
+              p_banner_url?: string
+              p_button_style?: string
+              p_card_style?: string
+              p_categories_section_title?: string
+              p_category_order?: string[]
+              p_category_overrides?: Json
               p_clear_background_color?: boolean
               p_clear_banner_url?: boolean
               p_clear_hero_subtitle?: boolean

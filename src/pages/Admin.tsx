@@ -44,9 +44,6 @@ const Admin = () => {
   const [staffMode, setStaffMode] = useState(
     () => localStorage.getItem("admin-staff-mode") === "true",
   );
-  // Guards de in-flight para evitar duplo clique em ações administrativas críticas
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
@@ -123,50 +120,38 @@ const Admin = () => {
   );
 
   const handleDelete = async (id: string) => {
-    if (deletingId) return; // anti duplo-clique
     if (!confirm("Excluir este produto?")) return;
-    setDeletingId(id);
     playFeedback("heavy");
-    try {
-      const { withPin } = await import("@/lib/manager-pin");
-      const ok = await withPin(async (pin) => {
-        const { error } = await supabase.rpc("admin_delete_product", { p_pin: pin, p_id: id });
-        if (error) throw error;
-        return true;
-      }, "Excluir produto");
-      if (!ok) return;
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      toast({ title: "Produto excluído" });
-    } finally {
-      setDeletingId(null);
-    }
+    const { withPin } = await import("@/lib/manager-pin");
+    const ok = await withPin(async (pin) => {
+      const { error } = await supabase.rpc("admin_delete_product", { p_pin: pin, p_id: id });
+      if (error) throw error;
+      return true;
+    }, "Excluir produto");
+    if (!ok) return;
+    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    toast({ title: "Produto excluído" });
   };
 
   const handleToggleActive = async (id: string, current: boolean) => {
-    if (togglingId === id) return; // anti duplo-clique no mesmo item
-    setTogglingId(id);
     playFeedback("click");
-    try {
-      const { error } = await supabase.rpc("toggle_product_active", {
-        p_id: id,
-        p_active: !current,
+    const { error } = await supabase.rpc("toggle_product_active", {
+      p_id: id,
+      p_active: !current,
+    });
+
+    if (error) {
+      playFeedback("error");
+      toast({
+        variant: "destructive",
+        title: "Erro ao atualizar",
+        description: error.message,
       });
-
-      if (error) {
-        playFeedback("error");
-        toast({
-          variant: "destructive",
-          title: "Erro ao atualizar",
-          description: error.message,
-        });
-        return;
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      toast({ title: !current ? "Item ativado no cardápio" : "Item removido do cardápio" });
-    } finally {
-      setTogglingId(null);
+      return;
     }
+
+    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    toast({ title: !current ? "Item ativado no cardápio" : "Item removido do cardápio" });
   };
 
   const handleEdit = (product: Product) => {
@@ -266,7 +251,7 @@ const Admin = () => {
               className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap relative"
             >
               <ShieldAlert className="w-4 h-4" />
-              <span className="hidden sm:inline">Erros &amp; Logs</span>
+              <span className="hidden sm:inline">Erros &amp; Saúde</span>
               <span className="sm:hidden">Erros</span>
               {unresolvedErrors > 0 && (
                 <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black leading-none">
