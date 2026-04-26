@@ -1,6 +1,13 @@
+import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { type Restaurant } from "@/lib/public-menu";
 import { cn } from "@/lib/utils";
+import {
+  contrastRatio,
+  overlayAlphaForWhiteText,
+  relativeLuminance,
+  sampleImageLuminance,
+} from "@/lib/wcag-contrast";
 
 type Props = {
   restaurant: Restaurant;
