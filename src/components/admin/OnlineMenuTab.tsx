@@ -152,7 +152,7 @@ function OnlineMenuList() {
 
   const toggle = async (
     p: ProductOnline,
-    field: "is_available_online" | "is_featured" | "is_sold_out",
+    field: "is_available_online" | "is_featured" | "is_sold_out" | "is_sold_out_online",
   ) => {
     try {
       await updateOnline(p.id, { [field]: !p[field] } as any);
