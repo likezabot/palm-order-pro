@@ -292,7 +292,7 @@ export default function LoyaltyTab() {
           <div>
             <div className="font-bold">Programa de Fidelidade</div>
             <div className="text-xs text-muted-foreground">
-              1 ponto por R$ 1 em pedidos online (retirada/entrega)
+              1 ponto por R$ 1 — somente em pedidos online de retirada
             </div>
           </div>
         </div>
@@ -300,6 +300,24 @@ export default function LoyaltyTab() {
           checked={!!enabledQuery.data}
           onCheckedChange={toggleEnabled}
         />
+      </div>
+
+      <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 flex gap-3">
+        <Truck className="text-warning shrink-0 mt-0.5" size={18} />
+        <p className="text-xs text-foreground/90 leading-relaxed">
+          <strong>Somente pedidos online de retirada geram pontos.</strong> Entregas e
+          mesa não acumulam pontos. Itens marcados como casco/retornável e brindes
+          também não pontuam.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3">
+        <AlertTriangle className="text-primary shrink-0 mt-0.5" size={18} />
+        <p className="text-xs text-foreground/90 leading-relaxed">
+          <strong>Resgate mínimo:</strong> 100 pontos por brinde.{" "}
+          <strong>Compra mínima máxima:</strong> R$ 80,00 por brinde. Máximo de 1 brinde
+          por pedido.
+        </p>
       </div>
 
       <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3">
@@ -323,7 +341,7 @@ export default function LoyaltyTab() {
             disabled={seeding || !restaurantId}
           >
             <Sparkles size={14} className="mr-1" />
-            {seeding ? "Criando…" : "Criar brindes padrão"}
+            {seeding ? "Atualizando…" : "Criar/atualizar brindes recomendados"}
           </Button>
         </div>
         <div className="rounded-xl border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
