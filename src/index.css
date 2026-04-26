@@ -228,60 +228,61 @@
    off-white, marrom escuro.
    ============================================================ */
 .public-menu-theme {
-  /* Paleta refinada — quente, gastronômica, sofisticada */
-  --background: 36 38% 97%;          /* creme muito claro #FAF6F0 */
-  --foreground: 18 28% 16%;          /* café profundo */
+  /* Tema DARK/BRASA — premium, gastronômico, alta legibilidade */
+  --background: 14 32% 7%;            /* preto-brasa */
+  --foreground: 36 30% 95%;           /* off-white quente */
 
-  --card: 36 50% 99%;                /* off-white quente */
-  --card-foreground: 18 28% 16%;
+  --card: 14 24% 11%;                 /* superfície escura aquecida */
+  --card-foreground: 36 30% 95%;
 
-  --surface-elevated: 32 40% 94%;
-  --surface-warm: 28 45% 96%;        /* superfície com tinte cobre */
+  --surface-elevated: 14 22% 14%;
+  --surface-warm: 18 28% 13%;
 
-  --popover: 36 50% 99%;
-  --popover-foreground: 18 28% 16%;
+  --popover: 14 24% 11%;
+  --popover-foreground: 36 30% 95%;
 
-  --primary: 14 76% 46%;             /* terracota elegante */
+  --primary: 16 88% 56%;              /* brasa viva */
   --primary-foreground: 0 0% 100%;
-  --primary-glow: 22 88% 56%;        /* cobre/brasa */
+  --primary-glow: 28 95% 60%;         /* cobre incandescente */
 
-  --secondary: 32 40% 94%;
-  --secondary-foreground: 18 28% 16%;
+  --secondary: 14 18% 16%;
+  --secondary-foreground: 36 30% 95%;
 
-  --muted: 32 28% 93%;
-  --muted-foreground: 18 16% 36%;
+  --muted: 14 18% 16%;
+  --muted-foreground: 36 18% 72%;
 
-  --accent: 36 78% 52%;              /* dourado suave */
-  --accent-foreground: 18 28% 14%;
+  --accent: 36 90% 58%;               /* dourado mostarda */
+  --accent-foreground: 14 30% 10%;
 
-  --destructive: 0 70% 46%;
+  --destructive: 0 75% 55%;
   --destructive-foreground: 0 0% 100%;
 
-  --success: 142 48% 38%;            /* verde harmonizado, menos saturado */
+  --success: 142 60% 48%;
   --success-foreground: 0 0% 100%;
 
-  --warning: 36 78% 48%;
-  --warning-foreground: 18 28% 14%;
+  --warning: 38 95% 55%;
+  --warning-foreground: 14 30% 10%;
 
-  --border: 32 22% 88%;
-  --input: 32 22% 88%;
-  --ring: 14 76% 46%;
+  --border: 14 18% 20%;
+  --input: 14 18% 20%;
+  --ring: 16 88% 56%;
 
-  --brand-gradient: linear-gradient(135deg, hsl(14 76% 46%) 0%, hsl(22 88% 52%) 55%, hsl(36 78% 52%) 100%);
-  --brand-gradient-soft: linear-gradient(135deg, hsl(28 45% 96%) 0%, hsl(36 50% 99%) 100%);
-  --shadow-soft: 0 2px 10px -2px hsl(18 40% 18% / 0.08);
-  --shadow-card: 0 10px 28px -12px hsl(18 50% 20% / 0.18), 0 2px 6px hsl(18 30% 15% / 0.06);
-  --shadow-warm: 0 10px 30px -12px hsl(18 60% 25% / 0.18), 0 2px 6px hsl(18 40% 20% / 0.06);
-  --shadow-glow-primary: 0 0 32px hsl(14 76% 46% / 0.28);
+  --brand-gradient: linear-gradient(135deg, hsl(14 86% 46%) 0%, hsl(22 92% 54%) 55%, hsl(36 90% 56%) 100%);
+  --brand-gradient-soft: linear-gradient(135deg, hsl(14 30% 12%) 0%, hsl(18 28% 9%) 100%);
+  --shadow-soft: 0 2px 10px -2px hsl(0 0% 0% / 0.5);
+  --shadow-card: 0 10px 28px -12px hsl(0 0% 0% / 0.7), 0 2px 6px hsl(0 0% 0% / 0.4);
+  --shadow-warm: 0 12px 34px -14px hsl(16 90% 30% / 0.45), 0 2px 8px hsl(0 0% 0% / 0.4);
+  --shadow-glow-primary: 0 0 36px hsl(16 88% 50% / 0.35);
 
   font-family: 'Inter', system-ui, sans-serif;
   letter-spacing: -0.005em;
 
-  /* Fundo quente sutil — tira a sensação de tela seca */
+  /* Fundo dark/brasa com gradiente sutil */
   background:
-    radial-gradient(1200px 600px at 50% -10%, hsl(36 60% 92% / 0.55), transparent 60%),
-    radial-gradient(800px 500px at 100% 100%, hsl(22 70% 92% / 0.35), transparent 55%),
-    hsl(var(--background));
+    radial-gradient(1200px 700px at 50% -15%, hsl(16 60% 18% / 0.55), transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, hsl(28 70% 15% / 0.35), transparent 55%),
+    linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(14 30% 8%) 100%);
+  color: hsl(var(--foreground));
 }
 
 /* Tipografia mais apetitosa para títulos do cardápio */
@@ -292,31 +293,8 @@
   font-weight: 800;
 }
 
-/* Preço e CTAs com peso forte */
 .public-menu-theme .text-primary {
   color: hsl(var(--primary));
-}
-
-/* Variante escura preserva legibilidade caso usuário esteja em .dark */
-.dark .public-menu-theme {
-  --background: 15 28% 10%;
-  --foreground: 36 30% 94%;
-  --card: 15 24% 14%;
-  --card-foreground: 36 30% 94%;
-  --surface-elevated: 15 22% 17%;
-  --popover: 15 24% 14%;
-  --popover-foreground: 36 30% 94%;
-  --primary: 14 82% 55%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 15 20% 18%;
-  --secondary-foreground: 36 30% 94%;
-  --muted: 15 20% 18%;
-  --muted-foreground: 36 20% 75%;
-  --accent: 44 96% 55%;
-  --accent-foreground: 15 26% 12%;
-  --border: 15 18% 24%;
-  --input: 15 18% 24%;
-  --ring: 14 82% 55%;
 }
 
 @keyframes mesa-pulse {
