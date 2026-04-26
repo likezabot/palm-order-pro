@@ -2270,14 +2270,6 @@ const HELP_TEXT =
   `  • mesa 4 ver pedido\n` +
   `  • mesa 4 o que tem / consumo\n` +
   `  • status mesa 4 / mesa 4 como ta\n\n` +
-  `📦 *ESTOQUE*\n` +
-  `  • *gerenciar estoque* / menu estoque → modo guiado com botões\n` +
-  `  • entrada 10 coca / repor 10 coca\n` +
-  `  • saida 2 picanha / vendi 3 coca / acabou 1 prato\n` +
-  `  • ajuste coca 50 / contei 50 coca\n` +
-  `  • estoque coca / quanto tem de coca\n` +
-  `  • lista estoque / inventario → todos os itens\n` +
-  `  • estoque (sozinho) / alertas → críticos\n\n` +
   `🍽 *CARDÁPIO* (visibilidade)\n` +
   `  • ocultar panceta / esconder coca / desativar skol\n` +
   `  • tirar coca do cardapio\n` +
