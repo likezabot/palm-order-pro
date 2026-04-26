@@ -123,7 +123,7 @@ export const SystemTab = () => {
       ].join("\n• ");
 
       const confirmed = window.prompt(
-        `⚠️ APAGAR DADOS OPERACIONAIS\n\nPeríodo: ${periodLabel(resetPeriod)}\n\nSerá removido:\n• ${summary}\n\nO cardápio, cadastro de itens, receitas e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
+        `⚠️ APAGAR DADOS OPERACIONAIS\n\nPeríodo: ${periodLabel(resetPeriod)}\n\nSerá removido:\n• ${summary}\n\nO cardápio e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
       );
       if (confirmed?.trim().toUpperCase() !== "APAGAR") {
         toast({ title: "Cancelado", description: "Nada foi apagado." });
