@@ -110,6 +110,16 @@ export default function CartDrawer({
             <Button onClick={onCheckout} size="lg" className="w-full h-14 text-base font-bold">
               Continuar para o pedido
             </Button>
+            {loyaltyEnabled && slug && (
+              <button
+                type="button"
+                onClick={() => { onClose(); nav(`/menu/${slug}/pontos`); }}
+                className="flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              >
+                <Gift size={13} />
+                Ver meus pontos
+              </button>
+            )}
           </div>
         )}
       </SheetContent>
