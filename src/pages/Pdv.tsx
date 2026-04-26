@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff, Users, Split } from "lucide-react";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -30,6 +31,8 @@ import { getOrderGroup, getOrderKind, isOnlineOrder, KIND_LABEL } from "@/lib/or
 
 import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
+import { useConnectivity } from "@/hooks/use-connectivity";
+import { checkBridgeStatus } from "@/lib/thermal-printer";
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
   new: { label: "AGUARDANDO", color: "bg-blue-500 text-white", next: "preparing", nextLabel: "▶ PREPARAR" },
@@ -57,7 +60,37 @@ const Pdv = () => {
     return localStorage.getItem("pdv-staff-mode") === "1";
   });
 
-  const { realtimeStatus } = usePdvRealtime();
+  // Novos estados para dividir conta
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitCount, setSplitCount] = useState<number>(1);
+  const [partialAmount, setPartialAmount] = useState<string>("");
+  const [amountPaidInSplit, setAmountPaidInSplit] = useState<number>(0);
+
+  // Novos estados para alerta de novo pedido
+  const [showNewOrderModal, setShowNewOrderModal] = useState(false);
+  const [latestNewOrder, setLatestNewOrder] = useState<Order | null>(null);
+
+  const { isOffline, realtime, internet } = useConnectivity();
+  const [bridgeStatus, setBridgeStatus] = useState<{ online: boolean; printerOnline: boolean }>({ online: true, printerOnline: true });
+
+  useEffect(() => {
+    const checkBridge = async () => {
+      const cfg = loadPrintConfig();
+      if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
+      try {
+        const health = await checkBridgeStatus(cfg.bridgeUrl);
+        setBridgeStatus({
+          online: !health.error,
+          printerOnline: health.printer_connected !== false && health.printer_ok !== false,
+        });
+      } catch (e) {
+        setBridgeStatus({ online: false, printerOnline: false });
+      }
+    };
+    checkBridge();
+    const interval = setInterval(checkBridge, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleStaffMode = () => {
     setStaffMode((v) => {
