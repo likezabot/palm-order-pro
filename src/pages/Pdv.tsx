@@ -64,7 +64,8 @@ const Pdv = () => {
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splitCount, setSplitCount] = useState<number>(1);
   const [partialAmount, setPartialAmount] = useState<string>("");
-  const [amountPaidInSplit, setAmountPaidInSplit] = useState<number>(0);
+  const [paymentsHistory, setPaymentsHistory] = useState<number[]>([]);
+  const amountPaidInSplit = useMemo(() => paymentsHistory.reduce((acc, v) => acc + v, 0), [paymentsHistory]);
 
   // Novos estados para alerta de novo pedido
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
