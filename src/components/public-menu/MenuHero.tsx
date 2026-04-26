@@ -28,9 +28,9 @@ export default function MenuHero({
 
   return (
     <header className="relative">
-      {/* Hero compacto: 28 mobile, 44 sm+ */}
+      {/* Hero — altura confortável e fade suave para o conteúdo */}
       <div
-        className="relative h-28 w-full bg-gradient-to-br from-primary/30 via-background to-background sm:h-44"
+        className="relative h-36 w-full bg-gradient-to-br from-primary/20 via-background to-background sm:h-52"
         style={
           restaurant.hero_url
             ? { backgroundImage: `url(${restaurant.hero_url})`, backgroundSize: "cover", backgroundPosition: "center" }
@@ -38,31 +38,34 @@ export default function MenuHero({
         }
         aria-hidden
       >
+        {/* Overlay sutil para legibilidade quando há imagem */}
         {showOverlay && restaurant.hero_url && (
-          <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-background/10" />
         )}
+        {/* Fade final que conecta o hero ao fundo da página, sem corte visível */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background to-transparent" />
       </div>
       <div className="mx-auto max-w-3xl px-4">
-        <div className={`-mt-8 flex items-end gap-3 ${isCenter ? "sm:justify-center sm:text-center" : ""}`}>
+        <div className={`-mt-6 flex items-center gap-3 ${isCenter ? "sm:justify-center sm:text-center" : ""}`}>
           {showLogo && (
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border-4 border-background bg-card shadow-lg sm:h-20 sm:w-20">
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl ring-2 ring-background bg-card shadow-md sm:h-16 sm:w-16">
               {restaurant.logo_url ? (
                 <img src={restaurant.logo_url} alt={restaurant.name} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-primary text-xl font-black text-primary-foreground">
+                <div className="flex h-full w-full items-center justify-center bg-primary text-lg font-black text-primary-foreground">
                   {restaurant.name.charAt(0)}
                 </div>
               )}
             </div>
           )}
-          <div className={`min-w-0 flex-1 pb-1 ${isCenter ? "sm:text-center" : ""}`}>
+          <div className={`min-w-0 flex-1 ${isCenter ? "sm:text-center" : ""}`}>
             <h1 className="truncate text-xl font-black leading-tight sm:text-2xl">{displayTitle}</h1>
             {displaySub && (
               <p className="line-clamp-1 text-xs sm:text-sm text-muted-foreground">{displaySub}</p>
             )}
           </div>
           {rightSlot && !isCenter && (
-            <div className="pb-1 shrink-0">{rightSlot}</div>
+            <div className="shrink-0">{rightSlot}</div>
           )}
         </div>
         {(prep > 0 || (rightSlot && isCenter)) && (

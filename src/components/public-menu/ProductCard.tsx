@@ -25,29 +25,47 @@ function formatBRL(v: number) {
 function QuickAddButton({
   onClick,
   disabled,
+  productName,
   size = "md",
 }: {
-  onClick: (e: React.MouseEvent) => void;
+  onClick: (e: React.MouseEvent | React.KeyboardEvent) => void;
   disabled?: boolean;
+  productName?: string;
   size?: "sm" | "md";
 }) {
   const [justAdded, setJustAdded] = useState(false);
-  const handle = (e: React.MouseEvent) => {
+  const handle = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
     if (disabled) return;
     onClick(e);
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 700);
   };
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    // Evita que Enter/Espaço propague para o card pai (que também é button)
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handle(e);
+    }
+  };
   const dim = size === "sm" ? "h-9 w-9" : "h-10 w-10";
+  const label = productName
+    ? justAdded
+      ? `${productName} adicionado ao carrinho`
+      : `Adicionar ${productName} ao carrinho`
+    : "Adicionar ao carrinho";
   return (
     <button
       type="button"
       onClick={handle}
+      onKeyDown={handleKeyDown}
       disabled={disabled}
-      aria-label="Adicionar ao carrinho"
+      aria-label={label}
+      aria-live="polite"
+      aria-pressed={justAdded}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-all",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         dim,
         disabled
           ? "opacity-40 cursor-not-allowed"
@@ -55,7 +73,11 @@ function QuickAddButton({
         justAdded && "scale-110 bg-success",
       )}
     >
-      {justAdded ? <Check className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+      {justAdded ? (
+        <Check className="h-5 w-5" aria-hidden="true" />
+      ) : (
+        <Plus className="h-5 w-5" aria-hidden="true" />
+      )}
     </button>
   );
 }
