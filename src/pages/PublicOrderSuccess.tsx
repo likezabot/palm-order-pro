@@ -9,6 +9,8 @@ import {
   XCircle,
   AlertCircle,
   MessageCircle,
+  Gift,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,9 @@ type LocState = {
   note?: string;
   items?: LocItem[];
   address?: LocAddress | null;
+  loyalty_points_pending?: number;
+  loyalty_reward_name?: string | null;
+  loyalty_balance_after?: number;
 };
 
 type StatusInfo = {
