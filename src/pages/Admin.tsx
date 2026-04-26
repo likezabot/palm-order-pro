@@ -123,38 +123,50 @@ const Admin = () => {
   );
 
   const handleDelete = async (id: string) => {
+    if (deletingId) return; // anti duplo-clique
     if (!confirm("Excluir este produto?")) return;
+    setDeletingId(id);
     playFeedback("heavy");
-    const { withPin } = await import("@/lib/manager-pin");
-    const ok = await withPin(async (pin) => {
-      const { error } = await supabase.rpc("admin_delete_product", { p_pin: pin, p_id: id });
-      if (error) throw error;
-      return true;
-    }, "Excluir produto");
-    if (!ok) return;
-    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-    toast({ title: "Produto excluído" });
+    try {
+      const { withPin } = await import("@/lib/manager-pin");
+      const ok = await withPin(async (pin) => {
+        const { error } = await supabase.rpc("admin_delete_product", { p_pin: pin, p_id: id });
+        if (error) throw error;
+        return true;
+      }, "Excluir produto");
+      if (!ok) return;
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      toast({ title: "Produto excluído" });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleToggleActive = async (id: string, current: boolean) => {
+    if (togglingId === id) return; // anti duplo-clique no mesmo item
+    setTogglingId(id);
     playFeedback("click");
-    const { error } = await supabase.rpc("toggle_product_active", {
-      p_id: id,
-      p_active: !current,
-    });
-
-    if (error) {
-      playFeedback("error");
-      toast({
-        variant: "destructive",
-        title: "Erro ao atualizar",
-        description: error.message,
+    try {
+      const { error } = await supabase.rpc("toggle_product_active", {
+        p_id: id,
+        p_active: !current,
       });
-      return;
-    }
 
-    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-    toast({ title: !current ? "Item ativado no cardápio" : "Item removido do cardápio" });
+      if (error) {
+        playFeedback("error");
+        toast({
+          variant: "destructive",
+          title: "Erro ao atualizar",
+          description: error.message,
+        });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      toast({ title: !current ? "Item ativado no cardápio" : "Item removido do cardápio" });
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleEdit = (product: Product) => {
