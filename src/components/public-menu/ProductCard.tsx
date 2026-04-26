@@ -47,7 +47,6 @@ function QuickAddButton({
     window.setTimeout(() => setJustAdded(false), 700);
   };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    // Evita que Enter/Espaço propague para o card pai (que também é button)
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       handle(e);
@@ -109,20 +108,11 @@ export default function ProductCard({
   const isBlocked = disabled || product.is_sold_out;
   const interactive = !isBlocked && !!onClick;
   const Tag: any = interactive ? "button" : "article";
-  // Em card de grupo (priceLabel) o "+" não faz sentido — só abre o popup.
   const showQuickAdd = !!onQuickAdd && !isBlocked && !priceLabel;
   const priceText = priceLabel ?? formatBRL(product.price);
 
-  // Em modo compacto: força ocultar descrição e usa imagem reduzida (ou nenhuma).
   const effectiveShowDescription = cardStyle === "compact" ? false : showDescription;
   const effectiveShowImage = cardStyle === "compact" ? false : showImage;
-
-  const aspectClass =
-    imageAspect === "wide"
-      ? "aspect-[16/9]"
-      : imageAspect === "tall"
-        ? "aspect-[3/4]"
-        : "aspect-square";
 
   // ---- Modo compacto: renderização enxuta (igual em list/grid) ----
   if (cardStyle === "compact") {
@@ -154,21 +144,29 @@ export default function ProductCard({
     );
   }
 
+  // ---- Grid (tablet/desktop ou quando explicitamente forçado): cards menos altos ----
   if (layout === "grid") {
+    const imgClass =
+      imageAspect === "wide"
+        ? "aspect-[16/10]"
+        : imageAspect === "tall"
+          ? "aspect-[4/5]"
+          : "aspect-square";
+
     return (
       <Tag
         type={interactive ? "button" : undefined}
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
-          "group relative flex w-full flex-col text-left overflow-hidden rounded-2xl border border-border/60 bg-card transition-all duration-300",
+          "group relative flex w-full flex-col text-left overflow-hidden rounded-xl border border-border/60 bg-card transition-all duration-300",
           "shadow-[var(--shadow-warm)]",
           isBlocked
             ? "opacity-60 cursor-not-allowed"
-            : "hover:border-primary/40 hover:shadow-[0_18px_40px_-16px_hsl(18_60%_25%/0.28),0_0_24px_-4px_hsl(var(--primary)/0.18)] hover:-translate-y-1 active:scale-[0.99]",
+            : "hover:border-primary/40 hover:-translate-y-0.5 active:scale-[0.99]",
         )}
       >
         {effectiveShowImage && (
-          <div className={cn("relative w-full bg-muted overflow-hidden", aspectClass)}>
+          <div className={cn("relative w-full bg-muted overflow-hidden max-h-[120px] sm:max-h-none", imgClass)}>
             {product.image_url ? (
               <img
                 src={product.image_url}
@@ -177,27 +175,27 @@ export default function ProductCard({
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-4xl opacity-80">🍢</div>
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-2xl opacity-80">🍢</div>
             )}
           </div>
         )}
-        <div className="flex min-w-0 flex-1 flex-col p-3">
+        <div className="flex min-w-0 flex-1 flex-col p-2.5">
           <div className="flex items-start gap-2">
             <h3 className="line-clamp-2 flex-1 text-sm font-bold leading-tight">{product.name}</h3>
             {product.is_sold_out && <SoldOutBadge />}
           </div>
           {effectiveShowDescription && product.description && (
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
+            <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">{product.description}</p>
           )}
           <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-            <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">
+            <p className="text-base font-black text-primary leading-none tracking-tight tabular-nums">
               {priceText}
             </p>
             {showQuickAdd && (
-              <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />
+              <QuickAddButton onClick={() => onQuickAdd!(product)} size="sm" productName={product.name} />
             )}
             {trailingHint && !showQuickAdd && (
-              <span aria-hidden className="text-lg leading-none text-muted-foreground/60">›</span>
+              <span aria-hidden className="text-base leading-none text-muted-foreground/60">›</span>
             )}
           </div>
         </div>
@@ -205,44 +203,24 @@ export default function ProductCard({
     );
   }
 
-  // list
+  // ---- List (padrão mobile): card horizontal compacto, foto fixa pequena ----
   return (
     <Tag
       type={interactive ? "button" : undefined}
       onClick={interactive ? () => onClick!(product) : undefined}
       className={cn(
-        "group relative flex w-full text-left gap-3 rounded-2xl border border-border/60 bg-card p-3 transition-all duration-300",
+        "group relative flex w-full text-left items-stretch gap-3 rounded-xl border border-border/60 bg-card p-2.5 transition-all duration-200",
         "shadow-[var(--shadow-warm)]",
         isBlocked
           ? "opacity-60 cursor-not-allowed"
-          : "hover:border-primary/40 hover:shadow-[0_16px_36px_-16px_hsl(18_60%_25%/0.28),0_0_20px_-4px_hsl(var(--primary)/0.15)] hover:-translate-y-0.5 active:scale-[0.99]",
+          : "hover:border-primary/40 active:scale-[0.99]",
       )}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <h3 className="truncate text-base font-bold">{product.name}</h3>
-          {product.is_sold_out && <SoldOutBadge />}
-        </div>
-        {effectiveShowDescription && product.description && (
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
-        )}
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">{priceText}</p>
-          {showQuickAdd && <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />}
-          {trailingHint && !showQuickAdd && (
-            <span aria-hidden className="text-lg leading-none text-muted-foreground/60">›</span>
-          )}
-        </div>
-      </div>
       {effectiveShowImage && (
         <div
           className={cn(
-            "relative shrink-0 overflow-hidden rounded-xl bg-muted",
-            imageAspect === "wide"
-              ? "h-20 w-32 sm:h-24 sm:w-40"
-              : imageAspect === "tall"
-                ? "h-28 w-20 sm:h-32 sm:w-24"
-                : "h-24 w-24 sm:h-28 sm:w-28",
+            "relative shrink-0 overflow-hidden rounded-lg bg-muted self-center",
+            "h-[72px] w-[72px] sm:h-24 sm:w-24",
           )}
         >
           {product.image_url ? (
@@ -253,10 +231,36 @@ export default function ProductCard({
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-3xl opacity-80">🍢</div>
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-2xl opacity-80">🍢</div>
           )}
         </div>
       )}
+      <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="line-clamp-2 flex-1 text-sm font-bold leading-snug sm:text-base">
+              {product.name}
+            </h3>
+            {product.is_sold_out && <SoldOutBadge />}
+          </div>
+          {effectiveShowDescription && product.description && (
+            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:text-xs sm:line-clamp-2">
+              {product.description}
+            </p>
+          )}
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="text-base font-black text-primary leading-none tracking-tight tabular-nums sm:text-lg">
+            {priceText}
+          </p>
+          {showQuickAdd && (
+            <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />
+          )}
+          {trailingHint && !showQuickAdd && (
+            <span aria-hidden className="text-lg leading-none text-muted-foreground/60">›</span>
+          )}
+        </div>
+      </div>
     </Tag>
   );
 }

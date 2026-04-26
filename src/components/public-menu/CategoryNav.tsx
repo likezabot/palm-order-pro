@@ -42,7 +42,7 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
           : "bg-transparent",
       )}
     >
-      <div className="flex flex-wrap gap-1.5 py-2.5">
+      <div className="flex flex-wrap gap-1.5 py-2">
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
@@ -51,8 +51,8 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
-                "shrink-0 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all duration-200",
-                "min-h-[36px]",
+                "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200",
+                "min-h-[32px]",
                 isActive
                   ? "text-primary-foreground shadow-[0_6px_18px_-4px_hsl(var(--primary)/0.55)] scale-[1.02]"
                   : "border border-border/70 bg-card/80 text-foreground/75 hover:bg-card hover:text-foreground hover:border-primary/30",
