@@ -1,48 +1,128 @@
+
 ## Objetivo
 
-Hoje os 4 painéis de erro (`ErrorsSummaryPanel`, `DailyErrorsPanel`, `ErrorLogPanel`, `StuckPrintsPanel`) ficam empilhados no **topo da aba "Sistema"**, no mesmo lugar do botão "APAGAR — HOJE" e "Forçar atualização". Isso:
+Estender a aba **Personalização** com controles **por categoria**, permitindo que cada categoria do cardápio público tenha seu próprio layout, proporção de imagem, estilo de card e ordem de produtos — sobrescrevendo as configurações globais.
 
-- Esconde os erros (precisa abrir Sistema e rolar)
-- Mistura monitoramento com ações destrutivas
-- Dificulta o acesso rápido quando algo dá errado
+⚠️ **Nada relacionado à impressão, bridge, EXE ou print_jobs será tocado.**
 
-## O que vou fazer
+---
 
-### 1. Nova aba "Erros" em `src/pages/Admin.tsx`
-- Adicionar `<TabsTrigger value="errors">` com ícone `AlertTriangle` (lucide-react), entre **Impressão** e **Estatísticas**.
-- Marcar como `admin-only` (mesmo padrão de Sistema/Stats/Rede).
-- Label: **"Erros"** no mobile, **"Erros & Saúde"** em telas ≥ sm.
-- Adicionar `<TabsContent value="errors">` com o novo componente.
+## 1. Banco de dados (migration)
 
-### 2. Novo componente `src/components/admin/ErrorsTab.tsx`
-Concentra os 4 painéis em uma ordem lógica de "mais importante → mais detalhado":
-1. `ErrorsSummaryPanel` — visão geral (KPIs do dia)
-2. `DailyErrorsPanel` — resumo agrupado por código/fonte (já com filtro `auto_heal`)
-3. `StuckPrintsPanel` — impressões travadas (alta prioridade operacional)
-4. `ErrorLogPanel` — log bruto detalhado
+Adicionar **uma única coluna JSONB** em `public_menu_settings`:
 
-Inclui um cabeçalho curto explicando "Aqui você vê tudo que falhou e o que o sistema corrigiu sozinho."
+```sql
+ALTER TABLE public_menu_settings
+  ADD COLUMN IF NOT EXISTS category_overrides jsonb NOT NULL DEFAULT '{}'::jsonb;
+```
 
-### 3. Limpeza da aba "Sistema" (`SystemTab.tsx`)
-- **Remover** os 4 imports e renders dos painéis de erro (linhas 9-12 e 159-162).
-- A aba Sistema fica focada **só** em ferramentas de manutenção: Apagar período, Forçar atualização, Arquivar antigos, Histórico de arquivamentos.
-- Adicionar uma nota discreta no topo: *"Procurando erros? Veja a aba **Erros & Saúde**."*
+Formato do JSON (chave = slug da categoria):
+```json
+{
+  "bebidas":   { "layout": "grid-3", "image_aspect": "square", "card_style": "compact" },
+  "refeicoes": { "layout": "list",   "image_aspect": "wide",   "card_style": "detailed" }
+}
+```
 
-### 4. Badge de contagem (opcional, leve)
-No `TabsTrigger` da aba Erros, mostrar um pequeno badge vermelho com o número de erros não resolvidos das últimas 24h, consultando `error_log` com `resolved=false`. Usa o mesmo cliente Supabase já presente, query leve com `count` exato e revalidação a cada 60s. Se zero, badge fica oculto.
+Campos opcionais por categoria (se ausente → usa o global):
+- `layout`: `"list" | "grid-2" | "grid-3"`
+- `image_aspect`: `"square" | "wide" | "tall"`
+- `card_style`: `"compact" | "detailed"` (compact = sem imagem grande/sem descrição; detailed = padrão atual)
 
-## O que **NÃO** vai mudar
-- Nenhuma alteração em RLS, migrations, Edge Functions, cron, print_jobs, bridge ou Electron.
-- Nenhuma mudança de comportamento dos painéis em si — apenas onde eles vivem.
-- Aba "Rede" continua separada (ela é diagnóstico de conectividade, não de erros aplicacionais).
+**Atualizar a RPC** `admin_update_public_menu_settings` para aceitar `p_category_overrides jsonb` (opcional, se null mantém o atual).
 
-## Arquivos afetados
-- `src/pages/Admin.tsx` — novo TabsTrigger + TabsContent
-- `src/components/admin/ErrorsTab.tsx` — **novo arquivo**
-- `src/components/admin/SystemTab.tsx` — remover painéis de erro, adicionar nota
+---
 
-## Como você vai testar
-1. Abrir `/admin` → ver a nova aba **"Erros & Saúde"** com ícone de alerta.
-2. Clicar nela → ver os 4 painéis na nova ordem.
-3. Abrir aba **"Sistema"** → confirmar que ficou limpa, só com ferramentas de manutenção.
-4. Se houver erros não resolvidos, conferir o badge vermelho na aba.
+## 2. Frontend — Aba Personalização
+
+**Arquivo:** `src/components/admin/PublicMenuCustomizer.tsx`
+
+### 2a. Nova sub-aba "Por categoria"
+Adicionar `<TabsTrigger value="por-categoria">Por categoria</TabsTrigger>` ao lado de "Categorias".
+
+Conteúdo: para cada categoria visível, um card colapsável com:
+- Select **Layout**: Lista / Grade 2 col / Grade 3 col / *Usar padrão*
+- Select **Proporção da imagem**: Quadrada / Larga / Alta / *Usar padrão*
+- Select **Estilo do card**: Compacto / Detalhado / *Usar padrão*
+- Botão "Resetar esta categoria"
+
+Salva tudo num único `category_overrides` via RPC.
+
+### 2b. Reordenar produtos por categoria
+Dentro de cada card colapsável, abaixo dos selects, lista drag-and-drop dos produtos daquela categoria (`@dnd-kit`, mesmo padrão já usado em `CategoriesPanel`).
+
+Ao salvar, chama uma nova RPC simples:
+```sql
+admin_reorder_products(p_ids uuid[], p_orders int[])
+```
+que faz `UPDATE products SET display_order = ...`.
+
+---
+
+## 3. Frontend — Renderização do menu público
+
+**Arquivo:** `src/pages/PublicMenu.tsx`
+
+No bloco que renderiza cada categoria (linhas ~292-321), substituir as constantes globais por uma resolução por categoria:
+
+```ts
+const ov = settings?.category_overrides?.[cat.slug] ?? {};
+const catLayout  = ov.layout       ?? (layoutMode === "grid" ? "grid-2" : "list");
+const catAspect  = ov.image_aspect ?? imageAspect;
+const catStyle   = ov.card_style   ?? "detailed";
+const gridClass =
+  catLayout === "grid-3" ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
+  : catLayout === "grid-2" ? "grid grid-cols-2 gap-3"
+  : "grid grid-cols-1 gap-3";
+```
+
+Passar `catAspect` e `catStyle` para `<ProductCard />`.
+
+### ProductCard
+**Arquivo:** `src/components/public-menu/ProductCard.tsx`
+
+Adicionar prop `cardStyle?: "compact" | "detailed"`. Quando `compact`:
+- Esconde imagem grande (mostra só miniatura ou nenhuma)
+- Esconde descrição
+- Reduz padding
+
+Sem alterar nada no resto do fluxo (clique → `ProductDetailSheet` continua igual).
+
+---
+
+## 4. Tipos
+
+**Arquivo:** `src/lib/public-menu.ts`
+
+Adicionar ao tipo `PublicMenuSettings`:
+```ts
+category_overrides: Record<string, {
+  layout?: "list" | "grid-2" | "grid-3";
+  image_aspect?: "square" | "wide" | "tall";
+  card_style?: "compact" | "detailed";
+}>;
+```
+Default: `{}`. Incluir no `select` da query e no fallback inicial.
+
+---
+
+## Arquivos que serão alterados
+
+✅ Permitidos:
+- `supabase/migrations/<novo>.sql` (coluna + RPC)
+- `src/lib/public-menu.ts` (tipos + select)
+- `src/components/admin/PublicMenuCustomizer.tsx` (nova sub-aba + reordenação)
+- `src/pages/PublicMenu.tsx` (resolver overrides por categoria)
+- `src/components/public-menu/ProductCard.tsx` (suporte a `cardStyle`)
+
+🚫 **Não serão tocados:** qualquer arquivo de impressão, bridge, electron, print_jobs, print-service, thermal-printer, receipt-* etc.
+
+---
+
+## Como testar
+
+1. Admin → Personalização → **Por categoria** → expandir "Bebidas" → escolher "Grade 3 col" + "Quadrada" + "Compacto" → Salvar.
+2. Abrir o cardápio público → Bebidas aparece em 3 colunas com cards menores.
+3. Outras categorias permanecem com o layout global.
+4. Arrastar produtos dentro da categoria → recarregar → ordem mantida.
+5. Reset de categoria → volta ao global.
