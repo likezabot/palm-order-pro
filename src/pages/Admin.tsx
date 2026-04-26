@@ -23,6 +23,7 @@ import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import AdminHeader from "@/components/admin/AdminHeader";
 import OrdersTab from "@/components/admin/OrdersTab";
 import SystemTab from "@/components/admin/SystemTab";
+import ErrorsTab from "@/components/admin/ErrorsTab";
 import NetworkTab from "@/components/admin/NetworkTab";
 import OnlineMenuTab from "@/components/admin/OnlineMenuTab";
 import OnlineOrdersTab from "@/components/admin/OnlineOrdersTab";
