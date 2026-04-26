@@ -443,6 +443,7 @@ function EditDialog({
         is_featured: isFeatured,
         is_available_online: isAvailable,
         is_sold_out: isSoldOut,
+        is_sold_out_online: isSoldOutOnline,
         display_order: displayOrder,
         clear_description: !trimmedDesc,
         clear_image_url: !trimmedImg,
