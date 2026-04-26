@@ -230,7 +230,11 @@ export async function fetchPublicMenuSettings(
     return { restaurant_id: restaurantId, ...DEFAULT_PUBLIC_MENU_SETTINGS };
   }
   // Merge com defaults para resiliência caso colunas novas venham null
-  return { ...DEFAULT_PUBLIC_MENU_SETTINGS, restaurant_id: restaurantId, ...(data as any) };
+  const merged = { ...DEFAULT_PUBLIC_MENU_SETTINGS, restaurant_id: restaurantId, ...(data as any) };
+  if (!merged.category_overrides || typeof merged.category_overrides !== "object") {
+    merged.category_overrides = {};
+  }
+  return merged;
 }
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
