@@ -18,7 +18,7 @@ export default function ErrorsTab() {
           <ShieldAlert className="w-5 h-5 text-destructive" />
         </div>
         <div className="text-sm">
-          <h2 className="font-black text-base text-foreground">Erros & Saúde do sistema</h2>
+          <h2 className="font-black text-base text-foreground">Erros &amp; Logs do sistema</h2>
           <p className="text-muted-foreground mt-1">
             Tudo que falhou hoje (cardápio, PDV, cozinha, impressão, integrações) e o que o
             sistema corrigiu sozinho. Use os painéis abaixo para investigar e destravar.
