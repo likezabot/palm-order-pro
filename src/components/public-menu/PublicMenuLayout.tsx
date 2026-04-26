@@ -8,7 +8,7 @@ type Props = { children: ReactNode };
  */
 export default function PublicMenuLayout({ children }: Props) {
   return (
-    <div className="public-menu-theme min-h-screen text-foreground">
+    <div className="public-menu-theme dark min-h-screen bg-gradient-to-b from-background via-background to-[hsl(14_30%_8%)] text-foreground">
       <main className="pb-24">{children}</main>
       <footer className="mx-auto max-w-3xl px-4 py-8 text-center">
         <div className="mx-auto h-px w-16 bg-gradient-to-r from-transparent via-border to-transparent" />

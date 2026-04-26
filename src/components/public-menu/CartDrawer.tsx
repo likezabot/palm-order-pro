@@ -1,4 +1,6 @@
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Trash2, Gift } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -7,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import type { PublicCartItem } from "@/lib/public-cart";
+import { fetchLoyaltyEnabled } from "@/lib/loyalty";
 
 interface Props {
   open: boolean;
@@ -21,6 +24,16 @@ interface Props {
 export default function CartDrawer({
   open, onClose, items, subtotal, onUpdateQty, onRemove, onCheckout,
 }: Props) {
+  const { slug } = useParams<{ slug: string }>();
+  const nav = useNavigate();
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetchLoyaltyEnabled().then((v) => {
+      if (!cancelled) setLoyaltyEnabled(v);
+    });
+    return () => { cancelled = true; };
+  }, []);
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="bottom" className="h-[88vh] flex flex-col rounded-t-2xl p-0">
@@ -97,6 +110,16 @@ export default function CartDrawer({
             <Button onClick={onCheckout} size="lg" className="w-full h-14 text-base font-bold">
               Continuar para o pedido
             </Button>
+            {loyaltyEnabled && slug && (
+              <button
+                type="button"
+                onClick={() => { onClose(); nav(`/menu/${slug}/pontos`); }}
+                className="flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              >
+                <Gift size={13} />
+                Ver meus pontos
+              </button>
+            )}
           </div>
         )}
       </SheetContent>

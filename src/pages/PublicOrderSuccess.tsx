@@ -9,6 +9,8 @@ import {
   XCircle,
   AlertCircle,
   MessageCircle,
+  Gift,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,9 @@ type LocState = {
   note?: string;
   items?: LocItem[];
   address?: LocAddress | null;
+  loyalty_points_pending?: number;
+  loyalty_reward_name?: string | null;
+  loyalty_balance_after?: number;
 };
 
 type StatusInfo = {
@@ -428,6 +433,42 @@ export default function PublicOrderSuccess() {
             </ol>
           </div>
         )}
+
+        {!cancelled &&
+          ((state.loyalty_points_pending && state.loyalty_points_pending > 0) ||
+            state.loyalty_reward_name) && (
+            <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-5 shadow-[var(--shadow-warm)] space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-primary" />
+                <h2 className="text-sm font-bold uppercase tracking-wide text-primary">
+                  Plano B Pontos
+                </h2>
+              </div>
+              {state.loyalty_points_pending && state.loyalty_points_pending > 0 && (
+                <p className="text-sm text-foreground">
+                  Você vai ganhar{" "}
+                  <strong className="text-primary text-base">
+                    {state.loyalty_points_pending} pontos
+                  </strong>{" "}
+                  quando o pedido for finalizado.
+                </p>
+              )}
+              {state.loyalty_reward_name && (
+                <div className="flex items-start gap-2 text-sm">
+                  <Gift size={14} className="mt-0.5 text-primary shrink-0" />
+                  <span>
+                    <strong>Brinde resgatado:</strong> {state.loyalty_reward_name}
+                  </span>
+                </div>
+              )}
+              <Button asChild size="sm" className="w-full font-bold mt-1">
+                <Link to={`/menu/${slug}/pontos`}>
+                  <Gift size={14} className="mr-2" />
+                  Ver meu saldo de pontos
+                </Link>
+              </Button>
+            </div>
+          )}
 
         {error && (
           <div className="flex items-start gap-2 rounded-xl bg-destructive/10 text-destructive p-3 text-sm">

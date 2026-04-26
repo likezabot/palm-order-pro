@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
-import { useNavigate, useParams, Navigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate, useParams, Navigate, Link } from "react-router-dom";
+import { ArrowLeft, Gift } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +21,12 @@ import {
   type PaymentMethod,
 } from "@/lib/public-cart";
 import { fetchRestaurantBySlug } from "@/lib/public-menu";
+import { fetchLoyaltyStatus, normalizePhoneClient } from "@/lib/loyalty";
 import { logError, extractErrorCode } from "@/lib/error-log";
 import LoyaltySection from "@/components/public-menu/LoyaltySection";
+
+const PHONE_KEY = "pb_loyalty_phone";
+const REWARD_KEY = "pb_pending_reward";
 
 export default function PublicCheckout() {
   const { slug } = useParams<{ slug: string }>();
@@ -50,7 +54,21 @@ export default function PublicCheckout() {
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [loyaltyRewardId, setLoyaltyRewardId] = useState<string | null>(null);
+  const [pendingRewardId, setPendingRewardId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Pré-preenche telefone via localStorage e brinde via sessionStorage
+  useEffect(() => {
+    try {
+      const savedPhone =
+        sessionStorage.getItem(PHONE_KEY) || localStorage.getItem(PHONE_KEY);
+      if (savedPhone) setPhone(formatPhone(savedPhone));
+      const pending = sessionStorage.getItem(REWARD_KEY);
+      if (pending) setPendingRewardId(pending);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
@@ -58,6 +76,37 @@ export default function PublicCheckout() {
   const subtotal = cart.subtotal;
   const deliveryFee = computeDeliveryFee(serviceType);
   const total = subtotal + deliveryFee;
+
+  // Status de fidelidade — usado para resumo, botão e tela de sucesso
+  const phoneDigits = normalizePhoneClient(phone);
+  const phoneOk = phoneDigits.length >= 10;
+  const loyaltyQuery = useQuery({
+    queryKey: ["loyalty-status", slug, phoneDigits, subtotal],
+    queryFn: () =>
+      fetchLoyaltyStatus({
+        phone: phoneDigits,
+        restaurantSlug: slug ?? "",
+        orderSubtotal: subtotal,
+      }),
+    enabled: phoneOk && !!slug,
+    staleTime: 10_000,
+  });
+
+  // Aplica brinde pendente quando rewards carregam
+  useEffect(() => {
+    if (!pendingRewardId || !loyaltyQuery.data?.enabled) return;
+    const reward = loyaltyQuery.data.rewards.find((r) => r.id === pendingRewardId);
+    if (reward && reward.available) {
+      setLoyaltyRewardId(pendingRewardId);
+      setPendingRewardId(null);
+    }
+  }, [pendingRewardId, loyaltyQuery.data]);
+
+  const selectedReward = useMemo(() => {
+    if (!loyaltyRewardId || !loyaltyQuery.data) return null;
+    return loyaltyQuery.data.rewards.find((r) => r.id === loyaltyRewardId) ?? null;
+  }, [loyaltyRewardId, loyaltyQuery.data]);
+
   const canSubmit = useMemo(() => {
     if (cart.items.length === 0) return false;
     if (!name.trim()) return false;
@@ -104,7 +153,21 @@ export default function PublicCheckout() {
       });
 
       cart.clear();
+      // Limpa brinde pendente — só após o pedido ter sido criado com sucesso
+      try {
+        sessionStorage.removeItem(REWARD_KEY);
+        // Salva telefone para próximas visitas
+        if (phoneDigits) localStorage.setItem(PHONE_KEY, phoneDigits);
+      } catch {
+        /* ignore */
+      }
       const tokenParam = result.public_token ? `?t=${result.public_token}` : "";
+      const projectedEarn = loyaltyQuery.data?.projected_earn ?? 0;
+      const balanceBefore = loyaltyQuery.data?.balance ?? 0;
+      const balanceAfter = Math.max(
+        0,
+        balanceBefore - (selectedReward?.points_cost ?? 0),
+      ) + projectedEarn;
       nav(`/menu/${slug}/sucesso/${result.id}${tokenParam}`, {
         replace: true,
         state: {
@@ -134,6 +197,9 @@ export default function PublicCheckout() {
                   reference: reference.trim() || undefined,
                 }
               : null,
+          loyalty_points_pending: projectedEarn,
+          loyalty_reward_name: selectedReward?.display_name ?? null,
+          loyalty_balance_after: balanceAfter,
         },
       });
     } catch (e: any) {
@@ -321,7 +387,7 @@ export default function PublicCheckout() {
           />
         </section>
 
-        <section className="rounded-xl border border-border p-4 space-y-1.5">
+        <section className="rounded-xl border border-border bg-card p-4 space-y-1.5">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Subtotal ({cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"})</span>
             <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
@@ -334,6 +400,15 @@ export default function PublicCheckout() {
               {serviceType === "delivery" ? `R$ ${DELIVERY_FEE_FIXED.toFixed(2)}` : "R$ 0,00"}
             </span>
           </div>
+          {selectedReward && (
+            <div className="flex justify-between text-sm pt-1 border-t border-dashed border-border/60">
+              <span className="flex items-center gap-1.5 text-primary font-semibold">
+                <Gift size={13} />
+                Brinde: {selectedReward.display_name}
+              </span>
+              <span className="font-medium text-primary">R$ 0,00</span>
+            </div>
+          )}
           <div className="mt-2 flex justify-between border-t border-border pt-2 text-lg font-bold">
             <span>Total</span>
             <span className="brand-gradient-text">R$ {total.toFixed(2)}</span>
@@ -351,7 +426,11 @@ export default function PublicCheckout() {
           disabled={!canSubmit || submitting}
           onClick={handleSubmit}
         >
-          {submitting ? "Enviando..." : `Confirmar pedido • R$ ${total.toFixed(2)}`}
+          {submitting
+            ? "Enviando..."
+            : selectedReward
+              ? `Confirmar pedido com brinde • R$ ${total.toFixed(2)}`
+              : `Confirmar pedido • R$ ${total.toFixed(2)}`}
         </Button>
       </div>
     </div>
