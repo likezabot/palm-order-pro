@@ -19,7 +19,7 @@ const InstallPage = ({ title, subtitle, emoji, ctaTarget }: Props) => {
   return (
     <div className="flex min-h-screen-safe flex-col items-center justify-center gap-6 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))] bg-background">
       <button
-        onClick={() => navigate("/")}
+        onClick={() => navigate("/home")}
         className="absolute top-4 left-4 flex items-center gap-2 text-muted-foreground"
       >
         <ArrowLeft size={20} /> Voltar
