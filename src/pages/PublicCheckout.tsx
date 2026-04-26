@@ -93,15 +93,21 @@ export default function PublicCheckout() {
     staleTime: 10_000,
   });
 
-  // Aplica brinde pendente quando rewards carregam
+  // Aplica brinde pendente quando rewards carregam (apenas pickup)
   useEffect(() => {
     if (!pendingRewardId || !loyaltyQuery.data?.enabled) return;
+    if (serviceType !== "pickup") {
+      // Em delivery/dine_in, descarta brinde pendente
+      try { sessionStorage.removeItem(REWARD_KEY); } catch { /* ignore */ }
+      setPendingRewardId(null);
+      return;
+    }
     const reward = loyaltyQuery.data.rewards.find((r) => r.id === pendingRewardId);
     if (reward && reward.available) {
       setLoyaltyRewardId(pendingRewardId);
       setPendingRewardId(null);
     }
-  }, [pendingRewardId, loyaltyQuery.data]);
+  }, [pendingRewardId, loyaltyQuery.data, serviceType]);
 
   const selectedReward = useMemo(() => {
     if (!loyaltyRewardId || !loyaltyQuery.data) return null;
