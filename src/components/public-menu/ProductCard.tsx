@@ -227,8 +227,11 @@ export default function ProductCard({
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
         )}
         <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">{formatBRL(product.price)}</p>
+          <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">{priceText}</p>
           {showQuickAdd && <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />}
+          {trailingHint && !showQuickAdd && (
+            <span aria-hidden className="text-lg leading-none text-muted-foreground/60">›</span>
+          )}
         </div>
       </div>
       {effectiveShowImage && (
