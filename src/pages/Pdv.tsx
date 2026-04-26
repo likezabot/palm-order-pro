@@ -248,12 +248,36 @@ const Pdv = () => {
     const nextMap: Record<string, string | null> = { new: "preparing", preparing: "done", done: null };
     const next = nextMap[order.status];
     if (!next) return;
-    const { error } = await supabase.rpc("update_order_status", { p_order_id: order.id, p_status: next });
+
+    // Otimístico: atualiza no cache local imediatamente
+    const previous = queryClient.getQueryData<Order[]>(["pdv-orders"]);
+    queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
+      if (!old) return old;
+      return old.map((o) => (o.id === order.id ? { ...o, status: next, served_at: next === "done" ? new Date().toISOString() : o.served_at } : o));
+    });
+
+    playFeedback("click");
+
+    let error;
+    if (next === "done") {
+      // Se for para PRONTO, atualizamos também o timestamp de servido/pronto
+      const { error: err } = await supabase
+        .from("orders")
+        .update({ status: next, served_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", order.id);
+      error = err;
+    } else {
+      const { error: err } = await supabase.rpc("update_order_status", { p_order_id: order.id, p_status: next });
+      error = err;
+    }
+
     if (error) {
+      // Rollback em caso de erro
+      if (previous) queryClient.setQueryData(["pdv-orders"], previous);
       toast({ title: "Erro ao avançar status", description: error.message, variant: "destructive" });
       return;
     }
-    playFeedback("click");
+
     queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
   }, [queryClient, toast, playFeedback]);
 

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import KanbanColumn from "@/components/kitchen/KanbanColumn";
 import { useFeedback } from "@/hooks/use-feedback";
+import { useToast } from "@/hooks/use-toast";
 
 
 const SOUND_KEY = "kitchen-sound-enabled";
@@ -14,6 +15,7 @@ const Kitchen = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { playFeedback } = useFeedback();
+  const { toast } = useToast();
   const prevCountRef = useRef(0);
   const [pulseNew, setPulseNew] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
@@ -149,18 +151,32 @@ const Kitchen = () => {
     const previous = queryClient.getQueryData<Order[]>(["kitchen-orders"]);
     queryClient.setQueryData<Order[]>(["kitchen-orders"], (old) => {
       if (!old) return old;
-      return old.map((o) => (o.id === orderId ? { ...o, status } : o));
+      return old.map((o) => (o.id === orderId ? { ...o, status, served_at: status === "done" ? new Date().toISOString() : o.served_at } : o));
     });
 
-    const { error } = await supabase.rpc("update_order_status", {
-      p_order_id: orderId,
-      p_status: status,
-    });
+    let error;
+    if (status === "done") {
+      // Se for para PRONTO, atualizamos também o timestamp de servido/pronto
+      const { error: err } = await supabase
+        .from("orders")
+        .update({ status, served_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", orderId);
+      error = err;
+    } else {
+      const { error: err } = await supabase.rpc("update_order_status", {
+        p_order_id: orderId,
+        p_status: status,
+      });
+      error = err;
+    }
+
     if (error) {
       // Rollback
       if (previous) queryClient.setQueryData(["kitchen-orders"], previous);
       console.error("[Kitchen] updateStatus error:", error);
-      alert("Erro ao atualizar pedido: " + error.message);
+      toast({ title: "Erro ao atualizar pedido", description: error.message, variant: "destructive" });
+    } else {
+      queryClient.invalidateQueries({ queryKey: ["kitchen-orders"] });
     }
   };
 
