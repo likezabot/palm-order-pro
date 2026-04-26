@@ -44,6 +44,7 @@ export type CheckoutPayload = {
   note?: string;
   items: PublicCartItem[];
   client_request_id: string;
+  loyalty_reward_id?: string | null;
 };
 
 export type CreateOrderResult = {
@@ -166,6 +167,7 @@ export async function createPublicOrder(payload: CheckoutPayload): Promise<Creat
     })),
     p_note: payload.note ?? null,
     p_client_request_id: payload.client_request_id,
+    p_loyalty_reward_id: payload.loyalty_reward_id ?? null,
   });
   if (error) throw error;
   return data as CreateOrderResult;
