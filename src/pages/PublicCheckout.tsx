@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
-import { useNavigate, useParams, Navigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate, useParams, Navigate, Link } from "react-router-dom";
+import { ArrowLeft, Gift } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +21,12 @@ import {
   type PaymentMethod,
 } from "@/lib/public-cart";
 import { fetchRestaurantBySlug } from "@/lib/public-menu";
+import { fetchLoyaltyStatus, normalizePhoneClient } from "@/lib/loyalty";
 import { logError, extractErrorCode } from "@/lib/error-log";
 import LoyaltySection from "@/components/public-menu/LoyaltySection";
+
+const PHONE_KEY = "pb_loyalty_phone";
+const REWARD_KEY = "pb_pending_reward";
 
 export default function PublicCheckout() {
   const { slug } = useParams<{ slug: string }>();
@@ -50,7 +54,21 @@ export default function PublicCheckout() {
   const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [loyaltyRewardId, setLoyaltyRewardId] = useState<string | null>(null);
+  const [pendingRewardId, setPendingRewardId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Pré-preenche telefone via localStorage e brinde via sessionStorage
+  useEffect(() => {
+    try {
+      const savedPhone =
+        sessionStorage.getItem(PHONE_KEY) || localStorage.getItem(PHONE_KEY);
+      if (savedPhone) setPhone(formatPhone(savedPhone));
+      const pending = sessionStorage.getItem(REWARD_KEY);
+      if (pending) setPendingRewardId(pending);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
