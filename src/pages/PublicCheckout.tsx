@@ -76,6 +76,37 @@ export default function PublicCheckout() {
   const subtotal = cart.subtotal;
   const deliveryFee = computeDeliveryFee(serviceType);
   const total = subtotal + deliveryFee;
+
+  // Status de fidelidade — usado para resumo, botão e tela de sucesso
+  const phoneDigits = normalizePhoneClient(phone);
+  const phoneOk = phoneDigits.length >= 10;
+  const loyaltyQuery = useQuery({
+    queryKey: ["loyalty-status", slug, phoneDigits, subtotal],
+    queryFn: () =>
+      fetchLoyaltyStatus({
+        phone: phoneDigits,
+        restaurantSlug: slug ?? "",
+        orderSubtotal: subtotal,
+      }),
+    enabled: phoneOk && !!slug,
+    staleTime: 10_000,
+  });
+
+  // Aplica brinde pendente quando rewards carregam
+  useEffect(() => {
+    if (!pendingRewardId || !loyaltyQuery.data?.enabled) return;
+    const reward = loyaltyQuery.data.rewards.find((r) => r.id === pendingRewardId);
+    if (reward && reward.available) {
+      setLoyaltyRewardId(pendingRewardId);
+      setPendingRewardId(null);
+    }
+  }, [pendingRewardId, loyaltyQuery.data]);
+
+  const selectedReward = useMemo(() => {
+    if (!loyaltyRewardId || !loyaltyQuery.data) return null;
+    return loyaltyQuery.data.rewards.find((r) => r.id === loyaltyRewardId) ?? null;
+  }, [loyaltyRewardId, loyaltyQuery.data]);
+
   const canSubmit = useMemo(() => {
     if (cart.items.length === 0) return false;
     if (!name.trim()) return false;
@@ -122,7 +153,21 @@ export default function PublicCheckout() {
       });
 
       cart.clear();
+      // Limpa brinde pendente — só após o pedido ter sido criado com sucesso
+      try {
+        sessionStorage.removeItem(REWARD_KEY);
+        // Salva telefone para próximas visitas
+        if (phoneDigits) localStorage.setItem(PHONE_KEY, phoneDigits);
+      } catch {
+        /* ignore */
+      }
       const tokenParam = result.public_token ? `?t=${result.public_token}` : "";
+      const projectedEarn = loyaltyQuery.data?.projected_earn ?? 0;
+      const balanceBefore = loyaltyQuery.data?.balance ?? 0;
+      const balanceAfter = Math.max(
+        0,
+        balanceBefore - (selectedReward?.points_cost ?? 0),
+      ) + projectedEarn;
       nav(`/menu/${slug}/sucesso/${result.id}${tokenParam}`, {
         replace: true,
         state: {
@@ -152,6 +197,9 @@ export default function PublicCheckout() {
                   reference: reference.trim() || undefined,
                 }
               : null,
+          loyalty_points_pending: projectedEarn,
+          loyalty_reward_name: selectedReward?.display_name ?? null,
+          loyalty_balance_after: balanceAfter,
         },
       });
     } catch (e: any) {
