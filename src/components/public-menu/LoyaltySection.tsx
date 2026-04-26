@@ -16,6 +16,7 @@ type Props = {
   phone: string;
   restaurantSlug: string;
   subtotal: number;
+  serviceType?: "pickup" | "delivery" | "dine_in";
   selectedRewardId: string | null;
   onChange: (rewardId: string | null) => void;
 };
@@ -32,12 +33,19 @@ export default function LoyaltySection({
   phone,
   restaurantSlug,
   subtotal,
+  serviceType = "pickup",
   selectedRewardId,
   onChange,
 }: Props) {
   const { slug } = useParams<{ slug: string }>();
   const [status, setStatus] = useState<LoyaltyStatus>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const isPickup = serviceType === "pickup";
+
+  // Limpa brinde selecionado se mudar para delivery/dine_in
+  useEffect(() => {
+    if (!isPickup && selectedRewardId) onChange(null);
+  }, [isPickup, selectedRewardId, onChange]);
 
   const phoneDigits = phone.replace(/\D/g, "");
   const phoneOk = phoneDigits.length >= 10;
