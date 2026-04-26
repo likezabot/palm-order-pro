@@ -335,7 +335,7 @@ const Pdv = () => {
             return (
               <Badge className={`shrink-0 ${s.color}`}>
                 <span className="hidden sm:inline">● {s.label}</span>
-                <span className="sm:hidden">●</span>
+                <span className="sm:hidden">● {s.label.split(' ')[0]}</span>
               </Badge>
             );
           })()}
