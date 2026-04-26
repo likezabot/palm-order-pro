@@ -296,6 +296,15 @@ function CustomizerInner({
             />
           </TabsContent>
 
+          <TabsContent value="por-categoria">
+            <PerCategoryPanel
+              restaurantId={restaurantId}
+              settings={settings}
+              categories={categories}
+              onSaved={refresh}
+            />
+          </TabsContent>
+
           <TabsContent value="destaques">
             <FeaturedQuickPanel onChanged={refresh} />
           </TabsContent>
