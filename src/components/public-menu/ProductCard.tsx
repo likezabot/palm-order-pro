@@ -142,9 +142,12 @@ export default function ProductCard({
           {product.is_sold_out && <SoldOutBadge />}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <p className="text-sm font-black text-primary">{formatBRL(product.price)}</p>
+          <p className="text-sm font-black text-primary">{priceText}</p>
           {showQuickAdd && (
             <QuickAddButton onClick={() => onQuickAdd!(product)} size="sm" productName={product.name} />
+          )}
+          {trailingHint && (
+            <span aria-hidden className="text-base leading-none text-muted-foreground/60">›</span>
           )}
         </div>
       </Tag>
