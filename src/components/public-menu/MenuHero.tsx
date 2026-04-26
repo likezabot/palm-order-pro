@@ -7,6 +7,10 @@ import {
   overlayAlphaForWhiteText,
   sampleImageLuminance,
 } from "@/lib/wcag-contrast";
+import {
+  getCachedOverlayAlpha,
+  setCachedOverlayAlpha,
+} from "@/lib/hero-overlay-cache";
 
 type Props = {
   restaurant: Restaurant;
@@ -50,24 +54,35 @@ export default function MenuHero({
   const hasHero = !!restaurant.hero_url;
 
   // --- Overlay adaptativo WCAG ---
-  // Amostramos a foto e calculamos a opacidade mínima de overlay escuro
-  // necessária p/ que texto branco (#FFF) atinja AA (≥ 4.5:1).
-  // Default: 0.55 (forte) — usado enquanto a amostragem carrega ou se falhar.
-  const [overlayAlpha, setOverlayAlpha] = useState<number>(0.55);
+  // 1) Lemos cache síncrono (localStorage) no init → evita "flash" e poupa
+  //    rede em internet instável.
+  // 2) Se não houver cache, amostramos a foto, calculamos α e gravamos.
+  // 3) Default 0.55 (forte) só aparece quando não há hero ou cache nem
+  //    amostragem responderam ainda.
+  const [overlayAlpha, setOverlayAlpha] = useState<number>(() => {
+    if (!hasHero) return 0.55;
+    const cached = getCachedOverlayAlpha(restaurant.hero_url!);
+    return cached ?? 0.55;
+  });
 
   useEffect(() => {
     if (!hasHero) return;
+    const url = restaurant.hero_url!;
+
+    // Cache hit → nada a fazer (já aplicado no init).
+    if (getCachedOverlayAlpha(url) != null) return;
+
     const ctrl = new AbortController();
-    sampleImageLuminance(restaurant.hero_url!, ctrl.signal).then((L) => {
+    sampleImageLuminance(url, ctrl.signal).then((L) => {
       if (L == null) return; // CORS/erro: mantém default forte
       // alvo AA = 4.5:1; min 0.30 p/ preservar mood; max 0.85
       const alpha = overlayAlphaForWhiteText(L, 4.5, 0.3, 0.85);
       setOverlayAlpha(alpha);
+      setCachedOverlayAlpha(url, alpha);
 
       // Verificação automática de acessibilidade (apenas em dev)
       if (import.meta.env.DEV) {
-        // Estima luminância composta usando a mesma cor cinza derivada de L
-        const composedL = Math.max(0, L * (1 - alpha)); // overlay preto
+        const composedL = Math.max(0, L * (1 - alpha));
         const ratio = contrastRatio(1.0, composedL);
         const grade = ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "FAIL";
         // eslint-disable-next-line no-console
