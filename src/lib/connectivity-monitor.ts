@@ -70,13 +70,18 @@ async function pingBackend(): Promise<boolean> {
 async function runInternetCheck() {
   if (typeof document !== "undefined" && document.hidden) return;
   const ok = await pingInternet();
-  reportInternet(ok);
+  // Se internet falhou mas backend está OK, provavelmente é um falso negativo de ping (DNS/Firewall bloqueando google.com)
+  // mas o sistema está operando. Marcamos como online.
+  const { backend } = (await import("./connectivity-store")).getConnectivity();
+  reportInternet(ok || backend === "online");
 }
 
 async function runBackendCheck() {
   if (typeof document !== "undefined" && document.hidden) return;
   const ok = await pingBackend();
   reportBackend(ok);
+  // Se o backend respondeu, a internet está obrigatoriamente funcionando.
+  if (ok) reportInternet(true);
 }
 
 export function startConnectivityMonitor() {
