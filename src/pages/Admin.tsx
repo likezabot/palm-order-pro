@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart } from "lucide-react";
+import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
