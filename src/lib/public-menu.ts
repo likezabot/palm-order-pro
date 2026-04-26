@@ -42,6 +42,7 @@ export type PublicProduct = {
   is_featured: boolean;
   is_available_online: boolean;
   is_sold_out: boolean;
+  is_sold_out_online?: boolean;
   display_order: number;
   active: boolean;
 };
