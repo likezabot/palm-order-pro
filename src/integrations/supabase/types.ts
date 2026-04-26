@@ -453,81 +453,6 @@ export type Database = {
         }
         Relationships: []
       }
-      inventory_items: {
-        Row: {
-          aliases: string[]
-          category: string
-          created_at: string
-          current_stock: number
-          id: string
-          is_active: boolean
-          min_stock: number
-          name: string
-          product_id: string | null
-          slug: string
-          unit: string
-          updated_at: string
-        }
-        Insert: {
-          aliases?: string[]
-          category?: string
-          created_at?: string
-          current_stock?: number
-          id?: string
-          is_active?: boolean
-          min_stock?: number
-          name: string
-          product_id?: string | null
-          slug: string
-          unit?: string
-          updated_at?: string
-        }
-        Update: {
-          aliases?: string[]
-          category?: string
-          created_at?: string
-          current_stock?: number
-          id?: string
-          is_active?: boolean
-          min_stock?: number
-          name?: string
-          product_id?: string | null
-          slug?: string
-          unit?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      inventory_movements: {
-        Row: {
-          created_at: string
-          id: string
-          item_id: string
-          movement_type: string
-          note: string | null
-          quantity: number
-          source: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          item_id: string
-          movement_type: string
-          note?: string | null
-          quantity: number
-          source?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          item_id?: string
-          movement_type?: string
-          note?: string | null
-          quantity?: number
-          source?: string
-        }
-        Relationships: []
-      }
       menu_categories: {
         Row: {
           active: boolean
@@ -880,27 +805,6 @@ export type Database = {
           },
         ]
       }
-      product_recipes: {
-        Row: {
-          created_at: string
-          id: string
-          ingredient_product_id: string
-          product_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          ingredient_product_id: string
-          product_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          ingredient_product_id?: string
-          product_id?: string
-        }
-        Relationships: []
-      }
       products: {
         Row: {
           active: boolean
@@ -1170,41 +1074,6 @@ export type Database = {
         }
         Relationships: []
       }
-      stock_movements: {
-        Row: {
-          created_at: string | null
-          id: string
-          product_id: string | null
-          quantity: number
-          reason: string | null
-          type: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          product_id?: string | null
-          quantity: number
-          reason?: string | null
-          type: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          product_id?: string | null
-          quantity?: number
-          reason?: string | null
-          type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stock_movements_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       telegram_chat_state: {
         Row: {
           chat_id: number
@@ -1283,10 +1152,6 @@ export type Database = {
     }
     Functions: {
       _require_manager_pin: { Args: { p_pin: string }; Returns: undefined }
-      admin_bulk_import_inventory: {
-        Args: { p_items: Json; p_pin: string }
-        Returns: number
-      }
       admin_bulk_set_active: {
         Args: { p_active: boolean; p_ids: string[]; p_pin: string }
         Returns: number
@@ -1300,21 +1165,9 @@ export type Database = {
         Args: { p_id: string; p_pin: string }
         Returns: undefined
       }
-      admin_delete_recipe: {
-        Args: { p_id: string; p_pin: string }
-        Returns: undefined
-      }
       admin_edit_online_order_item: {
         Args: { p_item_id: string; p_new_quantity: number; p_order_id: string }
         Returns: Json
-      }
-      admin_set_recipe: {
-        Args: {
-          p_ingredient_product_id: string
-          p_pin: string
-          p_product_id: string
-        }
-        Returns: string
       }
       admin_set_setting: {
         Args: { p_key: string; p_pin: string; p_value: string }
@@ -1451,22 +1304,6 @@ export type Database = {
         }
         Returns: string
       }
-      admin_upsert_inventory_item: {
-        Args: {
-          p_aliases?: string[]
-          p_category: string
-          p_current_stock?: number
-          p_id: string
-          p_is_active?: boolean
-          p_min_stock?: number
-          p_name: string
-          p_pin: string
-          p_product_id?: string
-          p_slug: string
-          p_unit: string
-        }
-        Returns: string
-      }
       admin_upsert_product: {
         Args: {
           p_active?: boolean
@@ -1483,16 +1320,6 @@ export type Database = {
       annotate_error_log_resolution: {
         Args: { p_code?: string; p_ids?: number[]; p_reason?: string }
         Returns: number
-      }
-      apply_inventory_movement: {
-        Args: {
-          p_item_id: string
-          p_note?: string
-          p_quantity: number
-          p_source?: string
-          p_type: string
-        }
-        Returns: Json
       }
       approve_online_order: {
         Args: { p_approver: string; p_order_id: string }
@@ -1590,29 +1417,6 @@ export type Database = {
         Args: { p_error?: string; p_id: string; p_max_attempts?: number }
         Returns: undefined
       }
-      find_inventory_item_by_text: {
-        Args: { p_text: string }
-        Returns: {
-          aliases: string[]
-          category: string
-          created_at: string
-          current_stock: number
-          id: string
-          is_active: boolean
-          min_stock: number
-          name: string
-          product_id: string | null
-          slug: string
-          unit: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "inventory_items"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
       fix_create_public_order_duplicate: { Args: never; Returns: string }
       force_clear_orphan_prints: { Args: never; Returns: Json }
       get_customer_orders: { Args: { p_phone: string }; Returns: Json }
@@ -1664,7 +1468,7 @@ export type Database = {
       }
       reset_operational_data: { Args: never; Returns: Json }
       reset_operational_data_period: {
-        Args: { p_days?: number; p_reset_stock?: boolean }
+        Args: { p_days?: number }
         Returns: Json
       }
       toggle_product_active: {
