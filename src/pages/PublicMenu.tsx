@@ -378,24 +378,58 @@ export default function PublicMenu() {
                       ? "grid grid-cols-2 gap-3"
                       : "grid grid-cols-1 gap-3";
 
+                const entries = buildCategoryEntries(items, groupsQuery.data ?? [], cat.slug);
+                if (!entries.length) return null;
+
                 return (
                   <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
                     <h3 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h3>
                     <div className={gridClass}>
-                      {items.map((p) => (
-                        <ProductCard
-                          key={p.id}
-                          product={p}
-                          disabled={!isOpen && !isPreview}
-                          layout={productLayout}
-                          showImage={showImages}
-                          showDescription={showDescriptions}
-                          imageAspect={catAspect}
-                          cardStyle={catCardStyle}
-                          onClick={(prod) => setSelected(prod)}
-                          onQuickAdd={quickAdd}
-                        />
-                      ))}
+                      {entries.map((entry) => {
+                        if (entry.kind === "product") {
+                          const p = entry.product;
+                          return (
+                            <ProductCard
+                              key={p.id}
+                              product={p}
+                              disabled={!isOpen && !isPreview}
+                              layout={productLayout}
+                              showImage={showImages}
+                              showDescription={showDescriptions}
+                              imageAspect={catAspect}
+                              cardStyle={catCardStyle}
+                              onClick={(prod) => setSelected(prod)}
+                              onQuickAdd={quickAdd}
+                            />
+                          );
+                        }
+                        // Card de grupo: abre sheet com variantes
+                        const minBRL = entry.minPrice.toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        });
+                        return (
+                          <ProductCard
+                            key={`group-${entry.group.id}`}
+                            product={{ ...entry.trigger, is_sold_out: entry.allSoldOut }}
+                            disabled={!isOpen && !isPreview}
+                            layout={productLayout}
+                            showImage={showImages}
+                            showDescription={false}
+                            imageAspect={catAspect}
+                            cardStyle={catCardStyle}
+                            priceLabel={`a partir de ${minBRL}`}
+                            trailingHint
+                            onClick={() =>
+                              setOpenGroup({
+                                group: entry.group,
+                                trigger: entry.trigger,
+                                variants: entry.variants,
+                              })
+                            }
+                          />
+                        );
+                      })}
                     </div>
                   </section>
                 );
