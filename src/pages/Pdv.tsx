@@ -64,7 +64,8 @@ const Pdv = () => {
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splitCount, setSplitCount] = useState<number>(1);
   const [partialAmount, setPartialAmount] = useState<string>("");
-  const [amountPaidInSplit, setAmountPaidInSplit] = useState<number>(0);
+  const [paymentsHistory, setPaymentsHistory] = useState<number[]>([]);
+  const amountPaidInSplit = useMemo(() => paymentsHistory.reduce((acc, v) => acc + v, 0), [paymentsHistory]);
 
   // Novos estados para alerta de novo pedido
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
@@ -296,6 +297,7 @@ const Pdv = () => {
     setCustomerDoc("");
     setSending(false);
     setSelectedId(null);
+    setPaymentsHistory([]);
   };
 
   const confirmPrintAction = (action: () => Promise<void>) => {
@@ -335,7 +337,7 @@ const Pdv = () => {
             return (
               <Badge className={`shrink-0 ${s.color}`}>
                 <span className="hidden sm:inline">● {s.label}</span>
-                <span className="sm:hidden">●</span>
+                <span className="sm:hidden">● {s.label.split(' ')[0]}</span>
               </Badge>
             );
           })()}
@@ -424,7 +426,7 @@ const Pdv = () => {
                       markSeen(order.id);
                       setSelectedId(order.id);
                       setShowPayment(false);
-                      setAmountPaidInSplit(0);
+                      setPaymentsHistory([]);
                     }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
@@ -456,11 +458,11 @@ const Pdv = () => {
                     order={order}
                     itemCount={itemsByOrderId.get(order.id) || 0}
                     selected={selectedId === order.id}
-                    onSelect={() => { setSelectedId(order.id); setShowPayment(false); setAmountPaidInSplit(0); }}
+                    onSelect={() => { setSelectedId(order.id); setShowPayment(false); setPaymentsHistory([]); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
                     onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
-                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setAmountPaidInSplit(0); }}
+                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setPaymentsHistory([]); }}
                   />
                 ))}
               </div>
@@ -839,7 +841,7 @@ const Pdv = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold uppercase text-muted-foreground">Valor do pagamento parcial</label>
+              <label className="text-sm font-bold uppercase text-muted-foreground">Valor do pagamento agora</label>
               <div className="relative">
                 <span className="absolute left-3 top-3 text-muted-foreground font-bold">R$</span>
                 <input
@@ -853,8 +855,29 @@ const Pdv = () => {
               </div>
             </div>
 
-            <div className="rounded-lg bg-secondary/50 p-3 text-sm">
-              Saldo restante após este pagamento: <span className="font-bold">R$ {Math.max(0, total - amountPaidInSplit - (parseFloat(partialAmount) || 0)).toFixed(2)}</span>
+            {paymentsHistory.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-muted-foreground">Pagamentos já realizados</label>
+                <div className="max-h-[100px] overflow-y-auto space-y-1">
+                  {paymentsHistory.map((v, i) => (
+                    <div key={i} className="flex justify-between text-xs font-mono bg-success/5 p-1 rounded border border-success/10">
+                      <span>Pagamento {i + 1}</span>
+                      <span className="font-bold text-success">R$ {v.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => { setPaymentsHistory([]); setPartialAmount(""); }}
+                  className="text-[10px] text-destructive font-black uppercase hover:underline"
+                >
+                  Limpar todos os pagamentos
+                </button>
+              </div>
+            )}
+
+            <div className="rounded-lg bg-secondary/50 p-3 text-sm flex justify-between items-center">
+              <span>Saldo restante:</span>
+              <span className="font-black text-lg">R$ {Math.max(0, total - amountPaidInSplit - (parseFloat(partialAmount) || 0)).toFixed(2)}</span>
             </div>
           </div>
 
@@ -864,7 +887,7 @@ const Pdv = () => {
               onClick={() => {
                 const val = parseFloat(partialAmount) || 0;
                 if (val <= 0) return;
-                setAmountPaidInSplit(prev => prev + val);
+                setPaymentsHistory(prev => [...prev, val]);
                 setPartialAmount("");
                 setShowSplitModal(false);
                 playFeedback("click");
@@ -872,7 +895,7 @@ const Pdv = () => {
               }}
               className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground"
             >
-              REGISTRAR PAGAMENTO
+              CONFIRMAR PAGAMENTO
             </button>
           </AlertDialogFooter>
         </AlertDialogContent>
