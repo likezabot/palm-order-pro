@@ -36,8 +36,9 @@ async function fetchRestaurant(): Promise<Restaurant> {
       "id, slug, name, description, whatsapp_phone, logo_url, hero_url, pix_key, is_open_override, default_prep_minutes, delivery_prep_buffer",
     )
     .limit(1)
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Nenhum restaurante configurado");
   return data as unknown as Restaurant;
 }
 

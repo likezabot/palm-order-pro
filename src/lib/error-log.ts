@@ -50,9 +50,15 @@ export function extractErrorCode(raw: unknown): string | null {
 const DEDUPE_WINDOW_MS = 30_000;
 const THROTTLE_WINDOW_MS = 60_000;
 const THROTTLE_MAX = 20;
+const MAX_CONTEXT_BYTES = 20_000; // contexto malformado/grande não vai quebrar nem encher tabela
 
 const recentKeys = new Map<string, number>();
 const sentTimestamps: number[] = [];
+
+// Re-entrância: garante que o próprio fluxo de log nunca dispare logs
+// recursivos (ex.: console.error wrappado por nós que internamente loga
+// um erro do supabase, que então passa pelo fetch interceptor, etc.).
+let __plbLogging = false;
 
 function shouldSkip(key: string): boolean {
   const now = Date.now();
@@ -71,13 +77,15 @@ function shouldSkip(key: string): boolean {
 }
 
 export async function logError(input: LogErrorInput): Promise<void> {
+  if (__plbLogging) return; // proteção anti-loop: não loga durante log
+  __plbLogging = true;
   try {
     const message = String(input.message ?? "").slice(0, 2000);
     const code = input.code ?? extractErrorCode(message);
     const dedupeKey = `${input.source}|${code || ""}|${message.slice(0, 120)}`;
     if (shouldSkip(dedupeKey)) return;
 
-    const ctx: Record<string, unknown> = {
+    let ctx: Record<string, unknown> = {
       ...(input.context || {}),
       url: typeof window !== "undefined" ? window.location.href : undefined,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
@@ -88,6 +96,22 @@ export async function logError(input: LogErrorInput): Promise<void> {
       ts_client: new Date().toISOString(),
     };
 
+    // Trunca contexto se virar gigante (proteção contra payloads malformados)
+    try {
+      const serialized = JSON.stringify(ctx);
+      if (serialized.length > MAX_CONTEXT_BYTES) {
+        ctx = {
+          _truncated: true,
+          _original_size: serialized.length,
+          preview: serialized.slice(0, MAX_CONTEXT_BYTES),
+          url: ctx.url,
+          ts_client: ctx.ts_client,
+        };
+      }
+    } catch {
+      ctx = { _unserializable: true, url: ctx.url, ts_client: ctx.ts_client };
+    }
+
     await supabase.from("error_log" as any).insert({
       source: input.source,
       severity: input.severity ?? "error",
@@ -97,6 +121,8 @@ export async function logError(input: LogErrorInput): Promise<void> {
     });
   } catch {
     // silencioso por design
+  } finally {
+    __plbLogging = false;
   }
 }
 
@@ -198,8 +224,10 @@ export function installGlobalErrorCapture(): void {
 const IGNORE_URL_PATTERNS = [
   /\/rest\/v1\/error_log/i,
   /supabase\.co\/auth\/v1\/token/i, // token refresh — barulhento e benigno
+  /\/functions\/v1\/health-check/i, // o painel já trata erro localmente
   /lovable\.app\/.*\/(ping|telemetry|analytics)/i,
   /__vite|vite-hmr|@vite|@react-refresh/i,
+  /localhost:9100/i, // bridge local — offline esperado em web; já tratado pelo monitor de bridge
 ];
 
 function shouldIgnoreUrl(url: string): boolean {

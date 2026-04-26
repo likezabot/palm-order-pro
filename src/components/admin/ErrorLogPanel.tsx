@@ -26,6 +26,21 @@ const KNOWN_FIXES: Record<string, string> = {
   function_not_unique: "function_not_unique",
 };
 
+function safeStringifyContext(ctx: unknown): string {
+  if (ctx == null) return "{}";
+  if (typeof ctx === "string") return ctx.slice(0, 20_000);
+  try {
+    const s = JSON.stringify(ctx, null, 2);
+    return s.length > 20_000 ? s.slice(0, 20_000) + "\n…(truncado)" : s;
+  } catch {
+    try {
+      return String(ctx).slice(0, 20_000);
+    } catch {
+      return "[contexto não serializável]";
+    }
+  }
+}
+
 export default function ErrorLogPanel() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -129,19 +144,17 @@ export default function ErrorLogPanel() {
   async function applyFix(code: string) {
     const fixKey = KNOWN_FIXES[code];
     if (!fixKey) return;
+    if (fixing) return; // debounce/duplo-clique
     setFixing(code);
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/health-check?fix=${encodeURIComponent(fixKey)}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
+      const { data, error } = await supabase.functions.invoke("health-check", {
+        body: { fix: fixKey, trigger: "manual-fix" },
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.ok) throw new Error(json?.message || json?.error || `HTTP ${res.status}`);
-      toast({ title: "Correção aplicada", description: json.message ?? "OK" });
+      if (error) throw error;
+      const ok = (data as any)?.ok;
+      const msg = (data as any)?.message ?? (data as any)?.error;
+      if (ok === false) throw new Error(msg || "Falha na correção");
+      toast({ title: "Correção aplicada", description: msg ?? "OK" });
       qc.invalidateQueries({ queryKey: ["error_log"] });
     } catch (e: any) {
       toast({ title: "Falha na correção", description: e?.message ?? String(e), variant: "destructive" });
@@ -295,7 +308,7 @@ export default function ErrorLogPanel() {
                 </div>
                 {isOpen && (
                   <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">
-                    {JSON.stringify(r.context ?? {}, null, 2)}
+                    {safeStringifyContext(r.context)}
                   </pre>
                 )}
               </li>

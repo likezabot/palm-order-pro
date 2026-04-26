@@ -33,7 +33,7 @@ const MoveTableDialog = ({ open, onOpenChange, orderId, currentTable, onMoved }:
         .from("settings")
         .select("value")
         .eq("key", "table_count")
-        .single();
+        .maybeSingle();
       return data ? Number(data.value) : 10;
     },
     staleTime: 30_000,
