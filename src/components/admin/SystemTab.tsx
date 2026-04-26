@@ -7,6 +7,7 @@ import { getAppVersion } from "@/lib/version-check";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import StuckPrintsPanel from "./StuckPrintsPanel";
+import ErrorLogPanel from "./ErrorLogPanel";
 
 type RetentionLog = {
   id: number;
