@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Plus, Trash2, Search } from "lucide-react";
+import { Gift, Plus, Trash2, Search, Sparkles, Phone } from "lucide-react";
 
 type Reward = {
   id: string;
@@ -118,6 +118,21 @@ export default function LoyaltyTab() {
     }
     qc.invalidateQueries({ queryKey: ["loyalty-enabled"] });
     toast({ title: v ? "Fidelidade ativada" : "Fidelidade desativada" });
+  }
+
+  const [seeding, setSeeding] = useState(false);
+  async function seedDefaults() {
+    setSeeding(true);
+    const { error } = await supabase.rpc(
+      "admin_loyalty_seed_default_rewards" as never,
+    );
+    setSeeding(false);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["loyalty-rewards", restaurantId] });
+    toast({ title: "Brindes padrão criados/atualizados" });
   }
 
   // ===== CRUD brinde =====
@@ -266,9 +281,30 @@ export default function LoyaltyTab() {
         />
       </div>
 
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3">
+        <Phone className="text-primary shrink-0 mt-0.5" size={18} />
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Os pontos são salvos pelo <strong>telefone do cliente</strong>. O sistema remove
+          máscara e usa apenas números, então <code className="bg-muted px-1 rounded">(67) 99999-9999</code>{" "}
+          e <code className="bg-muted px-1 rounded">67999999999</code> são a mesma conta.
+        </p>
+      </div>
+
       {/* Brindes */}
       <section className="space-y-3">
-        <h2 className="text-sm font-bold uppercase">Brindes</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-sm font-bold uppercase">Brindes</h2>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={seedDefaults}
+            disabled={seeding || !restaurantId}
+          >
+            <Sparkles size={14} className="mr-1" />
+            {seeding ? "Criando…" : "Criar brindes padrão"}
+          </Button>
+        </div>
         <div className="rounded-xl border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2">
             <Label>Nome do brinde</Label>
