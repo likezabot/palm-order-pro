@@ -323,10 +323,22 @@ const Pdv = () => {
             <ArrowLeft size={24} />
           </button>
           <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">PDV / CAIXA</h1>
-          <Badge className={`admin-only shrink-0 ${realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}`}>
-            <span className="hidden sm:inline">{realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}</span>
-            <span className="sm:hidden">●</span>
-          </Badge>
+          {(() => {
+            const getStatus = () => {
+              if (isOffline || internet === "offline") return { label: "SEM INTERNET", color: "bg-destructive text-destructive-foreground" };
+              if (realtime !== "online") return { label: "SEM REALTIME", color: "bg-warning text-warning-foreground" };
+              if (!bridgeStatus.online) return { label: "PONTE OFF", color: "bg-warning text-warning-foreground" };
+              if (!bridgeStatus.printerOnline) return { label: "IMP. OFF", color: "bg-warning text-warning-foreground" };
+              return { label: "ONLINE", color: "bg-success text-success-foreground" };
+            };
+            const s = getStatus();
+            return (
+              <Badge className={`shrink-0 ${s.color}`}>
+                <span className="hidden sm:inline">● {s.label}</span>
+                <span className="sm:hidden">●</span>
+              </Badge>
+            );
+          })()}
           
         </div>
         <div className="flex items-center gap-2 shrink-0">
