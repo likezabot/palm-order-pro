@@ -707,7 +707,7 @@ export function parseCommand(raw: string): Command {
     /^(?:estoque|saldo|quanto\s+tem(?:\s+de)?|qtd|quantidade(?:\s+de)?|ver\s+estoque|consulta(?:r)?\s+estoque)\s+/.test(text) ||
     /^quanta?\s+\S+\s+tem\??$/.test(text)
   ) {
-    return { kind: "UNKNOWN" } as Command;
+    return { kind: "PARSE_ERROR", raw, hint: "no_op" };
   }
 
   if (/^(?:\/start|\/help|ajuda|help|comandos?|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite|\?+|o\s+que\s+(?:faz|voce\s+faz)|como\s+usar|me\s+ajuda|socorro)$/.test(text)) {
