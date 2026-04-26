@@ -193,14 +193,47 @@ export default function PublicMenu() {
     return ordered;
   }, [topSellersQuery.data, products]);
 
+  // Agrupa toasts de quickAdd: usa um id fixo (sonner sobrescreve em vez de
+  // empilhar) e janela de 1.2s. Múltiplos cliques rápidos geram UMA notificação
+  // com contagem total ("3 itens adicionados") em vez de uma por item.
+  const quickAddBatchRef = useRef<{
+    count: number;
+    lastName: string;
+    timer: number | null;
+  }>({ count: 0, lastName: "", timer: null });
+
   const quickAdd = (p: PublicProduct) => {
     if (isPreview) {
-      toast.info("Modo preview: ações de pedido estão desativadas.");
+      toast.info("Modo preview: ações de pedido estão desativadas.", {
+        id: "preview-disabled",
+      });
       return;
     }
     cart.add(p, 1, "");
-    toast.success(`${p.name} adicionado`, { duration: 1200 });
+
+    const batch = quickAddBatchRef.current;
+    batch.count += 1;
+    batch.lastName = p.name;
+
+    const message =
+      batch.count === 1
+        ? `${batch.lastName} adicionado`
+        : `${batch.count} itens adicionados`;
+
+    toast.success(message, {
+      id: "quick-add-batch",
+      duration: 1600,
+      description: batch.count > 1 ? `Último: ${batch.lastName}` : undefined,
+    });
+
+    if (batch.timer) window.clearTimeout(batch.timer);
+    batch.timer = window.setTimeout(() => {
+      batch.count = 0;
+      batch.lastName = "";
+      batch.timer = null;
+    }, 1500);
   };
+
 
   const hasUpsellSuggestion = useMemo(() => {
     const cartIds = new Set(cart.items.map((c) => c.product_id));
