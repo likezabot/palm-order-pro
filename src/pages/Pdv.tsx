@@ -421,7 +421,7 @@ const Pdv = () => {
                   <OrderRow
                     key={order.id}
                     order={order}
-                    itemCount={itemsByOrderId.get(order.id) || 0}
+                    itemCount={(order as any).item_count || 0}
                     selected={selectedId === order.id}
                     isUnseen={isOnlineOrder(order) && !isSeen(order.id)}
                     onSelect={() => {
