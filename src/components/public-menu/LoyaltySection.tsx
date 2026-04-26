@@ -163,12 +163,22 @@ export default function LoyaltySection({
                   <span className="text-sm font-medium">Não quero resgatar agora</span>
                 </label>
                 {status.rewards.map((r) => {
-                  const disabled = !r.available;
+                  const disabled = !r.available || !isPickup;
                   let badge: { label: string; cls: string } | null = null;
-                  if (r.available) {
+                  if (!isPickup) {
+                    badge = {
+                      label: "Apenas para retirada",
+                      cls: "bg-warning/15 text-warning border-warning/30",
+                    };
+                  } else if (r.available) {
                     badge = {
                       label: "Disponível",
                       cls: "bg-success/15 text-success border-success/30",
+                    };
+                  } else if (r.blocked_reason === "pickup_only") {
+                    badge = {
+                      label: "Apenas para retirada",
+                      cls: "bg-warning/15 text-warning border-warning/30",
                     };
                   } else if (r.blocked_reason?.startsWith("missing_points:")) {
                     const n = r.blocked_reason.split(":")[1];
