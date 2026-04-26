@@ -180,6 +180,28 @@ export default function PublicMenu() {
     [products],
   );
 
+  const topSellers = useMemo(() => {
+    const ids = topSellersQuery.data ?? [];
+    if (!ids.length) return [];
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const ordered: PublicProduct[] = [];
+    for (const id of ids) {
+      const p = byId.get(id);
+      if (p && !p.is_sold_out) ordered.push(p);
+      if (ordered.length >= 10) break;
+    }
+    return ordered;
+  }, [topSellersQuery.data, products]);
+
+  const quickAdd = (p: PublicProduct) => {
+    if (isPreview) {
+      toast.info("Modo preview: ações de pedido estão desativadas.");
+      return;
+    }
+    cart.add(p, 1, "");
+    toast.success(`${p.name} adicionado`, { duration: 1200 });
+  };
+
   const hasUpsellSuggestion = useMemo(() => {
     const cartIds = new Set(cart.items.map((c) => c.product_id));
     return products.some(
