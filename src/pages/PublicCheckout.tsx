@@ -21,6 +21,7 @@ import {
   type PaymentMethod,
 } from "@/lib/public-cart";
 import { fetchRestaurantBySlug } from "@/lib/public-menu";
+import { logError, extractErrorCode } from "@/lib/error-log";
 
 export default function PublicCheckout() {
   const { slug } = useParams<{ slug: string }>();
