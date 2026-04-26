@@ -81,7 +81,7 @@ const Pdv = () => {
         const health = await checkBridgeStatus(cfg.bridgeUrl);
         setBridgeStatus({
           online: !health.error,
-          printerOnline: health.printer_connected !== false && health.printer_ok !== false,
+          printerOnline: health.printer_connected !== false,
         });
       } catch (e) {
         setBridgeStatus({ online: false, printerOnline: false });
