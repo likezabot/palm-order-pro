@@ -134,6 +134,8 @@ export async function fetchTopSellerProductIds(days = 7): Promise<string[]> {
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => id);
 }
+
+export async function isRestaurantOpen(restaurantId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("is_restaurant_open" as any, {
     p_restaurant_id: restaurantId,
   });
