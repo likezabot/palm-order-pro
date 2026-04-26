@@ -106,24 +106,29 @@ const Pdv = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select("*, order_items(quantity)")
         .in("status", ["new", "preparing", "done"])
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return data as Order[];
+      
+      return (data as any[]).map(o => ({
+        ...o,
+        item_count: (o.order_items ?? []).reduce((sum: number, it: any) => sum + (it.quantity ?? 0), 0)
+      })) as (Order & { item_count: number })[];
     },
     refetchInterval: 30000,
   });
 
-  const { data: allItems = [] } = useQuery({
-    queryKey: ["pdv-items"],
+  const { data: selectedItems = [] } = useQuery({
+    queryKey: ["pdv-items", selectedId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("order_items").select("*");
+      if (!selectedId) return [];
+      const { data, error } = await supabase.from("order_items").select("*").eq("order_id", selectedId);
       if (error) throw error;
       return data as OrderItem[];
     },
-    refetchInterval: 30000,
+    enabled: !!selectedId,
   });
 
   // Impressão MANUAL — reimpressão sob demanda
@@ -154,17 +159,14 @@ const Pdv = () => {
     }
   }, [toast]);
 
-  const selectedOrder = orders.find((o) => o.id === selectedId) || null;
-  const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
+  const selectedOrder = (orders as (Order & { item_count: number })[]).find((o) => o.id === selectedId) || null;
 
-  // Agrupa pedidos por status + conta itens (mais antigo primeiro dentro de cada grupo)
-  const itemsByOrderId = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const it of allItems) {
-      map.set(it.order_id, (map.get(it.order_id) || 0) + (it.quantity || 0));
+  useEffect(() => {
+    if (selectedId && !orders.some(o => o.id === selectedId)) {
+      setSelectedId(null);
+      setShowPayment(false);
     }
-    return map;
-  }, [allItems]);
+  }, [selectedId, orders]);
 
   // Separa em MESAS (dine_in/balcão) e ENTREGAS (delivery + pickup)
   const { tablesOrders, deliveryOrders } = useMemo(() => {
@@ -273,7 +275,7 @@ const Pdv = () => {
 
     if (shouldPrint) {
       const printConfig = loadPrintConfig();
-      const items = allItems.filter((i) => i.order_id === selectedOrder.id);
+      const items = selectedItems;
       if (items.length > 0 && printConfig.printMode === "bridge") {
         const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
         await printCustomerReceipt(
@@ -419,7 +421,7 @@ const Pdv = () => {
                   <OrderRow
                     key={order.id}
                     order={order}
-                    itemCount={itemsByOrderId.get(order.id) || 0}
+                    itemCount={(order as any).item_count || 0}
                     selected={selectedId === order.id}
                     isUnseen={isOnlineOrder(order) && !isSeen(order.id)}
                     onSelect={() => {
@@ -456,7 +458,7 @@ const Pdv = () => {
                   <OrderRow
                     key={order.id}
                     order={order}
-                    itemCount={itemsByOrderId.get(order.id) || 0}
+                    itemCount={(order as any).item_count || 0}
                     selected={selectedId === order.id}
                     onSelect={() => { setSelectedId(order.id); setShowPayment(false); setPaymentsHistory([]); }}
                     onAdvance={handleAdvance}

@@ -42,9 +42,13 @@ export function usePdvRealtime() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         markRealtimeHeartbeat();
         const newOrder = payload.new as Order;
+        
+        // Ignorar se o status não for ativo
+        if (!["new", "preparing", "done"].includes(newOrder.status)) return;
+
         // Insere otimisticamente no cache de pedidos
         queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
-          if (!old) return old;
+          if (!old) return [newOrder];
           if (old.some((o) => o.id === newOrder.id)) return old;
           return [newOrder, ...old];
         });
@@ -56,19 +60,32 @@ export function usePdvRealtime() {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
         markRealtimeHeartbeat();
         const updated = payload.new as Order;
+        const activeStatuses = ["new", "preparing", "done"];
+        
         queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
           if (!old) return old;
-          let found = false;
-          const next = old.map((o) => {
+          
+          const isCurrentlyActive = activeStatuses.includes(updated.status);
+          const existsInCache = old.some(o => o.id === updated.id);
+
+          // Se mudou para um status não ativo (ex: paid), remove do cache
+          if (!isCurrentlyActive) {
+            return old.filter(o => o.id !== updated.id);
+          }
+
+          // Se é ativo mas não estava no cache, adiciona
+          if (!existsInCache) {
+            return [updated, ...old];
+          }
+
+          // Se já existe, atualiza normal
+          return old.map((o) => {
             if (o.id !== updated.id) return o;
-            found = true;
-            // Guard contra updates fora de ordem (versão menor = ignora)
             if (typeof o.version === "number" && typeof updated.version === "number" && updated.version < o.version) {
               return o;
             }
             return { ...o, ...updated };
           });
-          return found ? next : old;
         });
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
