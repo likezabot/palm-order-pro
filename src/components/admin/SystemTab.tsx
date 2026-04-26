@@ -159,6 +159,7 @@ export const SystemTab = () => {
 
   return (
     <div className="max-w-2xl mx-auto py-4 space-y-6">
+      <ErrorsSummaryPanel />
       <DailyErrorsPanel />
       <ErrorLogPanel />
       <StuckPrintsPanel />
