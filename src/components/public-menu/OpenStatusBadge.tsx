@@ -33,7 +33,7 @@ export default function OpenStatusBadge({ open, onClick }: Props) {
         />
       </span>
       {open ? "Aberto agora" : "Fechado"}
-      <span className="opacity-70 normal-case font-medium tracking-normal">· ver horários</span>
+      <span className="ml-1 opacity-70 normal-case font-medium tracking-normal">· ver horários</span>
     </button>
   );
 }

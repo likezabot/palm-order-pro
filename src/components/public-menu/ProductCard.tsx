@@ -48,7 +48,7 @@ function QuickAddButton({
       handle(e);
     }
   };
-  const dim = size === "sm" ? "h-9 w-9" : "h-10 w-10";
+  const dim = size === "sm" ? "h-8 w-8" : "h-9 w-9";
   const label = productName
     ? justAdded
       ? `${productName} adicionado ao carrinho`
@@ -80,9 +80,9 @@ function QuickAddButton({
       }}
     >
       {justAdded ? (
-        <Check className="h-5 w-5" aria-hidden="true" />
+        <Check className="h-4 w-4" aria-hidden="true" />
       ) : (
-        <Plus className="h-5 w-5" aria-hidden="true" />
+        <Plus className="h-4 w-4" aria-hidden="true" />
       )}
     </button>
   );
@@ -165,7 +165,7 @@ export default function ProductCard({
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-4xl">🍢</div>
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-4xl opacity-80">🍢</div>
             )}
           </div>
         )}
@@ -235,7 +235,7 @@ export default function ProductCard({
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-3xl">🍢</div>
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-3xl opacity-80">🍢</div>
           )}
         </div>
       )}
