@@ -18,7 +18,7 @@ type ErrorLogRow = {
   resolved_at: string | null;
 };
 
-const SOURCES = ["all", "global", "console", "public_checkout", "public_menu", "pdv", "kitchen", "palm", "admin", "bridge", "rpc", "realtime", "print", "other"] as const;
+const SOURCES = ["all", "global", "console", "fetch", "xhr", "rpc", "webusb", "public_checkout", "public_menu", "pdv", "kitchen", "palm", "admin", "bridge", "realtime", "print", "other"] as const;
 const SEVERITIES = ["all", "error", "warning", "info"] as const;
 
 // Códigos que têm correção pontual conhecida disparada via /functions/v1/health-check?fix=...
