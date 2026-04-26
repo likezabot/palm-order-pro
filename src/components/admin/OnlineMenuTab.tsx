@@ -54,7 +54,7 @@ async function fetchProducts(): Promise<ProductOnline[]> {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, category, price, description, image_url, is_featured, is_available_online, is_sold_out, display_order, active",
+      "id, name, category, price, description, image_url, is_featured, is_available_online, is_sold_out, is_sold_out_online, display_order, active",
     )
     .eq("active", true)
     .order("category")
@@ -77,6 +77,7 @@ async function updateOnline(id: string, patch: UpdateOnlinePatch) {
     p_is_featured: patch.is_featured ?? null,
     p_is_available_online: patch.is_available_online ?? null,
     p_is_sold_out: patch.is_sold_out ?? null,
+    p_is_sold_out_online: patch.is_sold_out_online ?? null,
     p_display_order: patch.display_order ?? null,
     p_clear_description: patch.clear_description ?? false,
     p_clear_image_url: patch.clear_image_url ?? false,
