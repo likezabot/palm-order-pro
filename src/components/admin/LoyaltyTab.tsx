@@ -120,6 +120,21 @@ export default function LoyaltyTab() {
     toast({ title: v ? "Fidelidade ativada" : "Fidelidade desativada" });
   }
 
+  const [seeding, setSeeding] = useState(false);
+  async function seedDefaults() {
+    setSeeding(true);
+    const { error } = await supabase.rpc(
+      "admin_loyalty_seed_default_rewards" as never,
+    );
+    setSeeding(false);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["loyalty-rewards", restaurantId] });
+    toast({ title: "Brindes padrão criados/atualizados" });
+  }
+
   // ===== CRUD brinde =====
   const [form, setForm] = useState<{
     id: string | null;
