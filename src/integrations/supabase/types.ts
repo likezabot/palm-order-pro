@@ -384,6 +384,42 @@ export type Database = {
           },
         ]
       }
+      error_log: {
+        Row: {
+          code: string | null
+          context: Json
+          id: number
+          message: string
+          occurred_at: string
+          resolved: boolean
+          resolved_at: string | null
+          severity: string
+          source: string
+        }
+        Insert: {
+          code?: string | null
+          context?: Json
+          id?: number
+          message: string
+          occurred_at?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          severity?: string
+          source: string
+        }
+        Update: {
+          code?: string | null
+          context?: Json
+          id?: number
+          message?: string
+          occurred_at?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          severity?: string
+          source?: string
+        }
+        Relationships: []
+      }
       inventory_items: {
         Row: {
           aliases: string[]
@@ -1479,37 +1515,21 @@ export type Database = {
         }
         Returns: Json
       }
-      create_public_order:
-        | {
-            Args: {
-              p_address: Json
-              p_change_for: number
-              p_client_request_id: string
-              p_customer_name: string
-              p_customer_phone: string
-              p_items: Json
-              p_note: string
-              p_payment_method: string
-              p_restaurant_slug: string
-              p_service_type: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_address: Json
-              p_change_for: number
-              p_client_request_id?: string
-              p_customer_name: string
-              p_customer_phone: string
-              p_items: Json
-              p_note: string
-              p_payment_method: string
-              p_restaurant_slug: string
-              p_service_type: string
-            }
-            Returns: Json
-          }
+      create_public_order: {
+        Args: {
+          p_address: Json
+          p_change_for: number
+          p_client_request_id: string
+          p_customer_name: string
+          p_customer_phone: string
+          p_items: Json
+          p_note: string
+          p_payment_method: string
+          p_restaurant_slug: string
+          p_service_type: string
+        }
+        Returns: Json
+      }
       defer_order_print: { Args: { p_order_id: string }; Returns: undefined }
       enqueue_print_job: {
         Args: { p_job_type: string; p_order_id: string; p_payload?: Json }
