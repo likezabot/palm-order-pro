@@ -321,6 +321,10 @@ const Admin = () => {
           <StatsPanel />
         </TabsContent>
 
+        <TabsContent value="errors" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
+          <ErrorsTab />
+        </TabsContent>
+
         <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
           <SystemTab />
         </TabsContent>
