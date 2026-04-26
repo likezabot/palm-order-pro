@@ -224,8 +224,10 @@ export function installGlobalErrorCapture(): void {
 const IGNORE_URL_PATTERNS = [
   /\/rest\/v1\/error_log/i,
   /supabase\.co\/auth\/v1\/token/i, // token refresh — barulhento e benigno
+  /\/functions\/v1\/health-check/i, // o painel já trata erro localmente
   /lovable\.app\/.*\/(ping|telemetry|analytics)/i,
   /__vite|vite-hmr|@vite|@react-refresh/i,
+  /localhost:9100/i, // bridge local — offline esperado em web; já tratado pelo monitor de bridge
 ];
 
 function shouldIgnoreUrl(url: string): boolean {
