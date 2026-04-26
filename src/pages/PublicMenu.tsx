@@ -353,12 +353,12 @@ export default function PublicMenu() {
             )}
 
             {(settings?.show_categories_section_title ?? true) && (
-              <h2 className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+              <h2 className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
                 {settings?.categories_section_title || "Categorias"}
               </h2>
             )}
 
-            <div className="mt-2 space-y-8">
+            <div className="mt-2 space-y-5 pb-32">
               {categories.map((cat) => {
                 const items = (productsByCategory.get(cat.slug) ?? []).sort(
                   (a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name),
@@ -371,22 +371,26 @@ export default function PublicMenu() {
                   ov.layout ?? (layoutMode === "grid" ? "grid-2" : "list");
                 const catAspect = ov.image_aspect ?? imageAspect;
                 const catCardStyle = ov.card_style ?? "detailed";
+                // Mobile sempre lista compacta; grid só em sm+ (tablet/desktop)
                 const productLayout: "list" | "grid" =
                   catLayoutKey === "list" ? "list" : "grid";
                 const gridClass =
                   catLayoutKey === "grid-3"
-                    ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
+                    ? "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
                     : catLayoutKey === "grid-2"
-                      ? "grid grid-cols-2 gap-3"
-                      : "grid grid-cols-1 gap-3";
+                      ? "grid grid-cols-1 gap-2 sm:grid-cols-2"
+                      : "grid grid-cols-1 gap-2";
+                // No mobile, força layout=list mesmo se admin escolheu grid (foto pequena)
+                const mobileLayout: "list" | "grid" = "list";
 
                 const entries = buildCategoryEntries(items, groupsQuery.data ?? [], cat.slug);
                 if (!entries.length) return null;
 
                 return (
                   <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
-                    <h3 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h3>
-                    <div className={gridClass}>
+                    <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
+                    {/* Mobile: lista compacta sempre */}
+                    <div className="grid grid-cols-1 gap-2 sm:hidden">
                       {entries.map((entry) => {
                         if (entry.kind === "product") {
                           const p = entry.product;
@@ -395,7 +399,7 @@ export default function PublicMenu() {
                               key={p.id}
                               product={p}
                               disabled={!isOpen && !isPreview}
-                              layout={productLayout}
+                              layout="list"
                               showImage={showImages}
                               showDescription={showDescriptions}
                               imageAspect={catAspect}
@@ -405,7 +409,6 @@ export default function PublicMenu() {
                             />
                           );
                         }
-                        // Card de grupo: abre sheet com variantes
                         const minBRL = entry.minPrice.toLocaleString("pt-BR", {
                           style: "currency",
                           currency: "BRL",
@@ -415,7 +418,7 @@ export default function PublicMenu() {
                             key={`group-${entry.group.id}`}
                             product={{ ...entry.trigger, is_sold_out: entry.allSoldOut }}
                             disabled={!isOpen && !isPreview}
-                            layout={productLayout}
+                            layout="list"
                             showImage={showImages}
                             showDescription={false}
                             imageAspect={catAspect}
@@ -432,6 +435,55 @@ export default function PublicMenu() {
                           />
                         );
                       })}
+                    </div>
+                    {/* Tablet/Desktop: respeita layout escolhido */}
+                    <div className={cn("hidden sm:block")}>
+                      <div className={gridClass}>
+                        {entries.map((entry) => {
+                          if (entry.kind === "product") {
+                            const p = entry.product;
+                            return (
+                              <ProductCard
+                                key={p.id}
+                                product={p}
+                                disabled={!isOpen && !isPreview}
+                                layout={productLayout}
+                                showImage={showImages}
+                                showDescription={showDescriptions}
+                                imageAspect={catAspect}
+                                cardStyle={catCardStyle}
+                                onClick={(prod) => setSelected(prod)}
+                                onQuickAdd={quickAdd}
+                              />
+                            );
+                          }
+                          const minBRL = entry.minPrice.toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          });
+                          return (
+                            <ProductCard
+                              key={`group-${entry.group.id}`}
+                              product={{ ...entry.trigger, is_sold_out: entry.allSoldOut }}
+                              disabled={!isOpen && !isPreview}
+                              layout={productLayout}
+                              showImage={showImages}
+                              showDescription={false}
+                              imageAspect={catAspect}
+                              cardStyle={catCardStyle}
+                              priceLabel={`a partir de ${minBRL}`}
+                              trailingHint
+                              onClick={() =>
+                                setOpenGroup({
+                                  group: entry.group,
+                                  trigger: entry.trigger,
+                                  variants: entry.variants,
+                                })
+                              }
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
                   </section>
                 );
