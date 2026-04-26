@@ -323,7 +323,7 @@ export const SystemTab = () => {
                       <span>Dias resumo: <b>{String(r.archived_summary_days ?? 0)}</b></span>
                       <span>Garçons: <b>{String(r.archived_waiter_rows ?? 0)}</b></span>
                       <span>Produtos: <b>{String(r.archived_product_rows ?? 0)}</b></span>
-                      <span>Mov. estoque: <b>{String(r.deleted_inventory_movements ?? 0)}</b></span>
+                      <span>Mov. caixa: <b>{String(r.deleted_cash_movements ?? 0)}</b></span>
                     </div>
                   ) : (
                     <p className="text-xs text-destructive font-mono break-all">
