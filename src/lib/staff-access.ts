@@ -14,7 +14,7 @@
 
 const STORAGE_KEY = "staff_access_unlocked";
 const OVERRIDE_KEY = "staff_pin_override";
-const DEFAULT_PIN = "2580";
+const DEFAULT_PIN = "112233";
 
 export function getExpectedPin(): string {
   try {
