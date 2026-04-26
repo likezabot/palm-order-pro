@@ -40,9 +40,9 @@ const SAMPLE_PHOTOS: Array<{
   { name: "fundo neutro cinza", rgb: [128, 128, 128], expectFailAt: null },
   { name: "prato claro com salada", rgb: [190, 195, 170], expectFailAt: null },
   { name: "céu pastel suave", rgb: [220, 225, 235], expectFailAt: null },
-  // Caso extremo — foto quase pura branca não atinge AA com α teto 0.85.
-  // Documentamos como “troque a foto”; o algoritmo deve usar α=MAX e logar warn.
-  { name: "papel branco (extremo)", rgb: [250, 250, 250], expectFailAt: "AA" },
+  // Caso extremo — papel quase puro branco. Com α=MAX (0.85) o algoritmo
+  // ainda atinge AA, mas valida que o teto é realmente acionado.
+  { name: "papel branco (extremo)", rgb: [250, 250, 250], expectFailAt: null },
   // Caso extremo oposto — foto preta já passa folgado sem overlay.
   { name: "preto", rgb: [10, 10, 10], expectFailAt: null },
 ];

@@ -123,9 +123,9 @@ export function overlayAlphaForWhiteText(
   const ceilingL = composedLuminance(baseRGB, overlayRGB, maxAlpha);
   if (contrastRatio(whiteL, ceilingL) < targetRatio) return maxAlpha;
 
-  // Busca binária com pequena margem de segurança (0.05) para compensar
+  // Busca binária com margem de segurança (0.15) para compensar
   // aproximação cinza-equivalente ↔ cor real e flutuação de pixels da foto.
-  const safeTarget = targetRatio + 0.05;
+  const safeTarget = targetRatio + 0.15;
   let lo = minAlpha;
   let hi = maxAlpha;
   for (let i = 0; i < 24; i++) {
