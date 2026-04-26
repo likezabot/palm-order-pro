@@ -132,13 +132,13 @@ export const SystemTab = () => {
 
       const { data, error } = await supabase.rpc(
         "reset_operational_data_period" as never,
-        { p_days: days, p_reset_stock: resetStock } as never,
+        { p_days: days } as never,
       );
       if (error) throw error;
       const r = (data as Record<string, number | string>) || {};
       toast({
         title: "Dados apagados",
-        description: `${r.orders ?? 0} pedidos · ${r.cash_register ?? 0} caixas · ${r.inventory_items_zeroed ?? 0} estoques zerados`,
+        description: `${r.orders ?? 0} pedidos · ${r.cash_register ?? 0} caixas`,
       });
       await qc.invalidateQueries();
       await loadLogs();
