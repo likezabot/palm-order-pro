@@ -17,6 +17,7 @@ import { usePublicCart } from "@/lib/public-cart";
 import { usePreviewMode } from "@/hooks/use-preview-mode";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import PublicMenuLayout from "@/components/public-menu/PublicMenuLayout";
 import MenuHero from "@/components/public-menu/MenuHero";
 import OpenStatusBadge from "@/components/public-menu/OpenStatusBadge";
