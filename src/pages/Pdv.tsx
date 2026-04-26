@@ -159,17 +159,14 @@ const Pdv = () => {
     }
   }, [toast]);
 
-  const selectedOrder = orders.find((o) => o.id === selectedId) || null;
-  const selectedItems = selectedOrder ? allItems.filter((i) => i.order_id === selectedOrder.id) : [];
+  const selectedOrder = (orders as (Order & { item_count: number })[]).find((o) => o.id === selectedId) || null;
 
-  // Agrupa pedidos por status + conta itens (mais antigo primeiro dentro de cada grupo)
-  const itemsByOrderId = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const it of allItems) {
-      map.set(it.order_id, (map.get(it.order_id) || 0) + (it.quantity || 0));
+  useEffect(() => {
+    if (selectedId && !orders.some(o => o.id === selectedId)) {
+      setSelectedId(null);
+      setShowPayment(false);
     }
-    return map;
-  }, [allItems]);
+  }, [selectedId, orders]);
 
   // Separa em MESAS (dine_in/balcão) e ENTREGAS (delivery + pickup)
   const { tablesOrders, deliveryOrders } = useMemo(() => {
