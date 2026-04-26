@@ -44,6 +44,9 @@ const Admin = () => {
   const [staffMode, setStaffMode] = useState(
     () => localStorage.getItem("admin-staff-mode") === "true",
   );
+  // Guards de in-flight para evitar duplo clique em ações administrativas críticas
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
