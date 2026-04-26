@@ -63,6 +63,17 @@ function startOfTodayIso() {
   return d.toISOString();
 }
 
+function safeStringifyContext(ctx: unknown): string {
+  if (ctx == null) return "{}";
+  if (typeof ctx === "string") return ctx.slice(0, 20_000);
+  try {
+    const s = JSON.stringify(ctx, null, 2);
+    return s.length > 20_000 ? s.slice(0, 20_000) + "\n…(truncado)" : s;
+  } catch {
+    try { return String(ctx).slice(0, 20_000); } catch { return "[contexto não serializável]"; }
+  }
+}
+
 export default function DailyErrorsPanel() {
   const qc = useQueryClient();
   const { toast } = useToast();
