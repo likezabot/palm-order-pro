@@ -1214,6 +1214,21 @@ export type Database = {
             }
             Returns: undefined
           }
+        | {
+            Args: {
+              p_clear_description?: boolean
+              p_clear_image_url?: boolean
+              p_description?: string
+              p_display_order?: number
+              p_id: string
+              p_image_url?: string
+              p_is_available_online?: boolean
+              p_is_featured?: boolean
+              p_is_sold_out?: boolean
+              p_is_sold_out_online?: boolean
+            }
+            Returns: undefined
+          }
       admin_update_public_menu_settings:
         | {
             Args: {
