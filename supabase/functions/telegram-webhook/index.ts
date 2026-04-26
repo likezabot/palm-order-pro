@@ -2818,12 +2818,12 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
-  // ─── WIZARD callbacks (wz|...) ───
-  if (data.startsWith("wz|")) {
-    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
-    const waiter = bound ?? (username ? `Telegram (@${username})` : "Telegram");
-    const handled = await wzHandleCallback(cb, waiter);
-    if (handled) return;
+  // ─── WIZARD/UNDO de estoque (wz|... e us|...) — REMOVIDO ───
+  // Módulo de estoque foi descontinuado. Botões antigos viram NO-OP amigável.
+  if (data.startsWith("wz|") || data.startsWith("us|")) {
+    await answerCallback(cbId, "Estoque removido");
+    try { await editTelegramMessage(chatId, messageId, "ℹ️ O controle de estoque foi removido do sistema."); } catch (_) {}
+    return;
   }
 
   // ─── VOICE CONFIRM (vc|ok|<token> | vc|no|<token>) ───
