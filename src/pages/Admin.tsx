@@ -247,6 +247,19 @@ const Admin = () => {
               <Printer className="w-4 h-4" /> Impressão
             </TabsTrigger>
             <TabsTrigger
+              value="errors"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap relative"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span className="hidden sm:inline">Erros &amp; Saúde</span>
+              <span className="sm:hidden">Erros</span>
+              {unresolvedErrors > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black leading-none">
+                  {unresolvedErrors > 99 ? "99+" : unresolvedErrors}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
               value="stats"
               className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
