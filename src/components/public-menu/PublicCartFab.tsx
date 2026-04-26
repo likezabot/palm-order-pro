@@ -32,26 +32,33 @@ export default function PublicCartFab({ itemCount, total, onClick }: Props) {
         left: "1rem",
         right: "1rem",
         background: "var(--brand-gradient)",
+        boxShadow:
+          "0 14px 40px -10px hsl(14 76% 46% / 0.55), 0 4px 14px -4px hsl(22 88% 52% / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.18)",
       }}
       className={cn(
-        "fixed z-30 flex items-center justify-between gap-3 rounded-full px-5 py-4 font-bold text-primary-foreground shadow-glow active:scale-[0.98] transition-transform min-h-[60px]",
-        "shadow-[0_8px_32px_-8px_hsl(var(--primary)/0.6)]",
+        "fixed z-30 flex items-center justify-between gap-3 rounded-full px-5 py-4 font-bold text-primary-foreground active:scale-[0.98] transition-transform min-h-[60px]",
+        "ring-1 ring-white/15",
         pulse && "animate-pulse-active",
       )}
     >
       <span className="flex items-center gap-2.5">
         <span
           className={cn(
-            "relative flex h-8 min-w-[32px] items-center justify-center rounded-full bg-primary-foreground/25 px-2 text-sm font-black backdrop-blur-sm transition-transform",
+            "relative flex h-8 min-w-[32px] items-center justify-center rounded-full bg-white/25 px-2 text-sm font-black backdrop-blur-sm transition-transform ring-1 ring-white/30",
             pulse && "scale-125",
           )}
         >
           {itemCount}
         </span>
-        <ShoppingBag className="h-5 w-5" />
-        <span>Ver carrinho</span>
+        <ShoppingBag className="h-5 w-5 drop-shadow-sm" />
+        <span className="tracking-wide">Ver carrinho</span>
       </span>
-      <span className="text-base font-black tabular-nums">R$ {total.toFixed(2)}</span>
+      <span className="flex items-center gap-3">
+        <span aria-hidden className="h-6 w-px bg-white/30" />
+        <span className="text-base font-black tabular-nums tracking-tight">
+          R$ {total.toFixed(2)}
+        </span>
+      </span>
     </button>
   );
 }

@@ -201,11 +201,11 @@ export default function MenuHero({
             <div
               className={cn(
                 "relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-card sm:h-24 sm:w-24",
-                "ring-4 ring-background",
+                "ring-[3px] ring-background",
               )}
               style={{
                 boxShadow:
-                  "0 10px 30px -10px hsl(var(--primary) / 0.45), 0 4px 12px rgba(0,0,0,0.15)",
+                  "0 0 0 1px hsl(36 78% 52% / 0.45), 0 14px 36px -10px hsl(14 76% 46% / 0.45), 0 4px 14px -2px hsl(18 50% 20% / 0.18)",
               }}
             >
               {restaurant.logo_url ? (
@@ -216,7 +216,7 @@ export default function MenuHero({
                   loading="eager"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary to-primary/70 text-2xl font-black text-primary-foreground">
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary via-primary-glow to-accent text-2xl font-black text-primary-foreground">
                   {restaurant.name.charAt(0)}
                 </div>
               )}
@@ -238,13 +238,19 @@ export default function MenuHero({
             )}
           >
             {prep > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-medium text-foreground/80">
-                <Clock size={12} aria-hidden /> ~{prep} min
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/70 px-2.5 py-1 font-semibold text-foreground/80 shadow-[var(--shadow-soft)]"
+                style={{ background: "var(--brand-gradient-soft)" }}
+              >
+                <Clock size={12} aria-hidden className="text-primary" /> ~{prep} min
               </span>
             )}
             {deliveryTotal > prep && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-medium text-foreground/80">
-                <Clock size={12} aria-hidden /> entrega ~{deliveryTotal} min
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/70 px-2.5 py-1 font-semibold text-foreground/80 shadow-[var(--shadow-soft)]"
+                style={{ background: "var(--brand-gradient-soft)" }}
+              >
+                <Clock size={12} aria-hidden className="text-primary" /> entrega ~{deliveryTotal} min
               </span>
             )}
             {rightSlot && isCenter && <div>{rightSlot}</div>}
