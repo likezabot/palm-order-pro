@@ -41,7 +41,10 @@ const AnimatedRoutes = () => {
     <div key={location.pathname} className="animate-fade-in">
       <Suspense fallback={<RouteFallback />}>
         <Routes location={location}>
-          <Route path="/" element={<Index />} />
+          {/* Raiz mostra o cardápio público para clientes (link compartilhado no WhatsApp) */}
+          <Route path="/" element={<Navigate to="/menu/plano-b-espetaria" replace />} />
+          {/* Tela interna de seleção (Atendimento/PDV/Cozinha/Admin) — uso da equipe */}
+          <Route path="/home" element={<Index />} />
           <Route path="/palm" element={<Palm />} />
           <Route path="/kitchen" element={<Kitchen />} />
           <Route path="/cashier" element={<Pdv />} />

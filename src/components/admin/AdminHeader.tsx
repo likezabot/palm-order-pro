@@ -29,7 +29,7 @@ export const AdminHeader = ({
         <button
           onClick={() => {
             playFeedback("click");
-            navigate("/");
+            navigate("/home");
           }}
           className="text-muted-foreground hover:bg-secondary p-2 rounded-full transition-colors shrink-0"
         >

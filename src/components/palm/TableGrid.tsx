@@ -273,7 +273,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
         <button
           onClick={() => {
             playFeedback("click");
-            navigate("/");
+            navigate("/home");
           }}
           className="flex items-center gap-2 text-muted-foreground"
         >

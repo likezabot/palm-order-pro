@@ -339,7 +339,7 @@ const Pdv = () => {
       {/* Header */}
       <div className="border-b border-border p-3 sm:p-4 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:pt-[calc(1rem+env(safe-area-inset-top))] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-          <button onClick={() => navigate("/")} className="text-muted-foreground shrink-0">
+          <button onClick={() => navigate("/home")} className="text-muted-foreground shrink-0">
             <ArrowLeft size={24} />
           </button>
           <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">PDV / CAIXA</h1>

@@ -313,7 +313,7 @@ const Cashier = () => {
   return (
     <div className="min-h-screen-safe flex flex-col">
       <div className="border-b border-border p-4 pt-[calc(1rem+env(safe-area-inset-top))] flex items-center gap-4">
-        <button onClick={() => navigate("/")} className="text-muted-foreground">
+        <button onClick={() => navigate("/home")} className="text-muted-foreground">
           <ArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-bold uppercase tracking-tight">CAIXA</h1>
