@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart } from "lucide-react";
+import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
@@ -23,6 +23,7 @@ import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import AdminHeader from "@/components/admin/AdminHeader";
 import OrdersTab from "@/components/admin/OrdersTab";
 import SystemTab from "@/components/admin/SystemTab";
+import ErrorsTab from "@/components/admin/ErrorsTab";
 import NetworkTab from "@/components/admin/NetworkTab";
 import OnlineMenuTab from "@/components/admin/OnlineMenuTab";
 import OnlineOrdersTab from "@/components/admin/OnlineOrdersTab";
@@ -46,7 +47,7 @@ const Admin = () => {
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
-    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network")) {
+    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network" || activeTab === "errors")) {
       setActiveTab("products");
     }
   }, [staffMode, activeTab]);
@@ -91,6 +92,23 @@ const Admin = () => {
       return data as Order[];
     },
     refetchInterval: 30_000,
+  });
+
+  // Contagem leve de erros não resolvidos das últimas 24h para badge na aba "Erros"
+  const { data: unresolvedErrors = 0 } = useQuery({
+    queryKey: ["admin-unresolved-errors-count"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count, error } = await supabase
+        .from("error_log" as never)
+        .select("*", { count: "exact", head: true })
+        .eq("resolved", false)
+        .gte("occurred_at", since);
+      if (error) return 0;
+      return count ?? 0;
+    },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
   const { orderMap, productsByCategory, handleDragEnd, handleResetOrder } =
@@ -229,6 +247,19 @@ const Admin = () => {
               <Printer className="w-4 h-4" /> Impressão
             </TabsTrigger>
             <TabsTrigger
+              value="errors"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap relative"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span className="hidden sm:inline">Erros &amp; Saúde</span>
+              <span className="sm:hidden">Erros</span>
+              {unresolvedErrors > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black leading-none">
+                  {unresolvedErrors > 99 ? "99+" : unresolvedErrors}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
               value="stats"
               className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
             >
@@ -288,6 +319,10 @@ const Admin = () => {
 
         <TabsContent value="stats" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
           <StatsPanel />
+        </TabsContent>
+
+        <TabsContent value="errors" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
+          <ErrorsTab />
         </TabsContent>
 
         <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
