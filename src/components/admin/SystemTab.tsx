@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import StuckPrintsPanel from "./StuckPrintsPanel";
 import ErrorLogPanel from "./ErrorLogPanel";
 import DailyErrorsPanel from "./DailyErrorsPanel";
+import ErrorsSummaryPanel from "./ErrorsSummaryPanel";
 
 type RetentionLog = {
   id: number;
