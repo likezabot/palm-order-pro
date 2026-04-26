@@ -47,7 +47,7 @@ const Admin = () => {
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
-    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network")) {
+    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network" || activeTab === "errors")) {
       setActiveTab("products");
     }
   }, [staffMode, activeTab]);
