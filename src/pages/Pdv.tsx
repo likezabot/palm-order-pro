@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff, Users, Split } from "lucide-react";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -30,6 +31,8 @@ import { getOrderGroup, getOrderKind, isOnlineOrder, KIND_LABEL } from "@/lib/or
 
 import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
+import { useConnectivity } from "@/hooks/use-connectivity";
+import { checkBridgeStatus } from "@/lib/thermal-printer";
 
 const statusConfig: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
   new: { label: "AGUARDANDO", color: "bg-blue-500 text-white", next: "preparing", nextLabel: "▶ PREPARAR" },
@@ -57,7 +60,37 @@ const Pdv = () => {
     return localStorage.getItem("pdv-staff-mode") === "1";
   });
 
-  const { realtimeStatus } = usePdvRealtime();
+  // Novos estados para dividir conta
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitCount, setSplitCount] = useState<number>(1);
+  const [partialAmount, setPartialAmount] = useState<string>("");
+  const [amountPaidInSplit, setAmountPaidInSplit] = useState<number>(0);
+
+  // Novos estados para alerta de novo pedido
+  const [showNewOrderModal, setShowNewOrderModal] = useState(false);
+  const [latestNewOrder, setLatestNewOrder] = useState<Order | null>(null);
+
+  const { isOffline, realtime, internet } = useConnectivity();
+  const [bridgeStatus, setBridgeStatus] = useState<{ online: boolean; printerOnline: boolean }>({ online: true, printerOnline: true });
+
+  useEffect(() => {
+    const checkBridge = async () => {
+      const cfg = loadPrintConfig();
+      if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
+      try {
+        const health = await checkBridgeStatus(cfg.bridgeUrl);
+        setBridgeStatus({
+          online: !health.error,
+          printerOnline: health.printer_connected !== false,
+        });
+      } catch (e) {
+        setBridgeStatus({ online: false, printerOnline: false });
+      }
+    };
+    checkBridge();
+    const interval = setInterval(checkBridge, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleStaffMode = () => {
     setStaffMode((v) => {
@@ -155,20 +188,19 @@ const Pdv = () => {
   // Sirene ativa enquanto houver entrega online não visualizada
   const { needsUnlock: sirenNeedsUnlock, unlock: unlockSiren, mute: muteSiren } = useSiren(unseenOnlineDelivery.length > 0);
 
-  // Toast forte quando uma NOVA entrega online aparece (1 vez por id)
+  // Alerta visual de novo pedido online (entrega/retirada)
   const announcedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    for (const o of unseenOnlineDelivery) {
-      if (announcedRef.current.has(o.id)) continue;
-      announcedRef.current.add(o.id);
-      const who = o.customer_name_snapshot || "cliente";
-      const kind = getOrderKind(o);
-      toast({
-        title: `🚨 Nova ${KIND_LABEL[kind]} ONLINE — ${who}`,
-        description: `Toque no card para confirmar e parar o alerta.`,
-      });
+    if (unseenOnlineDelivery.length > 0) {
+      const newOrders = unseenOnlineDelivery.filter(o => !announcedRef.current.has(o.id));
+      if (newOrders.length > 0) {
+        newOrders.forEach(o => announcedRef.current.add(o.id));
+        setLatestNewOrder(newOrders[0]);
+        setShowNewOrderModal(true);
+        playFeedback("notification");
+      }
     }
-  }, [unseenOnlineDelivery, toast]);
+  }, [unseenOnlineDelivery, playFeedback]);
 
   // Som curto quando pedido entra em "Prontos p/ Pagamento" (status done)
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
@@ -291,10 +323,22 @@ const Pdv = () => {
             <ArrowLeft size={24} />
           </button>
           <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">PDV / CAIXA</h1>
-          <Badge className={`admin-only shrink-0 ${realtimeStatus === "online" ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}`}>
-            <span className="hidden sm:inline">{realtimeStatus === "online" ? "● ONLINE" : "● OFFLINE"}</span>
-            <span className="sm:hidden">●</span>
-          </Badge>
+          {(() => {
+            const getStatus = () => {
+              if (isOffline || internet === "offline") return { label: "SEM INTERNET", color: "bg-destructive text-destructive-foreground" };
+              if (realtime !== "online") return { label: "SEM REALTIME", color: "bg-warning text-warning-foreground" };
+              if (!bridgeStatus.online) return { label: "BRIDGE OFFLINE", color: "bg-warning text-warning-foreground" };
+              if (!bridgeStatus.printerOnline) return { label: "IMPRESSORA OFFLINE", color: "bg-warning text-warning-foreground" };
+              return { label: "ONLINE", color: "bg-success text-success-foreground" };
+            };
+            const s = getStatus();
+            return (
+              <Badge className={`shrink-0 ${s.color}`}>
+                <span className="hidden sm:inline">● {s.label}</span>
+                <span className="sm:hidden">●</span>
+              </Badge>
+            );
+          })()}
           
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -380,6 +424,7 @@ const Pdv = () => {
                       markSeen(order.id);
                       setSelectedId(order.id);
                       setShowPayment(false);
+                      setAmountPaidInSplit(0);
                     }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
@@ -411,11 +456,11 @@ const Pdv = () => {
                     order={order}
                     itemCount={itemsByOrderId.get(order.id) || 0}
                     selected={selectedId === order.id}
-                    onSelect={() => { setSelectedId(order.id); setShowPayment(false); }}
+                    onSelect={() => { setSelectedId(order.id); setShowPayment(false); setAmountPaidInSplit(0); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
                     onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
-                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
+                    onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setAmountPaidInSplit(0); }}
                   />
                 ))}
               </div>
@@ -433,9 +478,36 @@ const Pdv = () => {
             /* Payment flow */
             <div className="space-y-4">
               <h2 className="text-xl font-bold">Fechar Conta — {formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}</h2>
-              <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
-                <span>TOTAL</span>
-                <span className="text-primary">R$ {total.toFixed(2)}</span>
+              
+              <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+                <div className="flex justify-between items-center text-lg font-bold">
+                  <span>TOTAL DA CONTA</span>
+                  <span className="text-primary text-xl">R$ {total.toFixed(2)}</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowSplitModal(true)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-primary/50 bg-primary/5 p-3 text-sm font-bold text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <Split size={18} /> DIVIDIR CONTA
+                  </button>
+                </div>
+
+                {amountPaidInSplit > 0 && (
+                  <div className="space-y-2 border-t border-dashed border-border pt-3">
+                    <div className="flex justify-between text-sm font-semibold text-success">
+                      <span>VALOR JÁ PAGO</span>
+                      <span>R$ {amountPaidInSplit.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-base font-black text-foreground">
+                      <span>SALDO RESTANTE</span>
+                      <span className={total - amountPaidInSplit > 0 ? "text-destructive" : "text-success"}>
+                        R$ {Math.max(0, total - amountPaidInSplit).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Customer data section */}
@@ -478,13 +550,18 @@ const Pdv = () => {
                 >
                   VOLTAR
                 </button>
-                <button
-                  onClick={() => setShowPayConfirm(true)}
-                  disabled={sending}
-                  className="flex-1 rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
-                >
-                  {sending ? "PROCESSANDO..." : "✅ FECHAR MESA"}
-                </button>
+                <div className="flex-1 flex flex-col gap-1">
+                  <button
+                    onClick={() => setShowPayConfirm(true)}
+                    disabled={sending || (amountPaidInSplit > 0 && amountPaidInSplit < total - 0.01)}
+                    className="w-full rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
+                  >
+                    {sending ? "PROCESSANDO..." : "✅ FECHAR MESA"}
+                  </button>
+                  {amountPaidInSplit > 0 && amountPaidInSplit < total - 0.01 && (
+                    <span className="text-[10px] text-destructive font-bold text-center uppercase">Aguardando quitação total</span>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
@@ -686,6 +763,116 @@ const Pdv = () => {
               className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground"
             >
               Sim, reimprimir
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal: Novo Pedido Recebido (Realtime) */}
+      <AlertDialog open={showNewOrderModal} onOpenChange={setShowNewOrderModal}>
+        <AlertDialogContent className="max-w-[400px]">
+          <AlertDialogHeader>
+            <div className="flex justify-center mb-4">
+              <div className="rounded-full bg-orange-500/10 p-4 ring-8 ring-orange-500/5">
+                <Bike className="w-12 h-12 text-orange-500 animate-bounce" />
+              </div>
+            </div>
+            <AlertDialogTitle className="text-2xl font-black text-center uppercase tracking-tight">
+              Novo pedido recebido
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-lg font-medium text-foreground pt-2">
+              {latestNewOrder && (
+                <>
+                  <span className="block font-black text-primary">
+                    {latestNewOrder.customer_name_snapshot || "Cliente Online"}
+                  </span>
+                  Acesse a área de entregas/retiradas.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center mt-6">
+            <AlertDialogAction
+              onClick={() => {
+                if (latestNewOrder) markSeen(latestNewOrder.id);
+                setShowNewOrderModal(false);
+              }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-6 text-xl rounded-xl"
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal: Dividir Conta */}
+      <AlertDialog open={showSplitModal} onOpenChange={setShowSplitModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Split className="text-primary" /> Dividir Conta
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Total da conta: <span className="font-bold text-foreground">R$ {total.toFixed(2)}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold uppercase text-muted-foreground">Dividir em quantas pessoas?</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="number"
+                  min="1"
+                  value={splitCount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setSplitCount(val);
+                    setPartialAmount(((total - amountPaidInSplit) / val).toFixed(2));
+                  }}
+                  className="w-20 rounded-lg border border-border bg-background p-3 text-center text-lg font-bold"
+                />
+                <div className="text-sm">
+                  Cada pessoa paga: <span className="font-black text-primary">R$ {((total - amountPaidInSplit) / splitCount).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold uppercase text-muted-foreground">Valor do pagamento parcial</label>
+              <div className="relative">
+                <span className="absolute left-3 top-3 text-muted-foreground font-bold">R$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={partialAmount}
+                  onChange={(e) => setPartialAmount(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background p-3 pl-10 text-xl font-black text-foreground focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-secondary/50 p-3 text-sm">
+              Saldo restante após este pagamento: <span className="font-bold">R$ {Math.max(0, total - amountPaidInSplit - (parseFloat(partialAmount) || 0)).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowSplitModal(false)}>CANCELAR</AlertDialogCancel>
+            <button
+              onClick={() => {
+                const val = parseFloat(partialAmount) || 0;
+                if (val <= 0) return;
+                setAmountPaidInSplit(prev => prev + val);
+                setPartialAmount("");
+                setShowSplitModal(false);
+                playFeedback("click");
+                toast({ title: `Pagamento de R$ ${val.toFixed(2)} registrado!` });
+              }}
+              className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground"
+            >
+              REGISTRAR PAGAMENTO
             </button>
           </AlertDialogFooter>
         </AlertDialogContent>
