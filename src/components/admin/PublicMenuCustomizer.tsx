@@ -106,6 +106,7 @@ async function callUpdateSettings(restaurantId: string, patch: UpdatePatch) {
     p_clear_surface_color: patch.clear_surface_color ?? false,
     p_clear_text_color: patch.clear_text_color ?? false,
     p_clear_muted_text_color: patch.clear_muted_text_color ?? false,
+    p_category_overrides: patch.category_overrides ?? null,
   });
   if (error) throw error;
 }
