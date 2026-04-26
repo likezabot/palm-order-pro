@@ -312,25 +312,36 @@ export default function PublicMenu() {
                   (a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name),
                 );
                 if (!items.length) return null;
+
+                // Resolve overrides por categoria (caem no padrão global se ausentes)
+                const ov = settings?.category_overrides?.[cat.slug] ?? {};
+                const catLayoutKey =
+                  ov.layout ?? (layoutMode === "grid" ? "grid-2" : "list");
+                const catAspect = ov.image_aspect ?? imageAspect;
+                const catCardStyle = ov.card_style ?? "detailed";
+                const productLayout: "list" | "grid" =
+                  catLayoutKey === "list" ? "list" : "grid";
+                const gridClass =
+                  catLayoutKey === "grid-3"
+                    ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
+                    : catLayoutKey === "grid-2"
+                      ? "grid grid-cols-2 gap-3"
+                      : "grid grid-cols-1 gap-3";
+
                 return (
                   <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
                     <h3 className="mb-2 text-lg font-black uppercase tracking-wide">{cat.name}</h3>
-                    <div
-                      className={
-                        layoutMode === "grid"
-                          ? "grid grid-cols-2 gap-3 sm:grid-cols-3"
-                          : "grid grid-cols-1 gap-3"
-                      }
-                    >
+                    <div className={gridClass}>
                       {items.map((p) => (
                         <ProductCard
                           key={p.id}
                           product={p}
                           disabled={!isOpen && !isPreview}
-                          layout={layoutMode}
+                          layout={productLayout}
                           showImage={showImages}
                           showDescription={showDescriptions}
-                          imageAspect={imageAspect}
+                          imageAspect={catAspect}
+                          cardStyle={catCardStyle}
                           onClick={(prod) => setSelected(prod)}
                         />
                       ))}
