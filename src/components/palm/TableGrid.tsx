@@ -70,7 +70,7 @@ export const TableGrid = ({ onSelectTable, waiterName, onSetWaiter }: TableGridP
   const { data: tableCount = 10 } = useQuery({
     queryKey: ["table-count"],
     queryFn: async () => {
-      const { data } = await supabase.from("settings").select("value").eq("key", "table_count").single();
+      const { data } = await supabase.from("settings").select("value").eq("key", "table_count").maybeSingle();
       return data ? Number(data.value) : 10;
     },
     staleTime: 30000,
