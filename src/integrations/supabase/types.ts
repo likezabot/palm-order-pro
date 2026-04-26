@@ -1654,6 +1654,7 @@ export type Database = {
         Args: { p_fingerprint?: string; p_pin: string }
         Returns: boolean
       }
+      verify_rpc_consistency: { Args: never; Returns: Json }
     }
     Enums: {
       [_ in never]: never
