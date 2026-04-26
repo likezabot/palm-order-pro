@@ -258,11 +258,10 @@ const Pdv = () => {
 
     playFeedback("click");
 
-    const { error: err } = await supabase.rpc("update_order_status", { 
+    const { error } = await supabase.rpc("update_order_status", { 
       p_order_id: order.id, 
       p_status: next 
     });
-    error = err;
 
     if (error) {
       // Rollback em caso de erro
