@@ -303,6 +303,14 @@ export default function PublicCheckout() {
           )}
         </section>
 
+        <LoyaltySection
+          phone={phone}
+          restaurantSlug={slug ?? ""}
+          subtotal={subtotal}
+          selectedRewardId={loyaltyRewardId}
+          onChange={setLoyaltyRewardId}
+        />
+
         <section className="space-y-3">
           <h2 className="text-sm font-bold uppercase text-muted-foreground">Observação</h2>
           <Textarea
