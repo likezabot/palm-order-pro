@@ -296,7 +296,12 @@ function OnlineMenuList() {
                       )}
                       {p.is_sold_out && (
                         <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600">
-                          Esgotado
+                          Esgotado salão
+                        </span>
+                      )}
+                      {p.is_sold_out_online && (
+                        <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600">
+                          Esgotado online
                         </span>
                       )}
                       {!p.is_available_online && (
