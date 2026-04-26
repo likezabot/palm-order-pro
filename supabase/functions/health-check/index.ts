@@ -30,7 +30,7 @@ interface Finding {
 }
 
 async function logToDb(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   source: string,
   severity: "error" | "warning" | "info",
   code: string,
@@ -46,7 +46,7 @@ async function logToDb(
   } as any);
 }
 
-async function runChecks(supabase: ReturnType<typeof createClient>): Promise<Finding[]> {
+async function runChecks(supabase: any): Promise<Finding[]> {
   const findings: Finding[] = [];
 
   // 1) create_public_order deve existir EXATAMENTE 1 vez
@@ -125,7 +125,7 @@ async function runChecks(supabase: ReturnType<typeof createClient>): Promise<Fin
 }
 
 async function autoFix(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   findings: Finding[],
 ): Promise<string[]> {
   const applied: string[] = [];
@@ -178,7 +178,7 @@ async function autoFix(
 }
 
 async function applyFixFunctionNotUnique(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
 ): Promise<{ ok: boolean; message: string }> {
   // Tenta dropar a versão antiga da assinatura conhecida.
   const { error } = await supabase.rpc("fix_create_public_order_duplicate" as any);
