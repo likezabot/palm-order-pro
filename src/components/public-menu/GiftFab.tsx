@@ -30,7 +30,7 @@ export default function GiftFab() {
       onClick={() => nav(`/menu/${slug}/pontos`)}
       aria-label="Ver meus pontos de fidelidade"
       style={{
-        bottom: "calc(10.5rem + env(safe-area-inset-bottom))",
+        bottom: "calc(12rem + env(safe-area-inset-bottom))",
         right: "1rem",
       }}
       className="fixed z-20 flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-[var(--shadow-warm)] transition-transform active:scale-95 hover:scale-105"
