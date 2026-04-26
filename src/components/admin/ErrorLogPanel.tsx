@@ -129,19 +129,17 @@ export default function ErrorLogPanel() {
   async function applyFix(code: string) {
     const fixKey = KNOWN_FIXES[code];
     if (!fixKey) return;
+    if (fixing) return; // debounce/duplo-clique
     setFixing(code);
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/health-check?fix=${encodeURIComponent(fixKey)}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
+      const { data, error } = await supabase.functions.invoke("health-check", {
+        body: { fix: fixKey, trigger: "manual-fix" },
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.ok) throw new Error(json?.message || json?.error || `HTTP ${res.status}`);
-      toast({ title: "Correção aplicada", description: json.message ?? "OK" });
+      if (error) throw error;
+      const ok = (data as any)?.ok;
+      const msg = (data as any)?.message ?? (data as any)?.error;
+      if (ok === false) throw new Error(msg || "Falha na correção");
+      toast({ title: "Correção aplicada", description: msg ?? "OK" });
       qc.invalidateQueries({ queryKey: ["error_log"] });
     } catch (e: any) {
       toast({ title: "Falha na correção", description: e?.message ?? String(e), variant: "destructive" });
