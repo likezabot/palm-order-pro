@@ -103,11 +103,15 @@ export default function ProductCard({
   cardStyle = "detailed",
   onClick,
   onQuickAdd,
+  priceLabel,
+  trailingHint,
 }: Props) {
   const isBlocked = disabled || product.is_sold_out;
   const interactive = !isBlocked && !!onClick;
   const Tag: any = interactive ? "button" : "article";
-  const showQuickAdd = !!onQuickAdd && !isBlocked;
+  // Em card de grupo (priceLabel) o "+" não faz sentido — só abre o popup.
+  const showQuickAdd = !!onQuickAdd && !isBlocked && !priceLabel;
+  const priceText = priceLabel ?? formatBRL(product.price);
 
   // Em modo compacto: força ocultar descrição e usa imagem reduzida (ou nenhuma).
   const effectiveShowDescription = cardStyle === "compact" ? false : showDescription;
