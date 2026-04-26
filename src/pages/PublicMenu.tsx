@@ -7,6 +7,7 @@ import {
   fetchMenuCategories,
   fetchPublicProducts,
   fetchPublicMenuSettings,
+  fetchTopSellerProductIds,
   isRestaurantOpen,
   hexToHslString,
   type PublicProduct,
@@ -29,6 +30,7 @@ import PublicCartFab from "@/components/public-menu/PublicCartFab";
 import CartDrawer from "@/components/public-menu/CartDrawer";
 import UpsellDialog from "@/components/public-menu/UpsellDialog";
 import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
+import TopSellersSection from "@/components/public-menu/TopSellersSection";
 
 const RADIUS_MAP = { md: "0.5rem", lg: "0.75rem", xl: "1rem" } as const;
 
@@ -87,6 +89,12 @@ export default function PublicMenu() {
     queryFn: () => isRestaurantOpen(restaurantId!),
     enabled: !!restaurantId,
     refetchInterval: 60_000,
+  });
+
+  const topSellersQuery = useQuery({
+    queryKey: ["pmenu", "top-sellers"],
+    queryFn: () => fetchTopSellerProductIds(7),
+    staleTime: 5 * 60_000,
   });
 
   const products = productsQuery.data ?? [];
@@ -171,6 +179,28 @@ export default function PublicMenu() {
     () => products.filter((p) => p.is_featured && !p.is_sold_out),
     [products],
   );
+
+  const topSellers = useMemo(() => {
+    const ids = topSellersQuery.data ?? [];
+    if (!ids.length) return [];
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const ordered: PublicProduct[] = [];
+    for (const id of ids) {
+      const p = byId.get(id);
+      if (p && !p.is_sold_out) ordered.push(p);
+      if (ordered.length >= 10) break;
+    }
+    return ordered;
+  }, [topSellersQuery.data, products]);
+
+  const quickAdd = (p: PublicProduct) => {
+    if (isPreview) {
+      toast.info("Modo preview: ações de pedido estão desativadas.");
+      return;
+    }
+    cart.add(p, 1, "");
+    toast.success(`${p.name} adicionado`, { duration: 1200 });
+  };
 
   const hasUpsellSuggestion = useMemo(() => {
     const cartIds = new Set(cart.items.map((c) => c.product_id));
@@ -268,6 +298,14 @@ export default function PublicMenu() {
         return (
           <div key="featured" className="mx-auto max-w-3xl px-4">
             <FeaturedCarousel products={featured} variant={featuredStyle} />
+            {topSellers.length > 0 && (
+              <TopSellersSection
+                products={topSellers}
+                disabled={!isOpen && !isPreview}
+                onSelect={(p) => setSelected(p)}
+                onQuickAdd={quickAdd}
+              />
+            )}
           </div>
         );
       case "categories":
@@ -343,6 +381,7 @@ export default function PublicMenu() {
                           imageAspect={catAspect}
                           cardStyle={catCardStyle}
                           onClick={(prod) => setSelected(prod)}
+                          onQuickAdd={quickAdd}
                         />
                       ))}
                     </div>

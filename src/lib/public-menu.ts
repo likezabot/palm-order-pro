@@ -108,6 +108,33 @@ export async function fetchPublicProducts(): Promise<PublicProduct[]> {
   return (data ?? []) as unknown as PublicProduct[];
 }
 
+/**
+ * Retorna IDs de produtos mais vendidos nos últimos `days` dias
+ * (somando quantity_sold de daily_product_stats).
+ * Read-only — não interfere em pedidos/impressão.
+ */
+export async function fetchTopSellerProductIds(days = 7): Promise<string[]> {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const sinceISO = since.toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
+    .from("daily_product_stats")
+    .select("product_id, quantity_sold")
+    .gte("date", sinceISO)
+    .not("product_id", "is", null);
+  if (error || !data) return [];
+
+  const totals = new Map<string, number>();
+  for (const row of data as Array<{ product_id: string | null; quantity_sold: number }>) {
+    if (!row.product_id) continue;
+    totals.set(row.product_id, (totals.get(row.product_id) ?? 0) + Number(row.quantity_sold ?? 0));
+  }
+  return [...totals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+}
+
 export async function isRestaurantOpen(restaurantId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("is_restaurant_open" as any, {
     p_restaurant_id: restaurantId,
