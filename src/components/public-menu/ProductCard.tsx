@@ -191,10 +191,13 @@ export default function ProductCard({
           )}
           <div className="mt-auto flex items-end justify-between gap-2 pt-2">
             <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">
-              {formatBRL(product.price)}
+              {priceText}
             </p>
             {showQuickAdd && (
               <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />
+            )}
+            {trailingHint && !showQuickAdd && (
+              <span aria-hidden className="text-lg leading-none text-muted-foreground/60">›</span>
             )}
           </div>
         </div>
