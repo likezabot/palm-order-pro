@@ -761,6 +761,116 @@ const Pdv = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal: Novo Pedido Recebido (Realtime) */}
+      <AlertDialog open={showNewOrderModal} onOpenChange={setShowNewOrderModal}>
+        <AlertDialogContent className="max-w-[400px]">
+          <AlertDialogHeader>
+            <div className="flex justify-center mb-4">
+              <div className="rounded-full bg-orange-500/10 p-4 ring-8 ring-orange-500/5">
+                <Bike className="w-12 h-12 text-orange-500 animate-bounce" />
+              </div>
+            </div>
+            <AlertDialogTitle className="text-2xl font-black text-center uppercase tracking-tight">
+              Novo pedido recebido
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-lg font-medium text-foreground pt-2">
+              {latestNewOrder && (
+                <>
+                  <span className="block font-black text-primary">
+                    {latestNewOrder.customer_name_snapshot || "Cliente Online"}
+                  </span>
+                  Acesse a área de entregas/retiradas.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center mt-6">
+            <AlertDialogAction
+              onClick={() => {
+                if (latestNewOrder) markSeen(latestNewOrder.id);
+                setShowNewOrderModal(false);
+              }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-6 text-xl rounded-xl"
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal: Dividir Conta */}
+      <AlertDialog open={showSplitModal} onOpenChange={setShowSplitModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Split className="text-primary" /> Dividir Conta
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Total da conta: <span className="font-bold text-foreground">R$ {total.toFixed(2)}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold uppercase text-muted-foreground">Dividir em quantas pessoas?</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="number"
+                  min="1"
+                  value={splitCount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setSplitCount(val);
+                    setPartialAmount(((total - amountPaidInSplit) / val).toFixed(2));
+                  }}
+                  className="w-20 rounded-lg border border-border bg-background p-3 text-center text-lg font-bold"
+                />
+                <div className="text-sm">
+                  Cada pessoa paga: <span className="font-black text-primary">R$ {((total - amountPaidInSplit) / splitCount).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold uppercase text-muted-foreground">Valor do pagamento parcial</label>
+              <div className="relative">
+                <span className="absolute left-3 top-3 text-muted-foreground font-bold">R$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={partialAmount}
+                  onChange={(e) => setPartialAmount(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background p-3 pl-10 text-xl font-black text-foreground focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-secondary/50 p-3 text-sm">
+              Saldo restante após este pagamento: <span className="font-bold">R$ {Math.max(0, total - amountPaidInSplit - (parseFloat(partialAmount) || 0)).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowSplitModal(false)}>CANCELAR</AlertDialogCancel>
+            <button
+              onClick={() => {
+                const val = parseFloat(partialAmount) || 0;
+                if (val <= 0) return;
+                setAmountPaidInSplit(prev => prev + val);
+                setPartialAmount("");
+                setShowSplitModal(false);
+                playFeedback("click");
+                toast({ title: `Pagamento de R$ ${val.toFixed(2)} registrado!` });
+              }}
+              className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground"
+            >
+              REGISTRAR PAGAMENTO
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
