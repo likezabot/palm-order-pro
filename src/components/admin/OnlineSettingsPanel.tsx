@@ -13,8 +13,9 @@ export default function OnlineSettingsPanel() {
         .from("restaurants" as any)
         .select("id")
         .limit(1)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Nenhum restaurante configurado");
       return (data as any).id as string;
     },
   });
