@@ -106,24 +106,29 @@ const Pdv = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select("*, order_items(quantity)")
         .in("status", ["new", "preparing", "done"])
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return data as Order[];
+      
+      return (data as any[]).map(o => ({
+        ...o,
+        item_count: (o.order_items ?? []).reduce((sum: number, it: any) => sum + (it.quantity ?? 0), 0)
+      })) as (Order & { item_count: number })[];
     },
     refetchInterval: 30000,
   });
 
-  const { data: allItems = [] } = useQuery({
-    queryKey: ["pdv-items"],
+  const { data: selectedItems = [] } = useQuery({
+    queryKey: ["pdv-items", selectedId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("order_items").select("*");
+      if (!selectedId) return [];
+      const { data, error } = await supabase.from("order_items").select("*").eq("order_id", selectedId);
       if (error) throw error;
       return data as OrderItem[];
     },
-    refetchInterval: 30000,
+    enabled: !!selectedId,
   });
 
   // Impressão MANUAL — reimpressão sob demanda
