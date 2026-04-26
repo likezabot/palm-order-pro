@@ -71,11 +71,13 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
 
   const borderAccent = isUnseen
     ? "border-l-orange-500"
-    : isCritical
-      ? "border-l-destructive"
-      : isAlert
-        ? "border-l-warning"
-        : "border-l-transparent";
+    : status === "done"
+      ? "border-l-success"
+      : isCritical
+        ? "border-l-destructive"
+        : isAlert
+          ? "border-l-warning"
+          : "border-l-transparent";
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
