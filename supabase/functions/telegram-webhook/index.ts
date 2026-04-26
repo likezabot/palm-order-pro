@@ -5072,14 +5072,11 @@ export async function webhookHandler(req: Request): Promise<Response> {
     if (voiceTraceId) console.log(`[voice ${voiceTraceId}] waiter=${waiter}`);
 
     // ─── WIZARD: gatilho explícito (estoque, gerenciar estoque, etc) ───
+    // ─── WIZARD DE ESTOQUE REMOVIDO ───
+    // O módulo de estoque foi descontinuado. Não disparamos mais wzStartMenu/wzHandleTextInput
+    // pra evitar chamadas a tabelas inexistentes (inventory_items / inventory_movements).
     if (wzIsTrigger(trimmed)) {
-      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_wizard_trigger`);
-      await wzStartMenu(chatId);
-      return testOrPlain();
-    }
-    // ─── WIZARD: input livre (qty digitada, nome de item, etc) ───
-    if (await wzHandleTextInput(chatId, trimmed, waiter)) {
-      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_wizard_text_input`);
+      await sendTelegram(chatId, "ℹ️ O controle de estoque foi removido do sistema. Use o PALM/Admin para gerenciar produtos.");
       return testOrPlain();
     }
 
