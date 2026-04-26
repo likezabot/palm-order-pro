@@ -66,7 +66,8 @@ export default function PublicCheckout() {
   }, [cart.items.length, name, phone, serviceType, street, number, neighborhood]);
 
   if (cart.items.length === 0 && !submitting) {
-    return <Navigate to={`/menu/${slug}`} replace />;
+    const fallback = slug ? `/menu/${slug}` : "/";
+    return <Navigate to={fallback} replace />;
   }
 
   async function handleSubmit() {
