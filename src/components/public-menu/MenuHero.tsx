@@ -193,7 +193,7 @@ export default function MenuHero({
       <div className="mx-auto max-w-3xl px-4">
         <div
           className={cn(
-            "-mt-10 flex items-center gap-3",
+            "-mt-12 flex items-center gap-3",
             isCenter && "sm:justify-center sm:text-center",
           )}
         >
