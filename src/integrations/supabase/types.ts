@@ -420,6 +420,39 @@ export type Database = {
         }
         Relationships: []
       }
+      error_log_daily_summary: {
+        Row: {
+          by_code: Json
+          by_severity: Json
+          by_source: Json
+          generated_at: string
+          summary_date: string
+          top_messages: Json
+          total_today: number
+          total_unresolved: number
+        }
+        Insert: {
+          by_code?: Json
+          by_severity?: Json
+          by_source?: Json
+          generated_at?: string
+          summary_date: string
+          top_messages?: Json
+          total_today?: number
+          total_unresolved?: number
+        }
+        Update: {
+          by_code?: Json
+          by_severity?: Json
+          by_source?: Json
+          generated_at?: string
+          summary_date?: string
+          top_messages?: Json
+          total_today?: number
+          total_unresolved?: number
+        }
+        Relationships: []
+      }
       inventory_items: {
         Row: {
           aliases: string[]
@@ -1468,6 +1501,10 @@ export type Database = {
       archive_and_purge_old_data:
         | { Args: { p_days_keep?: number }; Returns: Json }
         | { Args: { p_days_keep?: number; p_source?: string }; Returns: Json }
+      build_error_log_daily_summary: {
+        Args: { p_date?: string }
+        Returns: Json
+      }
       calculate_delivery_fee: {
         Args: { p_neighborhood: string; p_restaurant_id: string }
         Returns: Json
