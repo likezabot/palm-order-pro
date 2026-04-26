@@ -55,6 +55,8 @@ export default function PublicMenu() {
   } | null>(null);
 
   const groupsQuery = usePublicProductGroups();
+
+  const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
     queryFn: () => fetchRestaurantBySlug(slug ?? ""),
     enabled: !!slug,
