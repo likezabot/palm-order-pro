@@ -7,7 +7,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert } from "lucide-react";
+import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert, Link2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
@@ -27,6 +27,7 @@ import ErrorsTab from "@/components/admin/ErrorsTab";
 import NetworkTab from "@/components/admin/NetworkTab";
 import OnlineMenuTab from "@/components/admin/OnlineMenuTab";
 import OnlineOrdersTab from "@/components/admin/OnlineOrdersTab";
+import RoutesTab from "@/components/admin/RoutesTab";
 import { manualPrintOrder } from "@/lib/print-service";
 
 const Admin = () => {
@@ -277,6 +278,12 @@ const Admin = () => {
             >
               <Activity className="w-4 h-4" /> Rede
             </TabsTrigger>
+            <TabsTrigger
+              value="routes"
+              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
+            >
+              <Link2 className="w-4 h-4" /> <span className="hidden sm:inline">Rotas &amp; </span>URLs
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -331,6 +338,10 @@ const Admin = () => {
 
         <TabsContent value="network" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
           <NetworkTab />
+        </TabsContent>
+
+        <TabsContent value="routes" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
+          <RoutesTab />
         </TabsContent>
       </Tabs>
     </div>
