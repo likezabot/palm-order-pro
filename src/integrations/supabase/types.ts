@@ -1504,6 +1504,12 @@ export type Database = {
         Args: { p_chat_id: number; p_token: string }
         Returns: Json
       }
+      count_public_order_funcs: {
+        Args: never
+        Returns: {
+          n: number
+        }[]
+      }
       create_order: {
         Args: {
           p_items: Json
@@ -1566,6 +1572,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fix_create_public_order_duplicate: { Args: never; Returns: string }
       force_clear_orphan_prints: { Args: never; Returns: Json }
       get_customer_orders: { Args: { p_phone: string }; Returns: Json }
       get_or_create_customer: {
