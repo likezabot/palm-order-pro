@@ -157,7 +157,7 @@ export const SystemTab = () => {
         <p className="text-muted-foreground">
           Procurando erros, impressões travadas ou o resumo diário?
           {" "}
-          <span className="font-bold text-foreground">Veja a aba “Erros &amp; Saúde”.</span>
+          <span className="font-bold text-foreground">Veja a aba “Erros &amp; Logs”.</span>
         </p>
       </div>
       <div className="rounded-xl border-2 border-destructive/60 bg-destructive/5 p-5 space-y-4">
