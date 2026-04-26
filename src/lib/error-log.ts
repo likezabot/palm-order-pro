@@ -50,9 +50,15 @@ export function extractErrorCode(raw: unknown): string | null {
 const DEDUPE_WINDOW_MS = 30_000;
 const THROTTLE_WINDOW_MS = 60_000;
 const THROTTLE_MAX = 20;
+const MAX_CONTEXT_BYTES = 20_000; // contexto malformado/grande não vai quebrar nem encher tabela
 
 const recentKeys = new Map<string, number>();
 const sentTimestamps: number[] = [];
+
+// Re-entrância: garante que o próprio fluxo de log nunca dispare logs
+// recursivos (ex.: console.error wrappado por nós que internamente loga
+// um erro do supabase, que então passa pelo fetch interceptor, etc.).
+let __plbLogging = false;
 
 function shouldSkip(key: string): boolean {
   const now = Date.now();
