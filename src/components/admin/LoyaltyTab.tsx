@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Plus, Trash2, Search } from "lucide-react";
+import { Gift, Plus, Trash2, Search, Sparkles, Phone } from "lucide-react";
 
 type Reward = {
   id: string;
