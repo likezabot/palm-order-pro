@@ -190,7 +190,7 @@ const RoutesTab = () => {
           <span
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
               r.audience === "public"
-                ? "bg-emerald-500/10 text-emerald-600"
+                ? "bg-success/10 text-success"
                 : "bg-primary/10 text-primary"
             }`}
           >
@@ -205,7 +205,7 @@ const RoutesTab = () => {
                 </span>
               )}
               {r.audience === "public" && (
-                <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600">
+                <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-success/10 text-success">
                   Público
                 </span>
               )}
@@ -252,8 +252,8 @@ const RoutesTab = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-        <h2 className="text-base font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+      <div className="rounded-xl border border-success/20 bg-success/5 p-4">
+        <h2 className="text-base font-bold text-success flex items-center gap-2">
           <Globe className="h-5 w-5" /> URLs Públicas (Clientes)
         </h2>
         <p className="text-xs text-muted-foreground mt-1">
