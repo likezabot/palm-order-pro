@@ -16,7 +16,12 @@ type Props = {
   onClick?: (p: PublicProduct) => void;
   /** Quando informado, mostra botão "Adicionar" inline que adiciona 1 unidade direto. */
   onQuickAdd?: (p: PublicProduct) => void;
+  /** Sobrescreve o texto do preço (ex.: "a partir de R$ 5,00" para card de grupo). */
+  priceLabel?: string;
+  /** Mostra um chevron "›" indicando que o card abre algo (popup de variantes). */
+  trailingHint?: boolean;
 };
+
 
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -98,11 +103,15 @@ export default function ProductCard({
   cardStyle = "detailed",
   onClick,
   onQuickAdd,
+  priceLabel,
+  trailingHint,
 }: Props) {
   const isBlocked = disabled || product.is_sold_out;
   const interactive = !isBlocked && !!onClick;
   const Tag: any = interactive ? "button" : "article";
-  const showQuickAdd = !!onQuickAdd && !isBlocked;
+  // Em card de grupo (priceLabel) o "+" não faz sentido — só abre o popup.
+  const showQuickAdd = !!onQuickAdd && !isBlocked && !priceLabel;
+  const priceText = priceLabel ?? formatBRL(product.price);
 
   // Em modo compacto: força ocultar descrição e usa imagem reduzida (ou nenhuma).
   const effectiveShowDescription = cardStyle === "compact" ? false : showDescription;
@@ -133,9 +142,12 @@ export default function ProductCard({
           {product.is_sold_out && <SoldOutBadge />}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <p className="text-sm font-black text-primary">{formatBRL(product.price)}</p>
+          <p className="text-sm font-black text-primary">{priceText}</p>
           {showQuickAdd && (
             <QuickAddButton onClick={() => onQuickAdd!(product)} size="sm" productName={product.name} />
+          )}
+          {trailingHint && (
+            <span aria-hidden className="text-base leading-none text-muted-foreground/60">›</span>
           )}
         </div>
       </Tag>
@@ -179,10 +191,13 @@ export default function ProductCard({
           )}
           <div className="mt-auto flex items-end justify-between gap-2 pt-2">
             <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">
-              {formatBRL(product.price)}
+              {priceText}
             </p>
             {showQuickAdd && (
               <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />
+            )}
+            {trailingHint && !showQuickAdd && (
+              <span aria-hidden className="text-lg leading-none text-muted-foreground/60">›</span>
             )}
           </div>
         </div>
@@ -212,8 +227,11 @@ export default function ProductCard({
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.description}</p>
         )}
         <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">{formatBRL(product.price)}</p>
+          <p className="text-lg font-black text-primary leading-none tracking-tight tabular-nums">{priceText}</p>
           {showQuickAdd && <QuickAddButton onClick={() => onQuickAdd!(product)} productName={product.name} />}
+          {trailingHint && !showQuickAdd && (
+            <span aria-hidden className="text-lg leading-none text-muted-foreground/60">›</span>
+          )}
         </div>
       </div>
       {effectiveShowImage && (

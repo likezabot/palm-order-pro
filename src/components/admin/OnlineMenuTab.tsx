@@ -35,6 +35,7 @@ type ProductOnline = {
   is_featured: boolean;
   is_available_online: boolean;
   is_sold_out: boolean;
+  is_sold_out_online: boolean;
   display_order: number;
   active: boolean;
 };
@@ -53,7 +54,7 @@ async function fetchProducts(): Promise<ProductOnline[]> {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, category, price, description, image_url, is_featured, is_available_online, is_sold_out, display_order, active",
+      "id, name, category, price, description, image_url, is_featured, is_available_online, is_sold_out, is_sold_out_online, display_order, active",
     )
     .eq("active", true)
     .order("category")
@@ -76,6 +77,7 @@ async function updateOnline(id: string, patch: UpdateOnlinePatch) {
     p_is_featured: patch.is_featured ?? null,
     p_is_available_online: patch.is_available_online ?? null,
     p_is_sold_out: patch.is_sold_out ?? null,
+    p_is_sold_out_online: patch.is_sold_out_online ?? null,
     p_display_order: patch.display_order ?? null,
     p_clear_description: patch.clear_description ?? false,
     p_clear_image_url: patch.clear_image_url ?? false,
@@ -150,7 +152,7 @@ function OnlineMenuList() {
 
   const toggle = async (
     p: ProductOnline,
-    field: "is_available_online" | "is_featured" | "is_sold_out",
+    field: "is_available_online" | "is_featured" | "is_sold_out" | "is_sold_out_online",
   ) => {
     try {
       await updateOnline(p.id, { [field]: !p[field] } as any);
@@ -294,7 +296,12 @@ function OnlineMenuList() {
                       )}
                       {p.is_sold_out && (
                         <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600">
-                          Esgotado
+                          Esgotado salão
+                        </span>
+                      )}
+                      {p.is_sold_out_online && (
+                        <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600">
+                          Esgotado online
                         </span>
                       )}
                       {!p.is_available_online && (
@@ -395,6 +402,7 @@ function EditDialog({
   const [isFeatured, setIsFeatured] = useState(product.is_featured);
   const [isAvailable, setIsAvailable] = useState(product.is_available_online);
   const [isSoldOut, setIsSoldOut] = useState(product.is_sold_out);
+  const [isSoldOutOnline, setIsSoldOutOnline] = useState(product.is_sold_out_online);
   const [displayOrder, setDisplayOrder] = useState(product.display_order);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -435,6 +443,7 @@ function EditDialog({
         is_featured: isFeatured,
         is_available_online: isAvailable,
         is_sold_out: isSoldOut,
+        is_sold_out_online: isSoldOutOnline,
         display_order: displayOrder,
         clear_description: !trimmedDesc,
         clear_image_url: !trimmedImg,
