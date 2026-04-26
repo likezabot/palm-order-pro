@@ -73,7 +73,7 @@ export const SystemTab = () => {
       const r = (data as Record<string, number | boolean>) || {};
       toast({
         title: r.idempotent_skip ? "Já executado neste minuto" : "Arquivamento concluído",
-        description: `${r.deleted_orders ?? 0} pedidos arquivados · ${r.archived_summary_days ?? 0} dias consolidados · ${r.deleted_inventory_movements ?? 0} mov. estoque limpos`,
+        description: `${r.deleted_orders ?? 0} pedidos arquivados · ${r.archived_summary_days ?? 0} dias consolidados`,
       });
       await loadLogs();
     } catch (e) {
