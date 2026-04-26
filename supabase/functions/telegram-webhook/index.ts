@@ -2397,6 +2397,17 @@ function ctxPrefix(cmd: Extract<Command, { kind: "ADD" | "REMOVE" | "VIEW" | "TA
 }
 
 async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
+  // Defesa em profundidade: módulo de estoque removido.
+  // Qualquer STOCK_* que escape do parser cai aqui e devolve mensagem amigável.
+  if (
+    cmd.kind === "STOCK_CRITICAL" ||
+    cmd.kind === "STOCK_LIST" ||
+    cmd.kind === "STOCK_QUERY" ||
+    cmd.kind === "STOCK_OUT_NOW" ||
+    cmd.kind === "STOCK_MOVEMENT"
+  ) {
+    return { text: "ℹ️ O controle de estoque foi removido do sistema. Use o PALM/Admin para gerenciar produtos." };
+  }
   if (cmd.kind === "HELP") return { text: HELP_TEXT };
   if (cmd.kind === "PARSE_ERROR") {
     let body = `Faltou identificar mesa, ação ou produto.`;
