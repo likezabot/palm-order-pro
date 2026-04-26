@@ -214,27 +214,21 @@ export default function DailyErrorsPanel() {
     if (!row.code) return;
     const fixKey = KNOWN_FIXES[row.code];
     if (!fixKey) return;
+    if (fixing) return;
     setFixing(row.id);
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/health-check?fix=${encodeURIComponent(fixKey)}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
+      const { data, error } = await supabase.functions.invoke("health-check", {
+        body: { fix: fixKey, trigger: "manual-fix-daily" },
       });
-      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      if (!res.ok || !json?.ok) {
-        throw new Error(
-          (json?.message as string) || (json?.error as string) || `HTTP ${res.status}`,
-        );
-      }
+      if (error) throw error;
+      const ok = (data as any)?.ok;
+      const msg = ((data as any)?.message as string) ?? ((data as any)?.error as string);
+      if (ok === false) throw new Error(msg || "Falha na correção");
       await markResolved(row.id, `Auto-correção aplicada: ${fixKey}`);
-      toast({ title: "Correção aplicada", description: (json.message as string) ?? "OK" });
+      toast({ title: "Correção aplicada", description: msg ?? "OK" });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Falha na correção", description: msg, variant: "destructive" });
+      const m = e instanceof Error ? e.message : String(e);
+      toast({ title: "Falha na correção", description: m, variant: "destructive" });
     } finally {
       setFixing(null);
     }
