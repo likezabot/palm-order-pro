@@ -284,8 +284,7 @@ function installXhrInterceptor() {
     ...rest: any[]
   ) {
     this.__plb = { method: String(method).toUpperCase(), url: String(url) };
-    // @ts-expect-error spread args
-    return OrigOpen.call(this, method, url, ...rest);
+    return (OrigOpen as any).call(this, method, url, ...rest);
   };
 
   XMLHttpRequest.prototype.send = function (
