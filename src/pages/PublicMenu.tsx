@@ -48,8 +48,13 @@ export default function PublicMenu() {
   const [cartOpen, setCartOpen] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [openGroup, setOpenGroup] = useState<{
+    group: ProductGroup;
+    trigger: PublicProduct;
+    variants: PublicProduct[];
+  } | null>(null);
 
-  const restaurantQuery = useQuery({
+  const groupsQuery = usePublicProductGroups();
     queryKey: ["pmenu", "restaurant", slug],
     queryFn: () => fetchRestaurantBySlug(slug ?? ""),
     enabled: !!slug,
