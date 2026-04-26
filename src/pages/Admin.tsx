@@ -111,6 +111,9 @@ const Admin = () => {
     staleTime: 30_000,
   });
 
+  const { orderMap, productsByCategory, handleDragEnd, handleResetOrder } =
+    useProductOrder(products);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
