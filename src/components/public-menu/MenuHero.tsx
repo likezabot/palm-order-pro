@@ -50,7 +50,43 @@ export default function MenuHero({
   const isCenter = alignment === "center";
   const hasHero = !!restaurant.hero_url;
 
-  // Sombra densa de texto = legibilidade garantida sobre qualquer foto.
+  // --- Overlay adaptativo WCAG ---
+  // Amostramos a foto e calculamos a opacidade mínima de overlay escuro
+  // necessária p/ que texto branco (#FFF) atinja AA (≥ 4.5:1).
+  // Default: 0.55 (forte) — usado enquanto a amostragem carrega ou se falhar.
+  const [overlayAlpha, setOverlayAlpha] = useState<number>(0.55);
+
+  useEffect(() => {
+    if (!hasHero) return;
+    const ctrl = new AbortController();
+    sampleImageLuminance(restaurant.hero_url!, ctrl.signal).then((L) => {
+      if (L == null) return; // CORS/erro: mantém default forte
+      // alvo AA = 4.5:1; min 0.30 p/ preservar mood; max 0.85
+      const alpha = overlayAlphaForWhiteText(L, 4.5, 0.3, 0.85);
+      setOverlayAlpha(alpha);
+
+      // Verificação automática de acessibilidade (apenas em dev)
+      if (import.meta.env.DEV) {
+        // Estima luminância composta usando a mesma cor cinza derivada de L
+        const composedL = Math.max(0, L * (1 - alpha)); // overlay preto
+        const ratio = contrastRatio(1.0, composedL);
+        const grade = ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "FAIL";
+        // eslint-disable-next-line no-console
+        console.info(
+          `[MenuHero/WCAG] bgLuminance=${L.toFixed(3)} α=${alpha.toFixed(2)} ratio=${ratio.toFixed(2)} → ${grade}`,
+        );
+        if (grade === "FAIL") {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[MenuHero/WCAG] Contraste abaixo de AA mesmo com overlay máximo — considere trocar a foto.",
+          );
+        }
+      }
+    });
+    return () => ctrl.abort();
+  }, [hasHero, restaurant.hero_url]);
+
+  // Sombra densa de texto = legibilidade adicional sobre fotos com brilho local.
   const titleShadow = hasHero
     ? { textShadow: "0 2px 12px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)" }
     : undefined;
@@ -92,12 +128,11 @@ export default function MenuHero({
               }}
               aria-hidden
             />
-            {/* escurecimento base p/ contraste de texto */}
+            {/* escurecimento base p/ contraste de texto — α dinâmico WCAG AA */}
             <div
-              className="pointer-events-none absolute inset-0"
+              className="pointer-events-none absolute inset-0 transition-opacity duration-500"
               style={{
-                background:
-                  "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.30) 40%, rgba(0,0,0,0.65) 100%)",
+                background: `linear-gradient(to bottom, rgba(0,0,0,${(overlayAlpha * 0.85).toFixed(3)}) 0%, rgba(0,0,0,${(overlayAlpha * 0.65).toFixed(3)}) 40%, rgba(0,0,0,${Math.min(0.95, overlayAlpha * 1.15).toFixed(3)}) 100%)`,
               }}
               aria-hidden
             />
