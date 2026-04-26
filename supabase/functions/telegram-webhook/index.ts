@@ -692,6 +692,24 @@ export function parseCommand(raw: string): Command {
   const text = normalize(raw);
   if (!text) return { kind: "PARSE_ERROR", raw };
 
+  // ─── MÓDULO DE ESTOQUE REMOVIDO ───
+  // Intercepta qualquer comando relacionado a estoque/inventário antes do parser específico.
+  // Os tipos STOCK_* e o wizard `gerenciar estoque` deixaram de funcionar — devolvemos UNKNOWN
+  // pra que o usuário receba "comando não reconhecido" em vez de erro de RPC inexistente.
+  if (
+    /^(?:gerenciar\s+estoque|menu\s+estoque|wizard\s+estoque|contagem)$/.test(text) ||
+    /^(?:lista\s+estoque|listar\s+estoque|estoque\s+(?:completo|todo|tudo|geral|critico|crítico|baixo|zerado|acabando|em\s+falta)|inventario|inventário|tudo\s+do\s+estoque|todos\s+(?:os\s+)?itens|itens\s+(?:do\s+)?estoque)$/.test(text) ||
+    /^(?:estoque|criticos|críticos|alertas?(?:\s+(?:de\s+)?estoque)?|o\s+que\s+(?:ta|esta)\s+acabando|o\s+que\s+falta|falta(?:ndo)?\s+(?:o\s+)?que|precisa\s+repor|lista\s+critica)$/.test(text) ||
+    /^(?:entrada|entrou|recebi|chegou|comprei|repor|abasteci|abastecer|entregou|subir|subiu|reposicao|reposição)\b/.test(text) ||
+    /^(?:saida|saída|saiu|usei|gastei|tirei|consumi|baixa|vendi|quebrou|quebrei|descartei|descartar|perdi|perda)\b/.test(text) ||
+    /^(?:ajuste|ajustar|contei|contar|setar|setei|set|marca(?:r)?|tem)\s+/.test(text) ||
+    /^(?:acabou|terminou|sem|esgotou|zerou)\s+/.test(text) ||
+    /^(?:estoque|saldo|quanto\s+tem(?:\s+de)?|qtd|quantidade(?:\s+de)?|ver\s+estoque|consulta(?:r)?\s+estoque)\s+/.test(text) ||
+    /^quanta?\s+\S+\s+tem\??$/.test(text)
+  ) {
+    return { kind: "PARSE_ERROR", raw, hint: "no_op" };
+  }
+
   if (/^(?:\/start|\/help|ajuda|help|comandos?|menu|ola|oi|opa|bom\s+dia|boa\s+tarde|boa\s+noite|\?+|o\s+que\s+(?:faz|voce\s+faz)|como\s+usar|me\s+ajuda|socorro)$/.test(text)) {
     return { kind: "HELP" };
   }
@@ -2252,14 +2270,6 @@ const HELP_TEXT =
   `  • mesa 4 ver pedido\n` +
   `  • mesa 4 o que tem / consumo\n` +
   `  • status mesa 4 / mesa 4 como ta\n\n` +
-  `📦 *ESTOQUE*\n` +
-  `  • *gerenciar estoque* / menu estoque → modo guiado com botões\n` +
-  `  • entrada 10 coca / repor 10 coca\n` +
-  `  • saida 2 picanha / vendi 3 coca / acabou 1 prato\n` +
-  `  • ajuste coca 50 / contei 50 coca\n` +
-  `  • estoque coca / quanto tem de coca\n` +
-  `  • lista estoque / inventario → todos os itens\n` +
-  `  • estoque (sozinho) / alertas → críticos\n\n` +
   `🍽 *CARDÁPIO* (visibilidade)\n` +
   `  • ocultar panceta / esconder coca / desativar skol\n` +
   `  • tirar coca do cardapio\n` +
@@ -2379,6 +2389,15 @@ function ctxPrefix(cmd: Extract<Command, { kind: "ADD" | "REMOVE" | "VIEW" | "TA
 }
 
 async function handleCommand(cmd: Command, waiter: string): Promise<HandlerReply> {
+  // Defesa em profundidade: módulo de estoque removido.
+  // Qualquer STOCK_* que escape do parser cai aqui e devolve mensagem amigável.
+  // Usamos cast pra string pra não restringir o tipo Command (preserva código abaixo).
+  {
+    const k = (cmd as { kind: string }).kind;
+    if (k === "STOCK_CRITICAL" || k === "STOCK_LIST" || k === "STOCK_QUERY" || k === "STOCK_OUT_NOW" || k === "STOCK_MOVEMENT") {
+      return { text: "ℹ️ O controle de estoque foi removido do sistema. Use o PALM/Admin para gerenciar produtos." };
+    }
+  }
   if (cmd.kind === "HELP") return { text: HELP_TEXT };
   if (cmd.kind === "PARSE_ERROR") {
     let body = `Faltou identificar mesa, ação ou produto.`;
@@ -2791,12 +2810,12 @@ async function handleCallbackQuery(cb: any): Promise<void> {
     return;
   }
 
-  // ─── WIZARD callbacks (wz|...) ───
-  if (data.startsWith("wz|")) {
-    const bound = typeof userId === "number" ? await getWaiterBinding(userId) : null;
-    const waiter = bound ?? (username ? `Telegram (@${username})` : "Telegram");
-    const handled = await wzHandleCallback(cb, waiter);
-    if (handled) return;
+  // ─── WIZARD/UNDO de estoque (wz|... e us|...) — REMOVIDO ───
+  // Módulo de estoque foi descontinuado. Botões antigos viram NO-OP amigável.
+  if (data.startsWith("wz|") || data.startsWith("us|")) {
+    await answerCallback(cbId, "Estoque removido");
+    try { await editTelegramMessage(chatId, messageId, "ℹ️ O controle de estoque foi removido do sistema."); } catch (_) {}
+    return;
   }
 
   // ─── VOICE CONFIRM (vc|ok|<token> | vc|no|<token>) ───
@@ -5045,14 +5064,11 @@ export async function webhookHandler(req: Request): Promise<Response> {
     if (voiceTraceId) console.log(`[voice ${voiceTraceId}] waiter=${waiter}`);
 
     // ─── WIZARD: gatilho explícito (estoque, gerenciar estoque, etc) ───
+    // ─── WIZARD DE ESTOQUE REMOVIDO ───
+    // O módulo de estoque foi descontinuado. Não disparamos mais wzStartMenu/wzHandleTextInput
+    // pra evitar chamadas a tabelas inexistentes (inventory_items / inventory_movements).
     if (wzIsTrigger(trimmed)) {
-      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_wizard_trigger`);
-      await wzStartMenu(chatId);
-      return testOrPlain();
-    }
-    // ─── WIZARD: input livre (qty digitada, nome de item, etc) ───
-    if (await wzHandleTextInput(chatId, trimmed, waiter)) {
-      if (voiceTraceId) console.warn(`[voice ${voiceTraceId}] checkpoint=exit_wizard_text_input`);
+      await sendTelegram(chatId, "ℹ️ O controle de estoque foi removido do sistema. Use o PALM/Admin para gerenciar produtos.");
       return testOrPlain();
     }
 

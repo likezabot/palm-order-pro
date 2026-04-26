@@ -31,7 +31,6 @@ export const SystemTab = () => {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetPeriod, setResetPeriod] = useState<"today" | "7d" | "30d" | "all">("today");
-  const [resetStock, setResetStock] = useState(true);
 
   const loadLogs = async () => {
     setLoadingLogs(true);
@@ -74,7 +73,7 @@ export const SystemTab = () => {
       const r = (data as Record<string, number | boolean>) || {};
       toast({
         title: r.idempotent_skip ? "Já executado neste minuto" : "Arquivamento concluído",
-        description: `${r.deleted_orders ?? 0} pedidos arquivados · ${r.archived_summary_days ?? 0} dias consolidados · ${r.deleted_inventory_movements ?? 0} mov. estoque limpos`,
+        description: `${r.deleted_orders ?? 0} pedidos arquivados · ${r.archived_summary_days ?? 0} dias consolidados`,
       });
       await loadLogs();
     } catch (e) {
@@ -120,13 +119,11 @@ export const SystemTab = () => {
         `${p.order_items ?? 0} itens`,
         `${p.cash_register ?? 0} caixas`,
         `${p.cash_movements ?? 0} mov. caixa`,
-        `${p.inventory_movements ?? 0} mov. estoque`,
         `${p.notification_queue ?? 0} notif. pendentes`,
-        resetStock ? `${p.inventory_items_with_stock ?? 0} itens terão estoque zerado` : "estoque NÃO será zerado",
       ].join("\n• ");
 
       const confirmed = window.prompt(
-        `⚠️ APAGAR DADOS OPERACIONAIS\n\nPeríodo: ${periodLabel(resetPeriod)}\n\nSerá removido:\n• ${summary}\n\nO cardápio, cadastro de itens, receitas e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
+        `⚠️ APAGAR DADOS OPERACIONAIS\n\nPeríodo: ${periodLabel(resetPeriod)}\n\nSerá removido:\n• ${summary}\n\nO cardápio e configurações serão MANTIDOS.\n\nDigite APAGAR para confirmar:`,
       );
       if (confirmed?.trim().toUpperCase() !== "APAGAR") {
         toast({ title: "Cancelado", description: "Nada foi apagado." });
@@ -135,13 +132,13 @@ export const SystemTab = () => {
 
       const { data, error } = await supabase.rpc(
         "reset_operational_data_period" as never,
-        { p_days: days, p_reset_stock: resetStock } as never,
+        { p_days: days } as never,
       );
       if (error) throw error;
       const r = (data as Record<string, number | string>) || {};
       toast({
         title: "Dados apagados",
-        description: `${r.orders ?? 0} pedidos · ${r.cash_register ?? 0} caixas · ${r.inventory_items_zeroed ?? 0} estoques zerados`,
+        description: `${r.orders ?? 0} pedidos · ${r.cash_register ?? 0} caixas`,
       });
       await qc.invalidateQueries();
       await loadLogs();
@@ -173,10 +170,8 @@ export const SystemTab = () => {
               Limpar dados de teste
             </h3>
             <p className="text-sm text-slate-600 mt-1">
-              Apaga pedidos, caixas, movimentos de estoque, notificações e
-              estado do Telegram <b>do período escolhido</b>. <b>Mantém</b>{" "}
-              cardápio, cadastro de itens, receitas, vínculos do Telegram e
-              configurações.
+              Apaga pedidos, caixas, notificações e estado do Telegram <b>do período escolhido</b>.{" "}
+              <b>Mantém</b> cardápio, vínculos do Telegram e configurações.
             </p>
           </div>
         </div>
@@ -208,17 +203,7 @@ export const SystemTab = () => {
           </div>
         </div>
 
-        <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-border bg-background">
-          <input
-            type="checkbox"
-            checked={resetStock}
-            onChange={(e) => setResetStock(e.target.checked)}
-            className="w-5 h-5 accent-destructive"
-          />
-          <span className="text-sm font-medium text-foreground">
-            Zerar estoque atual de todos os itens
-          </span>
-        </label>
+
 
         <Button
           onClick={handleResetTestData}
@@ -338,7 +323,7 @@ export const SystemTab = () => {
                       <span>Dias resumo: <b>{String(r.archived_summary_days ?? 0)}</b></span>
                       <span>Garçons: <b>{String(r.archived_waiter_rows ?? 0)}</b></span>
                       <span>Produtos: <b>{String(r.archived_product_rows ?? 0)}</b></span>
-                      <span>Mov. estoque: <b>{String(r.deleted_inventory_movements ?? 0)}</b></span>
+                      <span>Mov. caixa: <b>{String(r.deleted_cash_movements ?? 0)}</b></span>
                     </div>
                   ) : (
                     <p className="text-xs text-destructive font-mono break-all">
