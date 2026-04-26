@@ -297,6 +297,7 @@ const Pdv = () => {
     setCustomerDoc("");
     setSending(false);
     setSelectedId(null);
+    setPaymentsHistory([]);
   };
 
   const confirmPrintAction = (action: () => Promise<void>) => {
