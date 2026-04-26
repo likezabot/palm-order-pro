@@ -188,20 +188,19 @@ const Pdv = () => {
   // Sirene ativa enquanto houver entrega online não visualizada
   const { needsUnlock: sirenNeedsUnlock, unlock: unlockSiren, mute: muteSiren } = useSiren(unseenOnlineDelivery.length > 0);
 
-  // Toast forte quando uma NOVA entrega online aparece (1 vez por id)
+  // Alerta visual de novo pedido online (entrega/retirada)
   const announcedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    for (const o of unseenOnlineDelivery) {
-      if (announcedRef.current.has(o.id)) continue;
-      announcedRef.current.add(o.id);
-      const who = o.customer_name_snapshot || "cliente";
-      const kind = getOrderKind(o);
-      toast({
-        title: `🚨 Nova ${KIND_LABEL[kind]} ONLINE — ${who}`,
-        description: `Toque no card para confirmar e parar o alerta.`,
-      });
+    if (unseenOnlineDelivery.length > 0) {
+      const newOrders = unseenOnlineDelivery.filter(o => !announcedRef.current.has(o.id));
+      if (newOrders.length > 0) {
+        newOrders.forEach(o => announcedRef.current.add(o.id));
+        setLatestNewOrder(newOrders[0]);
+        setShowNewOrderModal(true);
+        playFeedback("notification");
+      }
     }
-  }, [unseenOnlineDelivery, toast]);
+  }, [unseenOnlineDelivery, playFeedback]);
 
   // Som curto quando pedido entra em "Prontos p/ Pagamento" (status done)
   const prevDoneIdsRef = useRef<Set<string>>(new Set());
