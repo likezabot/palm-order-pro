@@ -255,6 +255,7 @@ function CustomizerInner({
             <TabsTrigger value="paleta">Paleta</TabsTrigger>
             <TabsTrigger value="layout">Layout</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
+            <TabsTrigger value="por-categoria">Por categoria</TabsTrigger>
             <TabsTrigger value="destaques">Destaques</TabsTrigger>
           </TabsList>
 
