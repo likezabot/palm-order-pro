@@ -1447,6 +1447,10 @@ export type Database = {
         }
         Returns: string
       }
+      annotate_error_log_resolution: {
+        Args: { p_code?: string; p_ids?: number[]; p_reason?: string }
+        Returns: number
+      }
       apply_inventory_movement: {
         Args: {
           p_item_id: string

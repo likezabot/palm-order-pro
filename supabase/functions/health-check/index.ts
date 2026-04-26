@@ -162,20 +162,156 @@ async function autoFix(
       .gte("occurred_at", recentCutoff)
       .limit(1);
     if (recent && recent.length === 0) {
-      const { error: updErr, count: updCount } = await supabase
-        .from("error_log")
-        .update(
-          { resolved: true, resolved_at: new Date().toISOString() } as any,
-          { count: "exact" } as any,
-        )
-        .eq("code", code)
-        .eq("resolved", false);
-      if (!updErr && updCount) applied.push(`auto_resolved:${code}:${updCount}`);
+      const ids = await markResolved(supabase, { code }, "auto_resolved_no_recurrence");
+      if (ids > 0) applied.push(`auto_resolved:${code}:${ids}`);
     }
   }
 
+  // ---- NOVO: auto-heal de códigos recorrentes ----
+  const healed = await autoHealRecurring(supabase);
+  applied.push(...healed);
+
   return applied;
 }
+
+/**
+ * Marca registros do error_log como resolved e injeta um motivo no contexto JSONB.
+ * Retorna quantos foram afetados.
+ */
+async function markResolved(
+  supabase: any,
+  match: { code?: string; ids?: number[] },
+  reason: string,
+): Promise<number> {
+  const nowIso = new Date().toISOString();
+  let q = supabase
+    .from("error_log")
+    .update(
+      { resolved: true, resolved_at: nowIso } as any,
+      { count: "exact" } as any,
+    )
+    .eq("resolved", false);
+  if (match.ids && match.ids.length) q = q.in("id", match.ids);
+  if (match.code) q = q.eq("code", match.code);
+  const { error, count } = await q;
+  if (error) return 0;
+
+  // Anota o motivo no contexto via RPC (merge no JSONB)
+  try {
+    await supabase.rpc("annotate_error_log_resolution" as any, {
+      p_code: match.code ?? null,
+      p_ids: match.ids ?? null,
+      p_reason: reason,
+    });
+  } catch {
+    /* opcional */
+  }
+  return count ?? 0;
+}
+
+/**
+ * Registry de auto-correção por código recorrente.
+ * Cada entrada define:
+ *  - threshold: quantas ocorrências em 24h disparam o fix
+ *  - fix(supabase): aplica a correção; retorna { ok, message }
+ */
+type RecurringFix = {
+  code: string;
+  threshold: number;
+  description: string;
+  fix: (supabase: any) => Promise<{ ok: boolean; message: string }>;
+};
+
+const RECURRING_FIXES: RecurringFix[] = [
+  {
+    code: "function_not_unique",
+    threshold: 1, // crítico — qualquer ocorrência aciona
+    description: "Remove versão duplicada de create_public_order",
+    fix: async (supabase) => {
+      const { data, error } = await supabase.rpc("fix_create_public_order_duplicate" as any);
+      if (error) return { ok: false, message: error.message };
+      return { ok: true, message: String(data ?? "fix aplicado") };
+    },
+  },
+  {
+    code: "pgrst116", // PostgREST: query with multiple results / not unique
+    threshold: 3,
+    description: "Função RPC ambígua — tenta resolver duplicata conhecida",
+    fix: async (supabase) => {
+      const { data, error } = await supabase.rpc("fix_create_public_order_duplicate" as any);
+      if (error) return { ok: false, message: error.message };
+      return { ok: true, message: String(data ?? "tentativa aplicada") };
+    },
+  },
+  {
+    code: "paid_without_served_at",
+    threshold: 1,
+    description: "Preenche served_at em pedidos pagos",
+    fix: async (supabase) => {
+      const nowIso = new Date().toISOString();
+      const { error, count } = await supabase
+        .from("orders")
+        .update({ served_at: nowIso } as any, { count: "exact" } as any)
+        .eq("status", "paid")
+        .is("served_at", null);
+      if (error) return { ok: false, message: error.message };
+      return { ok: true, message: `${count ?? 0} pedido(s) corrigido(s)` };
+    },
+  },
+];
+
+async function autoHealRecurring(supabase: any): Promise<string[]> {
+  const out: string[] = [];
+  const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+
+  for (const rule of RECURRING_FIXES) {
+    // Conta ocorrências nas últimas 24h, ainda não resolvidas
+    const { count, error: cErr } = await supabase
+      .from("error_log")
+      .select("id", { count: "exact", head: true })
+      .eq("code", rule.code)
+      .eq("resolved", false)
+      .gte("occurred_at", since);
+
+    if (cErr) continue;
+    const n = count ?? 0;
+    if (n < rule.threshold) continue;
+
+    // Aplica a correção
+    let result: { ok: boolean; message: string };
+    try {
+      result = await rule.fix(supabase);
+    } catch (e: any) {
+      result = { ok: false, message: e?.message ?? String(e) };
+    }
+
+    // Loga o resultado da auto-correção
+    await logToDb(
+      supabase,
+      "other",
+      result.ok ? "info" : "error",
+      result.ok ? "auto_heal_applied" : "auto_heal_failed",
+      `[auto-heal] ${rule.code} (${n}x): ${result.message}`,
+      {
+        rule: rule.code,
+        description: rule.description,
+        occurrences_24h: n,
+        result,
+      },
+    );
+
+    if (result.ok) {
+      const reason = `auto_heal: ${rule.description} → ${result.message}`;
+      const resolved = await markResolved(supabase, { code: rule.code }, reason);
+      out.push(`auto_heal:${rule.code}:${n}->resolved:${resolved}`);
+    } else {
+      out.push(`auto_heal_failed:${rule.code}:${n}`);
+    }
+  }
+
+  return out;
+}
+
 
 async function applyFixFunctionNotUnique(
   supabase: any,
