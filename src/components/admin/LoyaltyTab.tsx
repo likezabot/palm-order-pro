@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Plus, Trash2, Search, Sparkles, Phone } from "lucide-react";
+import { Gift, Plus, Trash2, Search, Sparkles, Phone, AlertTriangle, Truck } from "lucide-react";
 
 type Reward = {
   id: string;
@@ -147,7 +147,7 @@ export default function LoyaltyTab() {
   }>({
     id: null,
     display_name: "",
-    points_cost: "10",
+    points_cost: "100",
     min_order_subtotal: "0",
     sort_order: "0",
     active: true,
@@ -158,7 +158,7 @@ export default function LoyaltyTab() {
     setForm({
       id: null,
       display_name: "",
-      points_cost: "10",
+      points_cost: "100",
       min_order_subtotal: "0",
       sort_order: "0",
       active: true,
@@ -172,21 +172,42 @@ export default function LoyaltyTab() {
       toast({ title: "Nome obrigatório", variant: "destructive" });
       return;
     }
+    const points = Number(form.points_cost) || 0;
+    const minSub = Number(form.min_order_subtotal) || 0;
+    if (points < 100) {
+      toast({
+        title: "Pontuação mínima para brinde é 100 pontos",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (minSub > 80) {
+      toast({
+        title: "Compra mínima máxima é R$ 80,00",
+        variant: "destructive",
+      });
+      return;
+    }
     const { error } = await supabase.rpc(
       "admin_loyalty_upsert_reward" as never,
       {
         p_id: form.id,
         p_restaurant_id: restaurantId,
         p_display_name: form.display_name.trim(),
-        p_points_cost: Number(form.points_cost) || 0,
-        p_min_order_subtotal: Number(form.min_order_subtotal) || 0,
+        p_points_cost: points,
+        p_min_order_subtotal: minSub,
         p_active: form.active,
         p_sort_order: Number(form.sort_order) || 0,
         p_product_id: form.product_id || null,
       } as never,
     );
     if (error) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      let friendly = error.message;
+      if (friendly.includes("points_cost_min_100"))
+        friendly = "Pontuação mínima para brinde é 100 pontos";
+      else if (friendly.includes("min_subtotal_max_80"))
+        friendly = "Compra mínima máxima é R$ 80,00";
+      toast({ title: "Erro ao salvar", description: friendly, variant: "destructive" });
       return;
     }
     resetForm();
