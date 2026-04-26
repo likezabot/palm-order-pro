@@ -40,7 +40,7 @@ export default function LoyaltyCTACard() {
               Plano B Pontos
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              Ganhe 1 ponto a cada R$ 1 e troque por brindes.
+              Ganhe 1 ponto a cada R$ 1 em pedidos de retirada.
             </div>
           </div>
           <div className="flex items-center gap-1 text-xs font-bold text-primary">

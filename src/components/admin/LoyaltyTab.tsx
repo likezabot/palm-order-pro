@@ -354,18 +354,20 @@ export default function LoyaltyTab() {
             />
           </div>
           <div>
-            <Label>Custo (pontos)</Label>
+            <Label>Custo (pontos) — mínimo 100</Label>
             <Input
               type="number"
+              min={100}
               value={form.points_cost}
               onChange={(e) => setForm({ ...form, points_cost: e.target.value })}
             />
           </div>
           <div>
-            <Label>Pedido mínimo (R$)</Label>
+            <Label>Pedido mínimo (R$) — máximo 80</Label>
             <Input
               type="number"
               step="0.01"
+              max={80}
               value={form.min_order_subtotal}
               onChange={(e) => setForm({ ...form, min_order_subtotal: e.target.value })}
             />
@@ -410,30 +412,44 @@ export default function LoyaltyTab() {
           {(rewardsQuery.data ?? []).length === 0 && (
             <div className="p-4 text-sm text-muted-foreground">Nenhum brinde cadastrado.</div>
           )}
-          {(rewardsQuery.data ?? []).map((r) => (
-            <div key={r.id} className="p-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-semibold truncate">
-                  {r.display_name}{" "}
-                  {!r.active && <span className="text-xs text-muted-foreground">(inativo)</span>}
+          {[...(rewardsQuery.data ?? [])]
+            .sort((a, b) => {
+              if (a.active !== b.active) return a.active ? -1 : 1;
+              return a.sort_order - b.sort_order;
+            })
+            .map((r) => (
+              <div key={r.id} className="p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold truncate flex items-center gap-2">
+                    <span className="text-xs font-mono text-muted-foreground">#{r.sort_order}</span>
+                    <span className="truncate">{r.display_name}</span>
+                    {r.active ? (
+                      <span className="text-[10px] font-bold uppercase rounded-full border border-success/40 bg-success/10 text-success px-2 py-0.5">
+                        Ativo
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase rounded-full border border-border bg-muted text-muted-foreground px-2 py-0.5">
+                        Oculto
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}
+                    {r.product_name && ` · vinc. ${r.product_name} (R$ ${Number(r.product_price ?? 0).toFixed(2)})`}
+                    {r.effective_cost_per_point !== null &&
+                      ` · custo efetivo R$ ${r.effective_cost_per_point.toFixed(2)}/pt`}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}
-                  {r.product_name && ` · vinc. ${r.product_name} (R$ ${Number(r.product_price ?? 0).toFixed(2)})`}
-                  {r.effective_cost_per_point !== null &&
-                    ` · custo efetivo R$ ${r.effective_cost_per_point.toFixed(2)}/pt`}
+                <div className="flex gap-2 shrink-0">
+                  <Button size="sm" variant="outline" onClick={() => editReward(r)}>
+                    Editar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => deleteReward(r.id)}>
+                    <Trash2 size={14} />
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <Button size="sm" variant="outline" onClick={() => editReward(r)}>
-                  Editar
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => deleteReward(r.id)}>
-                  <Trash2 size={14} />
-                </Button>
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       </section>
 
