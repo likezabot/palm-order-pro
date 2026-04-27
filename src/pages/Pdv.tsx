@@ -86,10 +86,11 @@ const Pdv = () => {
       const cfg = loadPrintConfig();
       if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
       try {
-        const health = await checkBridgeStatus(cfg.bridgeUrl);
+        // REQUISITO: bypass cache com t=Date.now()
+        const health = await checkBridgeStatus(cfg.bridgeUrl, true);
         setBridgeStatus({
-          online: !health.error,
-          printerOnline: health.printer_connected !== false,
+          online: health.online,
+          printerOnline: health.printer_connected,
         });
       } catch (e) {
         setBridgeStatus({ online: false, printerOnline: false });
