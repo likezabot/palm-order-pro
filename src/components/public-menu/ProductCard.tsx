@@ -13,6 +13,8 @@ type Props = {
   imageAspect?: "square" | "wide" | "tall";
   /** Override por categoria. "compact" reduz para nome+preço, sem imagem grande nem descrição. */
   cardStyle?: "compact" | "detailed";
+  /** Sombra global (vem de settings.card_style). Default true (elevated). */
+  elevated?: boolean;
   onClick?: (p: PublicProduct) => void;
   /** Quando informado, mostra botão "Adicionar" inline que adiciona 1 unidade direto. */
   onQuickAdd?: (p: PublicProduct) => void;
@@ -100,6 +102,7 @@ export default function ProductCard({
   showDescription = true,
   imageAspect = "square",
   cardStyle = "detailed",
+  elevated = true,
   onClick,
   onQuickAdd,
   priceLabel,
@@ -113,6 +116,7 @@ export default function ProductCard({
 
   const effectiveShowDescription = cardStyle === "compact" ? false : showDescription;
   const effectiveShowImage = cardStyle === "compact" ? false : showImage;
+  const shadowClass = elevated ? "shadow-[var(--shadow-warm)]" : "";
 
   // ---- Modo compacto: renderização enxuta (igual em list/grid) ----
   if (cardStyle === "compact") {
