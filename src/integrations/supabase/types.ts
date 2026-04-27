@@ -1358,6 +1358,7 @@ export type Database = {
         Args: { p_ids: string[]; p_orders: number[] }
         Returns: undefined
       }
+      admin_save_print_config: { Args: { p_config: Json }; Returns: undefined }
       admin_set_setting: {
         Args: { p_key: string; p_pin: string; p_value: string }
         Returns: undefined
@@ -1692,6 +1693,7 @@ export type Database = {
         Args: { p_name: string; p_phone: string }
         Returns: string
       }
+      get_print_config: { Args: never; Returns: Json }
       get_public_loyalty_status:
         | {
             Args: {
