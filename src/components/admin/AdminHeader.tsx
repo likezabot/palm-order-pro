@@ -4,6 +4,7 @@ import DuplicatesResolver from "@/components/admin/DuplicatesResolver";
 import SettingsDialog from "@/components/admin/SettingsDialog";
 import TabIdBadge from "@/components/TabIdBadge";
 import { useFeedback } from "@/hooks/use-feedback";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 interface Props {
   staffMode: boolean;
@@ -26,6 +27,7 @@ export const AdminHeader = ({
   return (
     <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 bg-white shadow-sm">
       <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+        <SidebarTrigger className="shrink-0" />
         <button
           onClick={() => {
             playFeedback("click");
