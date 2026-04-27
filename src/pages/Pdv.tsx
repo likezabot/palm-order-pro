@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff, Users, Split, X } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff, Users, Split, X, Gift } from "lucide-react";
 import { CancelOrderDialog } from "@/components/pdv/CancelOrderDialog";
 import {
   AlertDialog,
@@ -801,6 +801,19 @@ const Pdv = () => {
             <AlertDialogTitle>Confirmar fechamento?</AlertDialogTitle>
             <AlertDialogDescription>
               Mesa {selectedOrder ? formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name) : ""} — Total: R$ {total.toFixed(2)}
+              {selectedOrder && getOrderGroup(selectedOrder) === "delivery" && (
+                <div className="mt-4 p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-3 animate-pulse ring-2 ring-primary/20">
+                  <Gift className="text-primary w-6 h-6 shrink-0" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-sm font-black text-primary uppercase tracking-tight">
+                      Enviar pontos para o cliente!
+                    </span>
+                    <span className="text-[10px] font-bold text-primary/70 uppercase">
+                      Lembre-se de creditar no sistema de fidelidade
+                    </span>
+                  </div>
+                </div>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
