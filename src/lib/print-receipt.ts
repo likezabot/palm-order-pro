@@ -279,8 +279,18 @@ export async function printDelivery(
     {
       items: input.items,
       total: input.total ?? undefined,
+      subtotal: input.subtotal ?? undefined,
+      deliveryFee: input.deliveryFee ?? undefined,
+      discount: input.discount ?? undefined,
       orderId: input.orderId ?? undefined,
+      orderShortId: input.orderShortId ?? undefined,
       customerName: input.customerName ?? undefined,
+      customerPhone: input.customerPhone ?? undefined,
+      deliveryAddress: input.deliveryAddress ?? undefined,
+      paymentMethod: input.paymentMethod ?? undefined,
+      changeFor: input.changeFor ?? undefined,
+      generalNote: input.generalNote ?? undefined,
+      serviceType: "delivery",
     },
     cfg,
   );
