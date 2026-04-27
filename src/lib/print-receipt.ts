@@ -224,7 +224,11 @@ export async function printBill(
   total: number,
   extras: ReceiptExtras = {},
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printBill", cfg, {
+    serviceType: extras.serviceType ?? null,
+    tableName,
+  });
   console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -232,7 +236,6 @@ export async function printBill(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
   buildHtmlFromLayout("CONTA", "Conta", {
     tableName,
     waiterName,
