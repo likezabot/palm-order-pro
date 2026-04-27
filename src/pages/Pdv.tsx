@@ -161,7 +161,7 @@ const Pdv = () => {
     } else {
       toast({
         title: "Falha ao imprimir",
-        description: "Bridge local offline e fila indisponível. Verifique a ponte em Admin → Sistema.",
+        description: result.error || "Bridge local offline e fila indisponível. Verifique a ponte em Admin → Sistema.",
         variant: "destructive",
       });
     }
