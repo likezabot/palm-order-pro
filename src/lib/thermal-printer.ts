@@ -551,6 +551,15 @@ export interface ReceiptExtras {
   customerPhone?: string | null;
 }
 
+function assertLegacyReceiptAllowed(functionName: string, extras: ReceiptExtras = {}) {
+  const serviceType = extras.serviceType ?? undefined;
+  if (serviceType === "delivery") {
+    const err = `[PRINT_ENGINE_CRITICAL] ${functionName} bloqueado para delivery; use buildEscPosDelivery`;
+    debugLog.error("print", err, { serviceType });
+    throw new Error(err);
+  }
+}
+
 export function buildEscPosReceipt(
   tableName: string,
   waiterName: string,
