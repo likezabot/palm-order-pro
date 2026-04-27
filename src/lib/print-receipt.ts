@@ -5,7 +5,7 @@
  * e despacha para o navegador (print-iframe) ou para a ponte ESC/POS (thermal-printer).
  */
 
-import { loadPrintConfig, savePrintConfig, type PaperWidth } from "./print-config";
+import { loadPrintConfig, savePrintConfig, ensureFreshPrintConfig, type PaperWidth } from "./print-config";
 import {
   buildEscPosReceipt,
   buildEscPosDelta,
@@ -19,8 +19,33 @@ import {
 import { createReceiptLayoutModel, type LayoutBlock } from "./receipt-layout";
 import { buildHtmlFromLayout, buildHtmlFromBlocks } from "./receipt-html";
 import { doPrint } from "./print-iframe";
+import { logPrintEngine } from "./print-engine";
 
 export type { PaperWidth };
+
+async function getPrintConfigForOutput() {
+  return await ensureFreshPrintConfig();
+}
+
+function logPrintCall(
+  functionName: string,
+  cfg: import("./print-config").PrintConfig,
+  params: { orderId?: string | null; serviceType?: string | null; tableName?: string | null },
+) {
+  logPrintEngine({
+    functionName,
+    orderId: params.orderId ?? null,
+    serviceType: params.serviceType ?? null,
+    tableName: params.tableName ?? null,
+    headerText: cfg.headerText,
+    footerText: cfg.footerText,
+    paperWidth: cfg.paperWidth,
+    configMeta: {
+      updatedAt: cfg.configUpdatedAt ?? null,
+      source: cfg.configSource ?? null,
+    },
+  });
+}
 
 export function getPaperWidth(): PaperWidth {
   return loadPrintConfig().paperWidth;
@@ -134,7 +159,11 @@ export async function printReceipt(
   total: number,
   extras: ReceiptExtras = {},
 ) {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printReceipt", cfg, {
+    serviceType: extras.serviceType ?? null,
+    tableName,
+  });
   console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -147,7 +176,6 @@ export async function printReceipt(
     return true;
   }
 
-  // No navegador/celular, não imprimir pedido para evitar PDF
   console.log("[print] Pedido ignorado no modo browser.");
   return false;
 }
@@ -158,7 +186,11 @@ export async function printDelta(
   deltaItems: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   extras: ReceiptExtras = {},
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printDelta", cfg, {
+    serviceType: extras.serviceType ?? null,
+    tableName,
+  });
   console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -166,7 +198,6 @@ export async function printDelta(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
   buildHtmlFromLayout(
     "ACRESCIMO",
     "Acréscimo",
@@ -193,7 +224,11 @@ export async function printBill(
   total: number,
   extras: ReceiptExtras = {},
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printBill", cfg, {
+    serviceType: extras.serviceType ?? null,
+    tableName,
+  });
   console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -201,7 +236,6 @@ export async function printBill(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
   buildHtmlFromLayout("CONTA", "Conta", {
     tableName,
     waiterName,
@@ -225,18 +259,20 @@ export async function printCustomerReceipt(
   amountPaid: number,
   customerData?: { name?: string; document?: string } | null,
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printCustomerReceipt", cfg, {
+    serviceType: "dine_in",
+    tableName,
+  });
   const COMPANY_CNPJ = "38.000.368/0001-22";
   const payLabel: Record<string, string> = { cash: "DINHEIRO", pix: "PIX", card: "CARTÃO" };
   const change = amountPaid - total;
 
-  // Base estrutural via fonte unica de layout (CONTA: titulo, info, itens, total).
   const layout = createReceiptLayoutModel(
     { docType: "CONTA", tableName, waiterName, items, total },
     cfg,
   );
 
-  // Insere blocos extras (cliente / pagamento / troco) imediatamente antes do rodape/cutMark.
   const extras: LayoutBlock[] = [];
   if (customerData?.name) extras.push({ kind: "info", label: "Cliente", value: customerData.name });
   if (customerData?.document) extras.push({ kind: "info", label: "CPF/CNPJ", value: customerData.document });
@@ -247,22 +283,18 @@ export async function printCustomerReceipt(
     extras.push({ kind: "info", label: "Troco", value: `R$ ${change.toFixed(2)}` });
   }
 
-  // Insere extras antes do cutMark (e depois do qtyLine, se houver).
   const cutIdx = layout.blocks.findIndex((b) => b.kind === "cutMark");
   const insertAt = cutIdx === -1 ? layout.blocks.length : cutIdx;
   layout.blocks.splice(insertAt, 0, { kind: "sep" }, ...extras);
 
-  // CNPJ entra logo apos o titulo (se visivel), como subheader simples.
   const titleIdx = layout.blocks.findIndex((b) => b.kind === "title");
   if (titleIdx !== -1) {
     layout.blocks.splice(titleIdx + 1, 0, { kind: "info", label: "CNPJ", value: COMPANY_CNPJ });
   }
 
-  // HTML usa os blocos JA enriquecidos (preserva CNPJ/Cliente/Pagamento/Troco).
   buildHtmlFromBlocks("Comprovante", layout.blocks, cfg);
 
   if (cfg.printMode === "bridge") {
-    // ESC/POS tambem usa os blocos enriquecidos -> papel sai com os mesmos extras.
     const payload = renderLayout(layout.blocks, cfg);
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
@@ -279,7 +311,12 @@ export async function printCustomerReceipt(
 export async function printDelivery(
   input: DeliveryPayloadInput,
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printDelivery", cfg, {
+    orderId: input.orderId ?? null,
+    serviceType: input.serviceType ?? "delivery",
+    tableName: input.orderShortId ?? input.orderId ?? null,
+  });
   console.log(`[print] Preparando DELIVERY pedido ${input.orderShortId ?? input.orderId ?? "?"}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -287,7 +324,6 @@ export async function printDelivery(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Browser: gera HTML pelo mesmo layout (não envia automaticamente p/ evitar PDF)
   buildHtmlFromLayout(
     "DELIVERY",
     "Delivery",

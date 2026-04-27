@@ -8,6 +8,7 @@
  */
 
 import type { PrintConfig } from "./print-config";
+import { APP_BUILD, PRINT_ENGINE_FOOTER } from "./print-engine";
 
 export type DocType = "PEDIDO" | "ACRESCIMO" | "CONTA" | "SENHA" | "DELIVERY";
 
@@ -238,6 +239,8 @@ export function createReceiptLayoutModel(
   if (v.footer && cfg.footerText) {
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
+  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
+  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
 
   // 9. Marca de corte (visual, só usada no HTML)
   blocks.push({ kind: "cutMark" });
@@ -357,6 +360,8 @@ function buildDeliveryLayout(
   if (v.footer && cfg.footerText) {
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
+  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
+  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
 
   blocks.push({ kind: "cutMark" });
   return { blocks, docType: "DELIVERY" };
@@ -414,6 +419,8 @@ function buildSenhaLayout(
   });
   blocks.push({ kind: "sep", bold: true });
   if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
+  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
+  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
   blocks.push({ kind: "cutMark" });
   return { blocks, docType: "SENHA" };
 }

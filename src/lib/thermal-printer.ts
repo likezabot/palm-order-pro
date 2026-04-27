@@ -12,6 +12,7 @@ import {
   type ReceiptItem,
 } from "./receipt-layout";
 import { debugLog } from "./debug-logger";
+import { logPrintEngine } from "./print-engine";
 
 // ESC/POS Commands
 const ESC = 27;
@@ -550,6 +551,15 @@ export interface ReceiptExtras {
   customerPhone?: string | null;
 }
 
+function assertLegacyReceiptAllowed(functionName: string, extras: ReceiptExtras = {}) {
+  const serviceType = extras.serviceType ?? undefined;
+  if (serviceType === "delivery") {
+    const err = `[PRINT_ENGINE_CRITICAL] ${functionName} bloqueado para delivery; use buildEscPosDelivery`;
+    debugLog.error("print", err, { serviceType });
+    throw new Error(err);
+  }
+}
+
 export function buildEscPosReceipt(
   tableName: string,
   waiterName: string,
@@ -558,6 +568,19 @@ export function buildEscPosReceipt(
   config: PrintConfig,
   extras: ReceiptExtras = {}
 ): Uint8Array {
+  assertLegacyReceiptAllowed("buildEscPosReceipt", extras);
+  logPrintEngine({
+    functionName: "buildEscPosReceipt",
+    serviceType: extras.serviceType ?? null,
+    tableName,
+    headerText: config.headerText,
+    footerText: config.footerText,
+    paperWidth: config.paperWidth,
+    configMeta: {
+      updatedAt: config.configUpdatedAt ?? null,
+      source: config.configSource ?? null,
+    },
+  });
   const layout = createReceiptLayoutModel(
     {
       docType: "PEDIDO",
@@ -581,6 +604,19 @@ export function buildEscPosDelta(
   config: PrintConfig,
   extras: ReceiptExtras = {}
 ): Uint8Array {
+  assertLegacyReceiptAllowed("buildEscPosDelta", extras);
+  logPrintEngine({
+    functionName: "buildEscPosDelta",
+    serviceType: extras.serviceType ?? null,
+    tableName,
+    headerText: config.headerText,
+    footerText: config.footerText,
+    paperWidth: config.paperWidth,
+    configMeta: {
+      updatedAt: config.configUpdatedAt ?? null,
+      source: config.configSource ?? null,
+    },
+  });
   const total = items.reduce((s, i) => s + i.product_price * i.quantity, 0);
   const layout = createReceiptLayoutModel(
     {
@@ -606,6 +642,19 @@ export function buildEscPosBill(
   config: PrintConfig,
   extras: ReceiptExtras = {}
 ): Uint8Array {
+  assertLegacyReceiptAllowed("buildEscPosBill", extras);
+  logPrintEngine({
+    functionName: "buildEscPosBill",
+    serviceType: extras.serviceType ?? null,
+    tableName,
+    headerText: config.headerText,
+    footerText: config.footerText,
+    paperWidth: config.paperWidth,
+    configMeta: {
+      updatedAt: config.configUpdatedAt ?? null,
+      source: config.configSource ?? null,
+    },
+  });
   const layout = createReceiptLayoutModel(
     {
       docType: "CONTA",
@@ -643,6 +692,19 @@ export function buildEscPosDelivery(
   input: DeliveryPayloadInput,
   config: PrintConfig
 ): Uint8Array {
+  logPrintEngine({
+    functionName: "buildEscPosDelivery",
+    orderId: input.orderId ?? null,
+    serviceType: input.serviceType ?? "delivery",
+    tableName: input.orderShortId ?? input.orderId ?? null,
+    headerText: config.headerText,
+    footerText: config.footerText,
+    paperWidth: config.paperWidth,
+    configMeta: {
+      updatedAt: config.configUpdatedAt ?? null,
+      source: config.configSource ?? null,
+    },
+  });
   const layout = createReceiptLayoutModel(
     {
       docType: "DELIVERY",
