@@ -290,8 +290,8 @@ export async function sendTestMinimal(bridgeUrl: string): Promise<{ ok: boolean;
   const payload = b.getPayload();
   const t0 = performance.now();
   try {
-    const ok = await sendToBridge(payload, bridgeUrl);
-    return { ok, latencyMs: Math.round(performance.now() - t0) };
+    const result = await sendToBridge(payload, bridgeUrl);
+    return { ok: result.success, latencyMs: Math.round(performance.now() - t0), error: result.error };
   } catch (e: any) {
     return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
   }
@@ -330,8 +330,8 @@ export async function sendOriginTest(input: {
   const payload = b.getPayload();
   const t0 = performance.now();
   try {
-    const ok = await sendToBridge(payload, input.bridgeUrl);
-    return { ok, latencyMs: Math.round(performance.now() - t0) };
+    const result = await sendToBridge(payload, input.bridgeUrl);
+    return { ok: result.success, latencyMs: Math.round(performance.now() - t0), error: result.error };
   } catch (e: any) {
     return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
   }
@@ -381,8 +381,8 @@ export async function sendConfigSelfTest(input: {
   const payload = b.getPayload();
   const t0 = performance.now();
   try {
-    const ok = await sendToBridge(payload, input.bridgeUrl);
-    return { ok, latencyMs: Math.round(performance.now() - t0) };
+    const result = await sendToBridge(payload, input.bridgeUrl);
+    return { ok: result.success, latencyMs: Math.round(performance.now() - t0), error: result.error };
   } catch (e: any) {
     return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
   }
