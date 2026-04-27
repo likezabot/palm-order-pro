@@ -824,6 +824,7 @@ export interface DeliveryPayloadInput {
   orderId?: string | null;
   orderShortId?: string | null;
   serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
+  fingerprint?: import("./receipt-layout").BuildLayoutInput["fingerprint"];
 }
 
 export function buildEscPosDelivery(
