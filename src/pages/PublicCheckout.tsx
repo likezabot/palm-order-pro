@@ -71,6 +71,37 @@ export default function PublicCheckout() {
     }
   }, []);
 
+  // Auto-preenche endereço pelo telefone (apenas delivery, e só se campos vazios)
+  const lastFetchedPhoneRef = useRef<string>("");
+  useEffect(() => {
+    if (serviceType !== "delivery") return;
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) return;
+    if (lastFetchedPhoneRef.current === digits) return;
+    // Não sobrescreve se cliente já começou a digitar
+    if (street.trim() || number.trim() || neighborhood.trim()) return;
+
+    const handle = setTimeout(async () => {
+      lastFetchedPhoneRef.current = digits;
+      const addr = await fetchLastCustomerAddress(digits);
+      if (!addr) return;
+      // Re-checa: se cliente digitou algo durante o debounce, não sobrescrever
+      if (street.trim() || number.trim() || neighborhood.trim()) return;
+      if (addr.street) setStreet(addr.street);
+      if (addr.number) setNumber(addr.number);
+      if (addr.neighborhood) setNeighborhood(addr.neighborhood);
+      if (addr.complement) setComplement(addr.complement);
+      if (addr.reference) setReference(addr.reference);
+      toast({
+        title: "Endereço preenchido",
+        description: "Usamos o endereço do seu último pedido.",
+      });
+    }, 500);
+
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, serviceType]);
+
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
 
