@@ -126,34 +126,54 @@ describe("PrintConfigPanel — fluxo de configuração via banco", () => {
 });
 
 describe("PrintConfigPanel — previews refletem service_type", () => {
+  // Validamos as previews via os helpers reais de layout (mesma fonte que o
+  // componente usa) — evita depender da interação Radix Tabs sob jsdom.
   it("preview de delivery NÃO mostra MESA nem GARCOM e mostra endereço/telefone", async () => {
-    render(<PrintConfigPanel />);
-    await waitFor(() => expect(syncMock).toHaveBeenCalled());
-
-    fireEvent.click(screen.getByRole("tab", { name: /delivery/i }));
-    await waitFor(() => {
-      const html = getPreviewSrcDoc();
-      expect(html).toContain("Maria Souza");
-    });
-    const html = getPreviewSrcDoc();
+    const { buildHtmlFromLayout } = await import("@/lib/receipt-html");
+    const html = buildHtmlFromLayout(
+      "DELIVERY",
+      "Delivery",
+      {
+        items: [{ product_name: "X", quantity: 1, product_price: 10, note: null }],
+        subtotal: 10,
+        deliveryFee: 5,
+        total: 15,
+        customerName: "Maria Souza",
+        customerPhone: "(11) 99999-1234",
+        deliveryAddress: { street: "Rua A", number: "10", neighborhood: "Centro" },
+        paymentMethod: "cash",
+        changeFor: 100,
+        orderShortId: "T001",
+        serviceType: "delivery",
+      },
+      baseCfg,
+    );
     expect(html).toContain("DELIVERY");
     expect(html).not.toMatch(/<span class="info-label">Mesa:/i);
     expect(html).not.toMatch(/<span class="info-label">Garcom:/i);
-    expect(html).toContain("Centro"); // bairro
+    expect(html).toContain("Maria Souza");
+    expect(html).toContain("Centro");
   });
 
   it("preview de retirada NÃO mostra MESA", async () => {
-    render(<PrintConfigPanel />);
-    await waitFor(() => expect(syncMock).toHaveBeenCalled());
-
-    fireEvent.click(screen.getByRole("tab", { name: /retirada/i }));
-    await waitFor(() => {
-      const html = getPreviewSrcDoc();
-      expect(html).toContain("João Pereira");
-    });
-    const html = getPreviewSrcDoc();
+    const { buildHtmlFromLayout } = await import("@/lib/receipt-html");
+    const html = buildHtmlFromLayout(
+      "PEDIDO",
+      "Retirada",
+      {
+        tableName: "",
+        waiterName: "",
+        items: [{ product_name: "Y", quantity: 1, product_price: 20, note: null }],
+        total: 20,
+        serviceType: "pickup",
+        customerName: "João Pereira",
+        customerPhone: "(11) 98888-2222",
+      },
+      baseCfg,
+    );
     expect(html).toMatch(/RETIRADA/i);
     expect(html).not.toMatch(/<span class="info-label">Mesa:/i);
+    expect(html).toContain("João Pereira");
   });
 
   it("preview de mesa MOSTRA mesa e garçom", async () => {
