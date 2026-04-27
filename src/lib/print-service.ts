@@ -129,15 +129,34 @@ export async function autoPrintOrder(order: {
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) return { printed: false, reason: "already_claimed" };
 
-  // Garante original_table_name (busca se não veio)
+  // Busca metadados extras (service_type, delivery_*, customer_*)
   let originalName = order.original_table_name;
-  if (originalName === undefined) {
+  let serviceType: string | null = null;
+  let deliveryAddress: any = null;
+  let deliveryFee = 0;
+  let customerName: string | null = null;
+  let customerPhone: string | null = null;
+  let paymentMethod: string | null = null;
+  let changeFor: number | null = null;
+  try {
     const { data } = await supabase
       .from("orders")
-      .select("original_table_name")
+      .select(
+        "original_table_name, service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for",
+      )
       .eq("id", order.id)
       .single();
-    originalName = (data as any)?.original_table_name ?? null;
+    const d = (data as any) ?? {};
+    if (originalName === undefined) originalName = d.original_table_name ?? null;
+    serviceType = d.service_type ?? null;
+    deliveryAddress = d.delivery_address ?? null;
+    deliveryFee = Number(d.delivery_fee ?? 0);
+    customerName = d.customer_name_snapshot ?? null;
+    customerPhone = d.customer_phone_snapshot ?? null;
+    paymentMethod = d.payment_method ?? null;
+    changeFor = d.change_for != null ? Number(d.change_for) : null;
+  } catch {
+    /* segue com defaults */
   }
   const tableValue = formatPrintTableValue(order.table_name, originalName);
 
@@ -156,6 +175,41 @@ export async function autoPrintOrder(order: {
     return { printed: false, reason: "no_items" };
   }
 
+  const cfg = loadPrintConfig();
+  const isDelivery = serviceType === "delivery";
+
+  // ---------- Fluxo DELIVERY (modelo dedicado) ----------
+  if (isDelivery) {
+    const subtotal = items.reduce(
+      (s, i) => s + Number(i.product_price) * Number(i.quantity),
+      0,
+    );
+    const deliveryInput: DeliveryPayloadInput = {
+      items,
+      customerName,
+      customerPhone,
+      deliveryAddress,
+      deliveryFee,
+      subtotal,
+      total: order.total ?? subtotal + deliveryFee,
+      paymentMethod,
+      changeFor,
+      orderId: order.id,
+      orderShortId: order.table_name?.replace(/^.*#/, "") || null,
+      serviceType: "delivery",
+    };
+    const success = await printDelivery(deliveryInput);
+    if (success) {
+      await completePrint(order.id);
+      return { printed: true, reason: "success_delivery" };
+    }
+    const payload = buildEscPosDelivery(deliveryInput, cfg);
+    await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
+    await deferPrint(order.id);
+    return { printed: false, reason: "bridge_offline_queued" };
+  }
+
+  // ---------- Fluxo MESA / BALCÃO / RETIRADA (legado) ----------
   const success = await printReceipt(
     tableValue,
     order.waiter_name || "N/A",
@@ -167,8 +221,6 @@ export async function autoPrintOrder(order: {
     await completePrint(order.id);
     return { printed: true, reason: "success" };
   } else {
-    // Bridge falhou → enfileira ESC/POS para retry automático
-    const cfg = loadPrintConfig();
     const payload = buildEscPosReceipt(
       tableValue,
       order.waiter_name || "N/A",
