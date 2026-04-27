@@ -186,7 +186,11 @@ export async function printDelta(
   deltaItems: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   extras: ReceiptExtras = {},
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printDelta", cfg, {
+    serviceType: extras.serviceType ?? null,
+    tableName,
+  });
   console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -194,7 +198,6 @@ export async function printDelta(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
   buildHtmlFromLayout(
     "ACRESCIMO",
     "Acréscimo",
