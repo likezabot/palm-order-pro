@@ -251,6 +251,17 @@ export function buildHtmlFromLayout(
     senha?: string;
     orderId?: string;
     customerName?: string;
+    // Campos extras (delivery / pickup / online)
+    customerPhone?: string | null;
+    deliveryAddress?: import("./receipt-layout").DeliveryAddressData | null;
+    deliveryFee?: number | null;
+    discount?: number | null;
+    subtotal?: number | null;
+    paymentMethod?: string | null;
+    changeFor?: number | null;
+    generalNote?: string | null;
+    orderShortId?: string | null;
+    serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
   },
   cfg: PrintConfig,
 ): string {
