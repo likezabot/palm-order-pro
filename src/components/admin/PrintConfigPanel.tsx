@@ -42,6 +42,7 @@ import PrinterDiagnostics from "./PrinterDiagnostics";
 import BridgeOriginDiagnostics from "./BridgeOriginDiagnostics";
 import PrintConfigSelfTest from "./PrintConfigSelfTest";
 import PrintOriginPanel from "./PrintOriginPanel";
+import AdvancedSection from "./AdvancedSection";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -516,31 +517,31 @@ export default function PrintConfigPanel() {
           </CardContent>
         </Card>
 
-        {/* 5. AUTO-TESTE DA CONFIG (prova: papel reflete o Admin) */}
-        <PrintConfigSelfTest cfg={cfg} onConfigSynced={(next) => setCfg(next)} />
-
-        {/* 6. ORIGEM DOS PEDIDOS REAIS (prova qual instância imprime de verdade) */}
-        <PrintOriginPanel />
-
-        {/* 7. DIAGNÓSTICO DE ORIGEM (prova de qual instância sai o papel) */}
-        <BridgeOriginDiagnostics
-          bridgeUrl={cfg.bridgeUrl}
-          configSource={cfg.configSource ?? "default"}
-          onBridgeUrlChange={(url) => persist({ ...cfg, bridgeUrl: url, printMode: "bridge" })}
-        />
-
-        {/* 7. DIAGNÓSTICO AVANÇADO (existente) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-bold uppercase tracking-wide">Diagnóstico avançado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PrinterDiagnostics
-              bridgeUrl={cfg.bridgeUrl}
-              onBridgeUrlChange={(url) => persist({ ...cfg, bridgeUrl: url, printMode: "bridge" })}
-            />
-          </CardContent>
-        </Card>
+        {/* 5. DIAGNÓSTICOS (auto-teste, origem, bridge, impressora) — escondidos por padrão */}
+        <AdvancedSection
+          id="print-diagnostics"
+          label="Mostrar diagnósticos avançados"
+          description="Auto-teste, origem dos pedidos reais, diagnóstico da bridge e da impressora."
+        >
+          <PrintConfigSelfTest cfg={cfg} onConfigSynced={(next) => setCfg(next)} />
+          <PrintOriginPanel />
+          <BridgeOriginDiagnostics
+            bridgeUrl={cfg.bridgeUrl}
+            configSource={cfg.configSource ?? "default"}
+            onBridgeUrlChange={(url) => persist({ ...cfg, bridgeUrl: url, printMode: "bridge" })}
+          />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-bold uppercase tracking-wide">Diagnóstico da impressora</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PrinterDiagnostics
+                bridgeUrl={cfg.bridgeUrl}
+                onBridgeUrlChange={(url) => persist({ ...cfg, bridgeUrl: url, printMode: "bridge" })}
+              />
+            </CardContent>
+          </Card>
+        </AdvancedSection>
       </div>
 
       {/* ========== COLUNA DIREITA — Preview + Testes ========== */}
