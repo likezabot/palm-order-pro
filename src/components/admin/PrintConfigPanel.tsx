@@ -12,6 +12,7 @@ import {
 } from "@/lib/print-config";
 import { buildReceiptHtml, buildSenhaHtml, printReceipt, printSenha } from "@/lib/print-receipt";
 import { checkBridgeStatus, type BridgeHealth } from "@/lib/thermal-printer";
+import { PRINT_ENGINE_VERSION, APP_BUILD } from "@/lib/print-engine";
 import PrinterDiagnostics from "./PrinterDiagnostics";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -158,6 +159,33 @@ export default function PrintConfigPanel() {
     <div className="flex flex-col lg:flex-row gap-6 w-full">
       {/* LEFT: Visual editor */}
       <div className="flex-1 space-y-6 min-w-0 max-w-md">
+
+        {/* Diagnóstico de versão / fonte da config */}
+        <section className="rounded-lg border border-border bg-muted/30 p-3 text-[11px] font-mono space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">APP_BUILD</span>
+            <span className="font-bold">{APP_BUILD}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">PRINT_ENGINE</span>
+            <span className="font-bold">{PRINT_ENGINE_VERSION}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">config_source</span>
+            <span className={`font-bold ${cfg.configSource === "db" ? "text-success" : "text-warning"}`}>
+              {cfg.configSource ?? "default"}
+            </span>
+          </div>
+          {cfg.configUpdatedAt && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">updated_at</span>
+              <span className="font-bold">{new Date(cfg.configUpdatedAt).toLocaleString("pt-BR")}</span>
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground pt-1">
+            Se config_source ficar em "local" após salvar, o banco rejeitou a gravação. Se PRINT_ENGINE não bater com o que sai no papel, o EXE está com bundle antigo.
+          </p>
+        </section>
 
         {/* Modelo predefinido */}
         <section className="space-y-2">
