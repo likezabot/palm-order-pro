@@ -14,8 +14,55 @@ import {
 } from "@/lib/print-origin-tracker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2, Inbox, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, Inbox, RefreshCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+
+function isFetchError(msg?: string | null): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return m.includes("failed to fetch") || m.includes("networkerror") || m.includes("fetch");
+}
+
+function buildInstanceDiagnostic(record: PrintOriginRecord): string {
+  const lines = [
+    "=== DIAGNÓSTICO DE INSTÂNCIA ===",
+    `ts: ${new Date(record.ts).toISOString()}`,
+    `ok: ${record.ok}`,
+    `erro: ${record.errorMsg ?? "—"}`,
+    `bridgeUrl: ${record.bridgeUrl ?? "—"}`,
+    `printPath: ${record.printPath}`,
+    `source: ${record.source}`,
+    `orderId: ${record.orderId ?? "—"}`,
+    `serviceType: ${record.serviceType ?? "—"}`,
+    `tableName: ${record.tableName ?? "—"}`,
+    `bytes: ${record.bytes ?? "—"}`,
+    `APP_BUILD: ${record.appBuild}`,
+    `PRINT_ENGINE: ${record.engineVersion}`,
+    `userAgent: ${typeof navigator !== "undefined" ? navigator.userAgent : "—"}`,
+    `url: ${typeof location !== "undefined" ? location.href : "—"}`,
+  ];
+  return lines.join("\n");
+}
+
+async function copyDiagnostic(record: PrintOriginRecord) {
+  const text = buildInstanceDiagnostic(record);
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success("Diagnóstico copiado");
+  } catch {
+    toast.error("Falha ao copiar diagnóstico");
+  }
+}
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("pt-BR", {
@@ -114,6 +161,7 @@ export default function PrintOriginPanel() {
 function LastOriginCard({ record }: { record: PrintOriginRecord }) {
   const Icon = record.ok ? CheckCircle2 : XCircle;
   const tone = record.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  const showFetchAlert = !record.ok && isFetchError(record.errorMsg);
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
       <div className="flex items-center justify-between text-xs">
@@ -123,6 +171,20 @@ function LastOriginCard({ record }: { record: PrintOriginRecord }) {
         </span>
         <span className="text-muted-foreground font-mono">{formatTime(record.ts)}</span>
       </div>
+
+      {showFetchAlert && (
+        <div className="rounded-md border-2 border-rose-500 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-700 p-2.5 text-[11px] text-rose-800 dark:text-rose-200 leading-snug">
+          <div className="flex items-start gap-1.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <strong>Esta aba NÃO imprimiu este pedido.</strong> Ela tentou enviar
+              para a bridge e falhou (<span className="font-mono">{record.errorMsg}</span>).
+              Se mesmo assim saiu papel, outra instância/app antigo imprimiu.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono">
         <Field label="source" value={record.source} />
         <Field label="path" value={record.printPath} />
@@ -135,11 +197,23 @@ function LastOriginCard({ record }: { record: PrintOriginRecord }) {
         <Field label="app" value={record.appBuild.slice(0, 16)} />
         <Field label="engine" value={record.engineVersion} />
       </div>
-      {record.errorMsg && (
+      {record.errorMsg && !showFetchAlert && (
         <div className="text-[11px] text-rose-600 dark:text-rose-400 font-mono break-words">
           erro: {record.errorMsg}
         </div>
       )}
+
+      <div className="flex justify-end pt-1">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5"
+          onClick={() => copyDiagnostic(record)}
+        >
+          <Copy className="w-3 h-3" />
+          <span className="text-[11px]">Copiar diagnóstico de instância</span>
+        </Button>
+      </div>
     </div>
   );
 }
