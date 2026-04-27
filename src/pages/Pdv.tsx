@@ -296,7 +296,7 @@ const Pdv = () => {
         const custData = wantCustomerData ? { name: customerName || undefined, document: customerDoc || undefined } : null;
         await printCustomerReceipt(
           selectedOrder.table_name,
-          selectedOrder.waiter_name || "N/A",
+          selectedOrder.waiter_name || "",
           items,
           total,
           "none",

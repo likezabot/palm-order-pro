@@ -289,35 +289,35 @@ export async function autoPrintUpdate(order: {
     if (printType === "bill") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printBill(tableValue, order.waiter_name || "N/A", items, order.total || 0);
+      success = await printBill(tableValue, order.waiter_name || "", items, order.total || 0);
       reason = success ? "bill_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosBill(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "bill"; }
+      if (!success) { payloadForQueue = buildEscPosBill(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "bill"; }
     } else if (printType === "full") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
+      success = await printReceipt(tableValue, order.waiter_name || "", items, order.total || 0);
       reason = success ? "full_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
+      if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "full"; }
     } else if (printType === "extra") {
       if (!deltaItems || deltaItems.length === 0) {
         await failPrint(order.id, "no_delta_items");
         return { printed: false, reason: "no_delta" };
       }
-      success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
+      success = await printDelta(tableValue, order.waiter_name || "", deltaItems);
       reason = success ? "delta_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
+      if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg); queueType = "delta"; }
     } else {
       // Fallback legado
       if (deltaItems && deltaItems.length > 0) {
-        success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
+        success = await printDelta(tableValue, order.waiter_name || "", deltaItems);
         reason = success ? "delta_success" : "print_failed";
-        if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
+        if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg); queueType = "delta"; }
       } else {
         const items = await fetchAllItems();
         if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-        success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
+        success = await printReceipt(tableValue, order.waiter_name || "", items, order.total || 0);
         reason = success ? "full_fallback" : "print_failed";
-        if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
+        if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "full"; }
       }
     }
   } catch (err) {
@@ -427,13 +427,13 @@ export async function manualPrintOrder(order: {
   const cfg = loadPrintConfig();
   const payload = buildEscPosReceipt(
     tableValue,
-    order.waiter_name || "N/A",
+    order.waiter_name || "",
     items as any[],
     order.total || 0,
     cfg,
   );
   return enqueueAndPrint(order.id, tableValue, "full", payload, () =>
-    printReceipt(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0),
+    printReceipt(tableValue, order.waiter_name || "", items as any[], order.total || 0),
   );
 }
 
@@ -455,9 +455,9 @@ export async function manualPrintDelta(order: {
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
   const cfg = loadPrintConfig();
-  const payload = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg);
+  const payload = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg);
   return enqueueAndPrint(order.id, tableValue, "delta", payload, () =>
-    printDelta(tableValue, order.waiter_name || "N/A", deltaItems),
+    printDelta(tableValue, order.waiter_name || "", deltaItems),
   );
 }
 
@@ -480,12 +480,12 @@ export async function manualPrintBill(order: {
   const cfg = loadPrintConfig();
   const payload = buildEscPosBill(
     tableValue,
-    order.waiter_name || "N/A",
+    order.waiter_name || "",
     items as any[],
     order.total || 0,
     cfg,
   );
   return enqueueAndPrint(order.id, tableValue, "bill", payload, () =>
-    printBill(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0),
+    printBill(tableValue, order.waiter_name || "", items as any[], order.total || 0),
   );
 }
