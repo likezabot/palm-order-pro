@@ -68,7 +68,7 @@ function QuickAddButton({
       aria-live="polite"
       aria-pressed={justAdded}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full text-primary-foreground transition-all",
+        "btn-accent inline-flex shrink-0 items-center justify-center rounded-full text-primary-foreground transition-all",
         "shadow-[0_6px_16px_-4px_hsl(var(--primary)/0.55)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         dim,

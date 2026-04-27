@@ -36,7 +36,7 @@ export default function PublicCartFab({ itemCount, total, onClick }: Props) {
           "0 14px 40px -10px hsl(14 76% 46% / 0.55), 0 4px 14px -4px hsl(22 88% 52% / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.18)",
       }}
       className={cn(
-        "fixed z-30 flex items-center justify-between gap-3 rounded-full px-5 py-4 font-bold text-primary-foreground active:scale-[0.98] transition-transform min-h-[60px]",
+        "btn-accent fixed z-30 flex items-center justify-between gap-3 rounded-full px-5 py-4 font-bold text-primary-foreground active:scale-[0.98] transition-transform min-h-[60px]",
         "ring-1 ring-white/15",
         pulse && "animate-pulse-active",
       )}
