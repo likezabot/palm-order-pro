@@ -1,22 +1,15 @@
 /**
  * Diagnóstico de ORIGEM da impressão.
  *
- * Foco: provar de qual instância/máquina o papel está saindo.
- * Não mexe em layout, EXE, bridge, USB, print_jobs, fila — só investiga.
+ * Foco: provar de qual instância/máquina o papel está saindo e
+ * guiar o usuário sem ambiguidade quando a configuração estiver errada.
  *
- * Funcionalidades:
- *  1. Detecta ambiente atual (mobile/desktop, hostname, BRIDGE_URL).
- *  2. Avisa quando BRIDGE_URL=localhost em dispositivo móvel.
- *  3. Campo assistido para IP do PC (monta http://IP:9100/print).
- *  4. Testa /health, /printers e /config independentemente.
- *  5. "Teste de Origem": imprime APP_BUILD + PRINT_ENGINE + BRIDGE_URL.
- *  6. Checklist de instâncias antigas que podem estar imprimindo.
+ * Não mexe em layout, EXE, bridge, USB, print_jobs, fila — só investiga.
  */
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,6 +23,8 @@ import {
   Network,
   ListChecks,
   XCircle,
+  Copy,
+  ListOrdered,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -78,6 +73,11 @@ function shortUa(): string {
   return ua.slice(0, 40);
 }
 
+function extractIpFromUrl(url: string): string {
+  const m = url.match(/\/\/([\d.]+)(?::|\/|$)/);
+  return m?.[1] ?? "";
+}
+
 // ============================================================
 // Tipos de evento de teste
 // ============================================================
@@ -116,6 +116,8 @@ export default function BridgeOriginDiagnostics({
   const [printersRes, setPrintersRes] = useState<EndpointResult>({ status: "idle" });
   const [configRes, setConfigRes] = useState<EndpointResult>({ status: "idle" });
   const [originRes, setOriginRes] = useState<EndpointResult>({ status: "idle" });
+
+  const detectedIp = extractIpFromUrl(bridgeUrl);
 
   // ---- Aplica IP do PC ----
   const applyPcIp = () => {
@@ -206,6 +208,10 @@ export default function BridgeOriginDiagnostics({
 
   // ---- Imprime cupom de origem ----
   const runOriginPrint = async () => {
+    if (localhostOnMobile) {
+      toast.error("Não dá pra imprimir com localhost no celular. Use o IP do PC primeiro.");
+      return;
+    }
     setOriginRes({ status: "running" });
     try {
       const r = await sendOriginTest({
@@ -232,6 +238,55 @@ export default function BridgeOriginDiagnostics({
     }
   };
 
+  // ---- Copiar instruções para WhatsApp/Suporte ----
+  const copySupportReport = async () => {
+    const fmt = (r: EndpointResult) =>
+      r.status === "idle"
+        ? "não testado"
+        : r.status === "running"
+        ? "testando..."
+        : `${r.status.toUpperCase()}${r.latencyMs ? ` (${r.latencyMs}ms)` : ""}${
+            r.message ? ` — ${r.message}` : ""
+          }`;
+
+    const txt = [
+      "=== DIAGNÓSTICO IMPRESSÃO ===",
+      `APP_BUILD:    ${APP_BUILD}`,
+      `PRINT_ENGINE: ${PRINT_ENGINE_VERSION}`,
+      `BRIDGE_URL:   ${bridgeUrl || "—"}`,
+      `Device:       ${shortUa()} (${device})`,
+      `Hostname:     ${hostname}`,
+      `Config src:   ${configSource}`,
+      `É localhost?  ${isLocalhost ? "SIM" : "não"}`,
+      "",
+      "--- Endpoints ---",
+      `/health   : ${fmt(healthRes)}`,
+      `/printers : ${fmt(printersRes)}`,
+      `/config   : ${fmt(configRes)}`,
+      `/print(origem): ${fmt(originRes)}`,
+      "",
+      `Gerado em: ${new Date().toLocaleString("pt-BR")}`,
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(txt);
+      toast.success("Instruções copiadas. Cole no WhatsApp do suporte.");
+    } catch {
+      // Fallback
+      const ta = document.createElement("textarea");
+      ta.value = txt;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        toast.success("Instruções copiadas.");
+      } catch {
+        toast.error("Não foi possível copiar. Selecione e copie manualmente.");
+      }
+      document.body.removeChild(ta);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -241,6 +296,34 @@ export default function BridgeOriginDiagnostics({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* ===== ALERTA TOPO: localhost no mobile ===== */}
+        {localhostOnMobile && (
+          <div
+            className="rounded-md border-2 border-rose-500 bg-rose-50 dark:bg-rose-950/40 p-3 text-rose-900 dark:text-rose-100"
+            role="alert"
+            data-testid="localhost-mobile-alert"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div className="space-y-1.5 text-[12px] leading-snug">
+                <div className="font-bold uppercase tracking-wide">
+                  No celular, localhost está errado. Use o IP do PC da impressora.
+                </div>
+                <div>
+                  <code>localhost</code> no celular aponta para o próprio celular — nunca vai
+                  achar a impressora.
+                </div>
+                <div className="font-mono text-[11px] bg-rose-100 dark:bg-rose-900/40 rounded px-2 py-1 inline-block">
+                  Exemplo: http://192.168.0.10:9100/print
+                </div>
+                <div className="text-[11px]">
+                  ↓ Use o campo <strong>"IP do PC da impressora"</strong> abaixo para corrigir.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ===== 1. AMBIENTE ATUAL ===== */}
         <section className="space-y-2">
           <SectionTitle icon={Wifi}>Ambiente atual</SectionTitle>
@@ -252,20 +335,10 @@ export default function BridgeOriginDiagnostics({
             <Pill
               label="É localhost?"
               value={isLocalhost ? "SIM" : "Não"}
-              tone={isLocalhost ? "warning" : "neutral"}
+              tone={localhostOnMobile ? "danger" : isLocalhost ? "warning" : "neutral"}
             />
           </div>
 
-          {localhostOnMobile && (
-            <Alert tone="danger">
-              <strong>BRIDGE_URL=localhost em dispositivo móvel.</strong>
-              <br />
-              No celular/tablet, <code>localhost</code> aponta para este aparelho — não para o PC da
-              impressora. A ponte vai sempre aparecer offline.
-              <br />
-              Use <code>http://IP_DO_PC:9100/print</code> (ex.: <code>http://192.168.0.10:9100/print</code>).
-            </Alert>
-          )}
           {isLocalhost && device === "desktop" && (
             <Alert tone="info">
               <strong>localhost OK no PC da impressora.</strong> Em outros dispositivos,
@@ -281,10 +354,11 @@ export default function BridgeOriginDiagnostics({
             <Input
               value={pcIp}
               onChange={(e) => setPcIp(e.target.value)}
-              placeholder="192.168.0.10"
+              placeholder={detectedIp || "192.168.0.10"}
               inputMode="decimal"
               className="font-mono text-xs"
               aria-label="IP do PC da impressora"
+              autoFocus={localhostOnMobile}
             />
             <Button onClick={applyPcIp} className="font-bold gap-2 shrink-0" disabled={!pcIp.trim()}>
               <Wifi className="w-4 h-4" /> Usar IP do PC
@@ -296,7 +370,49 @@ export default function BridgeOriginDiagnostics({
           </p>
         </section>
 
-        {/* ===== 3. TESTE DE ENDPOINTS ===== */}
+        {/* ===== 3. CHECKLIST EM ORDEM ===== */}
+        <section className="space-y-2">
+          <SectionTitle icon={ListOrdered}>Checklist de teste (em ordem)</SectionTitle>
+          <ol className="space-y-2 text-[11px] leading-snug">
+            <Step n={1} title="No PC da impressora, abrir no navegador:">
+              <code className="font-mono text-[11px] block bg-muted px-2 py-1 rounded mt-1">
+                http://localhost:9100/health
+              </code>
+              <span className="text-muted-foreground">
+                Tem que retornar JSON com <code>online:true</code>. Se não, a bridge/EXE não está
+                rodando no PC.
+              </span>
+            </Step>
+            <Step n={2} title="No celular, abrir no navegador:">
+              <code className="font-mono text-[11px] block bg-muted px-2 py-1 rounded mt-1">
+                http://{detectedIp || "IP_DO_PC"}:9100/health
+              </code>
+              <span className="text-muted-foreground">
+                Tem que retornar o mesmo JSON. Se carregar no PC mas não no celular, é problema
+                de rede/firewall.
+              </span>
+            </Step>
+            <Step n={3} title="Se o passo 2 falhar, é UMA destas três coisas:">
+              <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
+                <li>PC e celular não estão na mesma rede WiFi.</li>
+                <li>Firewall do Windows bloqueia a porta 9100.</li>
+                <li>Bridge está ouvindo só em <code>127.0.0.1</code> (localhost), não na LAN.</li>
+              </ul>
+            </Step>
+            <Step n={4} title="Se o passo 2 passar:">
+              <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
+                <li>
+                  Configure BRIDGE_URL como{" "}
+                  <code className="font-mono">http://IP_DO_PC:9100/print</code> (use o campo acima).
+                </li>
+                <li>Clique <strong>"Testar /health, /printers e /config"</strong>.</li>
+                <li>Clique <strong>"Imprimir teste de origem"</strong>.</li>
+              </ul>
+            </Step>
+          </ol>
+        </section>
+
+        {/* ===== 4. TESTE DE ENDPOINTS ===== */}
         <section className="space-y-2">
           <SectionTitle icon={ScanSearch}>Testes de conexão</SectionTitle>
           <Button
@@ -319,13 +435,22 @@ export default function BridgeOriginDiagnostics({
           </div>
         </section>
 
-        {/* ===== 4. TESTE DE ORIGEM ===== */}
+        {/* ===== 5. TESTE DE ORIGEM ===== */}
         <section className="space-y-2">
           <SectionTitle icon={Printer}>Teste de origem da impressão</SectionTitle>
+
+          {localhostOnMobile && (
+            <Alert tone="danger">
+              <strong>Botão desabilitado.</strong> Configure o IP do PC primeiro (campo acima).
+              No celular, <code>localhost</code> não chega na impressora.
+            </Alert>
+          )}
+
           <Button
             onClick={runOriginPrint}
             className="w-full gap-2 font-bold"
-            disabled={originRes.status === "running"}
+            disabled={originRes.status === "running" || localhostOnMobile}
+            data-testid="origin-test-button"
           >
             <Printer className="w-4 h-4" />
             {originRes.status === "running" ? "Imprimindo..." : "Imprimir teste de origem"}
@@ -340,12 +465,46 @@ export default function BridgeOriginDiagnostics({
             <Pill label="APP_BUILD" value={APP_BUILD.slice(0, 22)} mono />
             <Pill label="PRINT_ENGINE" value={PRINT_ENGINE_VERSION} mono />
           </div>
+
           {originRes.status !== "idle" && (
-            <EndpointRow label="Resultado" result={originRes} />
+            <>
+              <EndpointRow label="Resultado" result={originRes} />
+              {originRes.status === "ok" && (
+                <Alert tone="info">
+                  <strong>Esta tela está conectada à bridge.</strong> Se um pedido real ainda sai
+                  com layout antigo, o problema é outra instância imprimindo: feche outras abas,
+                  EXEs antigos ou PWAs antigos no PC.
+                </Alert>
+              )}
+              {originRes.status === "fail" && (
+                <Alert tone="danger">
+                  <strong>Ainda é problema de conexão com a bridge.</strong> Não investigue
+                  layout/template ainda — primeiro resolva a conexão (passos 1 a 4 acima).
+                </Alert>
+              )}
+            </>
           )}
         </section>
 
-        {/* ===== 5. CHECKLIST DE INSTÂNCIAS ANTIGAS ===== */}
+        {/* ===== 6. COPIAR PARA SUPORTE ===== */}
+        <section className="space-y-2">
+          <SectionTitle icon={Copy}>Compartilhar com suporte</SectionTitle>
+          <Button
+            onClick={copySupportReport}
+            variant="outline"
+            className="w-full gap-2 font-bold"
+            data-testid="copy-support-button"
+          >
+            <Copy className="w-4 h-4" />
+            Copiar instruções para WhatsApp/Suporte
+          </Button>
+          <p className="text-[10px] text-muted-foreground">
+            Copia: APP_BUILD, PRINT_ENGINE, BRIDGE_URL, dispositivo, hostname e resultado dos
+            últimos testes (/health, /printers, /config, /print).
+          </p>
+        </section>
+
+        {/* ===== 7. CHECKLIST DE INSTÂNCIAS ANTIGAS ===== */}
         <section className="space-y-2">
           <SectionTitle icon={ListChecks}>Possíveis instâncias antigas</SectionTitle>
           <p className="text-[11px] text-muted-foreground">
@@ -386,6 +545,28 @@ function SectionTitle({
       <Icon className="w-3.5 h-3.5" />
       {children}
     </div>
+  );
+}
+
+function Step({
+  n,
+  title,
+  children,
+}: {
+  n: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="flex gap-2">
+      <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground font-bold text-[11px] flex items-center justify-center">
+        {n}
+      </span>
+      <div className="flex-1 space-y-1">
+        <div className="font-semibold">{title}</div>
+        <div className="space-y-1">{children}</div>
+      </div>
+    </li>
   );
 }
 
