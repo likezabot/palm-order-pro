@@ -159,7 +159,11 @@ export async function printReceipt(
   total: number,
   extras: ReceiptExtras = {},
 ) {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printReceipt", cfg, {
+    serviceType: extras.serviceType ?? null,
+    tableName,
+  });
   console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -172,7 +176,6 @@ export async function printReceipt(
     return true;
   }
 
-  // No navegador/celular, não imprimir pedido para evitar PDF
   console.log("[print] Pedido ignorado no modo browser.");
   return false;
 }
