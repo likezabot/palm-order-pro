@@ -145,8 +145,14 @@ export async function isOrderPrinted(orderId: string): Promise<boolean> {
 }
 
 /**
- * Impressão automática para pedidos NOVOS — sempre comanda completa.
+ * NOVA ARQUITETURA — todas as funções abaixo delegam ao dispatcher único
+ * `printOrderByServiceType`, que SEMPRE lê service_type do banco e escolhe
+ * o layout correto (delivery / pickup / dine_in). Os wrappers existem só para
+ * manter compatibilidade com os callsites antigos (PDV/Cashier/Admin/Palm).
  */
+import { printOrderByServiceType, type DispatchMode } from "@/lib/print-dispatcher";
+
+/** Impressão automática de pedidos NOVOS — sempre comanda completa. */
 export async function autoPrintOrder(order: {
   id: string;
   table_name: string;
@@ -155,136 +161,28 @@ export async function autoPrintOrder(order: {
   total: number | null;
 }): Promise<{ printed: boolean; reason: string }> {
   debugLog.info("print", `autoPrintOrder iniciado — pedido ${order.id} mesa ${order.table_name}`);
-
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) return { printed: false, reason: "already_claimed" };
 
-  // Busca metadados extras (service_type, delivery_*, customer_*)
-  let originalName = order.original_table_name;
-  let serviceType: string | null = null;
-  let deliveryAddress: any = null;
-  let deliveryFee = 0;
-  let customerName: string | null = null;
-  let customerPhone: string | null = null;
-  let paymentMethod: string | null = null;
-  let changeFor: number | null = null;
   try {
-    const { data } = await supabase
-      .from("orders")
-      .select(
-        "original_table_name, service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for",
-      )
-      .eq("id", order.id)
-      .single();
-    const d = (data as any) ?? {};
-    if (originalName === undefined) originalName = d.original_table_name ?? null;
-    serviceType = d.service_type ?? null;
-    deliveryAddress = d.delivery_address ?? null;
-    deliveryFee = Number(d.delivery_fee ?? 0);
-    customerName = d.customer_name_snapshot ?? null;
-    customerPhone = d.customer_phone_snapshot ?? null;
-    paymentMethod = d.payment_method ?? null;
-    changeFor = d.change_for != null ? Number(d.change_for) : null;
-  } catch {
-    /* segue com defaults */
-  }
-  const tableValue = formatPrintTableValue(order.table_name, originalName);
-
-  let items: PrintableItem[] = [];
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const { data } = await supabase
-      .from("order_items")
-      .select("*")
-      .eq("order_id", order.id);
-    if (data && data.length > 0) { items = data; break; }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-
-  if (items.length === 0) {
-    await failPrint(order.id, "no_items_found");
-    return { printed: false, reason: "no_items" };
-  }
-
-  const cfg = loadPrintConfig();
-  const isDelivery = serviceType === "delivery";
-
-  // ---------- Fluxo DELIVERY (modelo dedicado) ----------
-  if (isDelivery) {
-    const subtotal = items.reduce(
-      (s, i) => s + Number(i.product_price) * Number(i.quantity),
-      0,
-    );
-    const deliveryInput: DeliveryPayloadInput = {
-      items,
-      customerName,
-      customerPhone,
-      deliveryAddress,
-      deliveryFee,
-      subtotal,
-      total: order.total ?? subtotal + deliveryFee,
-      paymentMethod,
-      changeFor,
-      orderId: order.id,
-      orderShortId: order.table_name?.replace(/^.*#/, "") || null,
-      serviceType: "delivery",
-    };
-
-    // Aviso (não bloqueante) sobre dados faltantes — UI pode usar validateDeliveryFields
-    // para bloquear/confirmar antes de impressão MANUAL.
-    const missing = validateDeliveryFields(deliveryInput);
-    if (missing.length > 0) {
-      debugLog.warn(
-        "print",
-        `DELIVERY ${order.id} com dados faltantes: ${missing.join(", ")} — imprimindo mesmo assim (auto)`,
-      );
-    }
-
-    const success = await printDelivery(deliveryInput);
-    if (success) {
+    const r = await printOrderByServiceType(order.id, "full");
+    if (r.ok && r.bridgeOk) {
       await completePrint(order.id);
-      return { printed: true, reason: "success_delivery" };
+      return { printed: true, reason: r.reason };
     }
-    const payload = buildEscPosDelivery(deliveryInput, cfg);
-    await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
-    await deferPrint(order.id);
-    return { printed: false, reason: "bridge_offline_queued" };
-  }
-
-  // ---------- Fluxo MESA / BALCÃO / RETIRADA (legado) ----------
-  const extras = {
-    serviceType: serviceType ?? undefined,
-    customerName: customerName ?? undefined,
-    customerPhone: customerPhone ?? undefined,
-  };
-  const success = await printReceipt(
-    tableValue,
-    order.waiter_name || "",
-    items,
-    order.total || 0,
-    extras,
-  );
-
-  if (success) {
-    await completePrint(order.id);
-    return { printed: true, reason: "success" };
-  } else {
-    const payload = buildEscPosReceipt(
-      tableValue,
-      order.waiter_name || "",
-      items,
-      order.total || 0,
-      cfg,
-      extras,
-    );
-    await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
-    await deferPrint(order.id);
-    return { printed: false, reason: "bridge_offline_queued" };
+    if (r.queued) {
+      await deferPrint(order.id);
+      return { printed: false, reason: "bridge_offline_queued" };
+    }
+    await failPrint(order.id, r.reason);
+    return { printed: false, reason: r.reason };
+  } catch (err) {
+    await failPrint(order.id, String(err));
+    return { printed: false, reason: "print_error" };
   }
 }
 
-/**
- * Impressão automática de UPDATE — usa print_type do banco.
- */
+/** Impressão automática de UPDATE — usa print_type do banco para decidir delta/full/bill. */
 export async function autoPrintUpdate(order: {
   id: string;
   table_name: string;
@@ -293,342 +191,95 @@ export async function autoPrintUpdate(order: {
   total: number | null;
 }): Promise<{ printed: boolean; reason: string }> {
   debugLog.info("print", `autoPrintUpdate iniciado — pedido ${order.id} mesa ${order.table_name}`);
-
   const claimed = await claimOrderForPrint(order.id);
   if (!claimed) return { printed: false, reason: "already_claimed" };
 
-  const { data: orderData } = await supabase
+  // Lê print_type só para escolher modo; o dispatcher relê tudo (incl. service_type).
+  const { data: meta } = await supabase
     .from("orders")
-    .select(
-      "delta_items, print_type, waiter_name, original_table_name, service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for",
-    )
+    .select("print_type, delta_items")
     .eq("id", order.id)
     .single();
+  const printType = (meta as any)?.print_type as string | null;
+  const deltaItems = ((meta as any)?.delta_items ?? []) as any[];
 
-  const printType = (orderData as any)?.print_type as string | null;
-  const deltaItems = (orderData as any)?.delta_items as PrintableItem[] | null;
-  const originalName =
-    order.original_table_name ?? (orderData as any)?.original_table_name ?? null;
-  const tableValue = formatPrintTableValue(order.table_name, originalName);
-  const serviceType = (orderData as any)?.service_type as string | null;
-  const isDelivery = serviceType === "delivery";
-
-  debugLog.info(
-    "print",
-    `print_type=${printType ?? "(nulo)"} delta_items=${deltaItems?.length ?? 0} service_type=${serviceType ?? "-"}`,
-  );
-
-  const fetchAllItems = async (): Promise<PrintableItem[]> => {
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const { data } = await supabase.from("order_items").select("*").eq("order_id", order.id);
-      if (data && data.length > 0) return data;
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    return [];
-  };
-
-  // ----- Delivery: NUNCA usa template de mesa. Sempre re-imprime comanda completa. -----
-  if (isDelivery) {
-    const items = await fetchAllItems();
-    if (items.length === 0) {
-      await failPrint(order.id, "no_items");
-      return { printed: false, reason: "no_items" };
-    }
-    const subtotal = items.reduce(
-      (s, i) => s + Number(i.product_price) * Number(i.quantity),
-      0,
-    );
-    const cfg = await ensureFreshPrintConfig();
-    const deliveryInput: DeliveryPayloadInput = {
-      items,
-      customerName: (orderData as any)?.customer_name_snapshot ?? null,
-      customerPhone: (orderData as any)?.customer_phone_snapshot ?? null,
-      deliveryAddress: (orderData as any)?.delivery_address ?? null,
-      deliveryFee: Number((orderData as any)?.delivery_fee ?? 0),
-      subtotal,
-      total: order.total ?? subtotal + Number((orderData as any)?.delivery_fee ?? 0),
-      paymentMethod: (orderData as any)?.payment_method ?? null,
-      changeFor:
-        (orderData as any)?.change_for != null
-          ? Number((orderData as any).change_for)
-          : null,
-      orderId: order.id,
-      orderShortId: order.table_name?.replace(/^.*#/, "") || null,
-      serviceType: "delivery",
-    };
-    const ok = await printDelivery(deliveryInput);
-    if (ok) {
-      await completePrint(order.id);
-      return { printed: true, reason: "delivery_update_success" };
-    }
-    const payload = buildEscPosDelivery(deliveryInput, cfg);
-    await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
-    await deferPrint(order.id);
-    return { printed: false, reason: "bridge_offline_queued" };
-  }
-
-
-
-  let success = false;
-  let reason = "unknown";
-  let payloadForQueue: Uint8Array | null = null;
-  let queueType: PrintJobType = "full";
+  let mode: DispatchMode = "full";
+  if (printType === "bill") mode = "bill";
+  else if (printType === "extra") mode = "delta";
+  else if (printType === "full") mode = "full";
+  else if (deltaItems.length > 0) mode = "delta"; // fallback legado
 
   try {
-    const cfg = loadPrintConfig();
-    if (printType === "bill") {
-      const items = await fetchAllItems();
-      if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printBill(tableValue, order.waiter_name || "", items, order.total || 0);
-      reason = success ? "bill_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosBill(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "bill"; }
-    } else if (printType === "full") {
-      const items = await fetchAllItems();
-      if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printReceipt(tableValue, order.waiter_name || "", items, order.total || 0);
-      reason = success ? "full_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "full"; }
-    } else if (printType === "extra") {
-      if (!deltaItems || deltaItems.length === 0) {
-        await failPrint(order.id, "no_delta_items");
-        return { printed: false, reason: "no_delta" };
-      }
-      success = await printDelta(tableValue, order.waiter_name || "", deltaItems);
-      reason = success ? "delta_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg); queueType = "delta"; }
-    } else {
-      // Fallback legado
-      if (deltaItems && deltaItems.length > 0) {
-        success = await printDelta(tableValue, order.waiter_name || "", deltaItems);
-        reason = success ? "delta_success" : "print_failed";
-        if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg); queueType = "delta"; }
-      } else {
-        const items = await fetchAllItems();
-        if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-        success = await printReceipt(tableValue, order.waiter_name || "", items, order.total || 0);
-        reason = success ? "full_fallback" : "print_failed";
-        if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "full"; }
-      }
+    const r = await printOrderByServiceType(order.id, mode);
+    if (r.ok && r.bridgeOk) {
+      await completePrint(order.id);
+      return { printed: true, reason: r.reason };
     }
+    if (r.queued) {
+      await deferPrint(order.id);
+      return { printed: false, reason: "bridge_offline_queued" };
+    }
+    await failPrint(order.id, r.reason);
+    return { printed: false, reason: r.reason };
   } catch (err) {
     await failPrint(order.id, String(err));
     return { printed: false, reason: "print_error" };
   }
-
-  if (success) {
-    await completePrint(order.id);
-  } else {
-    if (payloadForQueue) {
-      await enqueueOnBridgeFailure(order.id, tableValue, queueType, payloadForQueue);
-      await deferPrint(order.id);
-      return { printed: false, reason: "bridge_offline_queued" };
-    }
-    await failPrint(order.id, reason);
-  }
-
-  return { printed: success, reason };
 }
 
 // Backward compat
 export const autoPrintDelta = autoPrintUpdate;
 
-/**
- * Resultado das impressões manuais.
- * - ok: true se ao menos uma das vias (bridge local OU central) foi acionada
- * - reason: código curto p/ UI exibir mensagem
- * - queued: true se foi enfileirado p/ Central
- * - bridgeOk: true se a bridge local respondeu OK
- */
+// ============================================================
+// MANUAL PRINTS (não tocam em print_status)
+// ============================================================
+
 export interface ManualPrintResult {
   ok: boolean;
-  reason:
-    | "success"
-    | "queued_only"
-    | "no_items"
-    | "no_delta"
-    | "bridge_failed"
-    | "error";
+  reason: "success" | "queued_only" | "no_items" | "no_delta" | "bridge_failed" | "error";
   queued: boolean;
   bridgeOk: boolean;
 }
 
-/**
- * Sempre enfileira na Central (PrintStation) e em paralelo tenta imprimir
- * localmente via bridge. Não toca em print_status do pedido — é manual.
- */
-async function enqueueAndPrint(
-  orderId: string,
-  tableValue: string,
-  printType: PrintJobType,
-  payload: Uint8Array,
-  bridgeAttempt: () => Promise<boolean>,
-): Promise<ManualPrintResult> {
-  // 1. Sempre tenta enfileirar na Central (se modo bridge)
-  let queued = false;
-  try {
-    const cfg = loadPrintConfig();
-    if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
-      await enqueuePrintJob({
-        orderId,
-        tableName: tableValue,
-        printType,
-        payloadB64: encodePayloadB64(payload),
-        bridgeUrl: cfg.bridgeUrl,
-        lastError: null,
-      });
-      queued = true;
-    }
-  } catch (e) {
-    debugLog.error("queue", "falha ao enfileirar manual", e);
-  }
-
-  // 2. Tenta bridge local
-  let bridgeOk = false;
-  try {
-    bridgeOk = await bridgeAttempt();
-  } catch (e) {
-    debugLog.error("print", "manual bridge erro", e);
-  }
-
-  if (bridgeOk) return { ok: true, reason: "success", queued, bridgeOk: true };
-  if (queued) return { ok: true, reason: "queued_only", queued: true, bridgeOk: false };
+function toManual(r: Awaited<ReturnType<typeof printOrderByServiceType>>): ManualPrintResult {
+  if (r.ok && r.bridgeOk)
+    return { ok: true, reason: "success", queued: r.queued, bridgeOk: true };
+  if (r.queued) return { ok: true, reason: "queued_only", queued: true, bridgeOk: false };
+  if (r.reason === "no_items") return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
+  if (r.reason === "no_delta") return { ok: false, reason: "no_delta", queued: false, bridgeOk: false };
+  if (r.reason === "order_not_found") return { ok: false, reason: "error", queued: false, bridgeOk: false };
   return { ok: false, reason: "bridge_failed", queued: false, bridgeOk: false };
 }
 
-/**
- * Reimpressão manual — comanda completa.
- */
 export async function manualPrintOrder(order: {
   id: string;
-  table_name: string;
+  table_name?: string;
   original_table_name?: string | null;
-  waiter_name: string | null;
-  total: number | null;
+  waiter_name?: string | null;
+  total?: number | null;
 }): Promise<ManualPrintResult> {
-  const [{ data: items }, { data: orderMeta }] = await Promise.all([
-    supabase.from("order_items").select("*").eq("order_id", order.id),
-    supabase
-      .from("orders")
-      .select("service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for")
-      .eq("id", order.id)
-      .single(),
-  ]);
-
-  if (!items || items.length === 0)
-    return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
-
-  const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  const cfg = await ensureFreshPrintConfig();
-  const meta = (orderMeta as any) ?? {};
-  const serviceType = meta.service_type ?? null;
-
-  if (serviceType === "delivery") {
-    const subtotal = (items as any[]).reduce(
-      (s, i) => s + Number(i.product_price) * Number(i.quantity),
-      0,
-    );
-    const deliveryInput: DeliveryPayloadInput = {
-      items: items as any[],
-      customerName: meta.customer_name_snapshot ?? null,
-      customerPhone: meta.customer_phone_snapshot ?? null,
-      deliveryAddress: meta.delivery_address ?? null,
-      deliveryFee: Number(meta.delivery_fee ?? 0),
-      subtotal,
-      total: order.total ?? subtotal + Number(meta.delivery_fee ?? 0),
-      paymentMethod: meta.payment_method ?? null,
-      changeFor: meta.change_for != null ? Number(meta.change_for) : null,
-      orderId: order.id,
-      orderShortId: order.table_name?.replace(/^.*#/, "") || null,
-      serviceType: "delivery",
-    };
-    const payload = buildEscPosDelivery(deliveryInput, cfg);
-    return enqueueAndPrint(order.id, tableValue, "full", payload, () =>
-      printDelivery(deliveryInput),
-    );
-  }
-
-  const extras = {
-    serviceType: serviceType ?? undefined,
-    customerName: meta.customer_name_snapshot ?? undefined,
-    customerPhone: meta.customer_phone_snapshot ?? undefined,
-  };
-  const payload = buildEscPosReceipt(
-    tableValue,
-    order.waiter_name || "",
-    items as any[],
-    order.total || 0,
-    cfg,
-    extras,
-  );
-  return enqueueAndPrint(order.id, tableValue, "full", payload, () =>
-    printReceipt(tableValue, order.waiter_name || "", items as any[], order.total || 0, extras),
-  );
+  const r = await printOrderByServiceType(order.id, "full");
+  return toManual(r);
 }
 
 export async function manualPrintDelta(order: {
   id: string;
-  table_name: string;
+  table_name?: string;
   original_table_name?: string | null;
-  waiter_name: string | null;
+  waiter_name?: string | null;
 }): Promise<ManualPrintResult> {
-  const { data } = await supabase
-    .from("orders")
-    .select("delta_items, service_type, customer_name_snapshot, customer_phone_snapshot")
-    .eq("id", order.id)
-    .single();
-
-  const deltaItems = (data as any)?.delta_items as PrintableItem[] | null;
-  if (!deltaItems || deltaItems.length === 0)
-    return { ok: false, reason: "no_delta", queued: false, bridgeOk: false };
-
-  const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  const cfg = await ensureFreshPrintConfig();
-  const extras = {
-    serviceType: (data as any)?.service_type ?? undefined,
-    customerName: (data as any)?.customer_name_snapshot ?? undefined,
-    customerPhone: (data as any)?.customer_phone_snapshot ?? undefined,
-  };
-  const payload = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg, extras);
-  return enqueueAndPrint(order.id, tableValue, "delta", payload, () =>
-    printDelta(tableValue, order.waiter_name || "", deltaItems, extras),
-  );
+  const r = await printOrderByServiceType(order.id, "delta");
+  return toManual(r);
 }
 
 export async function manualPrintBill(order: {
   id: string;
-  table_name: string;
+  table_name?: string;
   original_table_name?: string | null;
-  waiter_name: string | null;
-  total: number | null;
+  waiter_name?: string | null;
+  total?: number | null;
 }): Promise<ManualPrintResult> {
-  const [{ data: items }, { data: orderMeta }] = await Promise.all([
-    supabase.from("order_items").select("*").eq("order_id", order.id),
-    supabase
-      .from("orders")
-      .select("service_type, customer_name_snapshot, customer_phone_snapshot")
-      .eq("id", order.id)
-      .single(),
-  ]);
-
-  if (!items || items.length === 0)
-    return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
-
-  const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  const cfg = await ensureFreshPrintConfig();
-  const extras = {
-    serviceType: (orderMeta as any)?.service_type ?? undefined,
-    customerName: (orderMeta as any)?.customer_name_snapshot ?? undefined,
-    customerPhone: (orderMeta as any)?.customer_phone_snapshot ?? undefined,
-  };
-  const payload = buildEscPosBill(
-    tableValue,
-    order.waiter_name || "",
-    items as any[],
-    order.total || 0,
-    cfg,
-    extras,
-  );
-  return enqueueAndPrint(order.id, tableValue, "bill", payload, () =>
-    printBill(tableValue, order.waiter_name || "", items as any[], order.total || 0, extras),
-  );
+  const r = await printOrderByServiceType(order.id, "bill");
+  return toManual(r);
 }
+

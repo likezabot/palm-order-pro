@@ -62,7 +62,8 @@ describe("createReceiptLayoutModel — fluxo crítico impressão (fonte única)"
       cfg,
     );
     expect(blocks.some((b) => b.kind === "title")).toBe(false);
-    expect(blocks.some((b) => b.kind === "footer")).toBe(false);
+    // footer do usuário oculto, mas fingerprints PRINT_ENGINE/APP_BUILD permanecem (sempre)
+    expect(blocks.some((b) => b.kind === "footer" && (b as any).text === DEFAULT_CONFIG.footerText)).toBe(false);
     // mesa ainda aparece
     expect(blocks.some((b) => b.kind === "info" && (b as any).label === "Mesa")).toBe(true);
     // garçom não

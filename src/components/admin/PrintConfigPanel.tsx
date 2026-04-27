@@ -182,6 +182,14 @@ export default function PrintConfigPanel() {
               <span className="font-bold">{new Date(cfg.configUpdatedAt).toLocaleString("pt-BR")}</span>
             </div>
           )}
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">print_mode</span>
+            <span className="font-bold">{cfg.printMode}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground shrink-0">bridge_url</span>
+            <span className="font-bold truncate text-right">{cfg.bridgeUrl}</span>
+          </div>
           <p className="text-[10px] text-muted-foreground pt-1">
             Se config_source ficar em "local" após salvar, o banco rejeitou a gravação. Se PRINT_ENGINE não bater com o que sai no papel, o EXE está com bundle antigo.
           </p>

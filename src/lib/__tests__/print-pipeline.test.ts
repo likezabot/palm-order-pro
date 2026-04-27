@@ -97,49 +97,29 @@ describe("sendTestMinimal", () => {
 });
 
 describe("autoPrintUpdate", () => {
-  it("cai no fallback (printReceipt) quando print_type=extra mas delta_items é null", async () => {
+  it("delega ao dispatcher e retorna no_delta quando print_type=extra sem delta_items", async () => {
     vi.resetModules();
 
-    const printReceipt = vi.fn().mockResolvedValue(true);
-    const printDelta = vi.fn().mockResolvedValue(true);
-
-    vi.doMock("@/lib/print-receipt", () => ({
-      printReceipt,
-      printDelta,
-      printBill: vi.fn().mockResolvedValue(true),
+    const dispatcher = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: "no_delta",
+      bridgeOk: false,
+      queued: false,
+      serviceType: "dine_in",
+      layoutUsed: "dine_in_delta",
+    });
+    vi.doMock("@/lib/print-dispatcher", () => ({
+      printOrderByServiceType: dispatcher,
     }));
 
-    // single() devolve print_type=extra mas delta_items=null
-    // depois, ao buscar order_items, devolve 1 item
-    const single = vi
-      .fn()
-      .mockResolvedValueOnce({
-        data: {
-          print_type: "extra",
-          delta_items: null,
-          waiter_name: "Carlos",
-          original_table_name: null,
-        },
-        error: null,
-      });
-
-    const eqItems = vi.fn().mockResolvedValue({
-      data: [{ product_name: "X", quantity: 1, product_price: 10 }],
+    const single = vi.fn().mockResolvedValue({
+      data: { print_type: "extra", delta_items: null },
       error: null,
     });
-
     vi.doMock("@/integrations/supabase/client", () => ({
       supabase: {
         rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
-        from: vi.fn((table: string) => {
-          if (table === "orders") {
-            return {
-              select: () => ({ eq: () => ({ single }) }),
-            };
-          }
-          // order_items
-          return { select: () => ({ eq: eqItems }) };
-        }),
+        from: vi.fn(() => ({ select: () => ({ eq: () => ({ single }) }) })),
       },
     }));
 
@@ -152,9 +132,7 @@ describe("autoPrintUpdate", () => {
       total: 10,
     });
 
-    // No print_type=extra sem delta, espera que NÃO chame printDelta e
-    // que autoPrintUpdate retorne reason='no_delta' (fail rápido).
-    expect(printDelta).not.toHaveBeenCalled();
+    expect(dispatcher).toHaveBeenCalledWith("ord-1", "delta");
     expect(r.printed).toBe(false);
     expect(r.reason).toBe("no_delta");
   });
