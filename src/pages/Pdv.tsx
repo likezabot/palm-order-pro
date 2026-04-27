@@ -178,6 +178,7 @@ const Pdv = () => {
   }, [selectedId, orders]);
 
   // Separa em MESAS (dine_in/balcão) e ENTREGAS (delivery + pickup)
+  // Ordenação: críticos (>25min) primeiro, depois por horário
   const { tablesOrders, deliveryOrders } = useMemo(() => {
     const tablesOrders: Order[] = [];
     const deliveryOrders: Order[] = [];
@@ -185,11 +186,50 @@ const Pdv = () => {
       if (getOrderGroup(o) === "delivery") deliveryOrders.push(o);
       else tablesOrders.push(o);
     }
-    const byCreated = (a: Order, b: Order) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    tablesOrders.sort(byCreated);
-    deliveryOrders.sort(byCreated);
+    const sortFn = (a: Order, b: Order) => {
+      const stageA = Date.now() - new Date(a.updated_at || a.created_at).getTime();
+      const stageB = Date.now() - new Date(b.updated_at || b.created_at).getTime();
+      const critA = stageA >= 25 * 60000 ? 1 : 0;
+      const critB = stageB >= 25 * 60000 ? 1 : 0;
+      if (critA !== critB) return critB - critA;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    };
+    tablesOrders.sort(sortFn);
+    deliveryOrders.sort(sortFn);
     return { tablesOrders, deliveryOrders };
   }, [orders]);
+
+  // Aplica filtros por tipo
+  const filteredTables = useMemo(
+    () => tablesFilter === "all" ? tablesOrders : tablesOrders.filter((o) => getOrderKind(o) === tablesFilter),
+    [tablesOrders, tablesFilter]
+  );
+  const filteredDeliveries = useMemo(
+    () => deliveryFilter === "all" ? deliveryOrders : deliveryOrders.filter((o) => getOrderKind(o) === deliveryFilter),
+    [deliveryOrders, deliveryFilter]
+  );
+
+  // Contagem de itens por seção
+  const tablesItemsTotal = useMemo(
+    () => filteredTables.reduce((sum, o) => sum + ((o as any).item_count || 0), 0),
+    [filteredTables]
+  );
+  const deliveryItemsTotal = useMemo(
+    () => filteredDeliveries.reduce((sum, o) => sum + ((o as any).item_count || 0), 0),
+    [filteredDeliveries]
+  );
+
+  // Atalho ESC fecha painel direito
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedId) {
+        setSelectedId(null);
+        setShowPayment(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId]);
 
   // Pedidos online de entrega não visualizados → disparam sirene
   const { isSeen, markSeen } = useSeenOrders();
