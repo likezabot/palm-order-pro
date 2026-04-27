@@ -246,12 +246,19 @@ export async function printBill(
   logPrintCall("printBill", cfg, {
     serviceType: extras.serviceType ?? null,
     tableName,
+    orderId: extras.orderId ?? null,
   });
   console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosBill(tableName, waiterName, items, total, cfg, extras);
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    return await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: extras.fingerprint?.printPath ?? "printBill",
+      source: (extras.fingerprint?.source as any) ?? "unknown",
+      orderId: extras.orderId ?? null,
+      serviceType: extras.serviceType ?? null,
+      tableName,
+    });
   }
 
   buildHtmlFromLayout("CONTA", "Conta", {
