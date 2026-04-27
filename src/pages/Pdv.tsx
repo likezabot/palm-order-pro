@@ -75,6 +75,9 @@ const Pdv = () => {
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
   const [latestNewOrder, setLatestNewOrder] = useState<Order | null>(null);
 
+  // Estado para obrigatoriedade de envio de pontos fidelidade
+  const [pointsConfirmed, setPointsConfirmed] = useState(false);
+
   const { isOffline, realtime, internet } = useConnectivity();
   const [bridgeStatus, setBridgeStatus] = useState<{ online: boolean; printerOnline: boolean }>({ online: true, printerOnline: true });
 
