@@ -132,9 +132,11 @@ function bridgeBase(url: string): string {
   return path.replace(/\/(?:print|health)\/?$/, "").replace(/\/$/, "");
 }
 
-function bridgeHealthUrl(url: string): string {
+function bridgeHealthUrl(url: string, bypassCache: boolean = false): string {
   const { query } = splitBridgeUrl(url);
-  return `${bridgeBase(url)}/health${query}`;
+  const separator = query.includes("?") ? "&" : "?";
+  const t = bypassCache ? `${separator}t=${Date.now()}` : "";
+  return `${bridgeBase(url)}/health${query}${t}`;
 }
 
 function bridgePrintUrl(url: string): string {
@@ -143,10 +145,11 @@ function bridgePrintUrl(url: string): string {
 }
 
 export async function checkBridgeStatus(
-  url: string
+  url: string,
+  forceBypass: boolean = false
 ): Promise<BridgeHealth> {
   const cached = _bridgeStatusCache.get(url);
-  if (cached && Date.now() - cached.at < BRIDGE_STATUS_TTL_MS) {
+  if (!forceBypass && cached && Date.now() - cached.at < BRIDGE_STATUS_TTL_MS) {
     return cached.result;
   }
 
