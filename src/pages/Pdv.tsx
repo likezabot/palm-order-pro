@@ -496,36 +496,18 @@ const Pdv = () => {
 
           {/* SEÇÃO MESAS */}
           <section className="space-y-3">
-            <div className="flex items-center gap-2 px-1">
-              <UtensilsCrossed className="w-5 h-5 text-purple-400" />
-              <h2 className="text-sm font-black uppercase tracking-wider text-purple-400">
-                Mesas / Balcão <span className="text-muted-foreground">({filteredTables.length}{tablesItemsTotal > 0 ? ` · ${tablesItemsTotal} ${tablesItemsTotal === 1 ? "item" : "itens"}` : ""})</span>
-              </h2>
+            <div className="flex items-center gap-3 px-1">
+              <div className="h-px flex-1 bg-purple-500/30" />
+              <div className="flex items-center gap-2 text-purple-400">
+                <UtensilsCrossed className="w-5 h-5 shrink-0" />
+                <span className="text-[10px] font-black">{filteredTables.length}</span>
+              </div>
+              <div className="h-px flex-1 bg-purple-500/30" />
             </div>
-            {/* Filtro por tipo - Mesas */}
-            <div className="flex items-center gap-1.5 flex-wrap px-1">
-              <Filter className="w-3 h-3 text-muted-foreground" />
-              {([
-                { id: "all", label: "Todos" },
-                { id: "dine_in", label: "Mesa" },
-                { id: "counter", label: "Balcão" },
-              ] as const).map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setTablesFilter(f.id)}
-                  className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border transition-colors ${
-                    tablesFilter === f.id
-                      ? "border-purple-400 bg-purple-400/15 text-purple-400"
-                      : "border-border bg-card text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+
             {filteredTables.length === 0 ? (
-              <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
-                {tablesOrders.length === 0 ? "Nenhuma mesa aberta no momento." : "Nenhum pedido com esse filtro."}
+              <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg text-center">
+                Nenhuma mesa aberta.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
