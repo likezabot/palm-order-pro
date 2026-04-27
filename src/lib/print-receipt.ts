@@ -201,12 +201,19 @@ export async function printDelta(
   logPrintCall("printDelta", cfg, {
     serviceType: extras.serviceType ?? null,
     tableName,
+    orderId: extras.orderId ?? null,
   });
   console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosDelta(tableName, waiterName, deltaItems, cfg, extras);
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    return await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: extras.fingerprint?.printPath ?? "printDelta",
+      source: (extras.fingerprint?.source as any) ?? "unknown",
+      orderId: extras.orderId ?? null,
+      serviceType: extras.serviceType ?? null,
+      tableName,
+    });
   }
 
   buildHtmlFromLayout(
