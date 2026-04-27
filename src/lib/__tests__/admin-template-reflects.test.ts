@@ -7,6 +7,7 @@ import {
   buildEscPosDelivery,
   type DeliveryPayloadInput,
 } from "@/lib/thermal-printer";
+import { validateDeliveryFields } from "@/lib/print-service";
 import { DEFAULT_CONFIG, type PrintConfig } from "@/lib/print-config";
 
 /**
