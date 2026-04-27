@@ -167,12 +167,19 @@ export async function printReceipt(
   logPrintCall("printReceipt", cfg, {
     serviceType: extras.serviceType ?? null,
     tableName,
+    orderId: extras.orderId ?? null,
   });
   console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg, extras);
-    const success = await sendToBridge(payload, cfg.bridgeUrl);
+    const success = await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: extras.fingerprint?.printPath ?? "printReceipt",
+      source: (extras.fingerprint?.source as any) ?? "unknown",
+      orderId: extras.orderId ?? null,
+      serviceType: extras.serviceType ?? null,
+      tableName,
+    });
     if (!success) {
       console.warn("[print] Falha na ponte térmica.");
       return false;
