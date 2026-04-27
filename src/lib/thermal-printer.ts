@@ -83,7 +83,7 @@ export class EscPosBuilder {
     return this;
   }
 
-  /** Reset completo de estilo entre blocos para evitar “vazamento”. */
+  /** Reset completo de estilo entre blocos para evitar "vazamento". */
   resetStyle() {
     this.bold(false).size(false, false).align("left");
     return this;
@@ -400,7 +400,7 @@ export async function sendToBridge(
   payload: Uint8Array,
   url: string,
   meta?: SendToBridgeMeta,
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   const t0 = performance.now();
   const printUrl = bridgePrintUrl(url);
   const metaInfo = meta
@@ -411,7 +411,6 @@ export async function sendToBridge(
 
   const recordOrigin = (ok: boolean, errorMsg?: string) => {
     if (!meta) return;
-    // import dinâmico p/ evitar ciclo
     import("./print-origin-tracker").then((m) =>
       m.recordPrintOrigin({
         printPath: meta.printPath,
@@ -442,26 +441,29 @@ export async function sendToBridge(
     const ms = Math.round(performance.now() - t0);
 
     if (!response.ok) {
-      const result = await response.json().catch(() => ({ error: "?" }));
-      debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${result.error ?? "?"}`, { url: printUrl });
-      recordOrigin(false, `HTTP ${response.status}`);
-      return false;
+      const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      const errorMsg = result.error || `Erro HTTP ${response.status}`;
+      debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${errorMsg}`, { url: printUrl });
+      recordOrigin(false, errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     const result = await response.json();
     if (result.success) {
       debugLog.success("print", `✓ cupom enviado em ${ms}ms (${payload.length} bytes)${metaInfo}`);
       recordOrigin(true);
-      return true;
+      return { success: true };
     }
-    debugLog.error("print", `✗ bridge respondeu success=false em ${ms}ms: ${result.error ?? "?"}`);
-    recordOrigin(false, result.error ?? "success=false");
-    return false;
+    const errorMsg = result.error || "Ponte respondeu erro desconhecido";
+    debugLog.error("print", `✗ bridge respondeu success=false em ${ms}ms: ${errorMsg}`);
+    recordOrigin(false, errorMsg);
+    return { success: false, error: errorMsg };
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
-    debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${e?.message ?? e}`, { url: printUrl });
-    recordOrigin(false, e?.message ?? String(e));
-    return false;
+    const errorMsg = e?.message || String(e);
+    debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${errorMsg}`, { url: printUrl });
+    recordOrigin(false, errorMsg);
+    return { success: false, error: `Falha na conexão com bridge: ${errorMsg}` };
   }
 }
 
@@ -527,7 +529,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
   const b = new EscPosBuilder();
   const cols = paperColumns(cfg.paperWidth);
   const f = getFontSizes(cfg);
-  // baselines para decidir “grande”
+  // baselines para decidir "grande"
   const titleLarge = isLarge(cfg.fontSizes?.title, f.title - 4) || f.title >= 18;
   const totalLarge = isLarge(cfg.fontSizes?.total, f.total - 4) || f.total >= 18;
   const itemsLarge = isLarge(cfg.fontSizes?.items, f.base);
@@ -875,4 +877,3 @@ export function buildEscPosDelivery(
   );
   return renderLayout(layout.blocks, config);
 }
-
