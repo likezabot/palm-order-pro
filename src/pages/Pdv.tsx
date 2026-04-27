@@ -617,7 +617,7 @@ const Pdv = () => {
                 </button>
                 <div className="flex-1 flex flex-col gap-1">
                   <button
-                    onClick={() => setShowPayConfirm(true)}
+                    onClick={() => { setPointsConfirmed(false); setShowPayConfirm(true); }}
                     disabled={sending || (amountPaidInSplit > 0 && amountPaidInSplit < total - 0.01)}
                     className="w-full rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
                   >
