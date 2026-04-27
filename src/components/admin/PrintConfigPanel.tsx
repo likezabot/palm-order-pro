@@ -12,6 +12,7 @@ import {
 } from "@/lib/print-config";
 import { buildReceiptHtml, buildSenhaHtml, printReceipt, printSenha } from "@/lib/print-receipt";
 import { checkBridgeStatus, type BridgeHealth } from "@/lib/thermal-printer";
+import { PRINT_ENGINE_VERSION, APP_BUILD } from "@/lib/print-engine";
 import PrinterDiagnostics from "./PrinterDiagnostics";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
