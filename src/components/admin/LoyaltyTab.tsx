@@ -14,7 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Plus, Trash2, Search, Sparkles, Phone, AlertTriangle, Truck } from "lucide-react";
+import { Gift, Plus, Trash2, Search, Sparkles, Phone, AlertTriangle, Truck, Info } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Reward = {
   id: string;
@@ -287,12 +294,66 @@ export default function LoyaltyTab() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between rounded-xl border p-4">
-        <div className="flex items-center gap-3">
-          <Gift className="text-primary" />
-          <div>
-            <div className="font-bold">Programa de Fidelidade</div>
+        <div className="flex items-center gap-3 min-w-0">
+          <Gift className="text-primary shrink-0" />
+          <div className="min-w-0">
+            <div className="font-bold flex items-center gap-2">
+              Programa de Fidelidade
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Como funciona o programa de fidelidade"
+                    className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors"
+                  >
+                    <Info size={12} />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Gift className="text-primary" size={18} />
+                      Como funciona a fidelidade
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 text-sm">
+                    <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 flex gap-2">
+                      <Truck className="text-warning shrink-0 mt-0.5" size={16} />
+                      <p className="text-xs leading-relaxed">
+                        <strong>Somente pedidos online de retirada geram pontos.</strong>{" "}
+                        Entregas e mesa não acumulam. Itens marcados como casco/retornável e
+                        brindes também não pontuam.
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex gap-2">
+                      <AlertTriangle className="text-primary shrink-0 mt-0.5" size={16} />
+                      <p className="text-xs leading-relaxed">
+                        <strong>Resgate mínimo:</strong> 100 pontos por brinde.{" "}
+                        <strong>Compra mínima máxima:</strong> R$ 80,00. Máximo de 1 brinde
+                        por pedido.
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex gap-2">
+                      <Phone className="text-primary shrink-0 mt-0.5" size={16} />
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        Os pontos são salvos pelo <strong>telefone do cliente</strong>. O
+                        sistema remove máscara e usa apenas números, então{" "}
+                        <code className="bg-muted px-1 rounded">(67) 99999-9999</code> e{" "}
+                        <code className="bg-muted px-1 rounded">67999999999</code> são a
+                        mesma conta.
+                      </p>
+                    </div>
+                    <ul className="text-xs text-muted-foreground space-y-1 pl-1">
+                      <li>• 1 ponto a cada R$ 1 gasto (somente retirada online).</li>
+                      <li>• Cliente identificado pelo telefone, sem cadastro/senha.</li>
+                      <li>• Brindes precisam ter pelo menos 100 pontos de custo.</li>
+                    </ul>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
             <div className="text-xs text-muted-foreground">
-              1 ponto por R$ 1 — somente em pedidos online de retirada
+              1 ponto por R$ 1 — somente retirada online
             </div>
           </div>
         </div>
@@ -300,33 +361,6 @@ export default function LoyaltyTab() {
           checked={!!enabledQuery.data}
           onCheckedChange={toggleEnabled}
         />
-      </div>
-
-      <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 flex gap-3">
-        <Truck className="text-warning shrink-0 mt-0.5" size={18} />
-        <p className="text-xs text-foreground/90 leading-relaxed">
-          <strong>Somente pedidos online de retirada geram pontos.</strong> Entregas e
-          mesa não acumulam pontos. Itens marcados como casco/retornável e brindes
-          também não pontuam.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3">
-        <AlertTriangle className="text-primary shrink-0 mt-0.5" size={18} />
-        <p className="text-xs text-foreground/90 leading-relaxed">
-          <strong>Resgate mínimo:</strong> 100 pontos por brinde.{" "}
-          <strong>Compra mínima máxima:</strong> R$ 80,00 por brinde. Máximo de 1 brinde
-          por pedido.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex gap-3">
-        <Phone className="text-primary shrink-0 mt-0.5" size={18} />
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Os pontos são salvos pelo <strong>telefone do cliente</strong>. O sistema remove
-          máscara e usa apenas números, então <code className="bg-muted px-1 rounded">(67) 99999-9999</code>{" "}
-          e <code className="bg-muted px-1 rounded">67999999999</code> são a mesma conta.
-        </p>
       </div>
 
       {/* Brindes */}
