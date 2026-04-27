@@ -186,6 +186,33 @@ export async function createPublicOrder(payload: CheckoutPayload): Promise<Creat
   return data as CreateOrderResult;
 }
 
+export async function fetchLastCustomerAddress(
+  phone: string,
+): Promise<CheckoutAddress | null> {
+  try {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) return null;
+    const { data, error } = await supabase.rpc(
+      "get_last_customer_address" as any,
+      { p_phone: digits },
+    );
+    if (error) return null;
+    if (!data || typeof data !== "object") return null;
+    const d = data as Record<string, string | null>;
+    const addr: CheckoutAddress = {
+      street: d.street ?? undefined,
+      number: d.number ?? undefined,
+      neighborhood: d.neighborhood ?? undefined,
+      complement: d.complement ?? undefined,
+      reference: d.reference ?? undefined,
+    };
+    if (!addr.street && !addr.number && !addr.neighborhood) return null;
+    return addr;
+  } catch {
+    return null;
+  }
+}
+
 export function validatePhone(phone: string): boolean {
   const digits = phone.replace(/\D/g, "");
   return digits.length >= 10 && digits.length <= 13;
