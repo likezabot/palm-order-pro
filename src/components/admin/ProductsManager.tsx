@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, ArrowDownAZ, Search, X, CheckSquare } from "lucide-react";
+import { Plus, ArrowDownAZ, X, CheckSquare } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -47,10 +47,7 @@ const ProductsManager = ({
   onNewProduct,
 }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
-  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
@@ -63,28 +60,21 @@ const ProductsManager = ({
     [productGroups, activeCategory],
   );
 
-  const min = parseFloat(minPrice);
-  const max = parseFloat(maxPrice);
-  const hasFilters = !!search || statusFilter !== "all" || !isNaN(min) || !isNaN(max);
+  const hasFilters = statusFilter !== "all";
 
   const matchesFilters = (p: Product) => {
     if (statusFilter === "active" && !p.active) return false;
     if (statusFilter === "inactive" && p.active) return false;
-    if (!isNaN(min) && p.price < min) return false;
-    if (!isNaN(max) && p.price > max) return false;
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   };
 
-  // When searching, show all categories. Otherwise only active category.
+  // Mostra apenas a categoria ativa.
   const filteredByCategory = useMemo(() => {
     const result: Record<string, Product[]> = {};
-    const cats = search ? [...CATEGORIES] : [activeCategory];
-    cats.forEach((c) => {
-      result[c] = (productsByCategory[c] ?? []).filter(matchesFilters);
-    });
+    result[activeCategory] = (productsByCategory[activeCategory] ?? []).filter(matchesFilters);
     return result;
-  }, [productsByCategory, activeCategory, search, statusFilter, minPrice, maxPrice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsByCategory, activeCategory, statusFilter]);
 
   const items = filteredByCategory[activeCategory] ?? [];
   const hasCustomOrder = (orderMap[activeCategory]?.length ?? 0) > 0;
@@ -105,10 +95,7 @@ const ProductsManager = ({
   };
 
   const clearFilters = () => {
-    setSearch("");
     setStatusFilter("all");
-    setMinPrice("");
-    setMaxPrice("");
   };
 
   const exitSelection = () => {
@@ -180,11 +167,6 @@ const ProductsManager = ({
 
   const renderGrid = (cat: string, list: Product[]) => (
     <div key={cat}>
-      {search && (
-        <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground px-1 mb-2 mt-3">
-          {CATEGORY_LABELS[cat]} <span className="opacity-60">({list.length})</span>
-        </h3>
-      )}
       {selectionMode ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {list.map((product) => (
@@ -229,15 +211,6 @@ const ProductsManager = ({
       {/* Toolbar de busca + filtros */}
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3 space-y-3">
         <div className="flex gap-2 items-center flex-wrap">
-          <div className="relative flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar produto…"
-              className="pl-9 h-10"
-            />
-          </div>
           <div className="flex gap-1 rounded-lg bg-card border border-border p-1">
             {(["all", "active", "inactive"] as const).map((s) => (
               <button
@@ -252,27 +225,6 @@ const ProductsManager = ({
                 {s === "all" ? "Todos" : s === "active" ? "Visíveis" : "Ocultos"}
               </button>
             ))}
-          </div>
-          <div className="flex gap-1 items-center">
-            <Input
-              type="number" inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={minPrice}
-              onChange={(e) => setMinPrice(e.target.value)}
-              placeholder="R$ min"
-              className="h-10 w-24"
-            />
-            <span className="text-muted-foreground text-xs">–</span>
-            <Input
-              type="number" inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(e.target.value)}
-              placeholder="R$ máx"
-              className="h-10 w-24"
-            />
           </div>
           {hasFilters && (
             <button
@@ -298,91 +250,75 @@ const ProductsManager = ({
           </button>
         </div>
 
-        {/* Tabs categoria — escondidos quando há busca ativa */}
-        {!search && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            {CATEGORIES.map((cat) => {
-              const count = productsByCategory[cat]?.length ?? 0;
-              const active = activeCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => {
-                    playFeedback("click");
-                    setActiveCategory(cat);
-                  }}
-                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card text-muted-foreground border border-border"
-                  }`}
-                >
-                  {CATEGORY_LABELS[cat]}
-                  <span className={`ml-1.5 text-xs ${active ? "opacity-80" : "opacity-60"}`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Tabs categoria */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {CATEGORIES.map((cat) => {
+            const count = productsByCategory[cat]?.length ?? 0;
+            const active = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => {
+                  playFeedback("click");
+                  setActiveCategory(cat);
+                }}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground border border-border"
+                }`}
+              >
+                {CATEGORY_LABELS[cat]}
+                <span className={`ml-1.5 text-xs ${active ? "opacity-80" : "opacity-60"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Toolbar da categoria ativa (só sem busca) */}
-      {!search && (
-        <div className="flex items-center justify-between px-4 py-3 gap-2 flex-wrap">
-          <p className="text-xs text-muted-foreground">
-            Toque em <strong className="text-foreground">Visível/Oculto</strong> para mostrar/esconder. Arraste pelo <strong className="text-foreground">⋮⋮</strong> para reordenar.
-          </p>
-          <div className="flex items-center gap-2">
-            {hasCustomOrder && items.length > 1 && !selectionMode && (
-              <button
-                onClick={() => onResetOrder(activeCategory)}
-                className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-2 text-xs font-bold hover:bg-secondary/80 transition-colors"
-                title="Restaurar ordem alfabética"
-              >
-                <ArrowDownAZ size={14} /> A-Z
-              </button>
-            )}
+      {/* Toolbar da categoria ativa */}
+      <div className="flex items-center justify-between px-4 py-3 gap-2 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          Toque em <strong className="text-foreground">Visível/Oculto</strong> para mostrar/esconder. Arraste pelo <strong className="text-foreground">⋮⋮</strong> para reordenar.
+        </p>
+        <div className="flex items-center gap-2">
+          {hasCustomOrder && items.length > 1 && !selectionMode && (
             <button
-              onClick={() => { playFeedback("click"); setGroupsManagerOpen(true); }}
-              className="flex items-center gap-1.5 rounded-lg bg-card border border-border text-foreground px-3 py-2 text-xs font-bold hover:bg-secondary transition-colors"
-              title="Gerenciar grupos / popups"
+              onClick={() => onResetOrder(activeCategory)}
+              className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-2 text-xs font-bold hover:bg-secondary/80 transition-colors"
+              title="Restaurar ordem alfabética"
             >
-              <Layers size={14} /> Grupos
+              <ArrowDownAZ size={14} /> A-Z
             </button>
-            <button
-              onClick={() => onNewProduct(activeCategory)}
-              className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-bold hover:bg-primary/90 transition-colors"
-            >
-              <Plus size={14} /> Novo
-            </button>
-          </div>
+          )}
+          <button
+            onClick={() => { playFeedback("click"); setGroupsManagerOpen(true); }}
+            className="flex items-center gap-1.5 rounded-lg bg-card border border-border text-foreground px-3 py-2 text-xs font-bold hover:bg-secondary transition-colors"
+            title="Gerenciar grupos / popups"
+          >
+            <Layers size={14} /> Grupos
+          </button>
+          <button
+            onClick={() => onNewProduct(activeCategory)}
+            className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-bold hover:bg-primary/90 transition-colors"
+          >
+            <Plus size={14} /> Novo
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Grid */}
       <div className={`px-3 ${selectionMode ? "pb-28" : "pb-10"}`}>
-        {!search && !hasFilters && groupsForActiveCategory.map((g) => (
+        {!hasFilters && groupsForActiveCategory.map((g) => (
           <ProductGroupBanner
             key={g.id}
             group={g}
             products={productsByCategory[activeCategory] ?? []}
           />
         ))}
-        {search ? (
-          // Modo busca: lista todas categorias com header
-          allFilteredIds.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground bg-card rounded-xl border-2 border-dashed border-border">
-              Nenhum produto encontrado.
-            </div>
-          ) : (
-            CATEGORIES.map((cat) => {
-              const list = filteredByCategory[cat] ?? [];
-              return list.length > 0 ? renderGrid(cat, list) : null;
-            })
-          )
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground bg-card rounded-xl border-2 border-dashed border-border">
             {hasFilters
               ? "Nenhum produto corresponde aos filtros."
