@@ -840,14 +840,14 @@ const Pdv = () => {
             <AlertDialogCancel onClick={() => setShowPayConfirm(false)}>Cancelar</AlertDialogCancel>
             <button
               onClick={() => handlePayment(false)}
-              disabled={sending}
+              disabled={sending || (selectedOrder && getOrderGroup(selectedOrder) === "delivery" && !pointsConfirmed)}
               className="rounded-lg bg-secondary px-4 py-2 font-bold text-foreground disabled:opacity-40"
             >
               {sending ? "..." : "Fechar sem imprimir"}
             </button>
             <button
               onClick={() => handlePayment(true)}
-              disabled={sending}
+              disabled={sending || (selectedOrder && getOrderGroup(selectedOrder) === "delivery" && !pointsConfirmed)}
               className="rounded-lg bg-success px-4 py-2 font-bold text-success-foreground disabled:opacity-40"
             >
               {sending ? "..." : "✅ Fechar e imprimir"}
