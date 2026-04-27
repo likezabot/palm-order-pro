@@ -79,6 +79,15 @@ export interface BuildLayoutInput {
   orderShortId?: string | null;
   /** Tipo de serviço (delivery/pickup/dine_in) — usado p/ legendas extras. */
   serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
+  /**
+   * Fingerprint de rastreamento — adicionado ao rodapé de TODO cupom real
+   * para provar qual caminho/instância gerou o papel. Se um pedido real sai
+   * sem esse bloco, ele não passou pelo motor novo.
+   */
+  fingerprint?: {
+    printPath: string;       // ex.: "dispatcher.delivery", "dispatcher.dine_in_full"
+    source?: string | null;  // "auto" | "manual" | "reprint" | "queue"
+  } | null;
 }
 
 const NOT_PROVIDED = "NAO INFORMADO";
