@@ -75,6 +75,9 @@ const Pdv = () => {
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
   const [latestNewOrder, setLatestNewOrder] = useState<Order | null>(null);
 
+  // Estado para obrigatoriedade de envio de pontos fidelidade
+  const [pointsConfirmed, setPointsConfirmed] = useState(false);
+
   const { isOffline, realtime, internet } = useConnectivity();
   const [bridgeStatus, setBridgeStatus] = useState<{ online: boolean; printerOnline: boolean }>({ online: true, printerOnline: true });
 
@@ -614,7 +617,7 @@ const Pdv = () => {
                 </button>
                 <div className="flex-1 flex flex-col gap-1">
                   <button
-                    onClick={() => setShowPayConfirm(true)}
+                    onClick={() => { setPointsConfirmed(false); setShowPayConfirm(true); }}
                     disabled={sending || (amountPaidInSplit > 0 && amountPaidInSplit < total - 0.01)}
                     className="w-full rounded-lg bg-success p-4 font-bold text-success-foreground disabled:opacity-40 min-h-[56px]"
                   >
@@ -802,15 +805,32 @@ const Pdv = () => {
             <AlertDialogDescription>
               Mesa {selectedOrder ? formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name) : ""} — Total: R$ {total.toFixed(2)}
               {selectedOrder && getOrderGroup(selectedOrder) === "delivery" && (
-                <div className="mt-4 p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-3 animate-pulse ring-2 ring-primary/20">
-                  <Gift className="text-primary w-6 h-6 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="text-sm font-black text-primary uppercase tracking-tight">
-                      Enviar pontos para o cliente!
-                    </span>
-                    <span className="text-[10px] font-bold text-primary/70 uppercase">
-                      Lembre-se de creditar no sistema de fidelidade
-                    </span>
+                <div className="mt-4 p-4 rounded-xl bg-primary/10 border border-primary/20 flex flex-col gap-4 ring-2 ring-primary/20">
+                  <div className="flex items-center gap-3 animate-pulse">
+                    <Gift className="text-primary w-6 h-6 shrink-0" />
+                    <div className="flex flex-col text-left">
+                      <span className="text-sm font-black text-primary uppercase tracking-tight">
+                        Enviar pontos para o cliente!
+                      </span>
+                      <span className="text-[10px] font-bold text-primary/70 uppercase">
+                        Lembre-se de creditar no sistema de fidelidade
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 bg-white/50 p-3 rounded-lg border border-primary/10">
+                    <Checkbox 
+                      id="confirm-points" 
+                      checked={pointsConfirmed} 
+                      onCheckedChange={(checked) => setPointsConfirmed(!!checked)}
+                      className="mt-1 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                    />
+                    <label 
+                      htmlFor="confirm-points" 
+                      className="text-xs font-bold leading-tight text-primary cursor-pointer select-none"
+                    >
+                      CONFIRMO QUE OS PONTOS JÁ FORAM ENVIADOS AO CLIENTE OU COMPUTADOS NO SISTEMA.
+                    </label>
                   </div>
                 </div>
               )}
@@ -820,14 +840,14 @@ const Pdv = () => {
             <AlertDialogCancel onClick={() => setShowPayConfirm(false)}>Cancelar</AlertDialogCancel>
             <button
               onClick={() => handlePayment(false)}
-              disabled={sending}
+              disabled={sending || (selectedOrder && getOrderGroup(selectedOrder) === "delivery" && !pointsConfirmed)}
               className="rounded-lg bg-secondary px-4 py-2 font-bold text-foreground disabled:opacity-40"
             >
               {sending ? "..." : "Fechar sem imprimir"}
             </button>
             <button
               onClick={() => handlePayment(true)}
-              disabled={sending}
+              disabled={sending || (selectedOrder && getOrderGroup(selectedOrder) === "delivery" && !pointsConfirmed)}
               className="rounded-lg bg-success px-4 py-2 font-bold text-success-foreground disabled:opacity-40"
             >
               {sending ? "..." : "✅ Fechar e imprimir"}
