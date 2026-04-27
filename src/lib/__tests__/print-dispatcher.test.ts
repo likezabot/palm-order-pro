@@ -136,4 +136,49 @@ describe("printOrderByServiceType — dispatcher único", () => {
     const callArgs = printReceipt.mock.calls[0];
     expect(callArgs[1]).toBe(""); // string vazia, layout omite linha
   });
+
+  it("delivery injeta fingerprint com source repassado", async () => {
+    vi.resetModules();
+    vi.doMock("@/integrations/supabase/client", () => ({
+      supabase: mockSupabase(
+        {
+          id: "o5",
+          table_name: "Delivery #9",
+          service_type: "delivery",
+          delivery_address: { street: "R", number: "1", neighborhood: "C" },
+          delivery_fee: 5,
+          customer_name_snapshot: "X",
+          customer_phone_snapshot: "1",
+          payment_method: "pix",
+          total: 35,
+        },
+        [{ product_name: "X", quantity: 1, product_price: 30 }],
+      ),
+    }));
+    const { printOrderByServiceType } = await import("@/lib/print-dispatcher");
+    await printOrderByServiceType("o5", "full", "manual");
+    const input = printDelivery.mock.calls[0][0];
+    expect(input.fingerprint).toBeTruthy();
+    expect(input.fingerprint.printPath).toBe("dispatcher.delivery");
+    expect(input.fingerprint.source).toBe("manual");
+    expect(input.serviceType).toBe("delivery");
+  });
+
+  it("pickup injeta fingerprint com SERVICE pickup e tableValue vazio", async () => {
+    vi.resetModules();
+    vi.doMock("@/integrations/supabase/client", () => ({
+      supabase: mockSupabase(
+        { id: "o6", table_name: "Retirada #5", service_type: "pickup", total: 20 },
+        [{ product_name: "Y", quantity: 1, product_price: 20 }],
+      ),
+    }));
+    const { printOrderByServiceType } = await import("@/lib/print-dispatcher");
+    await printOrderByServiceType("o6", "full", "reprint");
+    const callArgs = printReceipt.mock.calls[0];
+    expect(callArgs[0]).toBe(""); // sem MESA
+    const extras = callArgs[4];
+    expect(extras.serviceType).toBe("pickup");
+    expect(extras.fingerprint.source).toBe("reprint");
+    expect(extras.fingerprint.printPath).toContain("pickup");
+  });
 });

@@ -64,6 +64,8 @@ export interface SenhaOpts {
   total?: number;
   /** Bypassa o toggle printSenhaEnabled (usado pelo botão "Imprimir novamente"). */
   force?: boolean;
+  /** Origem da impressão (manual, reprint, auto, queue, test). */
+  source?: "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
 }
 
 export function buildSenhaHtml(
@@ -145,10 +147,17 @@ export async function printSenha(
         waiterName: opts.waiterName,
         customerName: opts.customerName,
         total,
+        fingerprint: { printPath: "printSenha", source: opts.source ?? "auto" },
       },
       cfg,
     );
-    return await sendToBridge(renderLayout(layout.blocks, cfg), cfg.bridgeUrl);
+    return await sendToBridge(renderLayout(layout.blocks, cfg), cfg.bridgeUrl, {
+      printPath: "printSenha",
+      source: opts.source ?? "auto",
+      orderId: opts.orderId ?? null,
+      serviceType: "balcao",
+      tableName: opts.customerName ?? null,
+    });
   }
 
   // No navegador/celular, não imprimir senha para evitar PDF

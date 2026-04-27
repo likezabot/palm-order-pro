@@ -41,6 +41,7 @@ import { PRINT_ENGINE_VERSION, APP_BUILD } from "@/lib/print-engine";
 import PrinterDiagnostics from "./PrinterDiagnostics";
 import BridgeOriginDiagnostics from "./BridgeOriginDiagnostics";
 import PrintConfigSelfTest from "./PrintConfigSelfTest";
+import PrintOriginPanel from "./PrintOriginPanel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -235,6 +236,7 @@ export default function PrintConfigPanel() {
         case "mesa":
           ok = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
             serviceType: "dine_in",
+            fingerprint: { printPath: "admin.test.mesa", source: "test" },
           });
           break;
         case "retirada":
@@ -242,6 +244,7 @@ export default function PrintConfigPanel() {
             serviceType: "pickup",
             customerName: "João Pereira",
             customerPhone: "(11) 98888-2222",
+            fingerprint: { printPath: "admin.test.retirada", source: "test" },
           });
           break;
         case "delivery":
@@ -258,11 +261,13 @@ export default function PrintConfigPanel() {
             orderId: "test-delivery-001",
             orderShortId: "T001",
             serviceType: "delivery",
+            fingerprint: { printPath: "admin.test.delivery", source: "test" },
           });
           break;
         case "conta":
           ok = await printBill("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
             serviceType: "dine_in",
+            fingerprint: { printPath: "admin.test.conta", source: "test" },
           });
           break;
         case "senha":
@@ -272,6 +277,7 @@ export default function PrintConfigPanel() {
             customerName: "CONSUMIDOR FINAL",
             total: SAMPLE_TOTAL,
             force: true,
+            source: "test",
           });
           break;
       }
@@ -513,7 +519,10 @@ export default function PrintConfigPanel() {
         {/* 5. AUTO-TESTE DA CONFIG (prova: papel reflete o Admin) */}
         <PrintConfigSelfTest cfg={cfg} onConfigSynced={(next) => setCfg(next)} />
 
-        {/* 6. DIAGNÓSTICO DE ORIGEM (prova de qual instância sai o papel) */}
+        {/* 6. ORIGEM DOS PEDIDOS REAIS (prova qual instância imprime de verdade) */}
+        <PrintOriginPanel />
+
+        {/* 7. DIAGNÓSTICO DE ORIGEM (prova de qual instância sai o papel) */}
         <BridgeOriginDiagnostics
           bridgeUrl={cfg.bridgeUrl}
           configSource={cfg.configSource ?? "default"}

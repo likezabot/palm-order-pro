@@ -57,6 +57,7 @@ export async function reprintSenhaForOrder(orderId: string): Promise<ReprintResu
     orderId: order.id,
     total: Number(order.total) || 0,
     force: true,
+    source: "reprint",
   });
 
   // Enfileira também como comando explícito para o .exe (não bloqueia)

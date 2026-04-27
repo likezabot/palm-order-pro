@@ -9,7 +9,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { checkBridgeStatus } from "@/lib/thermal-printer";
+import { checkBridgeStatus, sendToBridge } from "@/lib/thermal-printer";
 import {
   decodePayloadB64,
   getPrintQueue,
@@ -29,24 +29,22 @@ let started = false;
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
-async function sendRawPayload(b64: string, bridgeUrl: string): Promise<boolean> {
-  try {
-    const response = await fetch(bridgeUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        payload: b64,
-        format: "escpos",
-        source: "Plano B Espetaria PDV (queue retry)",
-        timestamp: new Date().toISOString(),
-      }),
-    });
-    if (!response.ok) return false;
-    const json = await response.json().catch(() => ({ success: false }));
-    return !!json.success;
-  } catch {
-    return false;
-  }
+/**
+ * Envia o payload já serializado da fila e registra origem como "queue".
+ *
+ * Importante: o payload base64 foi gerado quando o pedido foi enfileirado;
+ * NÃO conseguimos injetar fingerprint dentro dele aqui. Mas o tracker de
+ * origem registra orderId/serviceType/printPath para a UI mostrar a fonte.
+ */
+async function sendQueuedPayload(job: PrintJob, serviceType: string | null): Promise<boolean> {
+  const payload = decodePayloadB64(job.payloadB64);
+  return await sendToBridge(payload, job.bridgeUrl, {
+    printPath: `queue.retry.${job.printType}`,
+    source: "queue",
+    orderId: job.orderId,
+    serviceType,
+    tableName: job.tableName ?? null,
+  });
 }
 
 function shouldDeferByBackoff(job: PrintJob): boolean {
@@ -75,10 +73,10 @@ export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnlin
       if (processed >= MAX_PER_CYCLE) break;
       if (shouldDeferByBackoff(job)) continue;
 
-      // Garante que o pedido ainda existe e está em estado que precisa de impressão
+      // Garante que o pedido ainda existe e tenta resgatar service_type
       const { data: order } = await supabase
         .from("orders")
-        .select("print_status")
+        .select("print_status, service_type")
         .eq("id", job.orderId)
         .maybeSingle();
 
@@ -89,7 +87,8 @@ export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnlin
         continue;
       }
 
-      const ok = await sendRawPayload(job.payloadB64, job.bridgeUrl);
+      const serviceType = (order as any)?.service_type ?? null;
+      const ok = await sendQueuedPayload(job, serviceType);
       processed++;
 
       if (ok) {
