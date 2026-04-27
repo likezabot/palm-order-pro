@@ -802,15 +802,32 @@ const Pdv = () => {
             <AlertDialogDescription>
               Mesa {selectedOrder ? formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name) : ""} — Total: R$ {total.toFixed(2)}
               {selectedOrder && getOrderGroup(selectedOrder) === "delivery" && (
-                <div className="mt-4 p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-3 animate-pulse ring-2 ring-primary/20">
-                  <Gift className="text-primary w-6 h-6 shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="text-sm font-black text-primary uppercase tracking-tight">
-                      Enviar pontos para o cliente!
-                    </span>
-                    <span className="text-[10px] font-bold text-primary/70 uppercase">
-                      Lembre-se de creditar no sistema de fidelidade
-                    </span>
+                <div className="mt-4 p-4 rounded-xl bg-primary/10 border border-primary/20 flex flex-col gap-4 ring-2 ring-primary/20">
+                  <div className="flex items-center gap-3 animate-pulse">
+                    <Gift className="text-primary w-6 h-6 shrink-0" />
+                    <div className="flex flex-col text-left">
+                      <span className="text-sm font-black text-primary uppercase tracking-tight">
+                        Enviar pontos para o cliente!
+                      </span>
+                      <span className="text-[10px] font-bold text-primary/70 uppercase">
+                        Lembre-se de creditar no sistema de fidelidade
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 bg-white/50 p-3 rounded-lg border border-primary/10">
+                    <Checkbox 
+                      id="confirm-points" 
+                      checked={pointsConfirmed} 
+                      onCheckedChange={(checked) => setPointsConfirmed(!!checked)}
+                      className="mt-1 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                    />
+                    <label 
+                      htmlFor="confirm-points" 
+                      className="text-xs font-bold leading-tight text-primary cursor-pointer select-none"
+                    >
+                      CONFIRMO QUE OS PONTOS JÁ FORAM ENVIADOS AO CLIENTE OU COMPUTADOS NO SISTEMA.
+                    </label>
                   </div>
                 </div>
               )}
