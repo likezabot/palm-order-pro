@@ -1,97 +1,111 @@
-## Reorganização visual do Admin
+## Diagnóstico — o que não funciona hoje
 
-Hoje o `/admin` tem **11 abas em fila horizontal** no topo (Cardápio, Cardápio Online, Pedidos Online, Editor Pedidos, Impressão, Erros, Estatísticas, Sistema, Rede, Fidelidade, Rotas) e várias delas exibem 4–6 painéis empilhados. A proposta é trocar tudo por uma **sidebar lateral colapsável** agrupada por função e esconder o conteúdo técnico atrás de um botão "Mostrar opções avançadas".
+A aba **Cardápio Online → Personalizar** tem 8 sub-abas com muitos controles. Auditoria mostrou:
+
+**Controles que NÃO surtem efeito no cardápio público (`/menu/<slug>`):**
+1. **Estilo de botão** (Sólido / Contorno / Suave) — salvo no banco mas nunca aplicado em nenhum componente. Trocar não muda nada.
+2. **Estilo de card global** (Elevado / Plano) — `cardElevated` é lido só para o card de boas-vindas; cada `ProductCard` recebe sempre `cardStyle="detailed"` fixo, ignorando a escolha global.
+3. **Mensagem de boas-vindas** — editada na aba "Visual", mas exigência de toggle "Card de boas-vindas" está em "Seções"; resultado: usuário edita o texto, não vê aparecer, e não entende que precisa ligar o switch em outra aba.
+4. **Banner**: enviar banner muda só estado local; se sair sem clicar "Salvar identidade visual" o upload se perde silenciosamente.
+
+**Confusão / duplicação:**
+5. 8 sub-abas (Visual, Hero, Seções, Paleta, Layout, Categorias, Por categoria, Destaques) numa linha que quebra em 2-3 fileiras.
+6. "Visual" + "Paleta" + "Layout" se sobrepõem — cor de destaque em "Visual" e demais cores em "Paleta"; layout global em "Layout" mas overrides por categoria em outra.
+7. "Destaques" duplica algo que já está na aba "Cardápio" (estrela do produto) e na aba "Cardápio Online → Cardápio".
+8. Falta feedback de "alterações não salvas" — cada painel tem seu botão Salvar isolado; é fácil trocar de aba e perder.
+
+**Pequenos bugs:**
+9. `welcome` na aba Visual sempre envia `clear_welcome_message` quando vazio — pode apagar a mensagem por engano ao salvar só a cor de destaque.
+10. Preview à direita ocupa 420px fixos — em telas menores (<1280px) o painel de edição vira inutilizável.
 
 ---
 
-### 1. Layout novo: sidebar lateral
+## O que vamos fazer
 
-Substituir `<TabsList>` no topo por uma `Sidebar` (shadcn) à esquerda, com 4 grupos. O header atual fica como está (logo, modo Garçom, novo produto), apenas com o `SidebarTrigger` adicionado para colapsar/expandir.
+### 1. Remodelar a aba "Personalizar" — 8 abas → 4 seções claras
 
-Em viewports estreitos (<768px) a sidebar vira off-canvas (drawer); em desktop/tablet fica fixa colapsável modo `icon` (mantém ícones quando recolhida).
+Trocar `Tabs` por uma lista vertical (acordeão) à esquerda, com 4 grupos:
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│ [≡] Painel de Controle           [Garçom] [⚙] [+ NOVO] │
-├──────────────┬─────────────────────────────────────────┤
-│ CARDÁPIO     │                                         │
-│  • Produtos  │                                         │
-│  • Online    │       conteúdo da seção ativa           │
-│  • Fidelidade│                                         │
-│              │                                         │
-│ PEDIDOS      │                                         │
-│  • Editor    │                                         │
-│  • Online    │                                         │
-│              │                                         │
-│ OPERAÇÃO     │                                         │
-│  • Impressão │                                         │
-│  • Rede      │                                         │
-│  • Rotas     │                                         │
-│              │                                         │
-│ SISTEMA      │                                         │
-│  • Erros [3] │                                         │
-│  • Estatíst. │                                         │
-│  • Manutenção│                                         │
-└──────────────┴─────────────────────────────────────────┘
+┌─ Identidade ──────────────────────────┐  ┌──────────────┐
+│ • Link & QR Code                      │  │   Preview    │
+│ • Logo, banner, cores                 │  │   ao vivo    │
+│ • Mensagem de boas-vindas             │  │              │
+├─ Home (capa & seções) ────────────────┤  │  [📱] [🖥️]    │
+│ • Hero (título, alinhamento, badges)  │  │              │
+│ • Ordem dos blocos                    │  │              │
+│ • Toggles: destaques, busca, WhatsApp │  │              │
+├─ Estilo dos produtos ─────────────────┤  │              │
+│ • Layout global (lista/grade)         │  │              │
+│ • Imagem, cards, botões, radius       │  │              │
+│ • Mostrar fotos / descrições          │  │              │
+├─ Categorias ──────────────────────────┤  │              │
+│ • Reordenar / ocultar                 │  │              │
+│ • Personalização por categoria        │  │              │
+│ • Ordem dos produtos por categoria    │  └──────────────┘
+└───────────────────────────────────────┘
 ```
 
-**Agrupamento das 11 abas atuais:**
+- Aba "Destaques" some daqui (já existe na aba "Cardápio"). Adicionamos um link discreto "Gerenciar destaques na aba Cardápio".
+- Cada seção mostra uma barrinha de status: "Tudo salvo" / "Alterações não salvas".
 
-| Grupo | Itens |
-|---|---|
-| **Cardápio** | Produtos (presencial), Cardápio Online, Fidelidade |
-| **Pedidos** | Editor de Pedidos, Pedidos Online |
-| **Operação** | Impressão, Rede, Rotas & URLs |
-| **Sistema** | Erros & Saúde (com badge), Estatísticas, Manutenção (ex-"Sistema") |
+### 2. Fazer os controles funcionarem
 
-Renomeação: a aba "Sistema" passa a se chamar **Manutenção** (mais claro — é onde se apaga dados, força update, arquiva), liberando "Sistema" como nome do grupo.
+**Estilo de botão** (`button_style`):
+- Aplicar via CSS variable nova `--btn-style` no escopo do PublicMenu, e propagar para os componentes que renderizam ações: `ProductCard` (botão "+"), `PublicCartFab`, `CartDrawer` botão checkout, `WhatsAppFab`, `OpenStatusBadge`.
+- 3 estilos: `solid` (default), `outline` (borda + fundo transparente), `soft` (fundo `primary/15` + texto `primary`).
+- Implementação: adicionar atributo `data-btn-style={settings.button_style}` no `PublicMenuLayout` e classes condicionais nos botões que usam o accent.
 
-### 2. Modo Garçom (mantido)
+**Estilo de card global** (`card_style`):
+- Hoje cada `ProductCard` recebe `cardStyle="detailed"` fixo. Passar a usar `settings.card_style` global como default e o override por categoria quando definido.
+- Adicionar opção `flat` no select global (já existe no enum DB) e respeitar: `flat` → sem sombra, `elevated` → com sombra (já existe `--shadow-soft`).
+- Renomear no admin para "Sombra dos cards" (Sim/Não) — o conceito real.
 
-A regra atual continua: itens marcados `admin-only` (Erros, Estatísticas, Manutenção, Rede, Rotas) ficam ocultos no modo Garçom. Na sidebar, grupos inteiros ficam vazios são escondidos automaticamente — então em modo Garçom a sidebar mostra só **Cardápio** e **Pedidos** + Impressão + Fidelidade.
+**Mensagem de boas-vindas**:
+- Mover toggle "mostrar card de boas-vindas" para junto do textarea (mesma seção "Identidade").
+- Auto-ligar o toggle quando o usuário digitar texto pela primeira vez.
 
-### 3. Esconder conteúdo técnico atrás de "Avançado"
+**Banner**:
+- Após upload, salvar imediatamente no servidor (não só no estado).
+- Mostrar "Banner salvo ✓" inline.
 
-Cada aba "pesada" mostra apenas o essencial; o resto fica atrás de um botão `[ Mostrar opções avançadas ▾ ]` que expande inline.
+### 3. Polir UX
 
-| Aba | Visível por padrão | Atrás de "Avançado" |
-|---|---|---|
-| **Impressão** | Configuração do talão, botão "Testar impressão", status da bridge | Self-test, Origem dos pedidos reais, Diagnóstico de bridge, Diagnóstico da impressora |
-| **Manutenção** | Forçar atualização, Limpar dados de teste | Arquivar pedidos antigos, Histórico de arquivamentos |
-| **Erros & Saúde** | Resumo de erros (cards) | Erros do dia detalhados, Impressões travadas, Log completo |
-| **Rede** | Status da conexão | Detalhes técnicos de latência/realtime |
+- Botão **"Salvar todas as mudanças"** sticky no rodapé do painel de edição, que confirma todos os pendentes em uma chamada (RPC já aceita patch único multi-campo).
+- Remover painéis individuais de salvar (cada seção marca dirty; só um Save global).
+- Indicador "Você tem N alterações não salvas" + confirmação ao trocar de aba/sair.
+- Em telas <1280px, preview vira drawer aberto via botão "Ver preview" no header da aba.
 
-O estado expandido/recolhido é lembrado em `localStorage` por aba (`admin-advanced-{tab}`).
+### 4. Pequenos consertos de bug
 
-### 4. Estado da rota
-
-Mantém `useState("products")` mas troca por `useSearchParams` (`?section=products`) para que recarregar a página preserve a seção e dê para linkar direto. Compatível com o comportamento atual.
+- Não enviar `clear_welcome_message` quando o usuário não tocou no campo (rastrear `dirty` por campo).
+- Idem para banner, hero_title, hero_subtitle e cores.
+- Validação: se hex inválido, destacar campo em vermelho ao invés de só `toast.error` no submit.
 
 ---
 
-### Detalhes técnicos
-
-**Arquivos novos:**
-- `src/components/admin/AdminSidebar.tsx` — Sidebar shadcn com 4 grupos, ícones (mantém os atuais), badge de erros não resolvidos no item "Erros", filtro `admin-only` igual ao atual
-- `src/components/admin/AdvancedSection.tsx` — wrapper `<details>`-like com botão "Mostrar opções avançadas", persistência em localStorage
+## Detalhes técnicos
 
 **Arquivos editados:**
-- `src/pages/Admin.tsx` — envolver com `<SidebarProvider>`, remover `<TabsList>`, manter `<TabsContent>` (Tabs continua como mecanismo de troca de painel, só a UI muda); adicionar `SidebarTrigger` ao header; trocar `useState` por `useSearchParams`
-- `src/components/admin/AdminHeader.tsx` — incluir `SidebarTrigger` à esquerda do botão voltar
-- `src/components/admin/PrintConfigPanel.tsx` — agrupar `PrintConfigSelfTest`, `PrintOriginPanel`, `BridgeOriginDiagnostics`, `PrinterDiagnostics` dentro de `<AdvancedSection>`
-- `src/components/admin/SystemTab.tsx` — renomear título visual para "Manutenção"; mover Arquivar + Histórico para `<AdvancedSection>`
-- `src/components/admin/ErrorsTab.tsx` — manter `ErrorsSummaryPanel` visível; mover `DailyErrorsPanel`, `StuckPrintsPanel`, `ErrorLogPanel` para `<AdvancedSection>`
-- `src/components/admin/NetworkTab.tsx` — colapsar detalhes técnicos
+- `src/components/admin/PublicMenuCustomizer.tsx` — refatorar layout (Tabs → Acordeão sticky), unir painéis duplicados, adicionar dirty tracking + save global, mover destaques para fora.
+- `src/pages/PublicMenu.tsx` — usar `settings.card_style` como default em `catCardStyle`; aplicar `data-btn-style` no `PublicMenuLayout` ou root.
+- `src/components/public-menu/PublicMenuLayout.tsx` — receber `buttonStyle` prop e expor via data-attribute / CSS var.
+- `src/components/public-menu/ProductCard.tsx` — botão "+" respeita `data-btn-style` ancestral via classes Tailwind condicionais (variant CSS).
+- `src/components/public-menu/PublicCartFab.tsx`, `CartDrawer.tsx`, `WhatsAppFab.tsx` — idem.
+- `src/index.css` — pequenas regras `[data-btn-style="outline"] .btn-accent { ... }` etc.
 
-**Não muda:**
-- Lógica de produtos, pedidos, impressão, bridge, fidelidade — apenas a navegação/embalagem visual
-- Modo Garçom continua usando classe `admin-only` + CSS atual
-- Badge de erros não resolvidos continua funcionando, agora ao lado do item "Erros" na sidebar
+**Sem mudança de banco:** o schema `public_menu_settings` já tem todos os campos necessários; a RPC `admin_update_public_menu_settings` já aceita patch parcial — basta enviar só os campos `dirty`.
 
-### Validação
+**Sem migração nova.**
 
-- Conferir que todas as 11 áreas continuam acessíveis em desktop e mobile
-- Conferir colapsar/expandir sidebar (modo `icon` no desktop, off-canvas no mobile)
-- Conferir modo Garçom esconde os grupos certos
-- Conferir badge de erros não resolvidos aparece na sidebar
-- Conferir que estado "Avançado" persiste após reload
+**Testes manuais:**
+- Trocar cada controle no admin → ver preview atualizar em <2s (já tem refetchInterval 2s no preview).
+- Confirmar que `button_style=outline` muda visualmente o botão "+" do produto e o FAB do carrinho.
+- Confirmar `card_style=flat` remove sombra de todos os cards.
+- Salvar com vários campos pendentes em uma única chamada (verificar Network: 1 RPC).
+- Trocar aba com alterações não salvas → confirma diálogo.
+
+**Não-objetivos** (fora do escopo desta iteração):
+- Não muda a aba "Cardápio" (lista de produtos) nem "Configurações" (horários/zonas/info).
+- Não muda templates de impressão.
+- Não toca em nada do EXE/PWA — é puramente web.
