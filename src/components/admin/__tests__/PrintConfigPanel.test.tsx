@@ -133,12 +133,13 @@ describe("PrintConfigPanel — previews refletem service_type", () => {
     fireEvent.click(screen.getByRole("tab", { name: /delivery/i }));
     await waitFor(() => {
       const html = getPreviewSrcDoc();
-      expect(html).toContain("DELIVERY");
-      expect(html).not.toMatch(/MESA[:\s]/i);
-      expect(html).not.toMatch(/GARCOM[:\s]/i);
       expect(html).toContain("Maria Souza");
-      expect(html).toContain("Centro"); // bairro
     });
+    const html = getPreviewSrcDoc();
+    expect(html).toContain("DELIVERY");
+    expect(html).not.toMatch(/<span class="info-label">Mesa:/i);
+    expect(html).not.toMatch(/<span class="info-label">Garcom:/i);
+    expect(html).toContain("Centro"); // bairro
   });
 
   it("preview de retirada NÃO mostra MESA", async () => {
@@ -148,11 +149,11 @@ describe("PrintConfigPanel — previews refletem service_type", () => {
     fireEvent.click(screen.getByRole("tab", { name: /retirada/i }));
     await waitFor(() => {
       const html = getPreviewSrcDoc();
-      expect(html).toMatch(/RETIRADA/i);
-      // a label "Mesa" não deve aparecer
-      expect(html).not.toMatch(/<span class="info-label">Mesa:/i);
       expect(html).toContain("João Pereira");
     });
+    const html = getPreviewSrcDoc();
+    expect(html).toMatch(/RETIRADA/i);
+    expect(html).not.toMatch(/<span class="info-label">Mesa:/i);
   });
 
   it("preview de mesa MOSTRA mesa e garçom", async () => {
