@@ -251,6 +251,27 @@ export async function ensureFreshPrintConfig(): Promise<PrintConfig> {
   return local;
 }
 
+/**
+ * Lê metadata do banco SEM mexer no localStorage. Usado pelo Admin para
+ * mostrar diff entre o que está no banco vs o que está aplicado neste
+ * dispositivo. Retorna null em caso de falha (banco offline / RPC erro).
+ */
+export async function fetchPrintConfigDbMeta(): Promise<{
+  updatedAt: string | null;
+  ok: boolean;
+  error?: string;
+} | null> {
+  try {
+    const { data, error } = await supabase.rpc("get_print_config");
+    if (error) return { updatedAt: null, ok: false, error: error.message };
+    if (!data) return { updatedAt: null, ok: true };
+    const wrap = data as { value: any; updated_at: string };
+    return { updatedAt: wrap.updated_at ?? null, ok: true };
+  } catch (e: any) {
+    return { updatedAt: null, ok: false, error: e?.message ?? String(e) };
+  }
+}
+
 /** Fire-and-forget save to database via SECURITY DEFINER RPC. */
 async function savePrintConfigToDb(config: PrintConfig): Promise<void> {
   const payload = stripDbOnly(config);
