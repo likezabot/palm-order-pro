@@ -239,16 +239,17 @@ export interface ManualPrintResult {
   reason: "success" | "queued_only" | "no_items" | "no_delta" | "bridge_failed" | "error";
   queued: boolean;
   bridgeOk: boolean;
+  error?: string;
 }
 
 function toManual(r: Awaited<ReturnType<typeof printOrderByServiceType>>): ManualPrintResult {
   if (r.ok && r.bridgeOk)
     return { ok: true, reason: "success", queued: r.queued, bridgeOk: true };
-  if (r.queued) return { ok: true, reason: "queued_only", queued: true, bridgeOk: false };
+  if (r.queued) return { ok: true, reason: "queued_only", queued: true, bridgeOk: false, error: r.reason };
   if (r.reason === "no_items") return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
   if (r.reason === "no_delta") return { ok: false, reason: "no_delta", queued: false, bridgeOk: false };
   if (r.reason === "order_not_found") return { ok: false, reason: "error", queued: false, bridgeOk: false };
-  return { ok: false, reason: "bridge_failed", queued: false, bridgeOk: false };
+  return { ok: false, reason: "bridge_failed", queued: false, bridgeOk: false, error: r.reason };
 }
 
 export async function manualPrintOrder(order: {
