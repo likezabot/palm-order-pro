@@ -203,18 +203,16 @@ export function resetPrintConfig(): PrintConfig {
 export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
   const local = loadPrintConfig();
   try {
-    const { data } = await supabase
-      .from("settings")
-      .select("value, updated_at")
-      .eq("key", DB_KEY)
-      .single();
+    const { data, error } = await supabase.rpc("get_print_config");
+    if (error) throw error;
 
-    if (data?.value) {
-      const parsed = JSON.parse(data.value);
+    if (data) {
+      const wrap = data as { value: any; updated_at: string };
+      const parsed = typeof wrap.value === "string" ? JSON.parse(wrap.value) : wrap.value;
       const merged = normalizeConfig(
         {
           ...parsed,
-          configUpdatedAt: data.updated_at ?? local.configUpdatedAt,
+          configUpdatedAt: wrap.updated_at ?? local.configUpdatedAt,
           configSource: "db",
         },
         "db",
@@ -225,8 +223,8 @@ export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
       persistLocal(merged);
       return merged;
     }
-  } catch {
-    // DB not available, use local
+  } catch (e) {
+    console.warn("[print-config] sync from DB failed", e);
   }
   return local;
 }
@@ -238,13 +236,10 @@ export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
 export async function ensureFreshPrintConfig(): Promise<PrintConfig> {
   const local = loadPrintConfig();
   try {
-    const { data } = await supabase
-      .from("settings")
-      .select("updated_at")
-      .eq("key", DB_KEY)
-      .single();
-
-    const dbTs = data?.updated_at ? Date.parse(data.updated_at) : 0;
+    const { data } = await supabase.rpc("get_print_config");
+    if (!data) return local;
+    const wrap = data as { value: any; updated_at: string };
+    const dbTs = wrap.updated_at ? Date.parse(wrap.updated_at) : 0;
     const localTs = local.configUpdatedAt ? Date.parse(local.configUpdatedAt) : 0;
 
     if (dbTs && (!localTs || dbTs > localTs)) {
@@ -256,14 +251,12 @@ export async function ensureFreshPrintConfig(): Promise<PrintConfig> {
   return local;
 }
 
-/** Fire-and-forget save to database — strip campos locais antes de subir. */
+/** Fire-and-forget save to database via SECURITY DEFINER RPC. */
 async function savePrintConfigToDb(config: PrintConfig): Promise<void> {
-  const value = JSON.stringify(stripDbOnly(config));
-  const { error } = await supabase
-    .from("settings")
-    .upsert(
-      { key: DB_KEY, value, updated_at: new Date().toISOString() },
-      { onConflict: "key" }
-    );
+  const payload = stripDbOnly(config);
+  const { error } = await supabase.rpc("admin_save_print_config", {
+    p_config: payload as any,
+  });
   if (error) console.warn("[print-config] Erro ao salvar no banco:", error);
 }
+
