@@ -797,33 +797,46 @@ const Pdv = () => {
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-2">
+              {/* Linha 1: ações secundárias */}
+              <div className="grid grid-cols-3 gap-2 pt-2">
                 <button
                   onClick={() => handlePrint(selectedOrder)}
-                  className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-4 py-3 font-bold text-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  className="rounded-lg border border-border bg-card px-2 py-2.5 font-bold text-sm text-foreground active:scale-95 transition-transform flex items-center justify-center gap-1.5"
                 >
-                  <Printer size={18} /> Imprimir
+                  <Printer size={16} /> Imprimir
                 </button>
                 <button
                   onClick={() => navigate(`/palm?orderId=${selectedOrder.id}&tableName=${selectedOrder.table_name}`)}
-                  className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-4 py-3 font-bold text-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  disabled={selectedOrder.status === "done"}
+                  title={selectedOrder.status === "done" ? "Pedido pronto — avance o status para reabrir e editar" : "Adicionar/remover itens"}
+                  className="rounded-lg border border-border bg-card px-2 py-2.5 font-bold text-sm text-foreground active:scale-95 transition-transform flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Pencil size={18} /> Editar
+                  <Pencil size={16} /> Editar
                 </button>
+                <button
+                  onClick={() => setCancelTarget(selectedOrder)}
+                  className="rounded-lg border border-destructive/40 bg-destructive/5 px-2 py-2.5 font-bold text-sm text-destructive hover:bg-destructive/10 active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+                  title="Cancelar pedido"
+                >
+                  <X size={16} /> Cancelar
+                </button>
+              </div>
+              {/* Linha 2: ação principal */}
+              <div className="pt-1">
                 {selectedOrder.status !== "done" && (
                   <button
                     onClick={() => handleAdvance(selectedOrder)}
-                    className="flex-1 min-w-[100px] rounded-lg bg-success px-4 py-3 font-bold text-success-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                    className="w-full rounded-lg bg-success px-4 py-3.5 font-black text-success-foreground active:scale-95 transition-transform flex items-center justify-center gap-2 min-h-[56px]"
                   >
-                    <CheckCircle2 size={18} /> {statusConfig[selectedOrder.status]?.nextLabel || "Avançar"}
+                    <CheckCircle2 size={20} /> {statusConfig[selectedOrder.status]?.nextLabel || "Avançar"}
                   </button>
                 )}
                 {selectedOrder.status === "done" && (
                   <button
                     onClick={() => setShowPayment(true)}
-                    className="flex-1 min-w-[100px] rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-3 font-bold text-primary-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                    className="w-full rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-3.5 font-black text-primary-foreground active:scale-95 transition-transform flex items-center justify-center gap-2 min-h-[56px]"
                   >
-                    <DollarSign size={18} /> FECHAR MESA
+                    <DollarSign size={20} /> FECHAR MESA
                   </button>
                 )}
               </div>
