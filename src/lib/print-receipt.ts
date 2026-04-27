@@ -6,7 +6,15 @@
  */
 
 import { loadPrintConfig, savePrintConfig, type PaperWidth } from "./print-config";
-import { buildEscPosReceipt, buildEscPosDelta, buildEscPosBill, sendToBridge, renderLayout } from "./thermal-printer";
+import {
+  buildEscPosReceipt,
+  buildEscPosDelta,
+  buildEscPosBill,
+  buildEscPosDelivery,
+  sendToBridge,
+  renderLayout,
+  type DeliveryPayloadInput,
+} from "./thermal-printer";
 import { createReceiptLayoutModel, type LayoutBlock } from "./receipt-layout";
 import { buildHtmlFromLayout, buildHtmlFromBlocks } from "./receipt-html";
 import { doPrint } from "./print-iframe";
