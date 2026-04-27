@@ -41,6 +41,7 @@ import { PRINT_ENGINE_VERSION, APP_BUILD } from "@/lib/print-engine";
 import PrinterDiagnostics from "./PrinterDiagnostics";
 import BridgeOriginDiagnostics from "./BridgeOriginDiagnostics";
 import PrintConfigSelfTest from "./PrintConfigSelfTest";
+import PrintOriginPanel from "./PrintOriginPanel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -513,7 +514,10 @@ export default function PrintConfigPanel() {
         {/* 5. AUTO-TESTE DA CONFIG (prova: papel reflete o Admin) */}
         <PrintConfigSelfTest cfg={cfg} onConfigSynced={(next) => setCfg(next)} />
 
-        {/* 6. DIAGNÓSTICO DE ORIGEM (prova de qual instância sai o papel) */}
+        {/* 6. ORIGEM DOS PEDIDOS REAIS (prova qual instância imprime de verdade) */}
+        <PrintOriginPanel />
+
+        {/* 7. DIAGNÓSTICO DE ORIGEM (prova de qual instância sai o papel) */}
         <BridgeOriginDiagnostics
           bridgeUrl={cfg.bridgeUrl}
           configSource={cfg.configSource ?? "default"}
