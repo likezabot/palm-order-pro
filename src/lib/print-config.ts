@@ -257,15 +257,13 @@ export async function ensureFreshPrintConfig(): Promise<PrintConfig> {
 }
 
 /** Fire-and-forget save to database — strip campos locais antes de subir. */
-function savePrintConfigToDb(config: PrintConfig): Promise<void> {
+async function savePrintConfigToDb(config: PrintConfig): Promise<void> {
   const value = JSON.stringify(stripDbOnly(config));
-  return supabase
+  const { error } = await supabase
     .from("settings")
     .upsert(
       { key: DB_KEY, value, updated_at: new Date().toISOString() },
       { onConflict: "key" }
-    )
-    .then(({ error }) => {
-      if (error) console.warn("[print-config] Erro ao salvar no banco:", error);
-    });
+    );
+  if (error) console.warn("[print-config] Erro ao salvar no banco:", error);
 }
