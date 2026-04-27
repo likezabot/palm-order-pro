@@ -32,11 +32,13 @@ export const CancelOrderDialog = ({ order, open, onOpenChange, onCancelled }: Ca
   const { toast } = useToast();
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
 
   useEffect(() => {
     if (!open) {
       setReason("");
       setSubmitting(false);
+      setStep(1);
     }
   }, [open]);
 
