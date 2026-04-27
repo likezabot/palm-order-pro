@@ -96,7 +96,7 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
   ];
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border">
+    <Sidebar collapsible="offcanvas" className="border-r border-border">
       <SidebarContent className="bg-white">
         {groups.map((group) => {
           const visible = group.items.filter((i) => !i.adminOnly || !staffMode);
