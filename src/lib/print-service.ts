@@ -165,7 +165,7 @@ export async function autoPrintOrder(order: {
   if (!claimed) return { printed: false, reason: "already_claimed" };
 
   try {
-    const r = await printOrderByServiceType(order.id, "full");
+    const r = await printOrderByServiceType(order.id, "full", "auto");
     if (r.ok && r.bridgeOk) {
       await completePrint(order.id);
       return { printed: true, reason: r.reason };
@@ -210,7 +210,7 @@ export async function autoPrintUpdate(order: {
   else if (deltaItems.length > 0) mode = "delta"; // fallback legado
 
   try {
-    const r = await printOrderByServiceType(order.id, mode);
+    const r = await printOrderByServiceType(order.id, mode, "auto");
     if (r.ok && r.bridgeOk) {
       await completePrint(order.id);
       return { printed: true, reason: r.reason };
@@ -258,7 +258,7 @@ export async function manualPrintOrder(order: {
   waiter_name?: string | null;
   total?: number | null;
 }): Promise<ManualPrintResult> {
-  const r = await printOrderByServiceType(order.id, "full");
+  const r = await printOrderByServiceType(order.id, "full", "manual");
   return toManual(r);
 }
 
@@ -268,7 +268,7 @@ export async function manualPrintDelta(order: {
   original_table_name?: string | null;
   waiter_name?: string | null;
 }): Promise<ManualPrintResult> {
-  const r = await printOrderByServiceType(order.id, "delta");
+  const r = await printOrderByServiceType(order.id, "delta", "manual");
   return toManual(r);
 }
 
@@ -279,7 +279,7 @@ export async function manualPrintBill(order: {
   waiter_name?: string | null;
   total?: number | null;
 }): Promise<ManualPrintResult> {
-  const r = await printOrderByServiceType(order.id, "bill");
+  const r = await printOrderByServiceType(order.id, "bill", "manual");
   return toManual(r);
 }
 
