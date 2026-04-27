@@ -326,7 +326,7 @@ export default function PublicCheckout() {
               </div>
               <div>
                 <Label>Número</Label>
-                <Input value={number} onChange={(e) => setNumber(e.target.value)} maxLength={20} />
+                <Input value={number} onChange={(e) => setNumber(e.target.value)} maxLength={20} inputMode="numeric" pattern="[0-9]*" />
               </div>
             </div>
             <div>
