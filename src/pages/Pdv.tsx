@@ -437,7 +437,7 @@ const Pdv = () => {
               <div className="flex items-center gap-2">
                 <Bike className="w-5 h-5 text-orange-400" />
                 <h2 className="text-sm font-black uppercase tracking-wider text-orange-400">
-                  Entregas / Retiradas <span className="text-muted-foreground">({deliveryOrders.length})</span>
+                  Entregas / Retiradas <span className="text-muted-foreground">({filteredDeliveries.length}{deliveryItemsTotal > 0 ? ` · ${deliveryItemsTotal} ${deliveryItemsTotal === 1 ? "item" : "itens"}` : ""})</span>
                 </h2>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -476,13 +476,34 @@ const Pdv = () => {
                 )}
               </div>
             </div>
-            {deliveryOrders.length === 0 ? (
+            {/* Filtro por tipo - Entregas */}
+            <div className="flex items-center gap-1.5 flex-wrap px-1">
+              <Filter className="w-3 h-3 text-muted-foreground" />
+              {([
+                { id: "all", label: "Todos" },
+                { id: "delivery", label: "Delivery" },
+                { id: "pickup", label: "Retirada" },
+              ] as const).map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setDeliveryFilter(f.id)}
+                  className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border transition-colors ${
+                    deliveryFilter === f.id
+                      ? "border-orange-400 bg-orange-400/15 text-orange-400"
+                      : "border-border bg-card text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {filteredDeliveries.length === 0 ? (
               <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
-                Nenhuma entrega/retirada no momento.
+                {deliveryOrders.length === 0 ? "Nenhuma entrega/retirada no momento." : "Nenhum pedido com esse filtro."}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-fr">
-                {deliveryOrders.map((order) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                {filteredDeliveries.map((order) => (
                   <OrderRow
                     key={order.id}
                     order={order}
@@ -499,6 +520,7 @@ const Pdv = () => {
                     onPrint={handlePrint}
                     onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
+                    onCancel={(o) => setCancelTarget(o)}
                   />
                 ))}
               </div>
@@ -510,16 +532,37 @@ const Pdv = () => {
             <div className="flex items-center gap-2 px-1">
               <UtensilsCrossed className="w-5 h-5 text-purple-400" />
               <h2 className="text-sm font-black uppercase tracking-wider text-purple-400">
-                Mesas / Balcão <span className="text-muted-foreground">({tablesOrders.length})</span>
+                Mesas / Balcão <span className="text-muted-foreground">({filteredTables.length}{tablesItemsTotal > 0 ? ` · ${tablesItemsTotal} ${tablesItemsTotal === 1 ? "item" : "itens"}` : ""})</span>
               </h2>
             </div>
-            {tablesOrders.length === 0 ? (
+            {/* Filtro por tipo - Mesas */}
+            <div className="flex items-center gap-1.5 flex-wrap px-1">
+              <Filter className="w-3 h-3 text-muted-foreground" />
+              {([
+                { id: "all", label: "Todos" },
+                { id: "dine_in", label: "Mesa" },
+                { id: "counter", label: "Balcão" },
+              ] as const).map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setTablesFilter(f.id)}
+                  className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border transition-colors ${
+                    tablesFilter === f.id
+                      ? "border-purple-400 bg-purple-400/15 text-purple-400"
+                      : "border-border bg-card text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {filteredTables.length === 0 ? (
               <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
-                Nenhuma mesa aberta no momento.
+                {tablesOrders.length === 0 ? "Nenhuma mesa aberta no momento." : "Nenhum pedido com esse filtro."}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
-                {tablesOrders.map((order) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                {filteredTables.map((order) => (
                   <OrderRow
                     key={order.id}
                     order={order}
@@ -530,6 +573,7 @@ const Pdv = () => {
                     onPrint={handlePrint}
                     onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setPaymentsHistory([]); }}
+                    onCancel={(o) => setCancelTarget(o)}
                   />
                 ))}
               </div>
