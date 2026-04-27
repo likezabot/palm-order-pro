@@ -318,6 +318,15 @@ export async function autoPrintUpdate(order: {
     `print_type=${printType ?? "(nulo)"} delta_items=${deltaItems?.length ?? 0} service_type=${serviceType ?? "-"}`,
   );
 
+  const fetchAllItems = async (): Promise<PrintableItem[]> => {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const { data } = await supabase.from("order_items").select("*").eq("order_id", order.id);
+      if (data && data.length > 0) return data;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    return [];
+  };
+
   // ----- Delivery: NUNCA usa template de mesa. Sempre re-imprime comanda completa. -----
   if (isDelivery) {
     const items = await fetchAllItems();
