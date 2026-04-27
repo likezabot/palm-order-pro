@@ -173,23 +173,31 @@ export function createReceiptLayoutModel(
     blocks.push({ kind: "sep", bold: true });
   }
 
-  // 4. Info (mesa / garçom / data) — só faz sentido para dine_in / sem service_type
+  // 4. Info (mesa / garçom / data) — diferenciação por service_type
   const isDineIn = !input.serviceType || input.serviceType === "dine_in";
+  const isPickup = input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão";
   if (input.tableName && isDineIn) {
     blocks.push({ kind: "info", label: "Mesa", value: input.tableName });
+  } else if (isPickup) {
+    // Banner em destaque para retirada/balcão (não imprime "MESA")
+    blocks.push({ kind: "banner", text: "*** RETIRADA / BALCAO ***" });
+    blocks.push({ kind: "sep" });
+    if (input.tableName && !isBlank(input.tableName)) {
+      blocks.push({ kind: "info", label: "Pedido", value: input.tableName });
+    }
   } else if (input.tableName && !isDineIn) {
-    // pickup/balcão: mostra como "PEDIDO" em vez de "MESA"
     blocks.push({ kind: "info", label: "Pedido", value: input.tableName });
   }
-  if (v.waiter && input.waiterName && isDineIn) {
-    blocks.push({ kind: "info", label: "Garcom", value: input.waiterName });
+  // Garçom: só imprime se houver nome real (omite "N/A", vazio, "---")
+  if (v.waiter && isDineIn && !isBlank(input.waiterName)) {
+    blocks.push({ kind: "info", label: "Garcom", value: input.waiterName! });
   }
-  // Cliente / telefone para pickup/balcão
-  if (!isDineIn && input.customerName) {
-    blocks.push({ kind: "info", label: "Cliente", value: safe(input.customerName) });
+  // Cliente / telefone para pickup/balcão e não-dine-in (só se existirem)
+  if (!isDineIn && !isBlank(input.customerName)) {
+    blocks.push({ kind: "info", label: "Cliente", value: input.customerName! });
   }
-  if (!isDineIn && input.customerPhone) {
-    blocks.push({ kind: "info", label: "Telefone", value: safe(input.customerPhone) });
+  if (!isDineIn && !isBlank(input.customerPhone)) {
+    blocks.push({ kind: "info", label: "Telefone", value: input.customerPhone! });
   }
   if (v.date) {
     blocks.push({ kind: "info", label: "Data", value: `${date} ${time}` });
