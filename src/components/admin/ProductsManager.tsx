@@ -167,11 +167,6 @@ const ProductsManager = ({
 
   const renderGrid = (cat: string, list: Product[]) => (
     <div key={cat}>
-      {search && (
-        <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground px-1 mb-2 mt-3">
-          {CATEGORY_LABELS[cat]} <span className="opacity-60">({list.length})</span>
-        </h3>
-      )}
       {selectionMode ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {list.map((product) => (
