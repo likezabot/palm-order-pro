@@ -417,7 +417,38 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
       }
       case "info": {
         b.resetStyle().align(align).size(headerLarge, false);
-        b.bold(true).text(`${blk.label.toUpperCase()}: `).bold(false).line(blk.value);
+        if (blk.value) {
+          b.bold(true).text(`${blk.label.toUpperCase()}: `).bold(false).line(blk.value);
+        } else {
+          // Label sozinho (ex.: "ENDERECO:" antes de um addressBlock)
+          b.bold(true).line(`${blk.label.toUpperCase()}:`).bold(false);
+        }
+        b.resetStyle();
+        break;
+      }
+      case "addressBlock": {
+        b.resetStyle().align(align).bold(true);
+        for (const line of blk.lines) b.line(line);
+        b.resetStyle();
+        break;
+      }
+      case "noteBlock": {
+        b.resetStyle().align(align).bold(true).line(`${blk.label.toUpperCase()}:`).bold(false);
+        // quebra texto longo a cada `cols` chars
+        const txt = blk.text;
+        for (let i = 0; i < txt.length; i += cols) {
+          b.line(txt.slice(i, i + cols));
+        }
+        b.resetStyle();
+        break;
+      }
+      case "summaryRow": {
+        b.resetStyle().align("left");
+        if (blk.bold) b.bold(true).size(false, true);
+        const label = blk.label.toUpperCase();
+        const value = blk.value;
+        const padN = Math.max(1, cols - label.length - value.length);
+        b.line(label + " ".repeat(padN) + value);
         b.resetStyle();
         break;
       }
@@ -554,3 +585,48 @@ export function buildEscPosBill(
   );
   return renderLayout(layout.blocks, config);
 }
+
+export interface DeliveryPayloadInput {
+  items: ReceiptItem[];
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: import("./receipt-layout").DeliveryAddressData | null;
+  deliveryFee?: number | null;
+  discount?: number | null;
+  subtotal?: number | null;
+  total?: number | null;
+  paymentMethod?: string | null;
+  changeFor?: number | null;
+  generalNote?: string | null;
+  orderId?: string | null;
+  orderShortId?: string | null;
+  serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
+}
+
+export function buildEscPosDelivery(
+  input: DeliveryPayloadInput,
+  config: PrintConfig
+): Uint8Array {
+  const layout = createReceiptLayoutModel(
+    {
+      docType: "DELIVERY",
+      items: input.items,
+      total: input.total ?? undefined,
+      subtotal: input.subtotal ?? undefined,
+      deliveryFee: input.deliveryFee ?? undefined,
+      discount: input.discount ?? undefined,
+      paymentMethod: input.paymentMethod ?? undefined,
+      changeFor: input.changeFor ?? undefined,
+      customerName: input.customerName ?? undefined,
+      customerPhone: input.customerPhone ?? undefined,
+      deliveryAddress: input.deliveryAddress ?? undefined,
+      generalNote: input.generalNote ?? undefined,
+      orderId: input.orderId ?? undefined,
+      orderShortId: input.orderShortId ?? undefined,
+      serviceType: input.serviceType ?? "delivery",
+    },
+    config
+  );
+  return renderLayout(layout.blocks, config);
+}
+

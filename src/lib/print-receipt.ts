@@ -6,7 +6,15 @@
  */
 
 import { loadPrintConfig, savePrintConfig, type PaperWidth } from "./print-config";
-import { buildEscPosReceipt, buildEscPosDelta, buildEscPosBill, sendToBridge, renderLayout } from "./thermal-printer";
+import {
+  buildEscPosReceipt,
+  buildEscPosDelta,
+  buildEscPosBill,
+  buildEscPosDelivery,
+  sendToBridge,
+  renderLayout,
+  type DeliveryPayloadInput,
+} from "./thermal-printer";
 import { createReceiptLayoutModel, type LayoutBlock } from "./receipt-layout";
 import { buildHtmlFromLayout, buildHtmlFromBlocks } from "./receipt-html";
 import { doPrint } from "./print-iframe";
@@ -245,6 +253,38 @@ export async function printCustomerReceipt(
   }
 
   console.log("[print] Comprovante do cliente ignorado no modo browser.");
+  return false;
+}
+
+/**
+ * Impressão de pedido DELIVERY — modelo dedicado.
+ * Não usa "MESA"/"GARÇOM"; imprime cliente, telefone, endereço, bairro,
+ * referência, itens, subtotal/taxa/desconto/total, pagamento e troco.
+ */
+export async function printDelivery(
+  input: DeliveryPayloadInput,
+): Promise<boolean> {
+  const cfg = loadPrintConfig();
+  console.log(`[print] Preparando DELIVERY pedido ${input.orderShortId ?? input.orderId ?? "?"}. Modo: ${cfg.printMode}`);
+
+  if (cfg.printMode === "bridge") {
+    const payload = buildEscPosDelivery(input, cfg);
+    return await sendToBridge(payload, cfg.bridgeUrl);
+  }
+
+  // Browser: gera HTML pelo mesmo layout (não envia automaticamente p/ evitar PDF)
+  buildHtmlFromLayout(
+    "DELIVERY",
+    "Delivery",
+    {
+      items: input.items,
+      total: input.total ?? undefined,
+      orderId: input.orderId ?? undefined,
+      customerName: input.customerName ?? undefined,
+    },
+    cfg,
+  );
+  console.log("[print] Delivery ignorado no modo browser.");
   return false;
 }
 

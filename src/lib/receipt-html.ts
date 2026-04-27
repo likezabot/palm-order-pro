@@ -33,7 +33,26 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
         break;
       case "info":
         parts.push(
-          `<div class="info-row"><span class="info-label">${escapeHtml(blk.label)}:</span> <span class="info-value">${escapeHtml(blk.value)}</span></div>`
+          blk.value
+            ? `<div class="info-row"><span class="info-label">${escapeHtml(blk.label)}:</span> <span class="info-value">${escapeHtml(blk.value)}</span></div>`
+            : `<div class="info-row info-label-only"><span class="info-label">${escapeHtml(blk.label)}:</span></div>`
+        );
+        break;
+      case "addressBlock":
+        parts.push(
+          `<div class="address-block">${blk.lines
+            .map((l) => `<div class="address-line">${escapeHtml(l)}</div>`)
+            .join("")}</div>`
+        );
+        break;
+      case "noteBlock":
+        parts.push(
+          `<div class="note-block"><div class="note-block-label">${escapeHtml(blk.label)}:</div><div class="note-block-text">${escapeHtml(blk.text)}</div></div>`
+        );
+        break;
+      case "summaryRow":
+        parts.push(
+          `<div class="summary-row${blk.bold ? " summary-row-bold" : ""}"><span>${escapeHtml(blk.label)}</span><span>${escapeHtml(blk.value)}</span></div>`
         );
         break;
       case "item": {
@@ -183,6 +202,17 @@ export function thermalCSS(cfg: PrintConfig): string {
     }
     .footer { font-size: ${f.footer}px !important; text-align: center !important; margin-top: 8px !important; color: #555 !important; }
     .cut { text-align: center !important; font-size: 8px !important; color: #aaa !important; margin-top: 5mm !important; letter-spacing: 2px !important; }
+    .address-block { padding: 2px 0 4px 0 !important; text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important; font-size: ${f.base}px !important; font-weight: 700 !important; }
+    .address-line { display: block !important; word-break: break-word !important; padding: 1px 0 !important; }
+    .note-block { padding: 4px 0 !important; text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important; }
+    .note-block-label { font-weight: 900 !important; text-transform: uppercase !important; font-size: ${f.base - 1}px !important; }
+    .note-block-text { font-size: ${f.note}px !important; font-style: italic !important; word-break: break-word !important; }
+    .summary-row { display: flex !important; justify-content: space-between !important; align-items: baseline !important; padding: 2px 0 !important; font-size: ${f.base}px !important; gap: 8px !important; }
+    .summary-row span:first-child { font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
+    .summary-row span:last-child { font-weight: 700 !important; white-space: nowrap !important; }
+    .summary-row-bold { font-size: ${f.total}px !important; padding: 4px 0 !important; border-top: 1px dashed #000 !important; margin-top: 4px !important; }
+    .summary-row-bold span { font-weight: 900 !important; }
+    .info-label-only .info-label { display: block !important; padding-bottom: 1px !important; }
     @media print {
       html, body {
         width: ${paper} !important; max-width: ${paper} !important; min-width: ${paper} !important;
