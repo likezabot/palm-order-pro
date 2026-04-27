@@ -299,7 +299,9 @@ export async function autoPrintUpdate(order: {
 
   const { data: orderData } = await supabase
     .from("orders")
-    .select("delta_items, print_type, waiter_name, original_table_name")
+    .select(
+      "delta_items, print_type, waiter_name, original_table_name, service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for",
+    )
     .eq("id", order.id)
     .single();
 
@@ -308,8 +310,53 @@ export async function autoPrintUpdate(order: {
   const originalName =
     order.original_table_name ?? (orderData as any)?.original_table_name ?? null;
   const tableValue = formatPrintTableValue(order.table_name, originalName);
+  const serviceType = (orderData as any)?.service_type as string | null;
+  const isDelivery = serviceType === "delivery";
 
-  debugLog.info("print", `print_type=${printType ?? "(nulo)"} delta_items=${deltaItems?.length ?? 0}`);
+  debugLog.info(
+    "print",
+    `print_type=${printType ?? "(nulo)"} delta_items=${deltaItems?.length ?? 0} service_type=${serviceType ?? "-"}`,
+  );
+
+  // ----- Delivery: NUNCA usa template de mesa. Sempre re-imprime comanda completa. -----
+  if (isDelivery) {
+    const items = await fetchAllItems();
+    if (items.length === 0) {
+      await failPrint(order.id, "no_items");
+      return { printed: false, reason: "no_items" };
+    }
+    const subtotal = items.reduce(
+      (s, i) => s + Number(i.product_price) * Number(i.quantity),
+      0,
+    );
+    const cfg = await ensureFreshPrintConfig();
+    const deliveryInput: DeliveryPayloadInput = {
+      items,
+      customerName: (orderData as any)?.customer_name_snapshot ?? null,
+      customerPhone: (orderData as any)?.customer_phone_snapshot ?? null,
+      deliveryAddress: (orderData as any)?.delivery_address ?? null,
+      deliveryFee: Number((orderData as any)?.delivery_fee ?? 0),
+      subtotal,
+      total: order.total ?? subtotal + Number((orderData as any)?.delivery_fee ?? 0),
+      paymentMethod: (orderData as any)?.payment_method ?? null,
+      changeFor:
+        (orderData as any)?.change_for != null
+          ? Number((orderData as any).change_for)
+          : null,
+      orderId: order.id,
+      orderShortId: order.table_name?.replace(/^.*#/, "") || null,
+      serviceType: "delivery",
+    };
+    const ok = await printDelivery(deliveryInput);
+    if (ok) {
+      await completePrint(order.id);
+      return { printed: true, reason: "delivery_update_success" };
+    }
+    const payload = buildEscPosDelivery(deliveryInput, cfg);
+    await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
+    await deferPrint(order.id);
+    return { printed: false, reason: "bridge_offline_queued" };
+  }
 
   const fetchAllItems = async (): Promise<PrintableItem[]> => {
     for (let attempt = 0; attempt < 6; attempt++) {
