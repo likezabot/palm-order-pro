@@ -163,7 +163,7 @@ export default function ProductCard({
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
           "group relative flex w-full flex-col text-left overflow-hidden rounded-xl border border-border/60 bg-card transition-all duration-300",
-          "shadow-[var(--shadow-warm)]",
+          shadowClass,
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 hover:-translate-y-0.5 active:scale-[0.99]",
@@ -214,7 +214,7 @@ export default function ProductCard({
       onClick={interactive ? () => onClick!(product) : undefined}
       className={cn(
         "group relative flex w-full text-left items-stretch gap-3 rounded-xl border border-border/60 bg-card p-2.5 transition-all duration-200",
-        "shadow-[var(--shadow-warm)]",
+        shadowClass,
         isBlocked
           ? "opacity-60 cursor-not-allowed"
           : "hover:border-primary/40 active:scale-[0.99]",
