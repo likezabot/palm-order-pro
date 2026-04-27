@@ -255,3 +255,44 @@ describe("Cálculo do total no DELIVERY", () => {
     expect(text).not.toContain("N/A");
   });
 });
+
+describe("validateDeliveryFields — pré-validação manual", () => {
+  it("retorna vazio quando todos os campos essenciais estão presentes", () => {
+    const missing = validateDeliveryFields({
+      customerName: "Joao",
+      customerPhone: "67999999999",
+      deliveryAddress: { street: "Rua A", number: "123", neighborhood: "Centro" },
+      paymentMethod: "pix",
+    });
+    expect(missing).toEqual([]);
+  });
+
+  it("lista todos os campos faltantes quando nada é fornecido", () => {
+    const missing = validateDeliveryFields({});
+    expect(missing).toContain("nome do cliente");
+    expect(missing).toContain("telefone");
+    expect(missing).toContain("endereço");
+    expect(missing).toContain("bairro");
+    expect(missing).toContain("forma de pagamento");
+  });
+
+  it("trata 'N/A' / '---' / vazio como campos faltantes", () => {
+    const missing = validateDeliveryFields({
+      customerName: "N/A",
+      customerPhone: "---",
+      deliveryAddress: { street: "", neighborhood: "  " },
+      paymentMethod: null,
+    });
+    expect(missing.length).toBe(5);
+  });
+
+  it("aceita apenas alguns campos faltando", () => {
+    const missing = validateDeliveryFields({
+      customerName: "Maria",
+      customerPhone: "67988887777",
+      deliveryAddress: { street: "Rua B", neighborhood: "" }, // bairro faltando
+      paymentMethod: "cash",
+    });
+    expect(missing).toEqual(["bairro"]);
+  });
+});
