@@ -422,31 +422,31 @@ const Pdv = () => {
         <div className="overflow-y-auto p-3 sm:p-4 space-y-6 border-r border-border">
           {/* SEÇÃO ENTREGAS */}
           <section className="space-y-3">
-            <div className="flex items-center justify-between gap-2 px-1 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Bike className="w-5 h-5 text-orange-400" />
-                <h2 className="text-sm font-black uppercase tracking-wider text-orange-400">
-                  Entregas / Retiradas <span className="text-muted-foreground">({filteredDeliveries.length}{deliveryItemsTotal > 0 ? ` · ${deliveryItemsTotal} ${deliveryItemsTotal === 1 ? "item" : "itens"}` : ""})</span>
-                </h2>
+            <div className="flex items-center justify-between gap-4 px-1">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="h-px flex-1 bg-orange-500/30" />
+                <div className="flex items-center gap-2 text-orange-400">
+                  <Bike className="w-5 h-5 shrink-0" />
+                  <span className="text-[10px] font-black">{filteredDeliveries.length}</span>
+                </div>
+                <div className="h-px flex-1 bg-orange-500/30" />
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
+
+              <div className="flex items-center gap-2 shrink-0">
                 {unseenOnlineDelivery.length > 0 && (
                   <>
                     <span
-                      className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white animate-pulse-active"
+                      className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white animate-pulse-active"
                       role="status"
-                      aria-live="polite"
                     >
                       🔔 {unseenOnlineDelivery.length} nova{unseenOnlineDelivery.length > 1 ? "s" : ""}
                     </span>
                     <button
                       type="button"
                       onClick={muteSiren}
-                      title="Silenciar alerta sonoro desta(s) entrega(s)"
-                      aria-label="Silenciar alerta sonoro das entregas online novas"
-                      className="inline-flex items-center gap-1 min-h-[36px] rounded-lg border-2 border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1 text-[10px] font-bold text-foreground hover:bg-secondary active:scale-95 transition-all"
                     >
-                      <BellOff className="w-4 h-4" aria-hidden="true" />
+                      <BellOff className="w-3 h-3" />
                       Silenciar
                     </button>
                   </>
@@ -455,40 +455,18 @@ const Pdv = () => {
                   <button
                     type="button"
                     onClick={unlockSiren}
-                    title="O navegador bloqueou o som — toque para liberar"
-                    aria-label="Ativar som de alertas (o navegador bloqueou o áudio)"
-                    className="inline-flex items-center gap-1.5 min-h-[40px] rounded-lg border-2 border-warning bg-warning px-3 py-1.5 text-xs font-black uppercase tracking-wide text-warning-foreground hover:brightness-110 active:scale-95 transition-all animate-pulse-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="inline-flex items-center gap-1 rounded-lg border border-warning bg-warning px-2 py-1 text-[10px] font-black uppercase text-warning-foreground hover:brightness-110 active:scale-95 transition-all animate-pulse-active"
                   >
-                    <Volume2 className="w-4 h-4" aria-hidden="true" />
-                    Ativar som de alertas
+                    <Volume2 className="w-3 h-3" />
+                    Som
                   </button>
                 )}
               </div>
             </div>
-            {/* Filtro por tipo - Entregas */}
-            <div className="flex items-center gap-1.5 flex-wrap px-1">
-              <Filter className="w-3 h-3 text-muted-foreground" />
-              {([
-                { id: "all", label: "Todos" },
-                { id: "delivery", label: "Delivery" },
-                { id: "pickup", label: "Retirada" },
-              ] as const).map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setDeliveryFilter(f.id)}
-                  className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border transition-colors ${
-                    deliveryFilter === f.id
-                      ? "border-orange-400 bg-orange-400/15 text-orange-400"
-                      : "border-border bg-card text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+
             {filteredDeliveries.length === 0 ? (
-              <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
-                {deliveryOrders.length === 0 ? "Nenhuma entrega/retirada no momento." : "Nenhum pedido com esse filtro."}
+              <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg text-center">
+                Nenhuma entrega no momento.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
