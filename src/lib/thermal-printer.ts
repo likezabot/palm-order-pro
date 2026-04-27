@@ -568,6 +568,19 @@ export function buildEscPosReceipt(
   config: PrintConfig,
   extras: ReceiptExtras = {}
 ): Uint8Array {
+  assertLegacyReceiptAllowed("buildEscPosReceipt", extras);
+  logPrintEngine({
+    functionName: "buildEscPosReceipt",
+    serviceType: extras.serviceType ?? null,
+    tableName,
+    headerText: config.headerText,
+    footerText: config.footerText,
+    paperWidth: config.paperWidth,
+    configMeta: {
+      updatedAt: config.configUpdatedAt ?? null,
+      source: config.configSource ?? null,
+    },
+  });
   const layout = createReceiptLayoutModel(
     {
       docType: "PEDIDO",
