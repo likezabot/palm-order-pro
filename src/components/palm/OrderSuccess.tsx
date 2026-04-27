@@ -93,6 +93,7 @@ const OrderSuccess = ({
           customerName,
           total,
           force,
+          source: force ? "manual" : "auto",
         });
         if (timedOut) return;
         if (!mountedRef.current) return;
