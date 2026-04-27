@@ -12,6 +12,7 @@ import {
   type ReceiptItem,
 } from "./receipt-layout";
 import { debugLog } from "./debug-logger";
+import { logPrintEngine } from "./print-engine";
 
 // ESC/POS Commands
 const ESC = 27;
