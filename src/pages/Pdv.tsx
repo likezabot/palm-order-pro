@@ -866,6 +866,7 @@ const Pdv = () => {
                 <span className="absolute left-3 top-3 text-muted-foreground font-bold">R$</span>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   placeholder="0,00"
                   value={partialAmount}
