@@ -81,7 +81,7 @@ const BulkActionsBar = ({ count, onShow, onHide, onAdjustPrice, onCancel }: Prop
           <div className="space-y-2">
             <Label>Novo preço (R$) para os {count} itens</Label>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               step="0.01"
               min="0"
               value={fixedValue}

@@ -177,7 +177,7 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         <div>
           <label className="text-sm font-semibold text-muted-foreground mb-1 block">Preço (R$)</label>
           <input
-            type="number"
+            type="number" inputMode="decimal"
             step="0.01"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
