@@ -8,7 +8,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
 import { formatPrintTableValue } from "@/lib/utils";
-import { loadPrintConfig } from "@/lib/print-config";
+import { loadPrintConfig, ensureFreshPrintConfig } from "@/lib/print-config";
 import {
   buildEscPosReceipt,
   buildEscPosDelta,
