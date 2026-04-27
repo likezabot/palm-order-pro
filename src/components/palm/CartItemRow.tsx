@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { Minus, Plus, Trash2, Lock } from "lucide-react";
+import { Minus, Plus, Trash2 } from "lucide-react";
 import { CartItem } from "@/lib/types";
 import { useFeedback } from "@/hooks/use-feedback";
 import { ConfirmRemoveDialog } from "./ConfirmRemoveDialog";
@@ -87,7 +87,7 @@ const CartItemRow = ({
             title={!canDecrement ? "Item já enviado — não pode ser removido aqui" : undefined}
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground active:scale-90 transition-transform disabled:opacity-40 disabled:active:scale-100 disabled:cursor-not-allowed"
           >
-            {canDecrement ? <Minus size={18} /> : <Lock size={14} />}
+            <Minus size={18} />
           </button>
           <span className="text-lg font-bold w-6 text-center tabular-nums">{item.quantity}</span>
           <button
