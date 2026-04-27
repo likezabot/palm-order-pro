@@ -544,15 +544,31 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
 // API pública (mantém assinaturas usadas pelo print-receipt.ts)
 // ============================================================
 
+export interface ReceiptExtras {
+  serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+}
+
 export function buildEscPosReceipt(
   tableName: string,
   waiterName: string,
   items: ReceiptItem[],
   total: number,
-  config: PrintConfig
+  config: PrintConfig,
+  extras: ReceiptExtras = {}
 ): Uint8Array {
   const layout = createReceiptLayoutModel(
-    { docType: "PEDIDO", tableName, waiterName, items, total },
+    {
+      docType: "PEDIDO",
+      tableName,
+      waiterName,
+      items,
+      total,
+      serviceType: extras.serviceType ?? undefined,
+      customerName: extras.customerName ?? undefined,
+      customerPhone: extras.customerPhone ?? undefined,
+    },
     config
   );
   return renderLayout(layout.blocks, config);
@@ -562,11 +578,21 @@ export function buildEscPosDelta(
   tableName: string,
   waiterName: string,
   items: ReceiptItem[],
-  config: PrintConfig
+  config: PrintConfig,
+  extras: ReceiptExtras = {}
 ): Uint8Array {
   const total = items.reduce((s, i) => s + i.product_price * i.quantity, 0);
   const layout = createReceiptLayoutModel(
-    { docType: "ACRESCIMO", tableName, waiterName, items, total },
+    {
+      docType: "ACRESCIMO",
+      tableName,
+      waiterName,
+      items,
+      total,
+      serviceType: extras.serviceType ?? undefined,
+      customerName: extras.customerName ?? undefined,
+      customerPhone: extras.customerPhone ?? undefined,
+    },
     config
   );
   return renderLayout(layout.blocks, config);
@@ -577,10 +603,20 @@ export function buildEscPosBill(
   waiterName: string,
   items: ReceiptItem[],
   total: number,
-  config: PrintConfig
+  config: PrintConfig,
+  extras: ReceiptExtras = {}
 ): Uint8Array {
   const layout = createReceiptLayoutModel(
-    { docType: "CONTA", tableName, waiterName, items, total },
+    {
+      docType: "CONTA",
+      tableName,
+      waiterName,
+      items,
+      total,
+      serviceType: extras.serviceType ?? undefined,
+      customerName: extras.customerName ?? undefined,
+      customerPhone: extras.customerPhone ?? undefined,
+    },
     config
   );
   return renderLayout(layout.blocks, config);
