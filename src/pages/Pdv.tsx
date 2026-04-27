@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff, Users, Split } from "lucide-react";
+import { ArrowLeft, Printer, DollarSign, AlertCircle, Banknote, CreditCard, QrCode, CheckCircle2, FilePlus, FileText, Receipt, User, Eye, EyeOff, Pencil, Bike, ShoppingBag, UtensilsCrossed, Wifi, MapPin, Phone, Wallet, Volume2, VolumeX, BellOff, Users, Split, X, Filter } from "lucide-react";
+import { CancelOrderDialog } from "@/components/pdv/CancelOrderDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +60,14 @@ const Pdv = () => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("pdv-staff-mode") === "1";
   });
+
+  // Cancelamento de pedido
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+
+  // Filtros por tipo (cada seção)
+  type KindFilter = "all" | "dine_in" | "counter" | "delivery" | "pickup";
+  const [tablesFilter, setTablesFilter] = useState<KindFilter>("all");
+  const [deliveryFilter, setDeliveryFilter] = useState<KindFilter>("all");
 
   // Novos estados para dividir conta
   const [showSplitModal, setShowSplitModal] = useState(false);
@@ -169,6 +178,7 @@ const Pdv = () => {
   }, [selectedId, orders]);
 
   // Separa em MESAS (dine_in/balcão) e ENTREGAS (delivery + pickup)
+  // Ordenação: críticos (>25min) primeiro, depois por horário
   const { tablesOrders, deliveryOrders } = useMemo(() => {
     const tablesOrders: Order[] = [];
     const deliveryOrders: Order[] = [];
@@ -176,11 +186,50 @@ const Pdv = () => {
       if (getOrderGroup(o) === "delivery") deliveryOrders.push(o);
       else tablesOrders.push(o);
     }
-    const byCreated = (a: Order, b: Order) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    tablesOrders.sort(byCreated);
-    deliveryOrders.sort(byCreated);
+    const sortFn = (a: Order, b: Order) => {
+      const stageA = Date.now() - new Date(a.updated_at || a.created_at).getTime();
+      const stageB = Date.now() - new Date(b.updated_at || b.created_at).getTime();
+      const critA = stageA >= 25 * 60000 ? 1 : 0;
+      const critB = stageB >= 25 * 60000 ? 1 : 0;
+      if (critA !== critB) return critB - critA;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    };
+    tablesOrders.sort(sortFn);
+    deliveryOrders.sort(sortFn);
     return { tablesOrders, deliveryOrders };
   }, [orders]);
+
+  // Aplica filtros por tipo
+  const filteredTables = useMemo(
+    () => tablesFilter === "all" ? tablesOrders : tablesOrders.filter((o) => getOrderKind(o) === tablesFilter),
+    [tablesOrders, tablesFilter]
+  );
+  const filteredDeliveries = useMemo(
+    () => deliveryFilter === "all" ? deliveryOrders : deliveryOrders.filter((o) => getOrderKind(o) === deliveryFilter),
+    [deliveryOrders, deliveryFilter]
+  );
+
+  // Contagem de itens por seção
+  const tablesItemsTotal = useMemo(
+    () => filteredTables.reduce((sum, o) => sum + ((o as any).item_count || 0), 0),
+    [filteredTables]
+  );
+  const deliveryItemsTotal = useMemo(
+    () => filteredDeliveries.reduce((sum, o) => sum + ((o as any).item_count || 0), 0),
+    [filteredDeliveries]
+  );
+
+  // Atalho ESC fecha painel direito
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedId) {
+        setSelectedId(null);
+        setShowPayment(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId]);
 
   // Pedidos online de entrega não visualizados → disparam sirene
   const { isSeen, markSeen } = useSeenOrders();
@@ -388,7 +437,7 @@ const Pdv = () => {
               <div className="flex items-center gap-2">
                 <Bike className="w-5 h-5 text-orange-400" />
                 <h2 className="text-sm font-black uppercase tracking-wider text-orange-400">
-                  Entregas / Retiradas <span className="text-muted-foreground">({deliveryOrders.length})</span>
+                  Entregas / Retiradas <span className="text-muted-foreground">({filteredDeliveries.length}{deliveryItemsTotal > 0 ? ` · ${deliveryItemsTotal} ${deliveryItemsTotal === 1 ? "item" : "itens"}` : ""})</span>
                 </h2>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -427,13 +476,34 @@ const Pdv = () => {
                 )}
               </div>
             </div>
-            {deliveryOrders.length === 0 ? (
+            {/* Filtro por tipo - Entregas */}
+            <div className="flex items-center gap-1.5 flex-wrap px-1">
+              <Filter className="w-3 h-3 text-muted-foreground" />
+              {([
+                { id: "all", label: "Todos" },
+                { id: "delivery", label: "Delivery" },
+                { id: "pickup", label: "Retirada" },
+              ] as const).map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setDeliveryFilter(f.id)}
+                  className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border transition-colors ${
+                    deliveryFilter === f.id
+                      ? "border-orange-400 bg-orange-400/15 text-orange-400"
+                      : "border-border bg-card text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {filteredDeliveries.length === 0 ? (
               <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
-                Nenhuma entrega/retirada no momento.
+                {deliveryOrders.length === 0 ? "Nenhuma entrega/retirada no momento." : "Nenhum pedido com esse filtro."}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 auto-rows-fr">
-                {deliveryOrders.map((order) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                {filteredDeliveries.map((order) => (
                   <OrderRow
                     key={order.id}
                     order={order}
@@ -450,6 +520,7 @@ const Pdv = () => {
                     onPrint={handlePrint}
                     onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
+                    onCancel={(o) => setCancelTarget(o)}
                   />
                 ))}
               </div>
@@ -461,16 +532,37 @@ const Pdv = () => {
             <div className="flex items-center gap-2 px-1">
               <UtensilsCrossed className="w-5 h-5 text-purple-400" />
               <h2 className="text-sm font-black uppercase tracking-wider text-purple-400">
-                Mesas / Balcão <span className="text-muted-foreground">({tablesOrders.length})</span>
+                Mesas / Balcão <span className="text-muted-foreground">({filteredTables.length}{tablesItemsTotal > 0 ? ` · ${tablesItemsTotal} ${tablesItemsTotal === 1 ? "item" : "itens"}` : ""})</span>
               </h2>
             </div>
-            {tablesOrders.length === 0 ? (
+            {/* Filtro por tipo - Mesas */}
+            <div className="flex items-center gap-1.5 flex-wrap px-1">
+              <Filter className="w-3 h-3 text-muted-foreground" />
+              {([
+                { id: "all", label: "Todos" },
+                { id: "dine_in", label: "Mesa" },
+                { id: "counter", label: "Balcão" },
+              ] as const).map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setTablesFilter(f.id)}
+                  className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border transition-colors ${
+                    tablesFilter === f.id
+                      ? "border-purple-400 bg-purple-400/15 text-purple-400"
+                      : "border-border bg-card text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {filteredTables.length === 0 ? (
               <div className="text-sm text-muted-foreground italic px-3 py-4 border border-dashed border-border rounded-lg">
-                Nenhuma mesa aberta no momento.
+                {tablesOrders.length === 0 ? "Nenhuma mesa aberta no momento." : "Nenhum pedido com esse filtro."}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-fr">
-                {tablesOrders.map((order) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                {filteredTables.map((order) => (
                   <OrderRow
                     key={order.id}
                     order={order}
@@ -481,6 +573,7 @@ const Pdv = () => {
                     onPrint={handlePrint}
                     onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setPaymentsHistory([]); }}
+                    onCancel={(o) => setCancelTarget(o)}
                   />
                 ))}
               </div>
@@ -704,33 +797,46 @@ const Pdv = () => {
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-2">
+              {/* Linha 1: ações secundárias */}
+              <div className="grid grid-cols-3 gap-2 pt-2">
                 <button
                   onClick={() => handlePrint(selectedOrder)}
-                  className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-4 py-3 font-bold text-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  className="rounded-lg border border-border bg-card px-2 py-2.5 font-bold text-sm text-foreground active:scale-95 transition-transform flex items-center justify-center gap-1.5"
                 >
-                  <Printer size={18} /> Imprimir
+                  <Printer size={16} /> Imprimir
                 </button>
                 <button
                   onClick={() => navigate(`/palm?orderId=${selectedOrder.id}&tableName=${selectedOrder.table_name}`)}
-                  className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-4 py-3 font-bold text-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  disabled={selectedOrder.status === "done"}
+                  title={selectedOrder.status === "done" ? "Pedido pronto — avance o status para reabrir e editar" : "Adicionar/remover itens"}
+                  className="rounded-lg border border-border bg-card px-2 py-2.5 font-bold text-sm text-foreground active:scale-95 transition-transform flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Pencil size={18} /> Editar
+                  <Pencil size={16} /> Editar
                 </button>
+                <button
+                  onClick={() => setCancelTarget(selectedOrder)}
+                  className="rounded-lg border border-destructive/40 bg-destructive/5 px-2 py-2.5 font-bold text-sm text-destructive hover:bg-destructive/10 active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+                  title="Cancelar pedido"
+                >
+                  <X size={16} /> Cancelar
+                </button>
+              </div>
+              {/* Linha 2: ação principal */}
+              <div className="pt-1">
                 {selectedOrder.status !== "done" && (
                   <button
                     onClick={() => handleAdvance(selectedOrder)}
-                    className="flex-1 min-w-[100px] rounded-lg bg-success px-4 py-3 font-bold text-success-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                    className="w-full rounded-lg bg-success px-4 py-3.5 font-black text-success-foreground active:scale-95 transition-transform flex items-center justify-center gap-2 min-h-[56px]"
                   >
-                    <CheckCircle2 size={18} /> {statusConfig[selectedOrder.status]?.nextLabel || "Avançar"}
+                    <CheckCircle2 size={20} /> {statusConfig[selectedOrder.status]?.nextLabel || "Avançar"}
                   </button>
                 )}
                 {selectedOrder.status === "done" && (
                   <button
                     onClick={() => setShowPayment(true)}
-                    className="flex-1 min-w-[100px] rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-3 font-bold text-primary-foreground active:scale-95 transition-transform flex items-center justify-center gap-2"
+                    className="w-full rounded-lg bg-gradient-to-r from-primary to-primary/80 px-4 py-3.5 font-black text-primary-foreground active:scale-95 transition-transform flex items-center justify-center gap-2 min-h-[56px]"
                   >
-                    <DollarSign size={18} /> FECHAR MESA
+                    <DollarSign size={20} /> FECHAR MESA
                   </button>
                 )}
               </div>
@@ -921,6 +1027,21 @@ const Pdv = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal: Cancelar pedido */}
+      <CancelOrderDialog
+        order={cancelTarget}
+        open={!!cancelTarget}
+        onOpenChange={(o) => { if (!o) setCancelTarget(null); }}
+        onCancelled={() => {
+          queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+          if (cancelTarget && selectedId === cancelTarget.id) {
+            setSelectedId(null);
+            setShowPayment(false);
+          }
+          setCancelTarget(null);
+        }}
+      />
     </div>
   );
 };

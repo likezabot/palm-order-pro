@@ -1,5 +1,5 @@
 import { forwardRef, memo } from "react";
-import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed, Bike, ShoppingBag, Wifi } from "lucide-react";
+import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed, Bike, ShoppingBag, Wifi, X } from "lucide-react";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
 import { usePrintJobsStatus } from "@/hooks/use-print-jobs-status";
@@ -9,7 +9,7 @@ import type { Order } from "@/lib/types";
 
 const STATUS_LABEL: Record<string, string> = {
   new: "AGUARDANDO",
-  preparing: "EM PREPARO",
+  preparing: "PREPARO",
   done: "PRONTO",
 };
 
@@ -26,8 +26,8 @@ const NEXT_STATUS: Record<string, string | null> = {
 };
 
 const ADVANCE_LABEL: Record<string, string> = {
-  new: "▶ PREPARAR",
-  preparing: "✅ PRONTO",
+  new: "▶",
+  preparing: "✓",
 };
 
 const ADVANCE_BTN: Record<string, string> = {
@@ -40,20 +40,15 @@ interface OrderRowProps {
   itemCount: number;
   selected: boolean;
   onSelect: () => void;
-  /** Avança status (1 clique). Se omitido, botão de avanço some. */
   onAdvance?: (order: Order) => void;
-  /** Imprimir cupom (opcional). */
   onPrint?: (order: Order) => void;
-  /** Editar pedido (opcional). */
   onEdit?: (order: Order) => void;
-  /** Quando status === "done", o que fazer (ex: abrir pagamento). Default = onSelect. */
   onClose?: (order: Order) => void;
-  /** Se true, marca o card como "novo / não visualizado" (entrega online). */
+  onCancel?: (order: Order) => void;
   isUnseen?: boolean;
 }
 
-const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose, isUnseen }, ref) => {
-  // Cronômetro do TEMPO NA ETAPA ATUAL (updated_at)
+const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose, onCancel, isUnseen }, ref) => {
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const { get: getJobInfo } = usePrintJobsStatus();
   const jobInfo = getJobInfo(order.id);
@@ -63,7 +58,6 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
   const kind = getOrderKind(order);
   const online = isOnlineOrder(order);
 
-  // Urgência baseada em tempo na etapa atual
   const stageMs = Date.now() - new Date(order.updated_at || order.created_at).getTime();
   const stageMin = Math.floor(stageMs / 60000);
   const isCritical = stageMin >= 25;
@@ -81,14 +75,11 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
-  // Texto do tempo padronizado: "Em preparo há 2 min" / "Pronto há 6 min"
   const getTimeLabel = () => {
     if (!elapsed || elapsed === "agora") return "agora";
-    const statusText = status === "new" ? "Aguardando" : status === "preparing" ? "Em preparo" : "Pronto";
-    return `${statusText} há ${elapsed}`;
+    return `${elapsed}`;
   };
 
-  // Título: cliente para online; mesa/balcão para os demais.
   const title = online && order.customer_name_snapshot
     ? order.customer_name_snapshot
     : formatTableLabel(order.table_name, order.original_table_name);
@@ -99,7 +90,7 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
     <div
       ref={ref}
       onClick={onSelect}
-      className={`relative flex flex-col p-3 rounded-xl border-l-4 border-2 ${borderAccent} transition-all cursor-pointer ${
+      className={`group relative flex flex-col h-[148px] p-2.5 rounded-xl border-l-4 border-2 ${borderAccent} transition-all cursor-pointer overflow-hidden ${
         selected
           ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.3)]"
           : isUnseen
@@ -117,110 +108,107 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
       }
     >
       {isUnseen && (
-        <span className="absolute -top-2 -right-2 z-10 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-lg">
+        <span className="absolute -top-1.5 -right-1.5 z-10 rounded-full bg-orange-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-lg">
           NOVO
         </span>
       )}
 
+      {/* Botão cancelar discreto (canto sup. direito, aparece em hover) */}
+      {onCancel && status !== "done" && (
+        <button
+          onClick={(e) => { stop(e); onCancel(order); }}
+          className="absolute top-1 right-1 z-10 p-1 rounded-md text-muted-foreground hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+          title="Cancelar pedido"
+          aria-label="Cancelar pedido"
+        >
+          <X size={14} />
+        </button>
+      )}
+
       {/* Header: Título + Status */}
-      <div className="flex items-start justify-between gap-2 min-w-0">
+      <div className="flex items-start justify-between gap-1.5 min-w-0">
         <div className="min-w-0 flex-1">
-          <div className="font-black text-xl leading-tight break-words flex items-center gap-1.5">
+          <div className="font-black text-base leading-tight truncate flex items-center gap-1">
             <span className="truncate">{title}</span>
             {order.served_at && (
-              <span
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-success/15 text-success border border-success/30 shrink-0"
-                title={`Servido às ${new Date(order.served_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
+              <UtensilsCrossed
+                className="w-3 h-3 text-success shrink-0"
                 aria-label="Pedido servido"
-              >
-                <UtensilsCrossed className="w-3 h-3" />
-              </span>
+              />
             )}
           </div>
-          {/* Sub-linha: badges de tipo + canal */}
-          <div className="mt-1 flex items-center gap-1 flex-wrap">
-            <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${KIND_BADGE_CLASS[kind]}`}>
-              {KindIcon && <KindIcon className="w-3 h-3" />}
-              {KIND_LABEL[kind]}
+          <div className="mt-0.5 flex items-center gap-1 flex-wrap">
+            <span className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[9px] font-black uppercase tracking-wide ${KIND_BADGE_CLASS[kind]}`}>
+              {KindIcon && <KindIcon className="w-2.5 h-2.5" />}
+              {online ? "ONLINE" : KIND_LABEL[kind]}
             </span>
-            {online && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-orange-400">
-                <Wifi className="w-3 h-3" />
-                ONLINE
-              </span>
-            )}
-            {online && order.customer_name_snapshot && (
-              <span className="text-[10px] font-bold text-muted-foreground">
-                {formatTableLabel(order.table_name, order.original_table_name)}
-              </span>
-            )}
+            <span className={`inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
+              {STATUS_LABEL[status] || status.toUpperCase()}
+            </span>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
-            {STATUS_LABEL[status] || status.toUpperCase()}
+      </div>
+
+      {/* Info compacta */}
+      <div className="flex-1 flex flex-col justify-center gap-0.5 py-0.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 min-w-0 truncate">
+            <Users className="w-3 h-3 shrink-0" />
+            <span className="truncate font-medium text-foreground/80">{order.waiter_name || "—"}</span>
           </span>
+          <span className="inline-flex items-center gap-1 shrink-0">
+            <Package className="w-3 h-3" />
+            <span>{itemCount}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 shrink-0">
+            <Clock className="w-3 h-3" />
+            <span className="font-medium text-foreground">{getTimeLabel()}</span>
+          </span>
+        </div>
+        <div className="flex items-center justify-end">
           <PrintStatusBadge jobInfo={jobInfo} legacyStatus={order.print_status} />
         </div>
       </div>
 
-      {/* Info central compacta */}
-      <div className="flex-1 flex flex-col justify-center gap-1 py-1">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1 min-w-0">
-            <Users className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate font-medium text-foreground/80">{order.waiter_name || "—"}</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Package className="w-3.5 h-3.5 shrink-0" />
-            <span>{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="w-3.5 h-3.5 shrink-0" />
-          <span className="font-medium text-foreground">{getTimeLabel()}</span>
-        </div>
-      </div>
-
       {/* Base: valor + ações */}
-      <div className="flex items-end justify-between gap-2 pt-2 border-t border-border/50">
-        <div className="font-black text-2xl text-primary leading-none">R$ {(order.total || 0).toFixed(2)}</div>
-        <div className="flex items-center gap-1" onClick={stop}>
+      <div className="flex items-end justify-between gap-1 pt-1.5 border-t border-border/50">
+        <div className="font-black text-lg text-primary leading-none">R$ {(order.total || 0).toFixed(2)}</div>
+        <div className="flex items-center gap-0.5" onClick={stop}>
           {onPrint && (
             <button
               onClick={(e) => { stop(e); onPrint(order); }}
-              className="p-2 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0 hover:bg-secondary/80"
+              className="p-1.5 rounded-md bg-secondary text-foreground active:scale-95 transition-transform shrink-0 hover:bg-secondary/80"
               title="Imprimir"
               aria-label="Imprimir"
             >
-              <Printer size={16} />
+              <Printer size={13} />
             </button>
           )}
-          {onEdit && (
+          {onEdit && status !== "done" && (
             <button
               onClick={(e) => { stop(e); onEdit(order); }}
-              className="p-2 rounded-lg bg-secondary text-foreground active:scale-95 transition-transform shrink-0 hover:bg-secondary/80"
-              title="Editar"
-              aria-label="Editar"
+              className="p-1.5 rounded-md bg-secondary text-foreground active:scale-95 transition-transform shrink-0 hover:bg-secondary/80"
+              title="Editar itens"
+              aria-label="Editar itens"
             >
-              <Pencil size={16} />
+              <Pencil size={13} />
             </button>
           )}
           {next && onAdvance ? (
             <button
               onClick={(e) => { stop(e); onAdvance(order); }}
-              className={`rounded-lg px-3 py-2 font-black text-xs tracking-wide active:scale-95 transition-transform min-h-[36px] ${ADVANCE_BTN[status] || "bg-secondary text-foreground"}`}
+              className={`rounded-md px-2.5 py-1.5 font-black text-xs tracking-wide active:scale-95 transition-transform min-h-[28px] ${ADVANCE_BTN[status] || "bg-secondary text-foreground"}`}
               title={`Avançar para ${STATUS_LABEL[next]}`}
               aria-label="Avançar status"
             >
-              {ADVANCE_LABEL[status] || <ChevronRight size={16} />}
+              {ADVANCE_LABEL[status] || <ChevronRight size={13} />}
             </button>
           ) : status === "done" && onClose ? (
             <button
               onClick={(e) => { stop(e); onClose(order); }}
-              className="rounded-lg bg-gradient-to-r from-primary to-primary/80 px-3 py-2 font-black text-xs tracking-wide text-primary-foreground active:scale-95 transition-transform min-h-[36px]"
+              className="rounded-md bg-gradient-to-r from-primary to-primary/80 px-2.5 py-1.5 font-black text-xs tracking-wide text-primary-foreground active:scale-95 transition-transform min-h-[28px] flex items-center gap-1"
             >
-              <DollarSign size={14} className="inline mr-1" /> FECHAR
+              <DollarSign size={12} /> FECHAR
             </button>
           ) : null}
         </div>
