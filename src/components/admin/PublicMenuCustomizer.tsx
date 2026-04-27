@@ -24,6 +24,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Loader2,
   Copy,
   ExternalLink,
@@ -34,6 +40,10 @@ import {
   Smartphone,
   Monitor,
   Image as ImageIcon,
+  Palette,
+  Home,
+  LayoutGrid,
+  ListTree,
 } from "lucide-react";
 import {
   DndContext,
