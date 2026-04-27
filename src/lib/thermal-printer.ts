@@ -153,7 +153,7 @@ export async function checkBridgeStatus(
     return cached.result;
   }
 
-  const healthUrl = bridgeHealthUrl(url);
+  const healthUrl = bridgeHealthUrl(url, forceBypass);
   const t0 = performance.now();
   const cacheResult = (result: BridgeHealth) => {
     _bridgeStatusCache.set(url, { at: Date.now(), result });
@@ -161,7 +161,7 @@ export async function checkBridgeStatus(
   };
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 1500);
+    const id = setTimeout(() => controller.abort(), 2000); 
 
     const response = await fetch(healthUrl, { signal: controller.signal, cache: "no-cache" });
     clearTimeout(id);
@@ -173,18 +173,23 @@ export async function checkBridgeStatus(
     }
 
     const data = await response.json();
-    // Compat: bridge v1.x usa printer_connected, v2.2 usa printer_ok / printer_ready.
+    
+    // REQUISITO: Se retornar online=true, printer_ok=true ou printer_connected=true, considerar online.
+    const isOnline = !!(data.online === true || data.ok === true || data.status === "ok");
     const printerOk = !!(
-      data.printer_connected ??
-      data.printer_ok ??
-      data.printer_ready ??
+      data.printer_connected === true ||
+      data.printer_ok === true ||
+      data.printer_ready === true ||
       (typeof data.printer_name === "string" && data.printer_name.length > 0)
     );
-    debugLog[printerOk ? "success" : "warn"]("bridge", `health OK em ${ms}ms — printer=${printerOk}`, { url: healthUrl });
+
+    const reallyOnline = isOnline || printerOk;
+    debugLog[reallyOnline ? "success" : "warn"]("bridge", `health OK em ${ms}ms — online=${isOnline}, printer=${printerOk}`, { url: healthUrl });
+
     return cacheResult({
-      online: true,
+      online: reallyOnline,
       printer_connected: printerOk,
-      error: printerOk ? undefined : "Impressora nao detectada na ponte",
+      error: reallyOnline ? undefined : "Impressora nao detectada na ponte",
       latencyMs: ms,
       bridge_version: data.bridge_version,
       printer_count: data.printer_count,
