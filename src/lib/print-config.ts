@@ -157,14 +157,27 @@ function stripDbOnly(config: PrintConfig): DbPrintConfigPayload {
 
 /** Synchronous load from localStorage cache (used by print functions) */
 export function loadPrintConfig(): PrintConfig {
+  let config: PrintConfig;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return normalizeConfig(DEFAULT_CONFIG, "default");
-    const parsed = JSON.parse(raw);
-    return normalizeConfig(parsed, parsed?.configSource ?? "local");
+    if (!raw) {
+      config = normalizeConfig(DEFAULT_CONFIG, "default");
+    } else {
+      const parsed = JSON.parse(raw);
+      config = normalizeConfig(parsed, parsed?.configSource ?? "local");
+    }
   } catch {
-    return normalizeConfig(DEFAULT_CONFIG, "default");
+    config = normalizeConfig(DEFAULT_CONFIG, "default");
   }
+
+  // REQUISITO: Forçar modo bridge local se estiver rodando dentro do EXE desktop
+  const isDesktop = (window as any).desktopPrinter?.isDesktop?.() === true;
+  if (isDesktop) {
+    config.printMode = "bridge";
+    config.bridgeUrl = "http://localhost:9100/print";
+  }
+
+  return config;
 }
 
 /** Save to localStorage AND to database */
