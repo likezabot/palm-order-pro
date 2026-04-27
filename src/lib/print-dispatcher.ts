@@ -27,6 +27,7 @@ import {
 import { encodePayloadB64, enqueuePrintJob, type PrintJobType } from "@/lib/print-queue";
 
 export type DispatchMode = "full" | "delta" | "bill";
+export type DispatchSource = "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
 
 export interface DispatchResult {
   ok: boolean;
@@ -78,7 +79,7 @@ async function loadItemsWithRetry(orderId: string) {
  * Sanitiza extras: NUNCA imprimir N/A. Campos vazios são removidos para que
  * o layout simplesmente não renderize a linha.
  */
-function buildExtras(o: OrderRow, printPath: string, source: "auto" | "manual" | "reprint" | "queue" | "unknown"): ReceiptExtras {
+function buildExtras(o: OrderRow, printPath: string, source: DispatchSource): ReceiptExtras {
   const extras: ReceiptExtras = {
     orderId: o.id,
     fingerprint: { printPath, source },
@@ -137,6 +138,7 @@ async function tryEnqueue(
 export async function printOrderByServiceType(
   orderId: string,
   mode: DispatchMode = "full",
+  source: DispatchSource = "auto",
 ): Promise<DispatchResult> {
   const order = await loadOrderForPrint(orderId);
   if (!order) {
@@ -158,7 +160,7 @@ export async function printOrderByServiceType(
   const waiter = safeWaiter(order);
 
   logPrintEngine({
-    functionName: `printOrderByServiceType:${mode}`,
+    functionName: `printOrderByServiceType:${mode}:${source}`,
     orderId,
     serviceType,
     tableName: tableValue || null,
@@ -166,7 +168,7 @@ export async function printOrderByServiceType(
     footerText: cfg.footerText,
     paperWidth: cfg.paperWidth,
     configMeta: { updatedAt: cfg.configUpdatedAt ?? null, source: cfg.configSource ?? null },
-    extra: { mode, isDelivery, isPickup },
+    extra: { mode, isDelivery, isPickup, dispatchSource: source },
   });
 
   // ---- DELIVERY: SEMPRE comanda completa, nunca delta/bill em layout mesa ----
@@ -193,7 +195,7 @@ export async function printOrderByServiceType(
       orderId,
       orderShortId: order.table_name?.replace(/^.*#/, "") || null,
       serviceType: "delivery",
-      fingerprint: { printPath: "dispatcher.delivery", source: "auto" },
+      fingerprint: { printPath: "dispatcher.delivery", source },
     };
 
     const ok = await printDelivery(input);
@@ -208,7 +210,7 @@ export async function printOrderByServiceType(
   // ---- DINE_IN: layout normal de mesa ----
   const layoutKey = isPickup ? "pickup" : (mode === "delta" ? "dine_in_delta" : mode === "bill" ? "dine_in_bill" : "dine_in_full");
   const printPath = `dispatcher.${layoutKey}.${mode}`;
-  const extras = buildExtras(order, printPath, "auto");
+  const extras = buildExtras(order, printPath, source);
 
   if (mode === "delta") {
     const deltaItems = (order.delta_items ?? []) as any[];
