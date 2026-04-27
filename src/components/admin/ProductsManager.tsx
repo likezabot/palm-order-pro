@@ -250,68 +250,64 @@ const ProductsManager = ({
           </button>
         </div>
 
-        {/* Tabs categoria — escondidos quando há busca ativa */}
-        {!search && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            {CATEGORIES.map((cat) => {
-              const count = productsByCategory[cat]?.length ?? 0;
-              const active = activeCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => {
-                    playFeedback("click");
-                    setActiveCategory(cat);
-                  }}
-                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card text-muted-foreground border border-border"
-                  }`}
-                >
-                  {CATEGORY_LABELS[cat]}
-                  <span className={`ml-1.5 text-xs ${active ? "opacity-80" : "opacity-60"}`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Tabs categoria */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {CATEGORIES.map((cat) => {
+            const count = productsByCategory[cat]?.length ?? 0;
+            const active = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => {
+                  playFeedback("click");
+                  setActiveCategory(cat);
+                }}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-150 ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground border border-border"
+                }`}
+              >
+                {CATEGORY_LABELS[cat]}
+                <span className={`ml-1.5 text-xs ${active ? "opacity-80" : "opacity-60"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Toolbar da categoria ativa (só sem busca) */}
-      {!search && (
-        <div className="flex items-center justify-between px-4 py-3 gap-2 flex-wrap">
-          <p className="text-xs text-muted-foreground">
-            Toque em <strong className="text-foreground">Visível/Oculto</strong> para mostrar/esconder. Arraste pelo <strong className="text-foreground">⋮⋮</strong> para reordenar.
-          </p>
-          <div className="flex items-center gap-2">
-            {hasCustomOrder && items.length > 1 && !selectionMode && (
-              <button
-                onClick={() => onResetOrder(activeCategory)}
-                className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-2 text-xs font-bold hover:bg-secondary/80 transition-colors"
-                title="Restaurar ordem alfabética"
-              >
-                <ArrowDownAZ size={14} /> A-Z
-              </button>
-            )}
+      {/* Toolbar da categoria ativa */}
+      <div className="flex items-center justify-between px-4 py-3 gap-2 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          Toque em <strong className="text-foreground">Visível/Oculto</strong> para mostrar/esconder. Arraste pelo <strong className="text-foreground">⋮⋮</strong> para reordenar.
+        </p>
+        <div className="flex items-center gap-2">
+          {hasCustomOrder && items.length > 1 && !selectionMode && (
             <button
-              onClick={() => { playFeedback("click"); setGroupsManagerOpen(true); }}
-              className="flex items-center gap-1.5 rounded-lg bg-card border border-border text-foreground px-3 py-2 text-xs font-bold hover:bg-secondary transition-colors"
-              title="Gerenciar grupos / popups"
+              onClick={() => onResetOrder(activeCategory)}
+              className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-2 text-xs font-bold hover:bg-secondary/80 transition-colors"
+              title="Restaurar ordem alfabética"
             >
-              <Layers size={14} /> Grupos
+              <ArrowDownAZ size={14} /> A-Z
             </button>
-            <button
-              onClick={() => onNewProduct(activeCategory)}
-              className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-bold hover:bg-primary/90 transition-colors"
-            >
-              <Plus size={14} /> Novo
-            </button>
-          </div>
+          )}
+          <button
+            onClick={() => { playFeedback("click"); setGroupsManagerOpen(true); }}
+            className="flex items-center gap-1.5 rounded-lg bg-card border border-border text-foreground px-3 py-2 text-xs font-bold hover:bg-secondary transition-colors"
+            title="Gerenciar grupos / popups"
+          >
+            <Layers size={14} /> Grupos
+          </button>
+          <button
+            onClick={() => onNewProduct(activeCategory)}
+            className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs font-bold hover:bg-primary/90 transition-colors"
+          >
+            <Plus size={14} /> Novo
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Grid */}
       <div className={`px-3 ${selectionMode ? "pb-28" : "pb-10"}`}>
