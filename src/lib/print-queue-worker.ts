@@ -73,10 +73,10 @@ export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnlin
       if (processed >= MAX_PER_CYCLE) break;
       if (shouldDeferByBackoff(job)) continue;
 
-      // Garante que o pedido ainda existe e está em estado que precisa de impressão
+      // Garante que o pedido ainda existe e tenta resgatar service_type
       const { data: order } = await supabase
         .from("orders")
-        .select("print_status")
+        .select("print_status, service_type")
         .eq("id", job.orderId)
         .maybeSingle();
 
@@ -87,7 +87,8 @@ export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnlin
         continue;
       }
 
-      const ok = await sendRawPayload(job.payloadB64, job.bridgeUrl);
+      const serviceType = (order as any)?.service_type ?? null;
+      const ok = await sendQueuedPayload(job, serviceType);
       processed++;
 
       if (ok) {
