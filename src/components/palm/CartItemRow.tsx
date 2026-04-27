@@ -124,12 +124,7 @@ const CartItemRow = ({
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
           setConfirmOpen(false);
-          // Se há addedQty, só remove o delta novo; se não há original, remove tudo.
-          if (originalQty > 0 && effectiveAdded > 0) {
-            onUpdateQuantity(item.product.id, -effectiveAdded);
-          } else {
-            onRemove(item.product.id);
-          }
+          onRemove(item.product.id);
         }}
       />
     </div>
