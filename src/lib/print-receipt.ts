@@ -5,7 +5,7 @@
  * e despacha para o navegador (print-iframe) ou para a ponte ESC/POS (thermal-printer).
  */
 
-import { loadPrintConfig, savePrintConfig, type PaperWidth } from "./print-config";
+import { loadPrintConfig, savePrintConfig, ensureFreshPrintConfig, type PaperWidth } from "./print-config";
 import {
   buildEscPosReceipt,
   buildEscPosDelta,
@@ -19,6 +19,7 @@ import {
 import { createReceiptLayoutModel, type LayoutBlock } from "./receipt-layout";
 import { buildHtmlFromLayout, buildHtmlFromBlocks } from "./receipt-html";
 import { doPrint } from "./print-iframe";
+import { logPrintEngine } from "./print-engine";
 
 export type { PaperWidth };
 
