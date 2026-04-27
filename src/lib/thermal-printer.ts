@@ -289,6 +289,46 @@ export async function sendTestMinimal(bridgeUrl: string): Promise<{ ok: boolean;
   }
 }
 
+/**
+ * "Teste de Origem" — imprime cupom curtinho com APP_BUILD, PRINT_ENGINE,
+ * CONFIG_SOURCE, BRIDGE_URL e timestamp. Permite provar visualmente que o
+ * papel saiu DESTA instância (e não de um EXE/aba/PWA antigos).
+ */
+export async function sendOriginTest(input: {
+  bridgeUrl: string;
+  appBuild: string;
+  engineVersion: string;
+  configSource: string;
+  hostname: string;
+}): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  const b = new EscPosBuilder();
+  b.reset()
+    .align("center").bold(true).size(true, true).line("TESTE DE ORIGEM").resetStyle()
+    .feed(1)
+    .align("center").line("=".repeat(32)).resetStyle()
+    .align("left")
+    .bold(true).text("APP_BUILD: ").bold(false).line(input.appBuild.slice(0, 30))
+    .bold(true).text("ENGINE:    ").bold(false).line(input.engineVersion)
+    .bold(true).text("CFG:       ").bold(false).line(input.configSource)
+    .bold(true).text("HOST:      ").bold(false).line(input.hostname.slice(0, 28))
+    .bold(true).text("BRIDGE:    ").bold(false).line(input.bridgeUrl.slice(0, 28))
+    .bold(true).text("HORA:      ").bold(false).line(new Date().toLocaleString("pt-BR"))
+    .align("center").line("-".repeat(32))
+    .bold(true).line("Se este papel saiu, esta")
+    .line("instancia EH a origem.")
+    .bold(false)
+    .feed(3)
+    .cut();
+  const payload = b.getPayload();
+  const t0 = performance.now();
+  try {
+    const ok = await sendToBridge(payload, input.bridgeUrl);
+    return { ok, latencyMs: Math.round(performance.now() - t0) };
+  } catch (e: any) {
+    return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
+  }
+}
+
 export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
   const t0 = performance.now();
   const printUrl = bridgePrintUrl(url);
