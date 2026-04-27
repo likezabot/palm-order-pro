@@ -153,6 +153,24 @@ export async function printOrderByServiceType(
   }
 
   const cfg = await ensureFreshPrintConfig();
+
+  // REQUISITO: Antes de imprimir pedido real, sempre executar checkBridgeStatus com cache bypass.
+  if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
+    const { checkBridgeStatus } = await import("./thermal-printer");
+    const health = await checkBridgeStatus(cfg.bridgeUrl, true);
+    if (!health.online) {
+      debugLog.error("print", `✗ Abortando impressao: bridge offline em ${cfg.bridgeUrl}`, health);
+      return {
+        ok: false,
+        reason: health.error || "bridge_offline",
+        bridgeOk: false,
+        queued: false,
+        serviceType: order.service_type ?? null,
+        layoutUsed: "dine_in_full",
+      };
+    }
+  }
+
   const serviceType = order.service_type ?? "dine_in";
   const isDelivery = serviceType === "delivery";
   const isPickup = serviceType === "pickup" || serviceType === "balcao";
