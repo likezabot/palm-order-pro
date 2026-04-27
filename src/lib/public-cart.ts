@@ -73,7 +73,7 @@ export type CreateOrderResult = {
 function readCart(): PublicCartItem[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -85,7 +85,7 @@ function readCart(): PublicCartItem[] {
 
 function writeCart(items: PublicCartItem[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   } catch {
     /* noop */
   }
