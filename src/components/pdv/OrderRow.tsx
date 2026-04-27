@@ -113,15 +113,15 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
         </span>
       )}
 
-      {/* Botão cancelar discreto (canto sup. direito, aparece em hover) */}
+      {/* Botão cancelar (canto sup. direito) */}
       {onCancel && status !== "done" && (
         <button
           onClick={(e) => { stop(e); onCancel(order); }}
-          className="absolute top-1 right-1 z-10 p-1 rounded-md text-muted-foreground hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+          className="absolute top-1 right-1 z-10 p-1.5 rounded-md text-muted-foreground hover:bg-destructive hover:text-destructive-foreground sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-card sm:bg-transparent shadow-sm sm:shadow-none"
           title="Cancelar pedido"
           aria-label="Cancelar pedido"
         >
-          <X size={14} />
+          <X size={16} />
         </button>
       )}
 
