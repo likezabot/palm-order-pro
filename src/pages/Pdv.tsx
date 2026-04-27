@@ -843,6 +843,8 @@ const Pdv = () => {
               <div className="flex items-center gap-4">
                 <input
                   type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   min="1"
                   value={splitCount}
                   onChange={(e) => {
