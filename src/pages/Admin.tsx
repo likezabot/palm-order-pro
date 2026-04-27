@@ -226,160 +226,93 @@ const Admin = () => {
   }
 
   return (
-    <div className={`min-h-screen-safe flex flex-col bg-slate-50/50 ${staffMode ? "staff-mode" : ""}`}>
-      <AdminHeader
-        staffMode={staffMode}
-        onToggleStaffMode={() => setStaffMode((v) => !v)}
-        autoPrint={autoPrint}
-        onAutoPrintChange={setAutoPrint}
-        onNewProduct={() => {
-          setEditing(null);
-          setFormInitialCategory(undefined);
-          setShowForm(true);
-        }}
-      />
+    <SidebarProvider defaultOpen>
+      <div className={`min-h-screen-safe flex w-full ${staffMode ? "staff-mode" : ""}`}>
+        <AdminSidebar
+          active={activeTab}
+          onChange={setActiveTab}
+          staffMode={staffMode}
+          unresolvedErrors={unresolvedErrors}
+        />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <div className="bg-white border-b border-border px-2 sm:px-4 overflow-x-auto">
-          <TabsList className="bg-transparent h-14 gap-3 sm:gap-6 w-max">
-            <TabsTrigger
-              value="products"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 whitespace-nowrap"
-            >
-              Cardápio
-            </TabsTrigger>
-            <TabsTrigger
-              value="online"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Globe className="w-4 h-4" /> <span className="hidden sm:inline">Cardápio </span>Online
-            </TabsTrigger>
-            <TabsTrigger
-              value="online-orders"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <ShoppingCart className="w-4 h-4" /> <span className="hidden sm:inline">Pedidos </span>Online
-            </TabsTrigger>
-            <TabsTrigger
-              value="orders"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <ShoppingBag className="w-4 h-4" /> <span className="hidden sm:inline">Editor de </span>Pedidos
-            </TabsTrigger>
-            <TabsTrigger
-              value="print"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Printer className="w-4 h-4" /> Impressão
-            </TabsTrigger>
-            <TabsTrigger
-              value="errors"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap relative"
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span className="hidden sm:inline">Erros &amp; Saúde</span>
-              <span className="sm:hidden">Erros</span>
-              {unresolvedErrors > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black leading-none">
-                  {unresolvedErrors > 99 ? "99+" : unresolvedErrors}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="stats"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <BarChart3 className="w-4 h-4" /> <span className="hidden sm:inline">Estatísticas</span><span className="sm:hidden">Stats</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="system"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Wrench className="w-4 h-4" /> Sistema
-            </TabsTrigger>
-            <TabsTrigger
-              value="network"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Activity className="w-4 h-4" /> Rede
-            </TabsTrigger>
-            <TabsTrigger
-              value="loyalty"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Gift className="w-4 h-4" /> Fidelidade
-            </TabsTrigger>
-            <TabsTrigger
-              value="routes"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Link2 className="w-4 h-4" /> <span className="hidden sm:inline">Rotas &amp; </span>URLs
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="products" className="flex-1 mt-0 flex flex-col">
-          <ProductsManager
-            productsByCategory={productsByCategory}
-            orderMap={orderMap}
-            sensors={sensors}
-            onDragEnd={handleDragEnd}
-            onResetOrder={handleResetOrder}
-            onToggleActive={handleToggleActive}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onNewProduct={(cat) => {
-              playFeedback("click");
+        <SidebarInset className="flex flex-col bg-slate-50/50 min-w-0">
+          <AdminHeader
+            staffMode={staffMode}
+            onToggleStaffMode={() => setStaffMode((v) => !v)}
+            autoPrint={autoPrint}
+            onAutoPrintChange={setAutoPrint}
+            onNewProduct={() => {
               setEditing(null);
-              setFormInitialCategory(cat);
+              setFormInitialCategory(undefined);
               setShowForm(true);
             }}
           />
-        </TabsContent>
 
-        <TabsContent value="orders" className="flex-1 p-4 space-y-3 mt-0">
-          <OrdersTab orders={activeOrders} onPrint={handlePrintOrder} onEdit={handleEditOrder} />
-        </TabsContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+            <TabsContent value="products" className="flex-1 mt-0 flex flex-col">
+              <ProductsManager
+                productsByCategory={productsByCategory}
+                orderMap={orderMap}
+                sensors={sensors}
+                onDragEnd={handleDragEnd}
+                onResetOrder={handleResetOrder}
+                onToggleActive={handleToggleActive}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onNewProduct={(cat) => {
+                  playFeedback("click");
+                  setEditing(null);
+                  setFormInitialCategory(cat);
+                  setShowForm(true);
+                }}
+              />
+            </TabsContent>
 
-        <TabsContent value="online" className="flex-1 p-4 mt-0 bg-white border-t">
-          <OnlineMenuTab />
-        </TabsContent>
+            <TabsContent value="orders" className="flex-1 p-4 space-y-3 mt-0">
+              <OrdersTab orders={activeOrders} onPrint={handlePrintOrder} onEdit={handleEditOrder} />
+            </TabsContent>
 
-        <TabsContent value="online-orders" className="flex-1 p-4 mt-0 bg-white border-t">
-          <OnlineOrdersTab />
-        </TabsContent>
+            <TabsContent value="online" className="flex-1 p-4 mt-0 bg-white">
+              <OnlineMenuTab />
+            </TabsContent>
 
-        <TabsContent value="print" className="flex-1 p-4 mt-0 bg-white border-t">
-          <div className="max-w-2xl mx-auto py-4">
-            <PrintConfigPanel />
-          </div>
-        </TabsContent>
+            <TabsContent value="online-orders" className="flex-1 p-4 mt-0 bg-white">
+              <OnlineOrdersTab />
+            </TabsContent>
 
-        <TabsContent value="stats" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <StatsPanel />
-        </TabsContent>
+            <TabsContent value="print" className="flex-1 p-4 mt-0 bg-white">
+              <div className="max-w-2xl mx-auto py-4">
+                <PrintConfigPanel />
+              </div>
+            </TabsContent>
 
-        <TabsContent value="errors" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <ErrorsTab />
-        </TabsContent>
+            <TabsContent value="stats" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <StatsPanel />
+            </TabsContent>
 
-        <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <SystemTab />
-        </TabsContent>
+            <TabsContent value="errors" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <ErrorsTab />
+            </TabsContent>
 
-        <TabsContent value="network" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <NetworkTab />
-        </TabsContent>
+            <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <SystemTab />
+            </TabsContent>
 
-        <TabsContent value="routes" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <RoutesTab />
-        </TabsContent>
+            <TabsContent value="network" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <NetworkTab />
+            </TabsContent>
 
-        <TabsContent value="loyalty" className="flex-1 p-4 mt-0 bg-white border-t">
-          <LoyaltyTab />
-        </TabsContent>
-      </Tabs>
-    </div>
+            <TabsContent value="routes" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <RoutesTab />
+            </TabsContent>
+
+            <TabsContent value="loyalty" className="flex-1 p-4 mt-0 bg-white">
+              <LoyaltyTab />
+            </TabsContent>
+          </Tabs>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 };
 
