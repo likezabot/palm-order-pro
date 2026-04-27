@@ -40,6 +40,7 @@ import { checkBridgeStatus, type BridgeHealth } from "@/lib/thermal-printer";
 import { PRINT_ENGINE_VERSION, APP_BUILD } from "@/lib/print-engine";
 import PrinterDiagnostics from "./PrinterDiagnostics";
 import BridgeOriginDiagnostics from "./BridgeOriginDiagnostics";
+import PrintConfigSelfTest from "./PrintConfigSelfTest";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
