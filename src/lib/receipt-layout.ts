@@ -419,6 +419,8 @@ function buildSenhaLayout(
   });
   blocks.push({ kind: "sep", bold: true });
   if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
+  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
+  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
   blocks.push({ kind: "cutMark" });
   return { blocks, docType: "SENHA" };
 }
