@@ -456,25 +456,63 @@ export async function manualPrintOrder(order: {
   waiter_name: string | null;
   total: number | null;
 }): Promise<ManualPrintResult> {
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("*")
-    .eq("order_id", order.id);
+  const [{ data: items }, { data: orderMeta }] = await Promise.all([
+    supabase.from("order_items").select("*").eq("order_id", order.id),
+    supabase
+      .from("orders")
+      .select("service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for")
+      .eq("id", order.id)
+      .single(),
+  ]);
 
   if (!items || items.length === 0)
     return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  const cfg = loadPrintConfig();
+  const cfg = await ensureFreshPrintConfig();
+  const meta = (orderMeta as any) ?? {};
+  const serviceType = meta.service_type ?? null;
+
+  if (serviceType === "delivery") {
+    const subtotal = (items as any[]).reduce(
+      (s, i) => s + Number(i.product_price) * Number(i.quantity),
+      0,
+    );
+    const deliveryInput: DeliveryPayloadInput = {
+      items: items as any[],
+      customerName: meta.customer_name_snapshot ?? null,
+      customerPhone: meta.customer_phone_snapshot ?? null,
+      deliveryAddress: meta.delivery_address ?? null,
+      deliveryFee: Number(meta.delivery_fee ?? 0),
+      subtotal,
+      total: order.total ?? subtotal + Number(meta.delivery_fee ?? 0),
+      paymentMethod: meta.payment_method ?? null,
+      changeFor: meta.change_for != null ? Number(meta.change_for) : null,
+      orderId: order.id,
+      orderShortId: order.table_name?.replace(/^.*#/, "") || null,
+      serviceType: "delivery",
+    };
+    const payload = buildEscPosDelivery(deliveryInput, cfg);
+    return enqueueAndPrint(order.id, tableValue, "full", payload, () =>
+      printDelivery(deliveryInput),
+    );
+  }
+
+  const extras = {
+    serviceType: serviceType ?? undefined,
+    customerName: meta.customer_name_snapshot ?? undefined,
+    customerPhone: meta.customer_phone_snapshot ?? undefined,
+  };
   const payload = buildEscPosReceipt(
     tableValue,
     order.waiter_name || "",
     items as any[],
     order.total || 0,
     cfg,
+    extras,
   );
   return enqueueAndPrint(order.id, tableValue, "full", payload, () =>
-    printReceipt(tableValue, order.waiter_name || "", items as any[], order.total || 0),
+    printReceipt(tableValue, order.waiter_name || "", items as any[], order.total || 0, extras),
   );
 }
 
@@ -486,7 +524,7 @@ export async function manualPrintDelta(order: {
 }): Promise<ManualPrintResult> {
   const { data } = await supabase
     .from("orders")
-    .select("delta_items")
+    .select("delta_items, service_type, customer_name_snapshot, customer_phone_snapshot")
     .eq("id", order.id)
     .single();
 
@@ -495,10 +533,15 @@ export async function manualPrintDelta(order: {
     return { ok: false, reason: "no_delta", queued: false, bridgeOk: false };
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  const cfg = loadPrintConfig();
-  const payload = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg);
+  const cfg = await ensureFreshPrintConfig();
+  const extras = {
+    serviceType: (data as any)?.service_type ?? undefined,
+    customerName: (data as any)?.customer_name_snapshot ?? undefined,
+    customerPhone: (data as any)?.customer_phone_snapshot ?? undefined,
+  };
+  const payload = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg, extras);
   return enqueueAndPrint(order.id, tableValue, "delta", payload, () =>
-    printDelta(tableValue, order.waiter_name || "", deltaItems),
+    printDelta(tableValue, order.waiter_name || "", deltaItems, extras),
   );
 }
 
@@ -509,24 +552,34 @@ export async function manualPrintBill(order: {
   waiter_name: string | null;
   total: number | null;
 }): Promise<ManualPrintResult> {
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("*")
-    .eq("order_id", order.id);
+  const [{ data: items }, { data: orderMeta }] = await Promise.all([
+    supabase.from("order_items").select("*").eq("order_id", order.id),
+    supabase
+      .from("orders")
+      .select("service_type, customer_name_snapshot, customer_phone_snapshot")
+      .eq("id", order.id)
+      .single(),
+  ]);
 
   if (!items || items.length === 0)
     return { ok: false, reason: "no_items", queued: false, bridgeOk: false };
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
-  const cfg = loadPrintConfig();
+  const cfg = await ensureFreshPrintConfig();
+  const extras = {
+    serviceType: (orderMeta as any)?.service_type ?? undefined,
+    customerName: (orderMeta as any)?.customer_name_snapshot ?? undefined,
+    customerPhone: (orderMeta as any)?.customer_phone_snapshot ?? undefined,
+  };
   const payload = buildEscPosBill(
     tableValue,
     order.waiter_name || "",
     items as any[],
     order.total || 0,
     cfg,
+    extras,
   );
   return enqueueAndPrint(order.id, tableValue, "bill", payload, () =>
-    printBill(tableValue, order.waiter_name || "", items as any[], order.total || 0),
+    printBill(tableValue, order.waiter_name || "", items as any[], order.total || 0, extras),
   );
 }
