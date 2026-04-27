@@ -14,6 +14,7 @@ import {
   sendToBridge,
   renderLayout,
   type DeliveryPayloadInput,
+  type ReceiptExtras,
 } from "./thermal-printer";
 import { createReceiptLayoutModel, type LayoutBlock } from "./receipt-layout";
 import { buildHtmlFromLayout, buildHtmlFromBlocks } from "./receipt-html";
@@ -131,12 +132,13 @@ export async function printReceipt(
   waiterName: string,
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number,
+  extras: ReceiptExtras = {},
 ) {
   const cfg = loadPrintConfig();
   console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
-    const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg);
+    const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg, extras);
     const success = await sendToBridge(payload, cfg.bridgeUrl);
     if (!success) {
       console.warn("[print] Falha na ponte térmica.");
@@ -154,12 +156,13 @@ export async function printDelta(
   tableName: string,
   waiterName: string,
   deltaItems: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
+  extras: ReceiptExtras = {},
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
   console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
-    const payload = buildEscPosDelta(tableName, waiterName, deltaItems, cfg);
+    const payload = buildEscPosDelta(tableName, waiterName, deltaItems, cfg, extras);
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
@@ -172,6 +175,9 @@ export async function printDelta(
       waiterName,
       items: deltaItems,
       total: deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0),
+      serviceType: extras.serviceType ?? undefined,
+      customerName: extras.customerName ?? undefined,
+      customerPhone: extras.customerPhone ?? undefined,
     },
     cfg,
   );
@@ -185,17 +191,26 @@ export async function printBill(
   waiterName: string,
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number,
+  extras: ReceiptExtras = {},
 ): Promise<boolean> {
   const cfg = loadPrintConfig();
   console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
-    const payload = buildEscPosBill(tableName, waiterName, items, total, cfg);
+    const payload = buildEscPosBill(tableName, waiterName, items, total, cfg, extras);
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
   // Modo browser: gera HTML a partir da MESMA fonte de layout (sem montagem paralela).
-  buildHtmlFromLayout("CONTA", "Conta", { tableName, waiterName, items, total }, cfg);
+  buildHtmlFromLayout("CONTA", "Conta", {
+    tableName,
+    waiterName,
+    items,
+    total,
+    serviceType: extras.serviceType ?? undefined,
+    customerName: extras.customerName ?? undefined,
+    customerPhone: extras.customerPhone ?? undefined,
+  }, cfg);
 
   console.log("[print] Conta ignorada no modo browser.");
   return false;

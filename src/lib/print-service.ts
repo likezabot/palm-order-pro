@@ -55,6 +55,36 @@ interface PrintableItem {
 }
 
 /**
+ * Valida campos essenciais de um pedido DELIVERY antes de imprimir.
+ * Retorna array de campos faltantes (vazio = OK).
+ *
+ * Uso:
+ *   const missing = validateDeliveryFields(deliveryInput);
+ *   if (missing.length > 0) {
+ *     // Mostrar aviso na UI e pedir confirmação manual antes de imprimir
+ *   }
+ */
+export function validateDeliveryFields(input: {
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: { street?: string | null; number?: string | null; neighborhood?: string | null } | null;
+  paymentMethod?: string | null;
+}): string[] {
+  const missing: string[] = [];
+  const isBlank = (v: string | null | undefined): boolean => {
+    if (v == null) return true;
+    const s = String(v).trim();
+    return !s || /^(n\/?a|undefined|null|---)$/i.test(s);
+  };
+  if (isBlank(input.customerName)) missing.push("nome do cliente");
+  if (isBlank(input.customerPhone)) missing.push("telefone");
+  if (!input.deliveryAddress || isBlank(input.deliveryAddress.street)) missing.push("endereço");
+  if (!input.deliveryAddress || isBlank(input.deliveryAddress.neighborhood)) missing.push("bairro");
+  if (isBlank(input.paymentMethod)) missing.push("forma de pagamento");
+  return missing;
+}
+
+/**
  * Tenta "clamar" o pedido para impressão via RPC atômica.
  */
 export async function claimOrderForPrint(orderId: string): Promise<boolean> {
@@ -198,6 +228,17 @@ export async function autoPrintOrder(order: {
       orderShortId: order.table_name?.replace(/^.*#/, "") || null,
       serviceType: "delivery",
     };
+
+    // Aviso (não bloqueante) sobre dados faltantes — UI pode usar validateDeliveryFields
+    // para bloquear/confirmar antes de impressão MANUAL.
+    const missing = validateDeliveryFields(deliveryInput);
+    if (missing.length > 0) {
+      debugLog.warn(
+        "print",
+        `DELIVERY ${order.id} com dados faltantes: ${missing.join(", ")} — imprimindo mesmo assim (auto)`,
+      );
+    }
+
     const success = await printDelivery(deliveryInput);
     if (success) {
       await completePrint(order.id);
@@ -210,11 +251,17 @@ export async function autoPrintOrder(order: {
   }
 
   // ---------- Fluxo MESA / BALCÃO / RETIRADA (legado) ----------
+  const extras = {
+    serviceType: serviceType ?? undefined,
+    customerName: customerName ?? undefined,
+    customerPhone: customerPhone ?? undefined,
+  };
   const success = await printReceipt(
     tableValue,
-    order.waiter_name || "N/A",
+    order.waiter_name || "",
     items,
-    order.total || 0
+    order.total || 0,
+    extras,
   );
 
   if (success) {
@@ -223,10 +270,11 @@ export async function autoPrintOrder(order: {
   } else {
     const payload = buildEscPosReceipt(
       tableValue,
-      order.waiter_name || "N/A",
+      order.waiter_name || "",
       items,
       order.total || 0,
       cfg,
+      extras,
     );
     await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
     await deferPrint(order.id);
@@ -282,35 +330,35 @@ export async function autoPrintUpdate(order: {
     if (printType === "bill") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printBill(tableValue, order.waiter_name || "N/A", items, order.total || 0);
+      success = await printBill(tableValue, order.waiter_name || "", items, order.total || 0);
       reason = success ? "bill_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosBill(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "bill"; }
+      if (!success) { payloadForQueue = buildEscPosBill(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "bill"; }
     } else if (printType === "full") {
       const items = await fetchAllItems();
       if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-      success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
+      success = await printReceipt(tableValue, order.waiter_name || "", items, order.total || 0);
       reason = success ? "full_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
+      if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "full"; }
     } else if (printType === "extra") {
       if (!deltaItems || deltaItems.length === 0) {
         await failPrint(order.id, "no_delta_items");
         return { printed: false, reason: "no_delta" };
       }
-      success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
+      success = await printDelta(tableValue, order.waiter_name || "", deltaItems);
       reason = success ? "delta_success" : "print_failed";
-      if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
+      if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg); queueType = "delta"; }
     } else {
       // Fallback legado
       if (deltaItems && deltaItems.length > 0) {
-        success = await printDelta(tableValue, order.waiter_name || "N/A", deltaItems);
+        success = await printDelta(tableValue, order.waiter_name || "", deltaItems);
         reason = success ? "delta_success" : "print_failed";
-        if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg); queueType = "delta"; }
+        if (!success) { payloadForQueue = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg); queueType = "delta"; }
       } else {
         const items = await fetchAllItems();
         if (items.length === 0) { await failPrint(order.id, "no_items"); return { printed: false, reason: "no_items" }; }
-        success = await printReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0);
+        success = await printReceipt(tableValue, order.waiter_name || "", items, order.total || 0);
         reason = success ? "full_fallback" : "print_failed";
-        if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "N/A", items, order.total || 0, cfg); queueType = "full"; }
+        if (!success) { payloadForQueue = buildEscPosReceipt(tableValue, order.waiter_name || "", items, order.total || 0, cfg); queueType = "full"; }
       }
     }
   } catch (err) {
@@ -420,13 +468,13 @@ export async function manualPrintOrder(order: {
   const cfg = loadPrintConfig();
   const payload = buildEscPosReceipt(
     tableValue,
-    order.waiter_name || "N/A",
+    order.waiter_name || "",
     items as any[],
     order.total || 0,
     cfg,
   );
   return enqueueAndPrint(order.id, tableValue, "full", payload, () =>
-    printReceipt(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0),
+    printReceipt(tableValue, order.waiter_name || "", items as any[], order.total || 0),
   );
 }
 
@@ -448,9 +496,9 @@ export async function manualPrintDelta(order: {
 
   const tableValue = formatPrintTableValue(order.table_name, order.original_table_name);
   const cfg = loadPrintConfig();
-  const payload = buildEscPosDelta(tableValue, order.waiter_name || "N/A", deltaItems, cfg);
+  const payload = buildEscPosDelta(tableValue, order.waiter_name || "", deltaItems, cfg);
   return enqueueAndPrint(order.id, tableValue, "delta", payload, () =>
-    printDelta(tableValue, order.waiter_name || "N/A", deltaItems),
+    printDelta(tableValue, order.waiter_name || "", deltaItems),
   );
 }
 
@@ -473,12 +521,12 @@ export async function manualPrintBill(order: {
   const cfg = loadPrintConfig();
   const payload = buildEscPosBill(
     tableValue,
-    order.waiter_name || "N/A",
+    order.waiter_name || "",
     items as any[],
     order.total || 0,
     cfg,
   );
   return enqueueAndPrint(order.id, tableValue, "bill", payload, () =>
-    printBill(tableValue, order.waiter_name || "N/A", items as any[], order.total || 0),
+    printBill(tableValue, order.waiter_name || "", items as any[], order.total || 0),
   );
 }
