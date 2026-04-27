@@ -311,26 +311,14 @@ const ProductsManager = ({
 
       {/* Grid */}
       <div className={`px-3 ${selectionMode ? "pb-28" : "pb-10"}`}>
-        {!search && !hasFilters && groupsForActiveCategory.map((g) => (
+        {!hasFilters && groupsForActiveCategory.map((g) => (
           <ProductGroupBanner
             key={g.id}
             group={g}
             products={productsByCategory[activeCategory] ?? []}
           />
         ))}
-        {search ? (
-          // Modo busca: lista todas categorias com header
-          allFilteredIds.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground bg-card rounded-xl border-2 border-dashed border-border">
-              Nenhum produto encontrado.
-            </div>
-          ) : (
-            CATEGORIES.map((cat) => {
-              const list = filteredByCategory[cat] ?? [];
-              return list.length > 0 ? renderGrid(cat, list) : null;
-            })
-          )
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground bg-card rounded-xl border-2 border-dashed border-border">
             {hasFilters
               ? "Nenhum produto corresponde aos filtros."
