@@ -510,7 +510,10 @@ export default function PrintConfigPanel() {
           </CardContent>
         </Card>
 
-        {/* 6. DIAGNÓSTICO DE ORIGEM (novo — prova de qual instância sai o papel) */}
+        {/* 5. AUTO-TESTE DA CONFIG (prova: papel reflete o Admin) */}
+        <PrintConfigSelfTest cfg={cfg} onConfigSynced={(next) => setCfg(next)} />
+
+        {/* 6. DIAGNÓSTICO DE ORIGEM (prova de qual instância sai o papel) */}
         <BridgeOriginDiagnostics
           bridgeUrl={cfg.bridgeUrl}
           configSource={cfg.configSource ?? "default"}
