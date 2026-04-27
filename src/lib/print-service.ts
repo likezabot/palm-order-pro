@@ -198,6 +198,17 @@ export async function autoPrintOrder(order: {
       orderShortId: order.table_name?.replace(/^.*#/, "") || null,
       serviceType: "delivery",
     };
+
+    // Aviso (não bloqueante) sobre dados faltantes — UI pode usar validateDeliveryFields
+    // para bloquear/confirmar antes de impressão MANUAL.
+    const missing = validateDeliveryFields(deliveryInput);
+    if (missing.length > 0) {
+      debugLog.warn(
+        "print",
+        `DELIVERY ${order.id} com dados faltantes: ${missing.join(", ")} — imprimindo mesmo assim (auto)`,
+      );
+    }
+
     const success = await printDelivery(deliveryInput);
     if (success) {
       await completePrint(order.id);
