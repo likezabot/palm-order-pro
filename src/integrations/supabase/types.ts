@@ -1687,6 +1687,7 @@ export type Database = {
       fix_create_public_order_duplicate: { Args: never; Returns: string }
       force_clear_orphan_prints: { Args: never; Returns: Json }
       get_customer_orders: { Args: { p_phone: string }; Returns: Json }
+      get_last_customer_address: { Args: { p_phone: string }; Returns: Json }
       get_or_create_customer: {
         Args: { p_name: string; p_phone: string }
         Returns: string
