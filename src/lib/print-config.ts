@@ -44,6 +44,9 @@ export interface PrintConfig {
   contentAlign: ContentAlign;
   /** Imprime senha automaticamente quando finaliza pedido no BALCÃO. */
   printSenhaEnabled: boolean;
+  /** Metadados de sincronização do cache local. */
+  configUpdatedAt?: string;
+  configSource?: "default" | "local" | "db";
 }
 
 const STORAGE_KEY = "print_config";
@@ -56,6 +59,9 @@ const DB_KEY = "print_config";
  */
 const LOCAL_ONLY_KEYS = ["bridgeUrl", "printMode"] as const;
 type LocalOnlyKey = typeof LOCAL_ONLY_KEYS[number];
+const META_ONLY_KEYS = ["configUpdatedAt", "configSource"] as const;
+
+type DbPrintConfigPayload = Omit<PrintConfig, LocalOnlyKey | (typeof META_ONLY_KEYS)[number]>;
 
 const DEFAULT_VISIBLE: VisibleSections = {
   title: true,
@@ -77,6 +83,7 @@ export const DEFAULT_CONFIG: PrintConfig = {
   visibleSections: { ...DEFAULT_VISIBLE },
   contentAlign: "center",
   printSenhaEnabled: true,
+  configSource: "default",
 };
 
 /** Aplica preset e devolve overrides recomendados (usuário ainda pode ajustar). */
@@ -121,39 +128,73 @@ export function getFontSizes(sizeOrCfg: PrintSize | PrintConfig) {
     total: o.total ?? base.total,
     note: o.notes ?? base.note,
     footer: base.footer,
-    // header não tinha campo dedicado; mapeia em info-row via baseSize secundário
     headerInfo: o.header ?? base.base,
   } as ReturnType<typeof baseFontSizes> & { headerInfo: number };
+}
+
+function normalizeConfig(raw: Partial<PrintConfig>, source: PrintConfig["configSource"]): PrintConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...raw,
+    fontSizes: { ...(raw.fontSizes || {}) },
+    visibleSections: { ...DEFAULT_VISIBLE, ...(raw.visibleSections || {}) },
+    configSource: source,
+  };
+}
+
+function persistLocal(config: PrintConfig): PrintConfig {
+  const normalized = normalizeConfig(config, config.configSource ?? "local");
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+function stripDbOnly(config: PrintConfig): DbPrintConfigPayload {
+  const sanitized: any = { ...config };
+  for (const k of LOCAL_ONLY_KEYS) delete sanitized[k];
+  for (const k of META_ONLY_KEYS) delete sanitized[k];
+  return sanitized as DbPrintConfigPayload;
 }
 
 /** Synchronous load from localStorage cache (used by print functions) */
 export function loadPrintConfig(): PrintConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_CONFIG };
+    if (!raw) return normalizeConfig(DEFAULT_CONFIG, "default");
     const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_CONFIG,
-      ...parsed,
-      fontSizes: { ...(parsed.fontSizes || {}) },
-      visibleSections: { ...DEFAULT_VISIBLE, ...(parsed.visibleSections || {}) },
-    };
+    return normalizeConfig(parsed, parsed?.configSource ?? "local");
   } catch {
-    return { ...DEFAULT_CONFIG };
+    return normalizeConfig(DEFAULT_CONFIG, "default");
   }
 }
 
 /** Save to localStorage AND to database */
 export function savePrintConfig(config: PrintConfig): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  savePrintConfigToDb(config);
+  const stamped = normalizeConfig(
+    {
+      ...config,
+      configUpdatedAt: new Date().toISOString(),
+      configSource: "local",
+    },
+    "local",
+  );
+  persistLocal(stamped);
+  void savePrintConfigToDb(stamped);
 }
 
 /** Reset to defaults locally and in database */
 export function resetPrintConfig(): PrintConfig {
   localStorage.removeItem(STORAGE_KEY);
-  savePrintConfigToDb(DEFAULT_CONFIG);
-  return { ...DEFAULT_CONFIG };
+  const fresh = normalizeConfig(
+    {
+      ...DEFAULT_CONFIG,
+      configUpdatedAt: new Date().toISOString(),
+      configSource: "local",
+    },
+    "local",
+  );
+  persistLocal(fresh);
+  void savePrintConfigToDb(fresh);
+  return fresh;
 }
 
 /** Load from database and update localStorage cache.
@@ -164,23 +205,24 @@ export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
   try {
     const { data } = await supabase
       .from("settings")
-      .select("value")
+      .select("value, updated_at")
       .eq("key", DB_KEY)
       .single();
 
     if (data?.value) {
       const parsed = JSON.parse(data.value);
-      const merged: PrintConfig = {
-        ...DEFAULT_CONFIG,
-        ...parsed,
-        fontSizes: { ...(parsed.fontSizes || {}) },
-        visibleSections: { ...DEFAULT_VISIBLE, ...(parsed.visibleSections || {}) },
-      };
-      // preserva config local do dispositivo
+      const merged = normalizeConfig(
+        {
+          ...parsed,
+          configUpdatedAt: data.updated_at ?? local.configUpdatedAt,
+          configSource: "db",
+        },
+        "db",
+      );
       for (const k of LOCAL_ONLY_KEYS) {
         (merged as any)[k] = (local as any)[k] ?? (merged as any)[k];
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      persistLocal(merged);
       return merged;
     }
   } catch {
@@ -189,12 +231,35 @@ export async function syncPrintConfigFromDb(): Promise<PrintConfig> {
   return local;
 }
 
+/**
+ * Antes de imprimir, garante que o cache local não está mais velho que o banco.
+ * Se o banco tiver versão mais nova, força sync e atualiza o cache imediatamente.
+ */
+export async function ensureFreshPrintConfig(): Promise<PrintConfig> {
+  const local = loadPrintConfig();
+  try {
+    const { data } = await supabase
+      .from("settings")
+      .select("updated_at")
+      .eq("key", DB_KEY)
+      .single();
+
+    const dbTs = data?.updated_at ? Date.parse(data.updated_at) : 0;
+    const localTs = local.configUpdatedAt ? Date.parse(local.configUpdatedAt) : 0;
+
+    if (dbTs && (!localTs || dbTs > localTs)) {
+      return await syncPrintConfigFromDb();
+    }
+  } catch {
+    // segue com cache local
+  }
+  return local;
+}
+
 /** Fire-and-forget save to database — strip campos locais antes de subir. */
-function savePrintConfigToDb(config: PrintConfig): void {
-  const sanitized: any = { ...config };
-  for (const k of LOCAL_ONLY_KEYS) delete sanitized[k];
-  const value = JSON.stringify(sanitized);
-  supabase
+function savePrintConfigToDb(config: PrintConfig): Promise<void> {
+  const value = JSON.stringify(stripDbOnly(config));
+  return supabase
     .from("settings")
     .upsert(
       { key: DB_KEY, value, updated_at: new Date().toISOString() },
