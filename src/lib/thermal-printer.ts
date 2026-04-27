@@ -861,6 +861,7 @@ export function buildEscPosDelivery(
       orderId: input.orderId ?? undefined,
       orderShortId: input.orderShortId ?? undefined,
       serviceType: input.serviceType ?? "delivery",
+      fingerprint: input.fingerprint ?? undefined,
     },
     config
   );
