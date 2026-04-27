@@ -83,15 +83,8 @@ beforeEach(() => {
 });
 
 function getPreviewIframe(): HTMLIFrameElement {
-  // pega o primeiro iframe visível (a aba ativa)
-  const frames = document.querySelectorAll<HTMLIFrameElement>("iframe[title^='Preview']");
-  // o componente renderiza um iframe por TabsContent, mas só o ativo é exibido
-  // — pegamos o que pertence à aba aria-selected
-  const active = Array.from(frames).find((f) => {
-    const panel = f.closest("[role='tabpanel']") as HTMLElement | null;
-    return panel && panel.getAttribute("data-state") === "active";
-  });
-  return active ?? frames[0];
+  // só existe um iframe de preview de cada vez
+  return document.querySelector<HTMLIFrameElement>("iframe[title^='Preview']")!;
 }
 
 function getPreviewSrcDoc(): string {
