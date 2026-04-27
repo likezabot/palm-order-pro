@@ -239,6 +239,8 @@ export function createReceiptLayoutModel(
   if (v.footer && cfg.footerText) {
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
+  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
+  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
 
   // 9. Marca de corte (visual, só usada no HTML)
   blocks.push({ kind: "cutMark" });
