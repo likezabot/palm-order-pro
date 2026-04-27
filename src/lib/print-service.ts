@@ -210,11 +210,17 @@ export async function autoPrintOrder(order: {
   }
 
   // ---------- Fluxo MESA / BALCÃO / RETIRADA (legado) ----------
+  const extras = {
+    serviceType: serviceType ?? undefined,
+    customerName: customerName ?? undefined,
+    customerPhone: customerPhone ?? undefined,
+  };
   const success = await printReceipt(
     tableValue,
-    order.waiter_name || "N/A",
+    order.waiter_name || "",
     items,
-    order.total || 0
+    order.total || 0,
+    extras,
   );
 
   if (success) {
@@ -223,10 +229,11 @@ export async function autoPrintOrder(order: {
   } else {
     const payload = buildEscPosReceipt(
       tableValue,
-      order.waiter_name || "N/A",
+      order.waiter_name || "",
       items,
       order.total || 0,
       cfg,
+      extras,
     );
     await enqueueOnBridgeFailure(order.id, tableValue, "full", payload);
     await deferPrint(order.id);
