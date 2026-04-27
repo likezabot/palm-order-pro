@@ -642,6 +642,19 @@ export function buildEscPosBill(
   config: PrintConfig,
   extras: ReceiptExtras = {}
 ): Uint8Array {
+  assertLegacyReceiptAllowed("buildEscPosBill", extras);
+  logPrintEngine({
+    functionName: "buildEscPosBill",
+    serviceType: extras.serviceType ?? null,
+    tableName,
+    headerText: config.headerText,
+    footerText: config.footerText,
+    paperWidth: config.paperWidth,
+    configMeta: {
+      updatedAt: config.configUpdatedAt ?? null,
+      source: config.configSource ?? null,
+    },
+  });
   const layout = createReceiptLayoutModel(
     {
       docType: "CONTA",
