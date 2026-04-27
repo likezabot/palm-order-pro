@@ -380,11 +380,44 @@ export async function sendConfigSelfTest(input: {
   }
 }
 
-export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
+export interface SendToBridgeMeta {
+  printPath: string;
+  source: "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
+  orderId?: string | null;
+  serviceType?: string | null;
+  tableName?: string | null;
+}
+
+export async function sendToBridge(
+  payload: Uint8Array,
+  url: string,
+  meta?: SendToBridgeMeta,
+): Promise<boolean> {
   const t0 = performance.now();
   const printUrl = bridgePrintUrl(url);
-  debugLog.info("print", `→ enviando ${payload.length} bytes para bridge`, { url: printUrl });
+  const metaInfo = meta
+    ? ` path=${meta.printPath} src=${meta.source} order=${meta.orderId ?? "-"} svc=${meta.serviceType ?? "-"}`
+    : "";
+  debugLog.info("print", `→ enviando ${payload.length} bytes para bridge${metaInfo}`, { url: printUrl, meta });
   const base64 = btoa(String.fromCharCode(...payload));
+
+  const recordOrigin = (ok: boolean, errorMsg?: string) => {
+    if (!meta) return;
+    // import dinâmico p/ evitar ciclo
+    import("./print-origin-tracker").then((m) =>
+      m.recordPrintOrigin({
+        printPath: meta.printPath,
+        source: meta.source,
+        orderId: meta.orderId ?? null,
+        serviceType: meta.serviceType ?? null,
+        tableName: meta.tableName ?? null,
+        bridgeUrl: url,
+        bytes: payload.length,
+        ok,
+        errorMsg: errorMsg ?? null,
+      }),
+    ).catch(() => {});
+  };
 
   try {
     const response = await fetch(printUrl, {
@@ -393,7 +426,7 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
       body: JSON.stringify({
         payload: base64,
         format: "escpos",
-        source: "Plano B Espetaria PDV",
+        source: meta ? `Plano B PDV [${meta.printPath}/${meta.source}]` : "Plano B Espetaria PDV",
         timestamp: new Date().toISOString(),
       }),
     });
@@ -403,19 +436,23 @@ export async function sendToBridge(payload: Uint8Array, url: string): Promise<bo
     if (!response.ok) {
       const result = await response.json().catch(() => ({ error: "?" }));
       debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${result.error ?? "?"}`, { url: printUrl });
+      recordOrigin(false, `HTTP ${response.status}`);
       return false;
     }
 
     const result = await response.json();
     if (result.success) {
-      debugLog.success("print", `✓ cupom enviado em ${ms}ms (${payload.length} bytes)`);
+      debugLog.success("print", `✓ cupom enviado em ${ms}ms (${payload.length} bytes)${metaInfo}`);
+      recordOrigin(true);
       return true;
     }
     debugLog.error("print", `✗ bridge respondeu success=false em ${ms}ms: ${result.error ?? "?"}`);
+    recordOrigin(false, result.error ?? "success=false");
     return false;
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
     debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${e?.message ?? e}`, { url: printUrl });
+    recordOrigin(false, e?.message ?? String(e));
     return false;
   }
 }
