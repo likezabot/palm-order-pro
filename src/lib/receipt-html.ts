@@ -202,6 +202,17 @@ export function thermalCSS(cfg: PrintConfig): string {
     }
     .footer { font-size: ${f.footer}px !important; text-align: center !important; margin-top: 8px !important; color: #555 !important; }
     .cut { text-align: center !important; font-size: 8px !important; color: #aaa !important; margin-top: 5mm !important; letter-spacing: 2px !important; }
+    .address-block { padding: 2px 0 4px 0 !important; text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important; font-size: ${f.base}px !important; font-weight: 700 !important; }
+    .address-line { display: block !important; word-break: break-word !important; padding: 1px 0 !important; }
+    .note-block { padding: 4px 0 !important; text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important; }
+    .note-block-label { font-weight: 900 !important; text-transform: uppercase !important; font-size: ${f.base - 1}px !important; }
+    .note-block-text { font-size: ${f.note}px !important; font-style: italic !important; word-break: break-word !important; }
+    .summary-row { display: flex !important; justify-content: space-between !important; align-items: baseline !important; padding: 2px 0 !important; font-size: ${f.base}px !important; gap: 8px !important; }
+    .summary-row span:first-child { font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
+    .summary-row span:last-child { font-weight: 700 !important; white-space: nowrap !important; }
+    .summary-row-bold { font-size: ${f.total}px !important; padding: 4px 0 !important; border-top: 1px dashed #000 !important; margin-top: 4px !important; }
+    .summary-row-bold span { font-weight: 900 !important; }
+    .info-label-only .info-label { display: block !important; padding-bottom: 1px !important; }
     @media print {
       html, body {
         width: ${paper} !important; max-width: ${paper} !important; min-width: ${paper} !important;
