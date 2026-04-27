@@ -132,7 +132,7 @@ describe("autoPrintUpdate", () => {
       total: 10,
     });
 
-    expect(dispatcher).toHaveBeenCalledWith("ord-1", "delta");
+    expect(dispatcher).toHaveBeenCalledWith("ord-1", "delta", "auto");
     expect(r.printed).toBe(false);
     expect(r.reason).toBe("no_delta");
   });
