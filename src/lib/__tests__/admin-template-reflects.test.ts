@@ -165,11 +165,12 @@ describe("Eliminação de N/A — paths legados", () => {
     expect(text.toUpperCase()).not.toContain("GARCOM:");
   });
 
-  it("waiterName='---' NÃO imprime garçom", () => {
+  it("waiterName='---' NÃO imprime linha de Garcom", () => {
     const text = decodeEscPosText(
       buildEscPosReceipt("Mesa 1", "---", sampleItems, 38, DEFAULT_CONFIG),
     );
-    expect(text).not.toContain("---");
+    expect(text.toUpperCase()).not.toMatch(/GARCOM:\s*---/);
+    expect(text.toUpperCase()).not.toContain("GARCOM:");
   });
 
   it("waiterName válido APARECE normalmente", () => {
