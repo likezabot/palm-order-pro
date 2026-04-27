@@ -23,6 +23,30 @@ import { logPrintEngine } from "./print-engine";
 
 export type { PaperWidth };
 
+async function getPrintConfigForOutput() {
+  return await ensureFreshPrintConfig();
+}
+
+function logPrintCall(
+  functionName: string,
+  cfg: import("./print-config").PrintConfig,
+  params: { orderId?: string | null; serviceType?: string | null; tableName?: string | null },
+) {
+  logPrintEngine({
+    functionName,
+    orderId: params.orderId ?? null,
+    serviceType: params.serviceType ?? null,
+    tableName: params.tableName ?? null,
+    headerText: cfg.headerText,
+    footerText: cfg.footerText,
+    paperWidth: cfg.paperWidth,
+    configMeta: {
+      updatedAt: cfg.configUpdatedAt ?? null,
+      source: cfg.configSource ?? null,
+    },
+  });
+}
+
 export function getPaperWidth(): PaperWidth {
   return loadPrintConfig().paperWidth;
 }
