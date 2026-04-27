@@ -18,3 +18,4 @@ Never re-add auth or tighten RLS without explicit user confirmation.
 - [Telegram notifications](mem://features/telegram-notifications) — Queue-based notifications via notify-telegram
 - [Security policy](mem://preferences/security) — RLS intentionally public; what IS in scope to harden
 - [Cron auth](mem://features/cron-auth) — Gate por X-Cron-Secret/Service Role nos 3 crons Telegram
+- [EXE strategy](mem://features/exe-strategy) — WEB primeiro, EXE depois. Próximo EXE = TESTE 3.3.0, não sobrescrever 3.2.0 estável
