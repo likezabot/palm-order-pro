@@ -1,4 +1,22 @@
-import { useState, useEffect, useMemo } from "react";
+/**
+ * Painel ÚNICO de configuração de impressão (Admin).
+ *
+ * Edita exclusivamente a config global `print_config` (RPC admin_save_print_config).
+ * Banco é a fonte de verdade — localStorage é só cache.
+ *
+ * Seções:
+ *  1. Status da impressão (APP_BUILD, PRINT_ENGINE, CONFIG_SOURCE, etc.)
+ *  2. Conexão da bridge
+ *  3. Layout do talão
+ *  4. Conteúdo exibido
+ *  5. Preview real (usa createReceiptLayoutModel)
+ *  6. Diagnóstico
+ *
+ * NÃO mexe em: bridge, EXE, USB, print_jobs, dispatcher, thermal-printer,
+ * receipt-layout — só orquestra a UI de configuração.
+ */
+
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   loadPrintConfig,
   savePrintConfig,
@@ -7,44 +25,86 @@ import {
   applyPreset,
   type PrintConfig,
   type LayoutPreset,
-  type FontSizesOverride,
   type VisibleSections,
 } from "@/lib/print-config";
-import { buildReceiptHtml, buildSenhaHtml, printReceipt, printSenha } from "@/lib/print-receipt";
+import {
+  buildReceiptHtml,
+  buildSenhaHtml,
+  printReceipt,
+  printSenha,
+  printDelivery,
+  printBill,
+} from "@/lib/print-receipt";
+import { buildHtmlFromLayout } from "@/lib/receipt-html";
 import { checkBridgeStatus, type BridgeHealth } from "@/lib/thermal-printer";
 import { PRINT_ENGINE_VERSION, APP_BUILD } from "@/lib/print-engine";
 import PrinterDiagnostics from "./PrinterDiagnostics";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, RotateCcw, AlertTriangle, CheckCircle2, Download, Info } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Printer,
+  RotateCcw,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Cloud,
+  CloudOff,
+  Save,
+  RefreshCw,
+  Truck,
+  Store,
+  Utensils,
+  Receipt,
+  Hash,
+} from "lucide-react";
+import { toast } from "sonner";
 
-type PreviewMode = "receipt" | "senha";
+// ============================================================
+// Sample data — usado em previews E nos testes de impressão
+// ============================================================
 
 const SAMPLE_ITEMS = [
   { product_name: "Espeto Picanha", quantity: 2, product_price: 15.0, note: "Bem passado" },
   { product_name: "Refrigerante Lata", quantity: 1, product_price: 8.5, note: null },
   { product_name: "Cerveja Original", quantity: 3, product_price: 12.0, note: "Bem gelada" },
-  { product_name: "Espeto Frango", quantity: 2, product_price: 10.0, note: null },
 ];
-const SAMPLE_TOTAL = 94.5;
+const SAMPLE_TOTAL = SAMPLE_ITEMS.reduce(
+  (s, i) => s + i.product_price * i.quantity,
+  0,
+);
 
-const PRESET_LABELS: Record<LayoutPreset, string> = {
-  mesa_simples: "Mesa simples",
-  classico: "Clássico",
-  conta_destacada: "Conta destacada",
+const SAMPLE_DELIVERY = {
+  customerName: "Maria Souza",
+  customerPhone: "(11) 99999-1234",
+  deliveryAddress: {
+    street: "Rua das Flores",
+    number: "123",
+    neighborhood: "Centro",
+    complement: "Apto 42",
+    reference: "Próximo à padaria",
+  },
+  deliveryFee: 5,
+  paymentMethod: "cash",
+  changeFor: 100,
 };
 
-const FONT_FIELDS: { key: keyof FontSizesOverride; label: string; min: number; max: number; def: number }[] = [
-  { key: "title", label: "Título", min: 12, max: 28, def: 20 },
-  { key: "header", label: "Cabeçalho (mesa/garçom)", min: 10, max: 22, def: 15 },
-  { key: "items", label: "Itens", min: 10, max: 22, def: 15 },
-  { key: "notes", label: "Observações", min: 8, max: 18, def: 12 },
-  { key: "total", label: "Total", min: 12, max: 32, def: 19 },
-];
+const PRESET_LABELS: Record<LayoutPreset, string> = {
+  classico: "Clássico",
+  mesa_simples: "Mesa simples",
+  conta_destacada: "Conta destacada",
+};
 
 const SECTION_FIELDS: { key: keyof VisibleSections; label: string }[] = [
   { key: "title", label: "Título do estabelecimento" },
@@ -54,375 +114,683 @@ const SECTION_FIELDS: { key: keyof VisibleSections; label: string }[] = [
   { key: "footer", label: "Rodapé" },
 ];
 
+type PreviewKind = "mesa" | "retirada" | "delivery" | "conta" | "senha";
+
+const PREVIEW_TABS: { value: PreviewKind; label: string; icon: typeof Truck }[] = [
+  { value: "mesa", label: "Mesa", icon: Utensils },
+  { value: "retirada", label: "Retirada", icon: Store },
+  { value: "delivery", label: "Delivery", icon: Truck },
+  { value: "conta", label: "Conta", icon: Receipt },
+  { value: "senha", label: "Senha", icon: Hash },
+];
+
+// ============================================================
+// Componente
+// ============================================================
+
 export default function PrintConfigPanel() {
-  const { toast } = useToast();
   const [cfg, setCfg] = useState<PrintConfig>(loadPrintConfig);
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("receipt");
+  const [previewKind, setPreviewKind] = useState<PreviewKind>("mesa");
   const [bridgeStatus, setBridgeStatus] = useState<BridgeHealth | null>(null);
   const [checking, setChecking] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState<PreviewKind | null>(null);
 
+  // ---- Carrega do banco no mount ----
   useEffect(() => {
-    syncPrintConfigFromDb().then(setCfg);
+    setSyncing(true);
+    syncPrintConfigFromDb()
+      .then((fresh) => setCfg(fresh))
+      .finally(() => setSyncing(false));
   }, []);
 
-  const verifyBridge = async (url: string) => {
+  // ---- Verificação de bridge ----
+  const verifyBridge = useCallback(async (url: string) => {
     setChecking(true);
-    const status = await checkBridgeStatus(url);
-    setBridgeStatus(status);
-    setChecking(false);
-  };
+    try {
+      const status = await checkBridgeStatus(url);
+      setBridgeStatus(status);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (cfg.printMode === "bridge") {
+    if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
       verifyBridge(cfg.bridgeUrl);
-      const interval = setInterval(() => verifyBridge(cfg.bridgeUrl), 10000);
-      return () => clearInterval(interval);
-    } else {
-      setBridgeStatus(null);
+      const id = setInterval(() => verifyBridge(cfg.bridgeUrl), 10_000);
+      return () => clearInterval(id);
     }
-  }, [cfg.printMode, cfg.bridgeUrl]);
+    setBridgeStatus(null);
+  }, [cfg.printMode, cfg.bridgeUrl, verifyBridge]);
 
-  const persist = (next: PrintConfig) => {
+  // ---- Persistência ----
+  const persist = useCallback((next: PrintConfig) => {
     setCfg(next);
-    savePrintConfig(next);
-  };
+    setSaving(true);
+    try {
+      savePrintConfig(next);
+      toast.success("Configuração salva no banco e sincronizada.");
+    } catch (e: any) {
+      const msg = String(e?.message ?? "");
+      if (msg.includes("42501") || /row-level security/i.test(msg)) {
+        toast.error("Erro de permissão ao salvar print_config. Verifique RPC admin_save_print_config.");
+      } else {
+        toast.error(`Falha ao salvar: ${msg || "erro desconhecido"}`);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, []);
 
   const update = <K extends keyof PrintConfig>(key: K, value: PrintConfig[K]) => {
     persist({ ...cfg, [key]: value });
   };
-
-  const updateFont = (key: keyof FontSizesOverride, value: number) => {
-    persist({ ...cfg, fontSizes: { ...cfg.fontSizes, [key]: value } });
-  };
-
   const updateSection = (key: keyof VisibleSections, value: boolean) => {
     persist({ ...cfg, visibleSections: { ...cfg.visibleSections, [key]: value } });
   };
-
   const handlePreset = (preset: LayoutPreset) => {
     persist(applyPreset(preset, cfg));
-    toast({ title: `Modelo aplicado: ${PRESET_LABELS[preset]}` });
+  };
+
+  // ---- Ações ----
+  const handleSyncFromDb = async () => {
+    setSyncing(true);
+    try {
+      const fresh = await syncPrintConfigFromDb();
+      setCfg(fresh);
+      toast.success("Configuração sincronizada do banco.");
+    } catch (e: any) {
+      toast.error(`Falha ao sincronizar: ${e?.message ?? "?"}`);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleReset = () => {
     const fresh = resetPrintConfig();
     setCfg(fresh);
-    toast({ title: "Configurações restauradas ao padrão" });
+    toast.success("Configuração restaurada ao padrão.");
   };
 
-  const handleTestPrint = async () => {
-    let success = false;
-    let errorMsg = "";
+  // ---- Testes de impressão ----
+  const runTestPrint = async (kind: PreviewKind) => {
+    setPrinting(kind);
+    let ok = false;
+    let err = "";
     try {
-      if (previewMode === "senha") {
-        success = await printSenha("146", SAMPLE_ITEMS, {
-          waiterName: "Carlos",
-          orderId: "abcd1234ef56789012114162",
-          customerName: "CONSUMIDOR FINAL",
-          total: SAMPLE_TOTAL,
-          force: true,
-        });
-      } else {
-        success = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL);
+      switch (kind) {
+        case "mesa":
+          ok = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
+            serviceType: "dine_in",
+          });
+          break;
+        case "retirada":
+          ok = await printReceipt("", "", SAMPLE_ITEMS, SAMPLE_TOTAL, {
+            serviceType: "pickup",
+            customerName: "João Pereira",
+            customerPhone: "(11) 98888-2222",
+          });
+          break;
+        case "delivery":
+          ok = await printDelivery({
+            items: SAMPLE_ITEMS,
+            customerName: SAMPLE_DELIVERY.customerName,
+            customerPhone: SAMPLE_DELIVERY.customerPhone,
+            deliveryAddress: SAMPLE_DELIVERY.deliveryAddress,
+            deliveryFee: SAMPLE_DELIVERY.deliveryFee,
+            subtotal: SAMPLE_TOTAL,
+            total: SAMPLE_TOTAL + SAMPLE_DELIVERY.deliveryFee,
+            paymentMethod: SAMPLE_DELIVERY.paymentMethod,
+            changeFor: SAMPLE_DELIVERY.changeFor,
+            orderId: "test-delivery-001",
+            orderShortId: "T001",
+            serviceType: "delivery",
+          });
+          break;
+        case "conta":
+          ok = await printBill("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
+            serviceType: "dine_in",
+          });
+          break;
+        case "senha":
+          ok = await printSenha("146", SAMPLE_ITEMS, {
+            waiterName: "Carlos",
+            orderId: "test-senha-0001",
+            customerName: "CONSUMIDOR FINAL",
+            total: SAMPLE_TOTAL,
+            force: true,
+          });
+          break;
       }
     } catch (e: any) {
-      errorMsg = e.message;
+      err = e?.message ?? "";
+    } finally {
+      setPrinting(null);
     }
-
-    if (success) {
-      toast({ title: "Impressão enviada!", description: "O comando foi processado pela ponte." });
+    if (ok) {
+      toast.success(`Teste de ${kind} enviado para impressão.`);
     } else {
-      toast({
-        title: "Erro na Impressão",
-        description: cfg.printMode === "bridge"
-          ? (errorMsg || "Ponte local indisponível ou impressora desconectada.")
-          : "No modo Navegador a impressão real não é executada — use a ponte local para imprimir de verdade.",
-        variant: "destructive",
-      });
+      toast.error(
+        cfg.printMode === "bridge"
+          ? `Falha no teste de ${kind}: ${err || "ponte indisponível"}`
+          : `Modo Navegador não imprime de verdade — ative a Ponte Local.`,
+      );
     }
   };
 
+  // ---- Preview HTML (mesma fonte do ESC/POS) ----
   const previewHtml = useMemo(() => {
-    if (previewMode === "senha")
-      return buildSenhaHtml("146", SAMPLE_ITEMS, cfg, {
-        waiterName: "Carlos",
-        orderId: "abcd1234ef56789012114162",
-        customerName: "CONSUMIDOR FINAL",
-        total: SAMPLE_TOTAL,
-      });
-    return buildReceiptHtml("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, cfg);
-  }, [cfg, previewMode]);
+    switch (previewKind) {
+      case "mesa":
+        return buildReceiptHtml("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, cfg);
+      case "retirada":
+        return buildHtmlFromLayout(
+          "PEDIDO",
+          "Retirada",
+          {
+            tableName: "",
+            waiterName: "",
+            items: SAMPLE_ITEMS,
+            total: SAMPLE_TOTAL,
+            serviceType: "pickup",
+            customerName: "João Pereira",
+            customerPhone: "(11) 98888-2222",
+          },
+          cfg,
+        );
+      case "delivery":
+        return buildHtmlFromLayout(
+          "DELIVERY",
+          "Delivery",
+          {
+            items: SAMPLE_ITEMS,
+            subtotal: SAMPLE_TOTAL,
+            deliveryFee: SAMPLE_DELIVERY.deliveryFee,
+            total: SAMPLE_TOTAL + SAMPLE_DELIVERY.deliveryFee,
+            customerName: SAMPLE_DELIVERY.customerName,
+            customerPhone: SAMPLE_DELIVERY.customerPhone,
+            deliveryAddress: SAMPLE_DELIVERY.deliveryAddress,
+            paymentMethod: SAMPLE_DELIVERY.paymentMethod,
+            changeFor: SAMPLE_DELIVERY.changeFor,
+            orderShortId: "T001",
+            serviceType: "delivery",
+          },
+          cfg,
+        );
+      case "conta":
+        return buildHtmlFromLayout(
+          "CONTA",
+          "Conta",
+          {
+            tableName: "Mesa 5",
+            waiterName: "Carlos",
+            items: SAMPLE_ITEMS,
+            total: SAMPLE_TOTAL,
+            serviceType: "dine_in",
+          },
+          cfg,
+        );
+      case "senha":
+        return buildSenhaHtml("146", SAMPLE_ITEMS, cfg, {
+          waiterName: "Carlos",
+          orderId: "test-senha-0001",
+          customerName: "CONSUMIDOR FINAL",
+          total: SAMPLE_TOTAL,
+        });
+    }
+  }, [cfg, previewKind]);
 
   const pxWidth = cfg.paperWidth === "58mm" ? 219 : 302;
 
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full">
-      {/* LEFT: Visual editor */}
-      <div className="flex-1 space-y-6 min-w-0 max-w-md">
-
-        {/* Diagnóstico de versão / fonte da config */}
-        <section className="rounded-lg border border-border bg-muted/30 p-3 text-[11px] font-mono space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">APP_BUILD</span>
-            <span className="font-bold">{APP_BUILD}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">PRINT_ENGINE</span>
-            <span className="font-bold">{PRINT_ENGINE_VERSION}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">config_source</span>
-            <span className={`font-bold ${cfg.configSource === "db" ? "text-success" : "text-warning"}`}>
-              {cfg.configSource ?? "default"}
-            </span>
-          </div>
-          {cfg.configUpdatedAt && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">updated_at</span>
-              <span className="font-bold">{new Date(cfg.configUpdatedAt).toLocaleString("pt-BR")}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">print_mode</span>
-            <span className="font-bold">{cfg.printMode}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground shrink-0">bridge_url</span>
-            <span className="font-bold truncate text-right">{cfg.bridgeUrl}</span>
-          </div>
-          <p className="text-[10px] text-muted-foreground pt-1">
-            Se config_source ficar em "local" após salvar, o banco rejeitou a gravação. Se PRINT_ENGINE não bater com o que sai no papel, o EXE está com bundle antigo.
-          </p>
-        </section>
-
-        {/* Modelo predefinido */}
-        <section className="space-y-2">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Modelo do cupom</Label>
-          <Select value={cfg.layoutPreset} onValueChange={(v) => handlePreset(v as LayoutPreset)}>
-            <SelectTrigger className="font-bold">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(PRESET_LABELS) as LayoutPreset[]).map((k) => (
-                <SelectItem key={k} value={k}>{PRESET_LABELS[k]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-[11px] text-muted-foreground">Aplica um layout-base. Você pode ajustar tudo abaixo.</p>
-        </section>
-
-        {/* Largura */}
-        <section className="space-y-2">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Largura do papel</Label>
-          <div className="flex gap-2">
-            {(["58mm", "80mm"] as const).map((w) => (
-              <Button
-                key={w}
-                variant={cfg.paperWidth === w ? "default" : "outline"}
-                className="flex-1 font-bold"
-                onClick={() => update("paperWidth", w)}
-              >{w}</Button>
-            ))}
-          </div>
-        </section>
-
-        {/* Alinhamento do conteúdo */}
-        <section className="space-y-2">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Alinhamento do conteúdo</Label>
-          <div className="flex gap-2">
-            {([
-              { v: "left", label: "Esquerda" },
-              { v: "center", label: "Centralizado" },
-            ] as const).map((opt) => (
-              <Button
-                key={opt.v}
-                variant={cfg.contentAlign === opt.v ? "default" : "outline"}
-                className="flex-1 font-bold"
-                onClick={() => update("contentAlign", opt.v)}
-              >{opt.label}</Button>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground">Aplica a mesa, itens e total. Título e rodapé sempre centralizados.</p>
-        </section>
-
-        {/* Fontes por seção */}
-        <section className="space-y-3 p-4 rounded-lg bg-secondary/40 border">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tamanho das fontes</Label>
-          {FONT_FIELDS.map((f) => {
-            const value = cfg.fontSizes[f.key] ?? f.def;
-            return (
-              <div key={f.key} className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold">{f.label}</span>
-                  <span className="font-mono text-muted-foreground">{value}px</span>
-                </div>
-                <Slider
-                  min={f.min}
-                  max={f.max}
-                  step={1}
-                  value={[value]}
-                  onValueChange={([v]) => updateFont(f.key, v)}
-                />
-              </div>
-            );
-          })}
-        </section>
-
-        {/* Visibilidade */}
-        <section className="space-y-3 p-4 rounded-lg bg-secondary/40 border">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Mostrar / ocultar</Label>
-          {SECTION_FIELDS.map((s) => (
-            <div key={s.key} className="flex items-center justify-between">
-              <span className="text-sm font-medium">{s.label}</span>
-              <Switch
-                checked={cfg.visibleSections[s.key]}
-                onCheckedChange={(v) => updateSection(s.key, v)}
-              />
-            </div>
-          ))}
-          <div className="flex items-center justify-between pt-2 border-t border-border/40">
-            <span className="text-sm font-medium">Imprimir senha automaticamente no BALCÃO</span>
-            <Switch
-              checked={cfg.printSenhaEnabled}
-              onCheckedChange={(v) => update("printSenhaEnabled", v)}
-            />
-          </div>
-        </section>
-
-        {/* Textos */}
-        <section className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Título</Label>
-            <input
-              type="text"
-              value={cfg.headerText}
-              onChange={(e) => update("headerText", e.target.value)}
-              className="w-full p-2 text-sm border rounded bg-white font-bold focus:ring-1 focus:ring-primary outline-none"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Rodapé</Label>
-            <input
-              type="text"
-              value={cfg.footerText}
-              onChange={(e) => update("footerText", e.target.value)}
-              className="w-full p-2 text-sm border rounded bg-white focus:ring-1 focus:ring-primary outline-none"
-            />
-          </div>
-        </section>
-
-        {/* Modo de impressão (técnico) */}
-        <section className="space-y-2">
-          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Modo de impressão</Label>
-          <div className="flex gap-2">
-            {(["browser", "bridge"] as const).map((m) => (
-              <Button
-                key={m}
-                variant={cfg.printMode === m ? "default" : "outline"}
-                className="flex-1 font-bold"
-                onClick={() => update("printMode", m)}
-              >{m === "browser" ? "Navegador" : "Ponte Local"}</Button>
-            ))}
-          </div>
-
-          {cfg.printMode === "bridge" ? (
-            <div className="pt-2 p-3 bg-slate-900/5 rounded-lg border border-slate-200 space-y-3">
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase">URL da Ponte Local</label>
-                <div className="flex gap-2 mt-0.5">
-                  <input
-                    type="text"
-                    value={cfg.bridgeUrl}
-                    onChange={(e) => update("bridgeUrl", e.target.value)}
-                    className="flex-1 p-2 text-xs border rounded bg-white font-mono focus:ring-1 focus:ring-primary outline-none"
-                  />
-                  <Button size="icon" variant="ghost" onClick={() => verifyBridge(cfg.bridgeUrl)} disabled={checking} className="h-8 w-8">
-                    <RotateCcw className={`w-3.5 h-3.5 ${checking ? "animate-spin" : ""}`} />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
-                <span className="text-muted-foreground uppercase">Status:</span>
-                {bridgeStatus?.online ? (
-                  <div className="flex items-center gap-1.5 text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" /><span>PONTE ONLINE</span></div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-rose-500"><AlertTriangle className="w-3.5 h-3.5" /><span>PONTE OFFLINE</span></div>
-                )}
-              </div>
-
-              {bridgeStatus?.online && (
-                <div className="flex items-center justify-between gap-2 text-[11px] font-bold pt-1 border-t border-slate-200/50">
-                  <span className="text-muted-foreground uppercase">Impressora USB:</span>
-                  {bridgeStatus.printer_connected
-                    ? <span className="text-emerald-600">DETECTADA</span>
-                    : <span className="text-amber-600">NÃO DETECTADA</span>}
-                </div>
-              )}
-
-              {bridgeStatus?.error && (
-                <p className="text-[10px] text-rose-500 font-medium leading-tight">{bridgeStatus.error}</p>
-              )}
-
-              <p className="text-[10px] text-muted-foreground leading-relaxed pt-1 border-t border-slate-200/50">
-                <Info className="w-3 h-3 inline mr-1 mb-0.5" />
-                A janela <strong>Impressao do app</strong> no desktop serve apenas para configurar fila/impressora local.
-                A aparência do cupom é configurada aqui.
-              </p>
-
-              <div className="pt-1">
-                <Button variant="link" className="h-auto p-0 text-[10px] gap-1 text-primary font-bold" asChild>
-                  <a href="/bridge/BRIDGE_INSTRUCTIONS.md" target="_blank">
-                    <Download className="w-3 h-3" /> VER INSTRUÇÕES DE INSTALAÇÃO
-                  </a>
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
-              <p className="text-[10px] text-amber-700 leading-relaxed">
-                <Info className="w-3 h-3 inline mr-1 mb-0.5" />
-                No modo <strong>Navegador</strong>, a impressão real não é executada (evita gerar PDF).
-                Use a <strong>Ponte Local</strong> para imprimir de verdade.
-              </p>
-            </div>
-          )}
-        </section>
-
-        <PrinterDiagnostics
-          bridgeUrl={cfg.bridgeUrl}
-          onBridgeUrlChange={(url) => setCfg((c) => ({ ...c, bridgeUrl: url, printMode: "bridge" }))}
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-6 w-full">
+      {/* ========== COLUNA ESQUERDA — Editor ========== */}
+      <div className="space-y-6 min-w-0">
+        {/* 1. STATUS */}
+        <StatusCard
+          cfg={cfg}
+          bridgeStatus={bridgeStatus}
+          syncing={syncing}
+          saving={saving}
+          onSync={handleSyncFromDb}
+          onReset={handleReset}
         />
 
-        {/* Actions */}
-        <div className="flex gap-2 pt-2">
-          <Button variant="outline" className="flex-1 gap-2 font-bold" onClick={handleReset}>
-            <RotateCcw className="w-4 h-4" /> RESETAR
-          </Button>
-          <Button className="flex-1 gap-2 font-bold" onClick={handleTestPrint}>
-            <Printer className="w-4 h-4" /> TESTAR
-          </Button>
-        </div>
+        {/* 2. BRIDGE */}
+        <BridgeCard
+          cfg={cfg}
+          bridgeStatus={bridgeStatus}
+          checking={checking}
+          onChange={(patch) => persist({ ...cfg, ...patch })}
+          onTest={() => verifyBridge(cfg.bridgeUrl)}
+        />
+
+        {/* 3. LAYOUT */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center gap-2">
+              <Printer className="w-4 h-4" /> Layout do talão
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase font-bold text-muted-foreground">Cabeçalho</Label>
+              <Input
+                value={cfg.headerText}
+                onChange={(e) => setCfg({ ...cfg, headerText: e.target.value })}
+                onBlur={() => persist(cfg)}
+                placeholder="PLANO B ESPETARIA"
+                aria-label="cabeçalho do talão"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase font-bold text-muted-foreground">Rodapé</Label>
+              <Input
+                value={cfg.footerText}
+                onChange={(e) => setCfg({ ...cfg, footerText: e.target.value })}
+                onBlur={() => persist(cfg)}
+                placeholder="Obrigado pela preferência!"
+                aria-label="rodapé do talão"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground">Largura</Label>
+                <div className="flex gap-2">
+                  {(["58mm", "80mm"] as const).map((w) => (
+                    <Button
+                      key={w}
+                      size="sm"
+                      variant={cfg.paperWidth === w ? "default" : "outline"}
+                      className="flex-1 font-bold"
+                      onClick={() => update("paperWidth", w)}
+                    >
+                      {w}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground">Tamanho</Label>
+                <div className="flex gap-2">
+                  {(["normal", "grande"] as const).map((s) => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      variant={cfg.printSize === s ? "default" : "outline"}
+                      className="flex-1 font-bold capitalize"
+                      onClick={() => update("printSize", s)}
+                    >
+                      {s === "normal" ? "Pequeno" : "Grande"}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground">Alinhamento</Label>
+                <div className="flex gap-2">
+                  {([
+                    { v: "left", label: "Esquerda" },
+                    { v: "center", label: "Centro" },
+                  ] as const).map((opt) => (
+                    <Button
+                      key={opt.v}
+                      size="sm"
+                      variant={cfg.contentAlign === opt.v ? "default" : "outline"}
+                      className="flex-1 font-bold"
+                      onClick={() => update("contentAlign", opt.v)}
+                    >
+                      {opt.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground">Preset visual</Label>
+                <Select value={cfg.layoutPreset} onValueChange={(v) => handlePreset(v as LayoutPreset)}>
+                  <SelectTrigger className="font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PRESET_LABELS) as LayoutPreset[]).map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {PRESET_LABELS[k]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 4. CONTEÚDO EXIBIDO */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-bold uppercase tracking-wide">Conteúdo exibido</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {SECTION_FIELDS.map((s) => (
+              <div key={s.key} className="flex items-center justify-between py-1">
+                <span className="text-sm font-medium">{s.label}</span>
+                <Switch
+                  checked={cfg.visibleSections[s.key]}
+                  onCheckedChange={(v) => updateSection(s.key, v)}
+                  aria-label={`exibir ${s.label}`}
+                />
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-3 mt-2 border-t">
+              <span className="text-sm font-medium">Imprimir senha automaticamente no BALCÃO</span>
+              <Switch
+                checked={cfg.printSenhaEnabled}
+                onCheckedChange={(v) => update("printSenhaEnabled", v)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 6. DIAGNÓSTICO */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-bold uppercase tracking-wide">Diagnóstico avançado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PrinterDiagnostics
+              bridgeUrl={cfg.bridgeUrl}
+              onBridgeUrlChange={(url) => persist({ ...cfg, bridgeUrl: url, printMode: "bridge" })}
+            />
+          </CardContent>
+        </Card>
       </div>
 
-      {/* RIGHT: Live preview */}
-      <div className="flex-1 flex flex-col items-center min-w-0">
-        <div className="flex gap-2 mb-3">
-          <Button size="sm" variant={previewMode === "receipt" ? "default" : "outline"} onClick={() => setPreviewMode("receipt")} className="h-8 text-xs font-bold">Cupom Pedido</Button>
-          <Button size="sm" variant={previewMode === "senha" ? "default" : "outline"} onClick={() => setPreviewMode("senha")} className="h-8 text-xs font-bold">Senha Balcão</Button>
-        </div>
+      {/* ========== COLUNA DIREITA — Preview + Testes ========== */}
+      <div className="space-y-4 min-w-0">
+        <Card className="sticky top-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center justify-between">
+              <span>Preview real</span>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {cfg.paperWidth}
+              </Badge>
+            </CardTitle>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Atualiza ao vivo. Usa o mesmo modelo do ESC/POS — se o papel sair diferente,
+              é cache antigo no EXE.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Tabs value={previewKind} onValueChange={(v) => setPreviewKind(v as PreviewKind)}>
+              <TabsList className="grid grid-cols-5 w-full">
+                {PREVIEW_TABS.map(({ value, label, icon: Icon }) => (
+                  <TabsTrigger key={value} value={value} className="text-[10px] font-bold gap-1">
+                    <Icon className="w-3 h-3" />
+                    <span className="hidden sm:inline">{label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
 
-        <div className="bg-white rounded-lg shadow-xl overflow-hidden mx-auto border-4 border-slate-100 sticky top-4" style={{ width: pxWidth, maxHeight: 700 }}>
-          <iframe
-            title="Print Preview"
-            srcDoc={previewHtml}
-            style={{ width: pxWidth, minHeight: 400, maxHeight: 700, border: "none", display: "block" }}
-          />
-        </div>
-        <p className="text-[10px] text-muted-foreground mt-3 uppercase font-bold tracking-widest">
-          Pré-visualização ({cfg.paperWidth}) — atualiza ao vivo
-        </p>
+            <div
+              className="bg-white rounded-lg shadow-md overflow-hidden mx-auto border border-border"
+              style={{ width: pxWidth, maxHeight: 520 }}
+            >
+              <iframe
+                title={`Preview ${previewKind}`}
+                srcDoc={previewHtml}
+                style={{
+                  width: pxWidth,
+                  minHeight: 350,
+                  maxHeight: 520,
+                  border: "none",
+                  display: "block",
+                }}
+              />
+            </div>
+
+            <Button
+              className="w-full font-bold gap-2"
+              onClick={() => runTestPrint(previewKind)}
+              disabled={printing === previewKind}
+            >
+              <Printer className="w-4 h-4" />
+              {printing === previewKind
+                ? "Imprimindo..."
+                : `Imprimir teste de ${PREVIEW_TABS.find((t) => t.value === previewKind)?.label}`}
+            </Button>
+
+            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="w-3.5 h-3.5 inline mr-1 mb-0.5" />
+              Se o papel não mostrar o mesmo <strong>PRINT_ENGINE: {PRINT_ENGINE_VERSION}</strong> exibido aqui, a impressora está usando outra versão/cache.
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// Subcomponentes
+// ============================================================
+
+function StatusCard({
+  cfg,
+  bridgeStatus,
+  syncing,
+  saving,
+  onSync,
+  onReset,
+}: {
+  cfg: PrintConfig;
+  bridgeStatus: BridgeHealth | null;
+  syncing: boolean;
+  saving: boolean;
+  onSync: () => void;
+  onReset: () => void;
+}) {
+  const isLocalStale = cfg.configSource && cfg.configSource !== "db";
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center justify-between">
+          <span>Status da impressão</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={onSync} disabled={syncing}>
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              <span className="text-xs">Sincronizar</span>
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={onReset}>
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="text-xs">Padrão</span>
+            </Button>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-mono">
+          <Row label="APP_BUILD" value={APP_BUILD} />
+          <Row label="PRINT_ENGINE" value={PRINT_ENGINE_VERSION} />
+          <Row
+            label="CONFIG_SOURCE"
+            value={cfg.configSource ?? "default"}
+            tone={cfg.configSource === "db" ? "success" : "warning"}
+          />
+          <Row
+            label="CONFIG_UPDATED_AT"
+            value={cfg.configUpdatedAt ? new Date(cfg.configUpdatedAt).toLocaleString("pt-BR") : "—"}
+          />
+          <Row label="PRINT_MODE" value={cfg.printMode} />
+          <Row label="BRIDGE_URL" value={cfg.bridgeUrl} mono />
+          <Row
+            label="BRIDGE_STATUS"
+            value={bridgeStatus?.online ? "ONLINE" : bridgeStatus ? "OFFLINE" : "—"}
+            tone={bridgeStatus?.online ? "success" : bridgeStatus ? "danger" : undefined}
+          />
+          <Row
+            label="LAST_SYNC"
+            value={syncing ? "..." : cfg.configUpdatedAt ? new Date(cfg.configUpdatedAt).toLocaleTimeString("pt-BR") : "—"}
+          />
+        </div>
+
+        {saving && (
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Save className="w-3 h-3 animate-pulse" /> Salvando no banco...
+          </div>
+        )}
+
+        {isLocalStale && (
+          <div className="mt-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2 text-[11px] text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="w-3.5 h-3.5 inline mr-1 mb-0.5" />
+            Config local pode estar mais velha que a do banco. Clique em <strong>Sincronizar</strong>.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Row({
+  label,
+  value,
+  tone,
+  mono,
+}: {
+  label: string;
+  value: string;
+  tone?: "success" | "warning" | "danger";
+  mono?: boolean;
+}) {
+  const cls =
+    tone === "success"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : tone === "warning"
+      ? "text-amber-600 dark:text-amber-400"
+      : tone === "danger"
+      ? "text-rose-600 dark:text-rose-400"
+      : "";
+  return (
+    <div className="flex items-baseline justify-between gap-2 min-w-0">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className={`font-bold truncate text-right ${cls} ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function BridgeCard({
+  cfg,
+  bridgeStatus,
+  checking,
+  onChange,
+  onTest,
+}: {
+  cfg: PrintConfig;
+  bridgeStatus: BridgeHealth | null;
+  checking: boolean;
+  onChange: (patch: Partial<PrintConfig>) => void;
+  onTest: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center gap-2">
+          {bridgeStatus?.online ? (
+            <Cloud className="w-4 h-4 text-emerald-500" />
+          ) : (
+            <CloudOff className="w-4 h-4 text-rose-500" />
+          )}
+          Conexão da bridge
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex gap-2">
+          {(["browser", "bridge"] as const).map((m) => (
+            <Button
+              key={m}
+              size="sm"
+              variant={cfg.printMode === m ? "default" : "outline"}
+              className="flex-1 font-bold"
+              onClick={() => onChange({ printMode: m })}
+            >
+              {m === "browser" ? "Navegador" : "Ponte Local"}
+            </Button>
+          ))}
+        </div>
+
+        {cfg.printMode === "bridge" ? (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs uppercase font-bold text-muted-foreground">URL da Ponte Local</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={cfg.bridgeUrl}
+                  onChange={(e) => onChange({ bridgeUrl: e.target.value })}
+                  placeholder="http://localhost:9100/print"
+                  className="font-mono text-xs"
+                />
+                <Button size="sm" variant="outline" onClick={onTest} disabled={checking} className="gap-1.5 shrink-0">
+                  <RotateCcw className={`w-3.5 h-3.5 ${checking ? "animate-spin" : ""}`} />
+                  Testar
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                <Info className="w-3 h-3 inline mr-1 mb-0.5" />
+                Este campo é por dispositivo (não sincroniza com o banco).
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
+              <div className="rounded-md border p-2 flex items-center justify-between">
+                <span className="text-muted-foreground uppercase">Bridge:</span>
+                {bridgeStatus?.online ? (
+                  <span className="text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> ONLINE
+                  </span>
+                ) : (
+                  <span className="text-rose-500 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" /> OFFLINE
+                  </span>
+                )}
+              </div>
+              <div className="rounded-md border p-2 flex items-center justify-between">
+                <span className="text-muted-foreground uppercase">USB:</span>
+                {bridgeStatus?.printer_connected ? (
+                  <span className="text-emerald-600">DETECTADA</span>
+                ) : bridgeStatus?.online ? (
+                  <span className="text-amber-600">N/D</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </div>
+            </div>
+
+            {bridgeStatus?.error && (
+              <p className="text-[10px] text-rose-500 font-medium">{bridgeStatus.error}</p>
+            )}
+            {bridgeStatus?.online && (
+              <div className="text-[10px] text-muted-foreground font-mono space-y-0.5">
+                {bridgeStatus.bridge_version && <div>bridge_version: {bridgeStatus.bridge_version}</div>}
+                {typeof bridgeStatus.queue_depth === "number" && <div>queue_depth: {bridgeStatus.queue_depth}</div>}
+                {typeof bridgeStatus.latencyMs === "number" && <div>latency: {bridgeStatus.latencyMs}ms</div>}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2.5 text-[11px] text-amber-800 dark:text-amber-200">
+            <Info className="w-3.5 h-3.5 inline mr-1 mb-0.5" />
+            No modo <strong>Navegador</strong> a impressão real não acontece. Use a Ponte Local para imprimir de verdade.
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
