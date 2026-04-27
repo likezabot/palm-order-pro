@@ -61,6 +61,14 @@ const Pdv = () => {
     return localStorage.getItem("pdv-staff-mode") === "1";
   });
 
+  // Cancelamento de pedido
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+
+  // Filtros por tipo (cada seção)
+  type KindFilter = "all" | "dine_in" | "counter" | "delivery" | "pickup";
+  const [tablesFilter, setTablesFilter] = useState<KindFilter>("all");
+  const [deliveryFilter, setDeliveryFilter] = useState<KindFilter>("all");
+
   // Novos estados para dividir conta
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [splitCount, setSplitCount] = useState<number>(1);
