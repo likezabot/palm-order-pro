@@ -194,15 +194,9 @@ const Pdv = () => {
     return { tablesOrders, deliveryOrders };
   }, [orders]);
 
-  // Aplica filtros por tipo
-  const filteredTables = useMemo(
-    () => tablesFilter === "all" ? tablesOrders : tablesOrders.filter((o) => getOrderKind(o) === tablesFilter),
-    [tablesOrders, tablesFilter]
-  );
-  const filteredDeliveries = useMemo(
-    () => deliveryFilter === "all" ? deliveryOrders : deliveryOrders.filter((o) => getOrderKind(o) === deliveryFilter),
-    [deliveryOrders, deliveryFilter]
-  );
+  // Usa as listas originais separadas
+  const filteredTables = tablesOrders;
+  const filteredDeliveries = deliveryOrders;
 
   // Contagem de itens por seção
   const tablesItemsTotal = useMemo(
