@@ -283,3 +283,12 @@ export async function manualPrintBill(order: {
   return toManual(r);
 }
 
+/** Reimpressão explícita (ex.: botão "Imprimir novamente"). */
+export async function reprintOrder(
+  order: { id: string },
+  mode: DispatchMode = "full",
+): Promise<ManualPrintResult> {
+  const r = await printOrderByServiceType(order.id, mode, "reprint");
+  return toManual(r);
+}
+
