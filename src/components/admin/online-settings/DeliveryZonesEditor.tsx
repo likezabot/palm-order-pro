@@ -164,7 +164,7 @@ export default function DeliveryZonesEditor({ restaurantId }: { restaurantId: st
                 <div>
                   <Label>Taxa (R$)</Label>
                   <Input
-                    type="number"
+                    type="number" inputMode="decimal"
                     step="0.01"
                     min={0}
                     value={editing.fee ?? 0}
@@ -174,7 +174,7 @@ export default function DeliveryZonesEditor({ restaurantId }: { restaurantId: st
                 <div>
                   <Label>Pedido mín. (R$)</Label>
                   <Input
-                    type="number"
+                    type="number" inputMode="decimal"
                     step="0.01"
                     min={0}
                     value={editing.min_order ?? 0}
@@ -186,7 +186,7 @@ export default function DeliveryZonesEditor({ restaurantId }: { restaurantId: st
                 <div>
                   <Label>Tempo (min)</Label>
                   <Input
-                    type="number"
+                    type="number" inputMode="decimal"
                     min={1}
                     value={editing.estimated_minutes ?? 30}
                     onChange={(e) =>

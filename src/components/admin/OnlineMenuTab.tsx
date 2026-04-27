@@ -561,7 +561,7 @@ function EditDialog({
           <div>
             <Label>Ordem de exibição</Label>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               value={displayOrder}
               onChange={(e) => setDisplayOrder(parseInt(e.target.value) || 0)}
             />

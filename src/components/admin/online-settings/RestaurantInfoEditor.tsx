@@ -217,7 +217,7 @@ export default function RestaurantInfoEditor() {
           <div>
             <Label>Preparo padrão (min)</Label>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               min={0}
               value={form.default_prep_minutes}
               onChange={(e) =>
@@ -228,7 +228,7 @@ export default function RestaurantInfoEditor() {
           <div>
             <Label>Folga extra para entrega (min)</Label>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               min={0}
               value={form.delivery_prep_buffer}
               onChange={(e) =>

@@ -356,7 +356,7 @@ export default function LoyaltyTab() {
           <div>
             <Label>Custo (pontos) — mínimo 100</Label>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               min={100}
               value={form.points_cost}
               onChange={(e) => setForm({ ...form, points_cost: e.target.value })}
@@ -365,7 +365,7 @@ export default function LoyaltyTab() {
           <div>
             <Label>Pedido mínimo (R$) — máximo 80</Label>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               step="0.01"
               max={80}
               value={form.min_order_subtotal}
@@ -375,7 +375,7 @@ export default function LoyaltyTab() {
           <div>
             <Label>Ordem</Label>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               value={form.sort_order}
               onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
             />
@@ -491,7 +491,7 @@ export default function LoyaltyTab() {
                     <p className="text-xs font-bold uppercase">Ajuste manual</p>
                     <div className="grid grid-cols-3 gap-2">
                       <Input
-                        type="number"
+                        type="number" inputMode="decimal"
                         placeholder="Pontos (+/-)"
                         value={adjustPoints}
                         onChange={(e) => setAdjustPoints(e.target.value)}

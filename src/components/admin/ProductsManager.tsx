@@ -255,7 +255,7 @@ const ProductsManager = ({
           </div>
           <div className="flex gap-1 items-center">
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               min="0"
               step="0.01"
               value={minPrice}
@@ -265,7 +265,7 @@ const ProductsManager = ({
             />
             <span className="text-muted-foreground text-xs">–</span>
             <Input
-              type="number"
+              type="number" inputMode="decimal"
               min="0"
               step="0.01"
               value={maxPrice}
