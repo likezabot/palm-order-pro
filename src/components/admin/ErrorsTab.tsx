@@ -3,12 +3,16 @@
  *
  * Mantém os mesmos painéis que viviam no topo da aba Sistema, agora isolados
  * de ferramentas destrutivas (apagar dados, etc).
+ *
+ * Visível por padrão: apenas o resumo. Detalhes (diário, travadas, log)
+ * ficam atrás de "Mostrar opções avançadas".
  */
 import { ShieldAlert } from "lucide-react";
 import ErrorsSummaryPanel from "./ErrorsSummaryPanel";
 import DailyErrorsPanel from "./DailyErrorsPanel";
 import StuckPrintsPanel from "./StuckPrintsPanel";
 import ErrorLogPanel from "./ErrorLogPanel";
+import AdvancedSection from "./AdvancedSection";
 
 export default function ErrorsTab() {
   return (
@@ -21,15 +25,22 @@ export default function ErrorsTab() {
           <h2 className="font-black text-base text-foreground">Erros & Saúde do sistema</h2>
           <p className="text-muted-foreground mt-1">
             Tudo que falhou hoje (cardápio, PDV, cozinha, impressão, integrações) e o que o
-            sistema corrigiu sozinho. Use os painéis abaixo para investigar e destravar.
+            sistema corrigiu sozinho.
           </p>
         </div>
       </div>
 
       <ErrorsSummaryPanel />
-      <DailyErrorsPanel />
-      <StuckPrintsPanel />
-      <ErrorLogPanel />
+
+      <AdvancedSection
+        id="errors-details"
+        label="Mostrar detalhes técnicos"
+        description="Erros do dia, impressões travadas e log completo."
+      >
+        <DailyErrorsPanel />
+        <StuckPrintsPanel />
+        <ErrorLogPanel />
+      </AdvancedSection>
     </div>
   );
 }
