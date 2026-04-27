@@ -1027,6 +1027,21 @@ const Pdv = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal: Cancelar pedido */}
+      <CancelOrderDialog
+        order={cancelTarget}
+        open={!!cancelTarget}
+        onOpenChange={(o) => { if (!o) setCancelTarget(null); }}
+        onCancelled={() => {
+          queryClient.invalidateQueries({ queryKey: ["pdv-orders"] });
+          if (cancelTarget && selectedId === cancelTarget.id) {
+            setSelectedId(null);
+            setShowPayment(false);
+          }
+          setCancelTarget(null);
+        }}
+      />
     </div>
   );
 };
