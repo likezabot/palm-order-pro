@@ -48,8 +48,9 @@ const CartItemRow = ({
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const effectiveAdded = addedQty ?? Math.max(0, item.quantity - originalQty);
-  const isLockedTotally = originalQty > 0 && effectiveAdded === 0;
-  const canDecrement = effectiveAdded > 0;
+  // Não trava mais o decremento nem a edição de observação conforme pedido
+  const isLockedTotally = false;
+  const canDecrement = true;
   const lastTime = formatHHmm(lastAddedAt);
 
   return (
@@ -79,12 +80,9 @@ const CartItemRow = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              if (!canDecrement) return;
               playFeedback("click");
               onUpdateQuantity(item.product.id, -1);
             }}
-            disabled={!canDecrement}
-            title={!canDecrement ? "Item já enviado — não pode ser removido aqui" : undefined}
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-foreground active:scale-90 transition-transform disabled:opacity-40 disabled:active:scale-100 disabled:cursor-not-allowed"
           >
             <Minus size={18} />
@@ -107,21 +105,18 @@ const CartItemRow = ({
         placeholder="Observação (ex: sem cebola)"
         value={item.note}
         onChange={(e) => onUpdateNote(item.product.id, e.target.value)}
-        disabled={isLockedTotally}
-        className="mt-2 w-full rounded-lg border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/60 focus:border-ring transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="mt-2 w-full rounded-lg border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/60 focus:border-ring transition-all"
       />
 
-      {!isLockedTotally && (
-        <button
-          onClick={() => {
-            playFeedback("heavy");
-            setConfirmOpen(true);
-          }}
-          className="mt-2 flex items-center gap-1 text-sm text-destructive font-semibold hover:underline"
-        >
-          <Trash2 size={14} /> REMOVER
-        </button>
-      )}
+      <button
+        onClick={() => {
+          playFeedback("heavy");
+          setConfirmOpen(true);
+        }}
+        className="mt-2 flex items-center gap-1 text-sm text-destructive font-semibold hover:underline"
+      >
+        <Trash2 size={14} /> REMOVER
+      </button>
 
       <ConfirmRemoveDialog
         open={confirmOpen}
