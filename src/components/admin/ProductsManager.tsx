@@ -229,15 +229,6 @@ const ProductsManager = ({
       {/* Toolbar de busca + filtros */}
       <div className="sticky top-0 z-10 bg-background border-b border-border p-3 space-y-3">
         <div className="flex gap-2 items-center flex-wrap">
-          <div className="relative flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar produto…"
-              className="pl-9 h-10"
-            />
-          </div>
           <div className="flex gap-1 rounded-lg bg-card border border-border p-1">
             {(["all", "active", "inactive"] as const).map((s) => (
               <button
@@ -252,27 +243,6 @@ const ProductsManager = ({
                 {s === "all" ? "Todos" : s === "active" ? "Visíveis" : "Ocultos"}
               </button>
             ))}
-          </div>
-          <div className="flex gap-1 items-center">
-            <Input
-              type="number" inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={minPrice}
-              onChange={(e) => setMinPrice(e.target.value)}
-              placeholder="R$ min"
-              className="h-10 w-24"
-            />
-            <span className="text-muted-foreground text-xs">–</span>
-            <Input
-              type="number" inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(e.target.value)}
-              placeholder="R$ máx"
-              className="h-10 w-24"
-            />
           </div>
           {hasFilters && (
             <button
