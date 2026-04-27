@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert, Link2, Gift } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useProductOrder } from "@/hooks/use-product-order";
@@ -21,6 +21,7 @@ import ProductsManager from "@/components/admin/ProductsManager";
 import StatsPanel from "@/components/admin/StatsPanel";
 import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import AdminHeader from "@/components/admin/AdminHeader";
+import AdminSidebar from "@/components/admin/AdminSidebar";
 import OrdersTab from "@/components/admin/OrdersTab";
 import SystemTab from "@/components/admin/SystemTab";
 import ErrorsTab from "@/components/admin/ErrorsTab";
@@ -30,6 +31,20 @@ import OnlineOrdersTab from "@/components/admin/OnlineOrdersTab";
 import RoutesTab from "@/components/admin/RoutesTab";
 import LoyaltyTab from "@/components/admin/LoyaltyTab";
 import { manualPrintOrder } from "@/lib/print-service";
+
+const VALID_SECTIONS = new Set([
+  "products",
+  "online",
+  "loyalty",
+  "orders",
+  "online-orders",
+  "print",
+  "network",
+  "routes",
+  "errors",
+  "stats",
+  "system",
+]);
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -42,16 +57,25 @@ const Admin = () => {
   const [autoPrint, setAutoPrint] = useState(
     () => localStorage.getItem("pdv_autoprint") !== "false",
   );
-  const [activeTab, setActiveTab] = useState("products");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawSection = searchParams.get("section") ?? "products";
+  const activeTab = VALID_SECTIONS.has(rawSection) ? rawSection : "products";
+  const setActiveTab = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("section", next);
+    setSearchParams(params, { replace: true });
+  };
+
   const [staffMode, setStaffMode] = useState(
     () => localStorage.getItem("admin-staff-mode") === "true",
   );
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
-    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network" || activeTab === "errors")) {
+    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network" || activeTab === "errors" || activeTab === "routes")) {
       setActiveTab("products");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffMode, activeTab]);
 
   useEffect(() => {
@@ -202,160 +226,93 @@ const Admin = () => {
   }
 
   return (
-    <div className={`min-h-screen-safe flex flex-col bg-slate-50/50 ${staffMode ? "staff-mode" : ""}`}>
-      <AdminHeader
-        staffMode={staffMode}
-        onToggleStaffMode={() => setStaffMode((v) => !v)}
-        autoPrint={autoPrint}
-        onAutoPrintChange={setAutoPrint}
-        onNewProduct={() => {
-          setEditing(null);
-          setFormInitialCategory(undefined);
-          setShowForm(true);
-        }}
-      />
+    <SidebarProvider defaultOpen>
+      <div className={`min-h-screen-safe flex w-full ${staffMode ? "staff-mode" : ""}`}>
+        <AdminSidebar
+          active={activeTab}
+          onChange={setActiveTab}
+          staffMode={staffMode}
+          unresolvedErrors={unresolvedErrors}
+        />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <div className="bg-white border-b border-border px-2 sm:px-4 overflow-x-auto">
-          <TabsList className="bg-transparent h-14 gap-3 sm:gap-6 w-max">
-            <TabsTrigger
-              value="products"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 whitespace-nowrap"
-            >
-              Cardápio
-            </TabsTrigger>
-            <TabsTrigger
-              value="online"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Globe className="w-4 h-4" /> <span className="hidden sm:inline">Cardápio </span>Online
-            </TabsTrigger>
-            <TabsTrigger
-              value="online-orders"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <ShoppingCart className="w-4 h-4" /> <span className="hidden sm:inline">Pedidos </span>Online
-            </TabsTrigger>
-            <TabsTrigger
-              value="orders"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <ShoppingBag className="w-4 h-4" /> <span className="hidden sm:inline">Editor de </span>Pedidos
-            </TabsTrigger>
-            <TabsTrigger
-              value="print"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Printer className="w-4 h-4" /> Impressão
-            </TabsTrigger>
-            <TabsTrigger
-              value="errors"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap relative"
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span className="hidden sm:inline">Erros &amp; Saúde</span>
-              <span className="sm:hidden">Erros</span>
-              {unresolvedErrors > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black leading-none">
-                  {unresolvedErrors > 99 ? "99+" : unresolvedErrors}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="stats"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <BarChart3 className="w-4 h-4" /> <span className="hidden sm:inline">Estatísticas</span><span className="sm:hidden">Stats</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="system"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Wrench className="w-4 h-4" /> Sistema
-            </TabsTrigger>
-            <TabsTrigger
-              value="network"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Activity className="w-4 h-4" /> Rede
-            </TabsTrigger>
-            <TabsTrigger
-              value="loyalty"
-              className="font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Gift className="w-4 h-4" /> Fidelidade
-            </TabsTrigger>
-            <TabsTrigger
-              value="routes"
-              className="admin-only font-bold text-xs sm:text-sm h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-0 flex gap-1.5 sm:gap-2 whitespace-nowrap"
-            >
-              <Link2 className="w-4 h-4" /> <span className="hidden sm:inline">Rotas &amp; </span>URLs
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="products" className="flex-1 mt-0 flex flex-col">
-          <ProductsManager
-            productsByCategory={productsByCategory}
-            orderMap={orderMap}
-            sensors={sensors}
-            onDragEnd={handleDragEnd}
-            onResetOrder={handleResetOrder}
-            onToggleActive={handleToggleActive}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onNewProduct={(cat) => {
-              playFeedback("click");
+        <SidebarInset className="flex flex-col bg-slate-50/50 min-w-0">
+          <AdminHeader
+            staffMode={staffMode}
+            onToggleStaffMode={() => setStaffMode((v) => !v)}
+            autoPrint={autoPrint}
+            onAutoPrintChange={setAutoPrint}
+            onNewProduct={() => {
               setEditing(null);
-              setFormInitialCategory(cat);
+              setFormInitialCategory(undefined);
               setShowForm(true);
             }}
           />
-        </TabsContent>
 
-        <TabsContent value="orders" className="flex-1 p-4 space-y-3 mt-0">
-          <OrdersTab orders={activeOrders} onPrint={handlePrintOrder} onEdit={handleEditOrder} />
-        </TabsContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+            <TabsContent value="products" className="flex-1 mt-0 flex flex-col">
+              <ProductsManager
+                productsByCategory={productsByCategory}
+                orderMap={orderMap}
+                sensors={sensors}
+                onDragEnd={handleDragEnd}
+                onResetOrder={handleResetOrder}
+                onToggleActive={handleToggleActive}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onNewProduct={(cat) => {
+                  playFeedback("click");
+                  setEditing(null);
+                  setFormInitialCategory(cat);
+                  setShowForm(true);
+                }}
+              />
+            </TabsContent>
 
-        <TabsContent value="online" className="flex-1 p-4 mt-0 bg-white border-t">
-          <OnlineMenuTab />
-        </TabsContent>
+            <TabsContent value="orders" className="flex-1 p-4 space-y-3 mt-0">
+              <OrdersTab orders={activeOrders} onPrint={handlePrintOrder} onEdit={handleEditOrder} />
+            </TabsContent>
 
-        <TabsContent value="online-orders" className="flex-1 p-4 mt-0 bg-white border-t">
-          <OnlineOrdersTab />
-        </TabsContent>
+            <TabsContent value="online" className="flex-1 p-4 mt-0 bg-white">
+              <OnlineMenuTab />
+            </TabsContent>
 
-        <TabsContent value="print" className="flex-1 p-4 mt-0 bg-white border-t">
-          <div className="max-w-2xl mx-auto py-4">
-            <PrintConfigPanel />
-          </div>
-        </TabsContent>
+            <TabsContent value="online-orders" className="flex-1 p-4 mt-0 bg-white">
+              <OnlineOrdersTab />
+            </TabsContent>
 
-        <TabsContent value="stats" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <StatsPanel />
-        </TabsContent>
+            <TabsContent value="print" className="flex-1 p-4 mt-0 bg-white">
+              <div className="max-w-2xl mx-auto py-4">
+                <PrintConfigPanel />
+              </div>
+            </TabsContent>
 
-        <TabsContent value="errors" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <ErrorsTab />
-        </TabsContent>
+            <TabsContent value="stats" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <StatsPanel />
+            </TabsContent>
 
-        <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <SystemTab />
-        </TabsContent>
+            <TabsContent value="errors" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <ErrorsTab />
+            </TabsContent>
 
-        <TabsContent value="network" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <NetworkTab />
-        </TabsContent>
+            <TabsContent value="system" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <SystemTab />
+            </TabsContent>
 
-        <TabsContent value="routes" className="flex-1 p-4 mt-0 bg-white border-t admin-only">
-          <RoutesTab />
-        </TabsContent>
+            <TabsContent value="network" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <NetworkTab />
+            </TabsContent>
 
-        <TabsContent value="loyalty" className="flex-1 p-4 mt-0 bg-white border-t">
-          <LoyaltyTab />
-        </TabsContent>
-      </Tabs>
-    </div>
+            <TabsContent value="routes" className="flex-1 p-4 mt-0 bg-white admin-only">
+              <RoutesTab />
+            </TabsContent>
+
+            <TabsContent value="loyalty" className="flex-1 p-4 mt-0 bg-white">
+              <LoyaltyTab />
+            </TabsContent>
+          </Tabs>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 };
 

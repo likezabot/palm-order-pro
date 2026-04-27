@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, Archive, History, Trash2, Info } from "lucide-react";
+import { RefreshCw, Archive, History, Trash2, Info, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useToast } from "@/hooks/use-toast";
 import { getAppVersion } from "@/lib/version-check";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import AdvancedSection from "./AdvancedSection";
 
 type RetentionLog = {
   id: number;
@@ -152,13 +153,17 @@ export const SystemTab = () => {
 
   return (
     <div className="max-w-2xl mx-auto py-4 space-y-6">
-      <div className="rounded-xl border border-border bg-muted/40 p-3 flex items-start gap-3 text-sm">
-        <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-        <p className="text-muted-foreground">
-          Procurando erros, impressões travadas ou o resumo diário?
-          {" "}
-          <span className="font-bold text-foreground">Veja a aba “Erros &amp; Saúde”.</span>
-        </p>
+      <div className="rounded-xl border-2 border-border bg-muted/30 p-4 flex items-start gap-3">
+        <div className="rounded-lg bg-primary/10 p-2.5 shrink-0">
+          <Wrench className="w-5 h-5 text-primary" />
+        </div>
+        <div className="text-sm">
+          <h2 className="font-black text-base text-foreground">Manutenção do sistema</h2>
+          <p className="text-muted-foreground mt-1">
+            Forçar atualização do app, limpar dados de teste e arquivar pedidos antigos.
+            Procurando erros ou impressões travadas? Veja a seção <strong>Erros &amp; Saúde</strong>.
+          </p>
+        </div>
       </div>
       <div className="rounded-xl border-2 border-destructive/60 bg-destructive/5 p-5 space-y-4">
         <div className="flex items-start gap-3">
@@ -242,103 +247,109 @@ export const SystemTab = () => {
         </p>
       </div>
 
-      <div className="rounded-xl border-2 border-border p-5 space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-primary/10 p-2.5">
-            <Archive className="w-5 h-5 text-primary" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-black text-lg text-slate-900">
-              Arquivar pedidos antigos
-            </h3>
-            <p className="text-sm text-slate-600 mt-1">
-              Consolida pedidos pagos com mais de 60 dias em histórico diário
-              (por garçom, produto e total) e apaga os registros detalhados.
-              Roda automaticamente todo dia às 04:00; use o botão para forçar
-              agora.
-            </p>
-          </div>
-        </div>
-        <Button
-          onClick={handleArchive}
-          disabled={archiving}
-          className="w-full h-14 font-black text-base gap-2"
-        >
-          <Archive className="w-5 h-5" />
-          {archiving ? "ARQUIVANDO…" : "ARQUIVAR AGORA"}
-        </Button>
-      </div>
-
-      <div className="rounded-xl border-2 border-border p-5 space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-primary/10 p-2.5">
-            <History className="w-5 h-5 text-primary" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-black text-lg text-slate-900">
-              Histórico de arquivamentos
-            </h3>
-            <p className="text-sm text-slate-600 mt-1">
-              Últimas 20 execuções (manual ou automática às 04:00).
-            </p>
+      <AdvancedSection
+        id="system-archive"
+        label="Mostrar arquivamento e histórico"
+        description="Consolida pedidos pagos com mais de 60 dias e mostra o log das execuções automáticas."
+      >
+        <div className="rounded-xl border-2 border-border p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2.5">
+              <Archive className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-black text-lg text-slate-900">
+                Arquivar pedidos antigos
+              </h3>
+              <p className="text-sm text-slate-600 mt-1">
+                Consolida pedidos pagos com mais de 60 dias em histórico diário
+                (por garçom, produto e total) e apaga os registros detalhados.
+                Roda automaticamente todo dia às 04:00; use o botão para forçar
+                agora.
+              </p>
+            </div>
           </div>
           <Button
-            size="sm"
-            variant="outline"
-            onClick={loadLogs}
-            disabled={loadingLogs}
+            onClick={handleArchive}
+            disabled={archiving}
+            className="w-full h-14 font-black text-base gap-2"
           >
-            <RefreshCw className={`w-4 h-4 ${loadingLogs ? "animate-spin" : ""}`} />
+            <Archive className="w-5 h-5" />
+            {archiving ? "ARQUIVANDO…" : "ARQUIVAR AGORA"}
           </Button>
         </div>
 
-        {logs.length === 0 ? (
-          <p className="text-sm text-slate-500 text-center py-4">
-            {loadingLogs ? "Carregando…" : "Nenhuma execução registrada ainda."}
-          </p>
-        ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {logs.map((log) => {
-              const r = log.result || {};
-              const ok = log.status === "success";
-              return (
-                <div
-                  key={log.id}
-                  className={`rounded-lg border p-3 text-sm ${
-                    ok ? "border-border bg-muted/30" : "border-destructive/40 bg-destructive/5"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-bold text-slate-900">
-                      {new Date(log.executed_at).toLocaleString("pt-BR")}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded font-mono bg-background border">
-                      {log.trigger_source}
-                    </span>
-                  </div>
-                  {ok ? (
-                    <div className="text-xs text-slate-600 grid grid-cols-2 gap-x-2">
-                      <span>Pedidos: <b>{String(r.deleted_orders ?? 0)}</b></span>
-                      <span>Itens: <b>{String(r.deleted_order_items ?? 0)}</b></span>
-                      <span>Dias resumo: <b>{String(r.archived_summary_days ?? 0)}</b></span>
-                      <span>Garçons: <b>{String(r.archived_waiter_rows ?? 0)}</b></span>
-                      <span>Produtos: <b>{String(r.archived_product_rows ?? 0)}</b></span>
-                      <span>Mov. caixa: <b>{String(r.deleted_cash_movements ?? 0)}</b></span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-destructive font-mono break-all">
-                      {log.error_message}
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-500 mt-1">
-                    {log.days_kept} dias mantidos · {log.duration_ms ?? 0}ms
-                  </p>
-                </div>
-              );
-            })}
+        <div className="rounded-xl border-2 border-border p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2.5">
+              <History className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-black text-lg text-slate-900">
+                Histórico de arquivamentos
+              </h3>
+              <p className="text-sm text-slate-600 mt-1">
+                Últimas 20 execuções (manual ou automática às 04:00).
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={loadLogs}
+              disabled={loadingLogs}
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingLogs ? "animate-spin" : ""}`} />
+            </Button>
           </div>
-        )}
-      </div>
+
+          {logs.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-4">
+              {loadingLogs ? "Carregando…" : "Nenhuma execução registrada ainda."}
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {logs.map((log) => {
+                const r = log.result || {};
+                const ok = log.status === "success";
+                return (
+                  <div
+                    key={log.id}
+                    className={`rounded-lg border p-3 text-sm ${
+                      ok ? "border-border bg-muted/30" : "border-destructive/40 bg-destructive/5"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-bold text-slate-900">
+                        {new Date(log.executed_at).toLocaleString("pt-BR")}
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded font-mono bg-background border">
+                        {log.trigger_source}
+                      </span>
+                    </div>
+                    {ok ? (
+                      <div className="text-xs text-slate-600 grid grid-cols-2 gap-x-2">
+                        <span>Pedidos: <b>{String(r.deleted_orders ?? 0)}</b></span>
+                        <span>Itens: <b>{String(r.deleted_order_items ?? 0)}</b></span>
+                        <span>Dias resumo: <b>{String(r.archived_summary_days ?? 0)}</b></span>
+                        <span>Garçons: <b>{String(r.archived_waiter_rows ?? 0)}</b></span>
+                        <span>Produtos: <b>{String(r.archived_product_rows ?? 0)}</b></span>
+                        <span>Mov. caixa: <b>{String(r.deleted_cash_movements ?? 0)}</b></span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-destructive font-mono break-all">
+                        {log.error_message}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500 mt-1">
+                      {log.days_kept} dias mantidos · {log.duration_ms ?? 0}ms
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </AdvancedSection>
     </div>
   );
 };

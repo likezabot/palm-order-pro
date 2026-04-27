@@ -1,172 +1,97 @@
-## Diagnóstico certo
+## Reorganização visual do Admin
 
-Não acho ideal refazer do zero o sistema inteiro de impressão. O núcleo bom já existe e deve ser preservado:
+Hoje o `/admin` tem **11 abas em fila horizontal** no topo (Cardápio, Cardápio Online, Pedidos Online, Editor Pedidos, Impressão, Erros, Estatísticas, Sistema, Rede, Fidelidade, Rotas) e várias delas exibem 4–6 painéis empilhados. A proposta é trocar tudo por uma **sidebar lateral colapsável** agrupada por função e esconder o conteúdo técnico atrás de um botão "Mostrar opções avançadas".
 
-- `receipt-layout.ts` já é a fonte canônica do layout
-- `thermal-printer.ts` já transforma esse layout em ESC/POS
-- `sendToBridge()` só transporta base64 para a ponte
-- a ponte/EXE não formata o talão
+---
 
-O problema está na camada web de orquestração e persistência, não no transporte.
+### 1. Layout novo: sidebar lateral
 
-### O que encontrei
+Substituir `<TabsList>` no topo por uma `Sidebar` (shadcn) à esquerda, com 4 grupos. O header atual fica como está (logo, modo Garçom, novo produto), apenas com o `SidebarTrigger` adicionado para colapsar/expandir.
 
-1. **A configuração do Admin não está salvando no backend**
-   - O console mostra erro real e objetivo:
-   - `new row violates row-level security policy for table "settings"`
-   - Hoje `savePrintConfig()` salva primeiro em `localStorage` e depois tenta gravar em `settings`, mas esse write está sendo negado.
-   - Resultado: o preview muda na tela do Admin, mas o papel real pode continuar usando config antiga em outra instância/dispositivo/cache.
+Em viewports estreitos (<768px) a sidebar vira off-canvas (drawer); em desktop/tablet fica fixa colapsável modo `icon` (mantém ícones quando recolhida).
 
-2. **Ainda existem múltiplos caminhos de entrada para impressão**
-   Fluxo atual:
-   ```text
-   global-order-runtime / ações manuais
-     -> print-service.ts
-       -> print-receipt.ts
-         -> thermal-printer.ts
-           -> sendToBridge()
-   ```
-   O renderer já está centralizado, mas a decisão de qual tipo de cupom gerar ainda está espalhada.
-
-3. **Há um furo importante no roteamento de delivery**
-   - `autoPrintOrder()` já busca `service_type` e manda delivery para `printDelivery()`.
-   - `manualPrintOrder()` também já trata delivery.
-   - **Mas `autoPrintUpdate()` não busca `service_type` nem dados de delivery** e ainda pode cair em `printReceipt()` / `buildEscPosReceipt()` como se fosse mesa.
-   - Isso explica por que pode continuar saindo `MESA: Delivery #...` em alguns cenários reais.
-
-4. **O problema do Admin refletir no papel não é “só cache”**
-   - Existe mecanismo de sync (`ensureFreshPrintConfig()`), mas ele só funciona se a gravação no backend der certo.
-   - Como o save falha por RLS, a sincronização não resolve.
-
-5. **Pelo código disponível, o bridge não contém template do talão**
-   - `bridge/lp-bridge.js` apenas recebe base64 e envia bytes para a impressora.
-   - Então **refazer bridge/EXE não resolve a causa principal**.
-
-6. **Sobre bundle local vs URL remota**
-   - O código e a documentação disponíveis apontam para app desktop/web carregando **URL remota** e usando **service worker/PWA**.
-   - Também existe proteção de update (`updateViaCache: "none"`, leitura de `sw.js`, `APP_BUILD`).
-   - Portanto, com o que está no repositório, o mais provável é:
-     - ponte = transporte local
-     - app = web remota/PWA
-   - Ainda assim, pode haver cache antigo no dispositivo, mas **isso não explica o erro de persistência do Admin**, que já está confirmado.
-
-## Recomendação
-
-Em vez de “refazer tudo do zero”, eu recomendo uma **refatoração controlada da camada web de impressão**, preservando completamente:
-
-- `bridge/lp-bridge.js`
-- conexão USB
-- envio base64
-- fila/`print_jobs`
-- automação de impressão
-
-A ideia é **refazer a orquestração**, não o transporte.
-
-## Plano proposto
-
-1. **Consertar a persistência da configuração de impressão**
-   - Ajustar o backend para permitir salvar **somente** `settings.key = 'print_config'` com segurança.
-   - Manter `bridgeUrl` e `printMode` locais por dispositivo.
-   - Garantir que o Admin mostre claramente:
-     - salvo no backend
-     - última atualização
-     - origem da config (`db` ou `local`)
-
-2. **Criar um dispatcher único de impressão**
-   - Centralizar toda decisão em uma função única, algo como:
-   - `resolvePrintJob(orderId, mode)`
-   - Essa função vai carregar:
-     - `service_type`
-     - itens
-     - cliente
-     - telefone
-     - endereço
-     - pagamento
-     - config atual
-   - E então escolher um único documento válido:
-     - mesa/pedido
-     - delivery
-     - conta
-     - acréscimo
-     - senha
-
-3. **Eliminar roteamento legado espalhado**
-   - Fazer `autoPrintOrder`, `autoPrintUpdate`, `manualPrintOrder`, `manualPrintBill`, `manualPrintDelta` virarem apenas wrappers finos do dispatcher.
-   - Ninguém mais decide layout “na mão”.
-
-4. **Bloquear combinações erradas**
-   - `delivery` nunca pode usar layout de mesa
-   - `pickup/balcão` nunca pode imprimir `MESA`
-   - `waiter_name` vazio nunca pode virar `N/A`
-   - se faltar dado crítico de delivery, avisar na UI e exigir confirmação manual quando aplicável
-
-5. **Manter um único gerador real de ESC/POS**
-   - Preservar `createReceiptLayoutModel()` como fonte única
-   - Preservar `renderLayout()` como renderizador único
-   - Redirecionar qualquer caminho antigo para esse modelo
-
-6. **Melhorar diagnóstico visível no Admin**
-   - Exibir:
-     - `APP_BUILD`
-     - `PRINT_ENGINE`
-     - `config_updated_at`
-     - `config_source`
-   - Isso permite saber se o papel saiu da versão certa
-
-7. **Fechar com testes de regressão**
-   - mesa/pedido
-   - delivery com taxa
-   - delivery sem taxa
-   - endereço longo
-   - retirada/balcão
-   - conta
-   - senha
-   - alteração do Admin refletindo no ESC/POS
-   - nenhum caminho imprimindo `N/A`
-
-## Decisão prática
-
-**Minha recomendação é: sim, vale “refazer” a camada web de impressão, mas de forma cirúrgica e segura.**
-
-Não refazer do zero o motor inteiro.
-Não tocar no bridge.
-Não tocar no USB.
-Não tocar na automação.
-
-O certo é:
-- corrigir a persistência da config
-- unificar o roteamento
-- eliminar os caminhos legados que ainda escolhem o layout errado
-
-## Detalhes técnicos
-
-### Evidências confirmadas
-- `src/lib/print-config.ts` grava em `settings`, mas o write falha por RLS
-- `src/components/admin/PrintConfigPanel.tsx` depende desse save
-- `src/lib/print-service.ts` ainda tem múltiplos entrypoints
-- `src/lib/print-service.ts:autoPrintUpdate()` não carrega `service_type`
-- `src/lib/thermal-printer.ts` já possui guard para delivery em alguns caminhos, mas não cobre tudo se o roteamento anterior omitir `extras.serviceType`
-- `bridge/lp-bridge.js` apenas recebe payload base64
-
-### Escopo preservado
-Não mexer em:
-- `bridge/lp-bridge.js`
-- USB
-- `print_jobs`
-- fila de impressão
-- banco de pedidos
-
-Pode ser necessário mexer apenas em backend/config para liberar `print_config` com segurança.
-
-### Resultado esperado após a refatoração
 ```text
-Qualquer impressão
-  -> dispatcher único
-    -> carrega pedido + config atual
-    -> escolhe documento correto
-    -> createReceiptLayoutModel()
-    -> renderLayout()
-    -> sendToBridge()
+┌────────────────────────────────────────────────────────┐
+│ [≡] Painel de Controle           [Garçom] [⚙] [+ NOVO] │
+├──────────────┬─────────────────────────────────────────┤
+│ CARDÁPIO     │                                         │
+│  • Produtos  │                                         │
+│  • Online    │       conteúdo da seção ativa           │
+│  • Fidelidade│                                         │
+│              │                                         │
+│ PEDIDOS      │                                         │
+│  • Editor    │                                         │
+│  • Online    │                                         │
+│              │                                         │
+│ OPERAÇÃO     │                                         │
+│  • Impressão │                                         │
+│  • Rede      │                                         │
+│  • Rotas     │                                         │
+│              │                                         │
+│ SISTEMA      │                                         │
+│  • Erros [3] │                                         │
+│  • Estatíst. │                                         │
+│  • Manutenção│                                         │
+└──────────────┴─────────────────────────────────────────┘
 ```
 
-Isso resolve a divergência entre preview, papel real e alterações do Admin.
+**Agrupamento das 11 abas atuais:**
+
+| Grupo | Itens |
+|---|---|
+| **Cardápio** | Produtos (presencial), Cardápio Online, Fidelidade |
+| **Pedidos** | Editor de Pedidos, Pedidos Online |
+| **Operação** | Impressão, Rede, Rotas & URLs |
+| **Sistema** | Erros & Saúde (com badge), Estatísticas, Manutenção (ex-"Sistema") |
+
+Renomeação: a aba "Sistema" passa a se chamar **Manutenção** (mais claro — é onde se apaga dados, força update, arquiva), liberando "Sistema" como nome do grupo.
+
+### 2. Modo Garçom (mantido)
+
+A regra atual continua: itens marcados `admin-only` (Erros, Estatísticas, Manutenção, Rede, Rotas) ficam ocultos no modo Garçom. Na sidebar, grupos inteiros ficam vazios são escondidos automaticamente — então em modo Garçom a sidebar mostra só **Cardápio** e **Pedidos** + Impressão + Fidelidade.
+
+### 3. Esconder conteúdo técnico atrás de "Avançado"
+
+Cada aba "pesada" mostra apenas o essencial; o resto fica atrás de um botão `[ Mostrar opções avançadas ▾ ]` que expande inline.
+
+| Aba | Visível por padrão | Atrás de "Avançado" |
+|---|---|---|
+| **Impressão** | Configuração do talão, botão "Testar impressão", status da bridge | Self-test, Origem dos pedidos reais, Diagnóstico de bridge, Diagnóstico da impressora |
+| **Manutenção** | Forçar atualização, Limpar dados de teste | Arquivar pedidos antigos, Histórico de arquivamentos |
+| **Erros & Saúde** | Resumo de erros (cards) | Erros do dia detalhados, Impressões travadas, Log completo |
+| **Rede** | Status da conexão | Detalhes técnicos de latência/realtime |
+
+O estado expandido/recolhido é lembrado em `localStorage` por aba (`admin-advanced-{tab}`).
+
+### 4. Estado da rota
+
+Mantém `useState("products")` mas troca por `useSearchParams` (`?section=products`) para que recarregar a página preserve a seção e dê para linkar direto. Compatível com o comportamento atual.
+
+---
+
+### Detalhes técnicos
+
+**Arquivos novos:**
+- `src/components/admin/AdminSidebar.tsx` — Sidebar shadcn com 4 grupos, ícones (mantém os atuais), badge de erros não resolvidos no item "Erros", filtro `admin-only` igual ao atual
+- `src/components/admin/AdvancedSection.tsx` — wrapper `<details>`-like com botão "Mostrar opções avançadas", persistência em localStorage
+
+**Arquivos editados:**
+- `src/pages/Admin.tsx` — envolver com `<SidebarProvider>`, remover `<TabsList>`, manter `<TabsContent>` (Tabs continua como mecanismo de troca de painel, só a UI muda); adicionar `SidebarTrigger` ao header; trocar `useState` por `useSearchParams`
+- `src/components/admin/AdminHeader.tsx` — incluir `SidebarTrigger` à esquerda do botão voltar
+- `src/components/admin/PrintConfigPanel.tsx` — agrupar `PrintConfigSelfTest`, `PrintOriginPanel`, `BridgeOriginDiagnostics`, `PrinterDiagnostics` dentro de `<AdvancedSection>`
+- `src/components/admin/SystemTab.tsx` — renomear título visual para "Manutenção"; mover Arquivar + Histórico para `<AdvancedSection>`
+- `src/components/admin/ErrorsTab.tsx` — manter `ErrorsSummaryPanel` visível; mover `DailyErrorsPanel`, `StuckPrintsPanel`, `ErrorLogPanel` para `<AdvancedSection>`
+- `src/components/admin/NetworkTab.tsx` — colapsar detalhes técnicos
+
+**Não muda:**
+- Lógica de produtos, pedidos, impressão, bridge, fidelidade — apenas a navegação/embalagem visual
+- Modo Garçom continua usando classe `admin-only` + CSS atual
+- Badge de erros não resolvidos continua funcionando, agora ao lado do item "Erros" na sidebar
+
+### Validação
+
+- Conferir que todas as 11 áreas continuam acessíveis em desktop e mobile
+- Conferir colapsar/expandir sidebar (modo `icon` no desktop, off-canvas no mobile)
+- Conferir modo Garçom esconde os grupos certos
+- Conferir badge de erros não resolvidos aparece na sidebar
+- Conferir que estado "Avançado" persiste após reload
