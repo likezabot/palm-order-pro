@@ -6,13 +6,15 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { printReceipt, printDelta, printBill } from "@/lib/print-receipt";
+import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
 import { formatPrintTableValue } from "@/lib/utils";
 import { loadPrintConfig } from "@/lib/print-config";
 import {
   buildEscPosReceipt,
   buildEscPosDelta,
   buildEscPosBill,
+  buildEscPosDelivery,
+  type DeliveryPayloadInput,
 } from "@/lib/thermal-printer";
 import { encodePayloadB64, enqueuePrintJob, type PrintJobType } from "@/lib/print-queue";
 import { debugLog } from "@/lib/debug-logger";
