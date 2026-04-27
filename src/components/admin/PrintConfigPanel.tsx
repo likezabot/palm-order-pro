@@ -538,36 +538,35 @@ export default function PrintConfigPanel() {
                   </TabsTrigger>
                 ))}
               </TabsList>
-
-              {PREVIEW_TABS.map(({ value }) => (
-                <TabsContent key={value} value={value} className="mt-3 space-y-3">
-                  <div
-                    className="bg-white rounded-lg shadow-md overflow-hidden mx-auto border border-border"
-                    style={{ width: pxWidth, maxHeight: 520 }}
-                  >
-                    <iframe
-                      title={`Preview ${value}`}
-                      srcDoc={previewHtml}
-                      style={{
-                        width: pxWidth,
-                        minHeight: 350,
-                        maxHeight: 520,
-                        border: "none",
-                        display: "block",
-                      }}
-                    />
-                  </div>
-                  <Button
-                    className="w-full font-bold gap-2"
-                    onClick={() => runTestPrint(value)}
-                    disabled={printing === value}
-                  >
-                    <Printer className="w-4 h-4" />
-                    {printing === value ? "Imprimindo..." : `Imprimir teste de ${PREVIEW_TABS.find((t) => t.value === value)?.label}`}
-                  </Button>
-                </TabsContent>
-              ))}
             </Tabs>
+
+            <div
+              className="bg-white rounded-lg shadow-md overflow-hidden mx-auto border border-border"
+              style={{ width: pxWidth, maxHeight: 520 }}
+            >
+              <iframe
+                title={`Preview ${previewKind}`}
+                srcDoc={previewHtml}
+                style={{
+                  width: pxWidth,
+                  minHeight: 350,
+                  maxHeight: 520,
+                  border: "none",
+                  display: "block",
+                }}
+              />
+            </div>
+
+            <Button
+              className="w-full font-bold gap-2"
+              onClick={() => runTestPrint(previewKind)}
+              disabled={printing === previewKind}
+            >
+              <Printer className="w-4 h-4" />
+              {printing === previewKind
+                ? "Imprimindo..."
+                : `Imprimir teste de ${PREVIEW_TABS.find((t) => t.value === previewKind)?.label}`}
+            </Button>
 
             <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
               <AlertTriangle className="w-3.5 h-3.5 inline mr-1 mb-0.5" />
