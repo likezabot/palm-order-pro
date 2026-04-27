@@ -816,7 +816,95 @@ const Pdv = () => {
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowPayConfirm(false)}>Cancelar</AlertDialogCancel>
+            <button
+              onClick={() => handlePayment(false)}
+              disabled={sending}
+              className="rounded-lg bg-secondary px-4 py-2 font-bold text-foreground disabled:opacity-40"
+            >
+              {sending ? "..." : "Fechar sem imprimir"}
+            </button>
+            <button
+              onClick={() => handlePayment(true)}
+              disabled={sending}
+              className="rounded-lg bg-success px-4 py-2 font-bold text-success-foreground disabled:opacity-40"
+            >
+              {sending ? "..." : "✅ Fechar e imprimir"}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
+      <AlertDialog open={showPrintConfirm} onOpenChange={setShowPrintConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reimprimir comprovante?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja reimprimir o comprovante da mesa?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowPrintConfirm(false)}>Cancelar</AlertDialogCancel>
+            <button
+              onClick={executePendingPrint}
+              className="rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground"
+            >
+              Sim, reimprimir
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal: Novo Pedido Recebido (Realtime) */}
+      <AlertDialog open={showNewOrderModal} onOpenChange={setShowNewOrderModal}>
+        <AlertDialogContent className="max-w-[400px]">
+          <AlertDialogHeader>
+            <div className="flex justify-center mb-4">
+              <div className="rounded-full bg-orange-500/10 p-4 ring-8 ring-orange-500/5">
+                <Bike className="w-12 h-12 text-orange-500 animate-bounce" />
+              </div>
+            </div>
+            <AlertDialogTitle className="text-2xl font-black text-center uppercase tracking-tight">
+              Novo pedido recebido
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-lg font-medium text-foreground pt-2">
+              {latestNewOrder && (
+                <>
+                  <span className="block font-black text-primary">
+                    {latestNewOrder.customer_name_snapshot || "Cliente Online"}
+                  </span>
+                  Acesse a área de entregas/retiradas.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center mt-6">
+            <AlertDialogAction
+              onClick={() => {
+                if (latestNewOrder) markSeen(latestNewOrder.id);
+                setShowNewOrderModal(false);
+              }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-6 text-xl rounded-xl"
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal: Dividir Conta */}
+      <AlertDialog open={showSplitModal} onOpenChange={setShowSplitModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Split className="text-primary" /> Dividir Conta
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Total da conta: <span className="font-bold text-foreground">R$ {total.toFixed(2)}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-bold uppercase text-muted-foreground">Dividir em quantas pessoas?</label>
