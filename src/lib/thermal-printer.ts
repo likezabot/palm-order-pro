@@ -677,6 +677,10 @@ export interface ReceiptExtras {
   serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  /** Order id usado para fingerprint do rodapé. */
+  orderId?: string | null;
+  /** Fingerprint propagado para o rodapé do cupom. */
+  fingerprint?: import("./receipt-layout").BuildLayoutInput["fingerprint"];
 }
 
 function assertLegacyReceiptAllowed(functionName: string, extras: ReceiptExtras = {}) {
