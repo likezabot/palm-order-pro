@@ -692,6 +692,19 @@ export function buildEscPosDelivery(
   input: DeliveryPayloadInput,
   config: PrintConfig
 ): Uint8Array {
+  logPrintEngine({
+    functionName: "buildEscPosDelivery",
+    orderId: input.orderId ?? null,
+    serviceType: input.serviceType ?? "delivery",
+    tableName: input.orderShortId ?? input.orderId ?? null,
+    headerText: config.headerText,
+    footerText: config.footerText,
+    paperWidth: config.paperWidth,
+    configMeta: {
+      updatedAt: config.configUpdatedAt ?? null,
+      source: config.configSource ?? null,
+    },
+  });
   const layout = createReceiptLayoutModel(
     {
       docType: "DELIVERY",
