@@ -151,13 +151,14 @@ export async function printSenha(
       },
       cfg,
     );
-    return await sendToBridge(renderLayout(layout.blocks, cfg), cfg.bridgeUrl, {
+    const result = await sendToBridge(renderLayout(layout.blocks, cfg), cfg.bridgeUrl, {
       printPath: "printSenha",
       source: opts.source ?? "auto",
       orderId: opts.orderId ?? null,
       serviceType: "balcao",
       tableName: opts.customerName ?? null,
     });
+    return result.success;
   }
 
   // No navegador/celular, não imprimir senha para evitar PDF
@@ -171,7 +172,7 @@ export async function printReceipt(
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number,
   extras: ReceiptExtras = {},
-) {
+): Promise<{ ok: boolean; error?: string }> {
   const cfg = await getPrintConfigForOutput();
   logPrintCall("printReceipt", cfg, {
     serviceType: extras.serviceType ?? null,
@@ -182,22 +183,23 @@ export async function printReceipt(
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg, extras);
-    const success = await sendToBridge(payload, cfg.bridgeUrl, {
+    const result = await sendToBridge(payload, cfg.bridgeUrl, {
       printPath: extras.fingerprint?.printPath ?? "printReceipt",
       source: (extras.fingerprint?.source as any) ?? "unknown",
       orderId: extras.orderId ?? null,
       serviceType: extras.serviceType ?? null,
       tableName,
     });
-    if (!success) {
-      console.warn("[print] Falha na ponte térmica.");
-      return false;
+    
+    if (!result.success) {
+      console.warn("[print] Falha na ponte térmica:", result.error);
+      return { ok: false, error: result.error };
     }
-    return true;
+    return { ok: true };
   }
 
   console.log("[print] Pedido ignorado no modo browser.");
-  return false;
+  return { ok: false, error: "Modo browser não suporta impressão direta" };
 }
 
 export async function printDelta(
@@ -205,7 +207,7 @@ export async function printDelta(
   waiterName: string,
   deltaItems: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   extras: ReceiptExtras = {},
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   const cfg = await getPrintConfigForOutput();
   logPrintCall("printDelta", cfg, {
     serviceType: extras.serviceType ?? null,
@@ -216,32 +218,18 @@ export async function printDelta(
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosDelta(tableName, waiterName, deltaItems, cfg, extras);
-    return await sendToBridge(payload, cfg.bridgeUrl, {
+    const result = await sendToBridge(payload, cfg.bridgeUrl, {
       printPath: extras.fingerprint?.printPath ?? "printDelta",
       source: (extras.fingerprint?.source as any) ?? "unknown",
       orderId: extras.orderId ?? null,
       serviceType: extras.serviceType ?? null,
       tableName,
     });
+    return { ok: result.success, error: result.error };
   }
 
-  buildHtmlFromLayout(
-    "ACRESCIMO",
-    "Acréscimo",
-    {
-      tableName,
-      waiterName,
-      items: deltaItems,
-      total: deltaItems.reduce((s, i) => s + i.product_price * i.quantity, 0),
-      serviceType: extras.serviceType ?? undefined,
-      customerName: extras.customerName ?? undefined,
-      customerPhone: extras.customerPhone ?? undefined,
-    },
-    cfg,
-  );
-
   console.log("[print] Acréscimo ignorado no modo browser.");
-  return false;
+  return { ok: false, error: "Modo browser não suporta impressão direta" };
 }
 
 export async function printBill(
@@ -250,7 +238,7 @@ export async function printBill(
   items: { product_name: string; quantity: number; product_price: number; note?: string | null }[],
   total: number,
   extras: ReceiptExtras = {},
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   const cfg = await getPrintConfigForOutput();
   logPrintCall("printBill", cfg, {
     serviceType: extras.serviceType ?? null,
@@ -261,27 +249,18 @@ export async function printBill(
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosBill(tableName, waiterName, items, total, cfg, extras);
-    return await sendToBridge(payload, cfg.bridgeUrl, {
+    const result = await sendToBridge(payload, cfg.bridgeUrl, {
       printPath: extras.fingerprint?.printPath ?? "printBill",
       source: (extras.fingerprint?.source as any) ?? "unknown",
       orderId: extras.orderId ?? null,
       serviceType: extras.serviceType ?? null,
       tableName,
     });
+    return { ok: result.success, error: result.error };
   }
 
-  buildHtmlFromLayout("CONTA", "Conta", {
-    tableName,
-    waiterName,
-    items,
-    total,
-    serviceType: extras.serviceType ?? undefined,
-    customerName: extras.customerName ?? undefined,
-    customerPhone: extras.customerPhone ?? undefined,
-  }, cfg);
-
   console.log("[print] Conta ignorada no modo browser.");
-  return false;
+  return { ok: false, error: "Modo browser não suporta impressão direta" };
 }
 
 export async function printCustomerReceipt(
@@ -330,7 +309,8 @@ export async function printCustomerReceipt(
 
   if (cfg.printMode === "bridge") {
     const payload = renderLayout(layout.blocks, cfg);
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    const result = await sendToBridge(payload, cfg.bridgeUrl);
+    return result.success;
   }
 
   console.log("[print] Comprovante do cliente ignorado no modo browser.");
@@ -344,7 +324,7 @@ export async function printCustomerReceipt(
  */
 export async function printDelivery(
   input: DeliveryPayloadInput,
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   const cfg = await getPrintConfigForOutput();
   logPrintCall("printDelivery", cfg, {
     orderId: input.orderId ?? null,
@@ -355,38 +335,18 @@ export async function printDelivery(
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosDelivery(input, cfg);
-    return await sendToBridge(payload, cfg.bridgeUrl, {
+    const result = await sendToBridge(payload, cfg.bridgeUrl, {
       printPath: input.fingerprint?.printPath ?? "printDelivery",
       source: (input.fingerprint?.source as any) ?? "unknown",
       orderId: input.orderId ?? null,
       serviceType: input.serviceType ?? "delivery",
       tableName: input.orderShortId ?? null,
     });
+    return { ok: result.success, error: result.error };
   }
 
-  buildHtmlFromLayout(
-    "DELIVERY",
-    "Delivery",
-    {
-      items: input.items,
-      total: input.total ?? undefined,
-      subtotal: input.subtotal ?? undefined,
-      deliveryFee: input.deliveryFee ?? undefined,
-      discount: input.discount ?? undefined,
-      orderId: input.orderId ?? undefined,
-      orderShortId: input.orderShortId ?? undefined,
-      customerName: input.customerName ?? undefined,
-      customerPhone: input.customerPhone ?? undefined,
-      deliveryAddress: input.deliveryAddress ?? undefined,
-      paymentMethod: input.paymentMethod ?? undefined,
-      changeFor: input.changeFor ?? undefined,
-      generalNote: input.generalNote ?? undefined,
-      serviceType: "delivery",
-    },
-    cfg,
-  );
   console.log("[print] Delivery ignorado no modo browser.");
-  return false;
+  return { ok: false, error: "Modo browser não suporta impressão direta" };
 }
 
 export async function printTest() {
