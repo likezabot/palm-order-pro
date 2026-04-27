@@ -346,7 +346,13 @@ export async function printDelivery(
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosDelivery(input, cfg);
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    return await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: input.fingerprint?.printPath ?? "printDelivery",
+      source: (input.fingerprint?.source as any) ?? "unknown",
+      orderId: input.orderId ?? null,
+      serviceType: input.serviceType ?? "delivery",
+      tableName: input.orderShortId ?? null,
+    });
   }
 
   buildHtmlFromLayout(
