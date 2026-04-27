@@ -259,18 +259,20 @@ export async function printCustomerReceipt(
   amountPaid: number,
   customerData?: { name?: string; document?: string } | null,
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printCustomerReceipt", cfg, {
+    serviceType: "dine_in",
+    tableName,
+  });
   const COMPANY_CNPJ = "38.000.368/0001-22";
   const payLabel: Record<string, string> = { cash: "DINHEIRO", pix: "PIX", card: "CARTÃO" };
   const change = amountPaid - total;
 
-  // Base estrutural via fonte unica de layout (CONTA: titulo, info, itens, total).
   const layout = createReceiptLayoutModel(
     { docType: "CONTA", tableName, waiterName, items, total },
     cfg,
   );
 
-  // Insere blocos extras (cliente / pagamento / troco) imediatamente antes do rodape/cutMark.
   const extras: LayoutBlock[] = [];
   if (customerData?.name) extras.push({ kind: "info", label: "Cliente", value: customerData.name });
   if (customerData?.document) extras.push({ kind: "info", label: "CPF/CNPJ", value: customerData.document });
@@ -281,22 +283,18 @@ export async function printCustomerReceipt(
     extras.push({ kind: "info", label: "Troco", value: `R$ ${change.toFixed(2)}` });
   }
 
-  // Insere extras antes do cutMark (e depois do qtyLine, se houver).
   const cutIdx = layout.blocks.findIndex((b) => b.kind === "cutMark");
   const insertAt = cutIdx === -1 ? layout.blocks.length : cutIdx;
   layout.blocks.splice(insertAt, 0, { kind: "sep" }, ...extras);
 
-  // CNPJ entra logo apos o titulo (se visivel), como subheader simples.
   const titleIdx = layout.blocks.findIndex((b) => b.kind === "title");
   if (titleIdx !== -1) {
     layout.blocks.splice(titleIdx + 1, 0, { kind: "info", label: "CNPJ", value: COMPANY_CNPJ });
   }
 
-  // HTML usa os blocos JA enriquecidos (preserva CNPJ/Cliente/Pagamento/Troco).
   buildHtmlFromBlocks("Comprovante", layout.blocks, cfg);
 
   if (cfg.printMode === "bridge") {
-    // ESC/POS tambem usa os blocos enriquecidos -> papel sai com os mesmos extras.
     const payload = renderLayout(layout.blocks, cfg);
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
@@ -313,7 +311,12 @@ export async function printCustomerReceipt(
 export async function printDelivery(
   input: DeliveryPayloadInput,
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printDelivery", cfg, {
+    orderId: input.orderId ?? null,
+    serviceType: input.serviceType ?? "delivery",
+    tableName: input.orderShortId ?? input.orderId ?? null,
+  });
   console.log(`[print] Preparando DELIVERY pedido ${input.orderShortId ?? input.orderId ?? "?"}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
@@ -321,7 +324,6 @@ export async function printDelivery(
     return await sendToBridge(payload, cfg.bridgeUrl);
   }
 
-  // Browser: gera HTML pelo mesmo layout (não envia automaticamente p/ evitar PDF)
   buildHtmlFromLayout(
     "DELIVERY",
     "Delivery",
