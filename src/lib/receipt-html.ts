@@ -33,7 +33,26 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
         break;
       case "info":
         parts.push(
-          `<div class="info-row"><span class="info-label">${escapeHtml(blk.label)}:</span> <span class="info-value">${escapeHtml(blk.value)}</span></div>`
+          blk.value
+            ? `<div class="info-row"><span class="info-label">${escapeHtml(blk.label)}:</span> <span class="info-value">${escapeHtml(blk.value)}</span></div>`
+            : `<div class="info-row info-label-only"><span class="info-label">${escapeHtml(blk.label)}:</span></div>`
+        );
+        break;
+      case "addressBlock":
+        parts.push(
+          `<div class="address-block">${blk.lines
+            .map((l) => `<div class="address-line">${escapeHtml(l)}</div>`)
+            .join("")}</div>`
+        );
+        break;
+      case "noteBlock":
+        parts.push(
+          `<div class="note-block"><div class="note-block-label">${escapeHtml(blk.label)}:</div><div class="note-block-text">${escapeHtml(blk.text)}</div></div>`
+        );
+        break;
+      case "summaryRow":
+        parts.push(
+          `<div class="summary-row${blk.bold ? " summary-row-bold" : ""}"><span>${escapeHtml(blk.label)}</span><span>${escapeHtml(blk.value)}</span></div>`
         );
         break;
       case "item": {
