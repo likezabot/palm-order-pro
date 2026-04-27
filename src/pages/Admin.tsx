@@ -57,16 +57,25 @@ const Admin = () => {
   const [autoPrint, setAutoPrint] = useState(
     () => localStorage.getItem("pdv_autoprint") !== "false",
   );
-  const [activeTab, setActiveTab] = useState("products");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawSection = searchParams.get("section") ?? "products";
+  const activeTab = VALID_SECTIONS.has(rawSection) ? rawSection : "products";
+  const setActiveTab = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("section", next);
+    setSearchParams(params, { replace: true });
+  };
+
   const [staffMode, setStaffMode] = useState(
     () => localStorage.getItem("admin-staff-mode") === "true",
   );
 
   useEffect(() => {
     localStorage.setItem("admin-staff-mode", String(staffMode));
-    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network" || activeTab === "errors")) {
+    if (staffMode && (activeTab === "stats" || activeTab === "system" || activeTab === "network" || activeTab === "errors" || activeTab === "routes")) {
       setActiveTab("products");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffMode, activeTab]);
 
   useEffect(() => {
