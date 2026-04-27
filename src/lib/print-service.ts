@@ -367,14 +367,7 @@ export async function autoPrintUpdate(order: {
     return { printed: false, reason: "bridge_offline_queued" };
   }
 
-  const fetchAllItems = async (): Promise<PrintableItem[]> => {
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const { data } = await supabase.from("order_items").select("*").eq("order_id", order.id);
-      if (data && data.length > 0) return data;
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    return [];
-  };
+
 
   let success = false;
   let reason = "unknown";
