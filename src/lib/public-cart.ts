@@ -7,7 +7,20 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { PublicProduct } from "./public-menu";
 
+/**
+ * Carrinho do cliente público:
+ * - Usa sessionStorage para zerar a cada nova visita (nova aba / reabrir o site).
+ * - Migração: limpa qualquer carrinho antigo persistido em localStorage.
+ */
 const STORAGE_KEY = "public_cart_v1";
+
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* noop */
+  }
+}
 
 export type PublicCartItem = {
   product_id: string;
