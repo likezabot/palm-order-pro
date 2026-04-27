@@ -14,8 +14,55 @@ import {
 } from "@/lib/print-origin-tracker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2, Inbox, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, Inbox, RefreshCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+
+function isFetchError(msg?: string | null): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return m.includes("failed to fetch") || m.includes("networkerror") || m.includes("fetch");
+}
+
+function buildInstanceDiagnostic(record: PrintOriginRecord): string {
+  const lines = [
+    "=== DIAGNÓSTICO DE INSTÂNCIA ===",
+    `ts: ${new Date(record.ts).toISOString()}`,
+    `ok: ${record.ok}`,
+    `erro: ${record.errorMsg ?? "—"}`,
+    `bridgeUrl: ${record.bridgeUrl ?? "—"}`,
+    `printPath: ${record.printPath}`,
+    `source: ${record.source}`,
+    `orderId: ${record.orderId ?? "—"}`,
+    `serviceType: ${record.serviceType ?? "—"}`,
+    `tableName: ${record.tableName ?? "—"}`,
+    `bytes: ${record.bytes ?? "—"}`,
+    `APP_BUILD: ${record.appBuild}`,
+    `PRINT_ENGINE: ${record.engineVersion}`,
+    `userAgent: ${typeof navigator !== "undefined" ? navigator.userAgent : "—"}`,
+    `url: ${typeof location !== "undefined" ? location.href : "—"}`,
+  ];
+  return lines.join("\n");
+}
+
+async function copyDiagnostic(record: PrintOriginRecord) {
+  const text = buildInstanceDiagnostic(record);
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success("Diagnóstico copiado");
+  } catch {
+    toast.error("Falha ao copiar diagnóstico");
+  }
+}
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("pt-BR", {
