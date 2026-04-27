@@ -801,6 +801,8 @@ export function buildEscPosBill(
       serviceType: extras.serviceType ?? undefined,
       customerName: extras.customerName ?? undefined,
       customerPhone: extras.customerPhone ?? undefined,
+      orderId: extras.orderId ?? undefined,
+      fingerprint: extras.fingerprint ?? undefined,
     },
     config
   );
