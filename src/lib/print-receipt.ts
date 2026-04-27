@@ -115,7 +115,11 @@ export async function printSenha(
   items: { product_name: string; quantity: number; product_price?: number }[],
   opts: SenhaOpts = {},
 ): Promise<boolean> {
-  const cfg = loadPrintConfig();
+  const cfg = await getPrintConfigForOutput();
+  logPrintCall("printSenha", cfg, {
+    orderId: opts.orderId ?? null,
+    serviceType: "balcao",
+  });
 
   // Respeita toggle (a menos que seja chamada manual com force=true)
   if (!opts.force && !cfg.printSenhaEnabled) {
