@@ -95,10 +95,7 @@ const ProductsManager = ({
   };
 
   const clearFilters = () => {
-    setSearch("");
     setStatusFilter("all");
-    setMinPrice("");
-    setMaxPrice("");
   };
 
   const exitSelection = () => {
