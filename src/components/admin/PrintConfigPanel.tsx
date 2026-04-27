@@ -233,23 +233,28 @@ export default function PrintConfigPanel() {
     let ok = false;
     let err = "";
     try {
+      let result: { ok: boolean; error?: string };
       switch (kind) {
         case "mesa":
-          ok = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
+          result = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
             serviceType: "dine_in",
             fingerprint: { printPath: "admin.test.mesa", source: "test" },
           });
+          ok = result.ok;
+          err = result.error || "";
           break;
         case "retirada":
-          ok = await printReceipt("", "", SAMPLE_ITEMS, SAMPLE_TOTAL, {
+          result = await printReceipt("", "", SAMPLE_ITEMS, SAMPLE_TOTAL, {
             serviceType: "pickup",
             customerName: "João Pereira",
             customerPhone: "(11) 98888-2222",
             fingerprint: { printPath: "admin.test.retirada", source: "test" },
           });
+          ok = result.ok;
+          err = result.error || "";
           break;
         case "delivery":
-          ok = await printDelivery({
+          result = await printDelivery({
             items: SAMPLE_ITEMS,
             customerName: SAMPLE_DELIVERY.customerName,
             customerPhone: SAMPLE_DELIVERY.customerPhone,
@@ -264,12 +269,16 @@ export default function PrintConfigPanel() {
             serviceType: "delivery",
             fingerprint: { printPath: "admin.test.delivery", source: "test" },
           });
+          ok = result.ok;
+          err = result.error || "";
           break;
         case "conta":
-          ok = await printBill("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
+          result = await printBill("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
             serviceType: "dine_in",
             fingerprint: { printPath: "admin.test.conta", source: "test" },
           });
+          ok = result.ok;
+          err = result.error || "";
           break;
         case "senha":
           ok = await printSenha("146", SAMPLE_ITEMS, {
