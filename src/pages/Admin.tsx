@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ShoppingBag, Printer, Wrench, BarChart3, Activity, Globe, ShoppingCart, ShieldAlert, Link2, Gift } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Order, Product } from "@/lib/types";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { useToast } from "@/hooks/use-toast";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useProductOrder } from "@/hooks/use-product-order";
@@ -21,6 +21,7 @@ import ProductsManager from "@/components/admin/ProductsManager";
 import StatsPanel from "@/components/admin/StatsPanel";
 import PrintConfigPanel from "@/components/admin/PrintConfigPanel";
 import AdminHeader from "@/components/admin/AdminHeader";
+import AdminSidebar from "@/components/admin/AdminSidebar";
 import OrdersTab from "@/components/admin/OrdersTab";
 import SystemTab from "@/components/admin/SystemTab";
 import ErrorsTab from "@/components/admin/ErrorsTab";
@@ -30,6 +31,20 @@ import OnlineOrdersTab from "@/components/admin/OnlineOrdersTab";
 import RoutesTab from "@/components/admin/RoutesTab";
 import LoyaltyTab from "@/components/admin/LoyaltyTab";
 import { manualPrintOrder } from "@/lib/print-service";
+
+const VALID_SECTIONS = new Set([
+  "products",
+  "online",
+  "loyalty",
+  "orders",
+  "online-orders",
+  "print",
+  "network",
+  "routes",
+  "errors",
+  "stats",
+  "system",
+]);
 
 const Admin = () => {
   const navigate = useNavigate();
