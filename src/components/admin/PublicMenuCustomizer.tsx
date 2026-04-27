@@ -22,7 +22,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   Loader2,
   Copy,
@@ -34,6 +40,10 @@ import {
   Smartphone,
   Monitor,
   Image as ImageIcon,
+  Palette,
+  Home,
+  LayoutGrid,
+  ListTree,
 } from "lucide-react";
 import {
   DndContext,
@@ -247,68 +257,97 @@ function CustomizerInner({
           onSlugSaved={onSlugSaved}
         />
 
-        <Tabs defaultValue="visual" className="w-full">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="visual">Visual</TabsTrigger>
-            <TabsTrigger value="hero">Home/Hero</TabsTrigger>
-            <TabsTrigger value="secoes">Seções</TabsTrigger>
-            <TabsTrigger value="paleta">Paleta</TabsTrigger>
-            <TabsTrigger value="layout">Layout</TabsTrigger>
-            <TabsTrigger value="categorias">Categorias</TabsTrigger>
-            <TabsTrigger value="por-categoria">Por categoria</TabsTrigger>
-            <TabsTrigger value="destaques">Destaques</TabsTrigger>
-          </TabsList>
+        <Accordion type="multiple" defaultValue={["identidade"]} className="w-full space-y-2">
+          <AccordionItem value="identidade" className="rounded-xl border border-border bg-card px-3">
+            <AccordionTrigger className="py-3 text-sm font-black uppercase tracking-wide">
+              <span className="flex items-center gap-2">
+                <Palette className="h-4 w-4 text-primary" /> Identidade visual
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pb-4">
+              <p className="text-xs text-muted-foreground">
+                Banner, cor de destaque, mensagem de boas-vindas e paleta detalhada.
+              </p>
+              <VisualPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+              <details className="rounded-lg border border-dashed border-border">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Paleta avançada (cores de fundo, cards, texto)
+                </summary>
+                <div className="border-t border-border p-2">
+                  <PalettePanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+                </div>
+              </details>
+            </AccordionContent>
+          </AccordionItem>
 
-          <TabsContent value="visual">
-            <VisualPanel
-              restaurantId={restaurantId}
-              settings={settings}
-              onSaved={refresh}
-            />
-          </TabsContent>
+          <AccordionItem value="home" className="rounded-xl border border-border bg-card px-3">
+            <AccordionTrigger className="py-3 text-sm font-black uppercase tracking-wide">
+              <span className="flex items-center gap-2">
+                <Home className="h-4 w-4 text-primary" /> Home (capa & seções)
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pb-4">
+              <p className="text-xs text-muted-foreground">
+                Capa, título, alinhamento, badges, ordem dos blocos e o que aparece na home.
+              </p>
+              <HeroPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+              <SectionsPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+            </AccordionContent>
+          </AccordionItem>
 
-          <TabsContent value="hero">
-            <HeroPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
-          </TabsContent>
+          <AccordionItem value="estilo" className="rounded-xl border border-border bg-card px-3">
+            <AccordionTrigger className="py-3 text-sm font-black uppercase tracking-wide">
+              <span className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4 text-primary" /> Estilo dos produtos
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pb-4">
+              <p className="text-xs text-muted-foreground">
+                Como os produtos aparecem: lista/grade, fotos, descrições, sombra dos cards e arredondamento.
+              </p>
+              <LayoutPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
+            </AccordionContent>
+          </AccordionItem>
 
-          <TabsContent value="secoes">
-            <SectionsPanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
-          </TabsContent>
+          <AccordionItem value="categorias" className="rounded-xl border border-border bg-card px-3">
+            <AccordionTrigger className="py-3 text-sm font-black uppercase tracking-wide">
+              <span className="flex items-center gap-2">
+                <ListTree className="h-4 w-4 text-primary" /> Categorias
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pb-4">
+              <p className="text-xs text-muted-foreground">
+                Reordene, oculte ou personalize cada categoria individualmente.
+              </p>
+              <CategoriesPanel
+                restaurantId={restaurantId}
+                settings={settings}
+                categories={categories}
+                onSaved={refresh}
+              />
+              <details className="rounded-lg border border-dashed border-border">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Personalizar cada categoria (layout, foto, ordem dos produtos)
+                </summary>
+                <div className="border-t border-border p-2">
+                  <PerCategoryPanel
+                    restaurantId={restaurantId}
+                    settings={settings}
+                    categories={categories}
+                    onSaved={refresh}
+                  />
+                </div>
+              </details>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
 
-          <TabsContent value="paleta">
-            <PalettePanel restaurantId={restaurantId} settings={settings} onSaved={refresh} />
-          </TabsContent>
-
-          <TabsContent value="layout">
-            <LayoutPanel
-              restaurantId={restaurantId}
-              settings={settings}
-              onSaved={refresh}
-            />
-          </TabsContent>
-
-          <TabsContent value="categorias">
-            <CategoriesPanel
-              restaurantId={restaurantId}
-              settings={settings}
-              categories={categories}
-              onSaved={refresh}
-            />
-          </TabsContent>
-
-          <TabsContent value="por-categoria">
-            <PerCategoryPanel
-              restaurantId={restaurantId}
-              settings={settings}
-              categories={categories}
-              onSaved={refresh}
-            />
-          </TabsContent>
-
-          <TabsContent value="destaques">
-            <FeaturedQuickPanel onChanged={refresh} />
-          </TabsContent>
-        </Tabs>
+        <div className="rounded-lg border border-dashed border-border bg-card/50 p-3 text-xs text-muted-foreground">
+          <p>
+            <strong className="text-foreground">Destaques?</strong> Marque a estrela direto na aba{" "}
+            <strong>Cardápio</strong> deste menu (ao lado de cada produto).
+          </p>
+        </div>
       </div>
 
       {/* Preview */}

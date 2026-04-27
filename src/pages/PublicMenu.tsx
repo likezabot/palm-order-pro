@@ -405,6 +405,7 @@ export default function PublicMenu() {
                               showDescription={showDescriptions}
                               imageAspect={catAspect}
                               cardStyle={catCardStyle}
+                              elevated={cardElevated}
                               onClick={(prod) => setSelected(prod)}
                               onQuickAdd={quickAdd}
                             />
@@ -424,6 +425,7 @@ export default function PublicMenu() {
                             showDescription={false}
                             imageAspect={catAspect}
                             cardStyle={catCardStyle}
+                            elevated={cardElevated}
                             priceLabel={`a partir de ${minBRL}`}
                             trailingHint
                             onClick={() =>
@@ -453,6 +455,7 @@ export default function PublicMenu() {
                                 showDescription={showDescriptions}
                                 imageAspect={catAspect}
                                 cardStyle={catCardStyle}
+                                elevated={cardElevated}
                                 onClick={(prod) => setSelected(prod)}
                                 onQuickAdd={quickAdd}
                               />
@@ -472,6 +475,7 @@ export default function PublicMenu() {
                               showDescription={false}
                               imageAspect={catAspect}
                               cardStyle={catCardStyle}
+                              elevated={cardElevated}
                               priceLabel={`a partir de ${minBRL}`}
                               trailingHint
                               onClick={() =>
@@ -498,7 +502,7 @@ export default function PublicMenu() {
   };
 
   return (
-    <PublicMenuLayout>
+    <PublicMenuLayout buttonStyle={settings?.button_style ?? "solid"}>
       {isPreview && (
         <div className="sticky top-0 z-50 bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground backdrop-blur">
           Modo preview — pedidos desativados

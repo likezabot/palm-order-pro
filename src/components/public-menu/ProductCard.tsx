@@ -13,6 +13,8 @@ type Props = {
   imageAspect?: "square" | "wide" | "tall";
   /** Override por categoria. "compact" reduz para nome+preço, sem imagem grande nem descrição. */
   cardStyle?: "compact" | "detailed";
+  /** Sombra global (vem de settings.card_style). Default true (elevated). */
+  elevated?: boolean;
   onClick?: (p: PublicProduct) => void;
   /** Quando informado, mostra botão "Adicionar" inline que adiciona 1 unidade direto. */
   onQuickAdd?: (p: PublicProduct) => void;
@@ -68,7 +70,7 @@ function QuickAddButton({
       aria-live="polite"
       aria-pressed={justAdded}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full text-primary-foreground transition-all",
+        "btn-accent inline-flex shrink-0 items-center justify-center rounded-full text-primary-foreground transition-all",
         "shadow-[0_6px_16px_-4px_hsl(var(--primary)/0.55)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         dim,
@@ -100,6 +102,7 @@ export default function ProductCard({
   showDescription = true,
   imageAspect = "square",
   cardStyle = "detailed",
+  elevated = true,
   onClick,
   onQuickAdd,
   priceLabel,
@@ -113,6 +116,7 @@ export default function ProductCard({
 
   const effectiveShowDescription = cardStyle === "compact" ? false : showDescription;
   const effectiveShowImage = cardStyle === "compact" ? false : showImage;
+  const shadowClass = elevated ? "shadow-[var(--shadow-warm)]" : "";
 
   // ---- Modo compacto: renderização enxuta (igual em list/grid) ----
   if (cardStyle === "compact") {
@@ -159,7 +163,7 @@ export default function ProductCard({
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
           "group relative flex w-full flex-col text-left overflow-hidden rounded-xl border border-border/60 bg-card transition-all duration-300",
-          "shadow-[var(--shadow-warm)]",
+          shadowClass,
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 hover:-translate-y-0.5 active:scale-[0.99]",
@@ -210,7 +214,7 @@ export default function ProductCard({
       onClick={interactive ? () => onClick!(product) : undefined}
       className={cn(
         "group relative flex w-full text-left items-stretch gap-3 rounded-xl border border-border/60 bg-card p-2.5 transition-all duration-200",
-        "shadow-[var(--shadow-warm)]",
+        shadowClass,
         isBlocked
           ? "opacity-60 cursor-not-allowed"
           : "hover:border-primary/40 active:scale-[0.99]",

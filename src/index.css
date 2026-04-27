@@ -390,3 +390,30 @@ html.hc svg {
   transform-origin: center;
 }
 
+
+/* ============================================================
+ * Public menu — variantes de botão de ação (.btn-accent)
+ * Controladas pelo atributo data-btn-style no PublicMenuLayout.
+ * - solid (default): mantém estilo original (gradiente de marca)
+ * - outline: contorno colorido, fundo transparente
+ * - soft: fundo suave (primary/15) com texto primary
+ * ============================================================ */
+[data-btn-style="outline"] .btn-accent {
+  background: transparent !important;
+  color: hsl(var(--primary)) !important;
+  border: 2px solid hsl(var(--primary)) !important;
+  box-shadow: none !important;
+}
+[data-btn-style="outline"] .btn-accent:hover {
+  background: hsl(var(--primary) / 0.08) !important;
+}
+
+[data-btn-style="soft"] .btn-accent {
+  background: hsl(var(--primary) / 0.15) !important;
+  color: hsl(var(--primary)) !important;
+  border: 1px solid hsl(var(--primary) / 0.25) !important;
+  box-shadow: none !important;
+}
+[data-btn-style="soft"] .btn-accent:hover {
+  background: hsl(var(--primary) / 0.22) !important;
+}
