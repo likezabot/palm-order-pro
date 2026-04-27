@@ -38,13 +38,14 @@ let running = false;
  */
 async function sendQueuedPayload(job: PrintJob, serviceType: string | null): Promise<boolean> {
   const payload = decodePayloadB64(job.payloadB64);
-  return await sendToBridge(payload, job.bridgeUrl, {
+  const result = await sendToBridge(payload, job.bridgeUrl, {
     printPath: `queue.retry.${job.printType}`,
     source: "queue",
     orderId: job.orderId,
     serviceType,
     tableName: job.tableName ?? null,
   });
+  return result.success;
 }
 
 function shouldDeferByBackoff(job: PrintJob): boolean {

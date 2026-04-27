@@ -187,7 +187,8 @@ export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
     setRunning("full");
     const t0 = performance.now();
     try {
-      const ok = await printReceipt("Mesa 5", "Diagnóstico", SAMPLE_ITEMS, SAMPLE_TOTAL);
+      const result = await printReceipt("Mesa 5", "Diagnóstico", SAMPLE_ITEMS, SAMPLE_TOTAL);
+      const ok = result.ok;
       const latencyMs = Math.round(performance.now() - t0);
       push({
         kind: "full",
@@ -195,13 +196,13 @@ export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
         latencyMs,
         message: ok
           ? "Cupom completo enviado pela pipeline real do site"
-          : "Pipeline do site falhou (bridge offline ou impressora travada)",
+          : result.error || "Pipeline do site falhou (bridge offline ou impressora travada)",
       });
       toast({
         title: ok ? "Cupom enviado" : "Falha no cupom",
         description: ok
           ? "Saiu papel? Se sim, pipeline do site está OK."
-          : "Verifique status da bridge acima e o teste mínimo.",
+          : result.error || "Verifique status da bridge acima e o teste mínimo.",
         variant: ok ? "default" : "destructive",
       });
     } finally {

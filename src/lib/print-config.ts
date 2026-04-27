@@ -133,13 +133,23 @@ export function getFontSizes(sizeOrCfg: PrintSize | PrintConfig) {
 }
 
 function normalizeConfig(raw: Partial<PrintConfig>, source: PrintConfig["configSource"]): PrintConfig {
-  return {
+  const config: PrintConfig = {
     ...DEFAULT_CONFIG,
     ...raw,
     fontSizes: { ...(raw.fontSizes || {}) },
     visibleSections: { ...DEFAULT_VISIBLE, ...(raw.visibleSections || {}) },
     configSource: source,
   };
+
+  // REQUISITO: Forçar modo bridge local se estiver rodando dentro do EXE desktop
+  // Isso garante que mesmo após um sync do banco, os valores locais permaneçam corretos.
+  const isDesktop = typeof window !== "undefined" && (window as any).desktopPrinter?.isDesktop?.() === true;
+  if (isDesktop) {
+    config.printMode = "bridge";
+    config.bridgeUrl = "http://localhost:9100/print";
+  }
+
+  return config;
 }
 
 function persistLocal(config: PrintConfig): PrintConfig {

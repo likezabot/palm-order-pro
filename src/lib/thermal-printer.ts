@@ -83,7 +83,7 @@ export class EscPosBuilder {
     return this;
   }
 
-  /** Reset completo de estilo entre blocos para evitar “vazamento”. */
+  /** Reset completo de estilo entre blocos para evitar "vazamento". */
   resetStyle() {
     this.bold(false).size(false, false).align("left");
     return this;
@@ -132,9 +132,11 @@ function bridgeBase(url: string): string {
   return path.replace(/\/(?:print|health)\/?$/, "").replace(/\/$/, "");
 }
 
-function bridgeHealthUrl(url: string): string {
+function bridgeHealthUrl(url: string, bypassCache: boolean = false): string {
   const { query } = splitBridgeUrl(url);
-  return `${bridgeBase(url)}/health${query}`;
+  const separator = query.includes("?") ? "&" : "?";
+  const t = bypassCache ? `${separator}t=${Date.now()}` : "";
+  return `${bridgeBase(url)}/health${query}${t}`;
 }
 
 function bridgePrintUrl(url: string): string {
@@ -143,14 +145,15 @@ function bridgePrintUrl(url: string): string {
 }
 
 export async function checkBridgeStatus(
-  url: string
+  url: string,
+  forceBypass: boolean = false
 ): Promise<BridgeHealth> {
   const cached = _bridgeStatusCache.get(url);
-  if (cached && Date.now() - cached.at < BRIDGE_STATUS_TTL_MS) {
+  if (!forceBypass && cached && Date.now() - cached.at < BRIDGE_STATUS_TTL_MS) {
     return cached.result;
   }
 
-  const healthUrl = bridgeHealthUrl(url);
+  const healthUrl = bridgeHealthUrl(url, forceBypass);
   const t0 = performance.now();
   const cacheResult = (result: BridgeHealth) => {
     _bridgeStatusCache.set(url, { at: Date.now(), result });
@@ -158,7 +161,7 @@ export async function checkBridgeStatus(
   };
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 1500);
+    const id = setTimeout(() => controller.abort(), 2000); 
 
     const response = await fetch(healthUrl, { signal: controller.signal, cache: "no-cache" });
     clearTimeout(id);
@@ -170,18 +173,23 @@ export async function checkBridgeStatus(
     }
 
     const data = await response.json();
-    // Compat: bridge v1.x usa printer_connected, v2.2 usa printer_ok / printer_ready.
+    
+    // REQUISITO: Se retornar online=true, printer_ok=true ou printer_connected=true, considerar online.
+    const isOnline = !!(data.online === true || data.ok === true || data.status === "ok");
     const printerOk = !!(
-      data.printer_connected ??
-      data.printer_ok ??
-      data.printer_ready ??
+      data.printer_connected === true ||
+      data.printer_ok === true ||
+      data.printer_ready === true ||
       (typeof data.printer_name === "string" && data.printer_name.length > 0)
     );
-    debugLog[printerOk ? "success" : "warn"]("bridge", `health OK em ${ms}ms — printer=${printerOk}`, { url: healthUrl });
+
+    const reallyOnline = isOnline || printerOk;
+    debugLog[reallyOnline ? "success" : "warn"]("bridge", `health OK em ${ms}ms — online=${isOnline}, printer=${printerOk}`, { url: healthUrl });
+
     return cacheResult({
-      online: true,
+      online: reallyOnline,
       printer_connected: printerOk,
-      error: printerOk ? undefined : "Impressora nao detectada na ponte",
+      error: reallyOnline ? undefined : "Impressora nao detectada na ponte",
       latencyMs: ms,
       bridge_version: data.bridge_version,
       printer_count: data.printer_count,
@@ -282,8 +290,8 @@ export async function sendTestMinimal(bridgeUrl: string): Promise<{ ok: boolean;
   const payload = b.getPayload();
   const t0 = performance.now();
   try {
-    const ok = await sendToBridge(payload, bridgeUrl);
-    return { ok, latencyMs: Math.round(performance.now() - t0) };
+    const result = await sendToBridge(payload, bridgeUrl);
+    return { ok: result.success, latencyMs: Math.round(performance.now() - t0), error: result.error };
   } catch (e: any) {
     return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
   }
@@ -322,8 +330,8 @@ export async function sendOriginTest(input: {
   const payload = b.getPayload();
   const t0 = performance.now();
   try {
-    const ok = await sendToBridge(payload, input.bridgeUrl);
-    return { ok, latencyMs: Math.round(performance.now() - t0) };
+    const result = await sendToBridge(payload, input.bridgeUrl);
+    return { ok: result.success, latencyMs: Math.round(performance.now() - t0), error: result.error };
   } catch (e: any) {
     return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
   }
@@ -373,8 +381,8 @@ export async function sendConfigSelfTest(input: {
   const payload = b.getPayload();
   const t0 = performance.now();
   try {
-    const ok = await sendToBridge(payload, input.bridgeUrl);
-    return { ok, latencyMs: Math.round(performance.now() - t0) };
+    const result = await sendToBridge(payload, input.bridgeUrl);
+    return { ok: result.success, latencyMs: Math.round(performance.now() - t0), error: result.error };
   } catch (e: any) {
     return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
   }
@@ -392,7 +400,7 @@ export async function sendToBridge(
   payload: Uint8Array,
   url: string,
   meta?: SendToBridgeMeta,
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   const t0 = performance.now();
   const printUrl = bridgePrintUrl(url);
   const metaInfo = meta
@@ -403,7 +411,6 @@ export async function sendToBridge(
 
   const recordOrigin = (ok: boolean, errorMsg?: string) => {
     if (!meta) return;
-    // import dinâmico p/ evitar ciclo
     import("./print-origin-tracker").then((m) =>
       m.recordPrintOrigin({
         printPath: meta.printPath,
@@ -434,26 +441,29 @@ export async function sendToBridge(
     const ms = Math.round(performance.now() - t0);
 
     if (!response.ok) {
-      const result = await response.json().catch(() => ({ error: "?" }));
-      debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${result.error ?? "?"}`, { url: printUrl });
-      recordOrigin(false, `HTTP ${response.status}`);
-      return false;
+      const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      const errorMsg = result.error || `Erro HTTP ${response.status}`;
+      debugLog.error("print", `✗ bridge HTTP ${response.status} em ${ms}ms — ${errorMsg}`, { url: printUrl });
+      recordOrigin(false, errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     const result = await response.json();
     if (result.success) {
       debugLog.success("print", `✓ cupom enviado em ${ms}ms (${payload.length} bytes)${metaInfo}`);
       recordOrigin(true);
-      return true;
+      return { success: true };
     }
-    debugLog.error("print", `✗ bridge respondeu success=false em ${ms}ms: ${result.error ?? "?"}`);
-    recordOrigin(false, result.error ?? "success=false");
-    return false;
+    const errorMsg = result.error || "Ponte respondeu erro desconhecido";
+    debugLog.error("print", `✗ bridge respondeu success=false em ${ms}ms: ${errorMsg}`);
+    recordOrigin(false, errorMsg);
+    return { success: false, error: errorMsg };
   } catch (e: any) {
     const ms = Math.round(performance.now() - t0);
-    debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${e?.message ?? e}`, { url: printUrl });
-    recordOrigin(false, e?.message ?? String(e));
-    return false;
+    const errorMsg = e?.message || String(e);
+    debugLog.error("print", `✗ falha de conexão em ${ms}ms: ${errorMsg}`, { url: printUrl });
+    recordOrigin(false, errorMsg);
+    return { success: false, error: `Falha na conexão com bridge: ${errorMsg}` };
   }
 }
 
@@ -519,7 +529,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
   const b = new EscPosBuilder();
   const cols = paperColumns(cfg.paperWidth);
   const f = getFontSizes(cfg);
-  // baselines para decidir “grande”
+  // baselines para decidir "grande"
   const titleLarge = isLarge(cfg.fontSizes?.title, f.title - 4) || f.title >= 18;
   const totalLarge = isLarge(cfg.fontSizes?.total, f.total - 4) || f.total >= 18;
   const itemsLarge = isLarge(cfg.fontSizes?.items, f.base);
@@ -867,4 +877,3 @@ export function buildEscPosDelivery(
   );
   return renderLayout(layout.blocks, config);
 }
-
