@@ -55,6 +55,36 @@ interface PrintableItem {
 }
 
 /**
+ * Valida campos essenciais de um pedido DELIVERY antes de imprimir.
+ * Retorna array de campos faltantes (vazio = OK).
+ *
+ * Uso:
+ *   const missing = validateDeliveryFields(deliveryInput);
+ *   if (missing.length > 0) {
+ *     // Mostrar aviso na UI e pedir confirmação manual antes de imprimir
+ *   }
+ */
+export function validateDeliveryFields(input: {
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: { street?: string | null; number?: string | null; neighborhood?: string | null } | null;
+  paymentMethod?: string | null;
+}): string[] {
+  const missing: string[] = [];
+  const isBlank = (v: string | null | undefined): boolean => {
+    if (v == null) return true;
+    const s = String(v).trim();
+    return !s || /^(n\/?a|undefined|null|---)$/i.test(s);
+  };
+  if (isBlank(input.customerName)) missing.push("nome do cliente");
+  if (isBlank(input.customerPhone)) missing.push("telefone");
+  if (!input.deliveryAddress || isBlank(input.deliveryAddress.street)) missing.push("endereço");
+  if (!input.deliveryAddress || isBlank(input.deliveryAddress.neighborhood)) missing.push("bairro");
+  if (isBlank(input.paymentMethod)) missing.push("forma de pagamento");
+  return missing;
+}
+
+/**
  * Tenta "clamar" o pedido para impressão via RPC atômica.
  */
 export async function claimOrderForPrint(orderId: string): Promise<boolean> {
