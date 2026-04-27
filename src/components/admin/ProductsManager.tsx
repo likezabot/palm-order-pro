@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, ArrowDownAZ, Search, X, CheckSquare } from "lucide-react";
+import { Plus, ArrowDownAZ, X, CheckSquare } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -47,10 +47,7 @@ const ProductsManager = ({
   onNewProduct,
 }: Props) => {
   const [activeCategory, setActiveCategory] = useState<string>("espetos");
-  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupsManagerOpen, setGroupsManagerOpen] = useState(false);
@@ -63,28 +60,21 @@ const ProductsManager = ({
     [productGroups, activeCategory],
   );
 
-  const min = parseFloat(minPrice);
-  const max = parseFloat(maxPrice);
-  const hasFilters = !!search || statusFilter !== "all" || !isNaN(min) || !isNaN(max);
+  const hasFilters = statusFilter !== "all";
 
   const matchesFilters = (p: Product) => {
     if (statusFilter === "active" && !p.active) return false;
     if (statusFilter === "inactive" && p.active) return false;
-    if (!isNaN(min) && p.price < min) return false;
-    if (!isNaN(max) && p.price > max) return false;
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   };
 
-  // When searching, show all categories. Otherwise only active category.
+  // Mostra apenas a categoria ativa.
   const filteredByCategory = useMemo(() => {
     const result: Record<string, Product[]> = {};
-    const cats = search ? [...CATEGORIES] : [activeCategory];
-    cats.forEach((c) => {
-      result[c] = (productsByCategory[c] ?? []).filter(matchesFilters);
-    });
+    result[activeCategory] = (productsByCategory[activeCategory] ?? []).filter(matchesFilters);
     return result;
-  }, [productsByCategory, activeCategory, search, statusFilter, minPrice, maxPrice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsByCategory, activeCategory, statusFilter]);
 
   const items = filteredByCategory[activeCategory] ?? [];
   const hasCustomOrder = (orderMap[activeCategory]?.length ?? 0) > 0;
