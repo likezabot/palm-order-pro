@@ -585,3 +585,48 @@ export function buildEscPosBill(
   );
   return renderLayout(layout.blocks, config);
 }
+
+export interface DeliveryPayloadInput {
+  items: ReceiptItem[];
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: import("./receipt-layout").DeliveryAddressData | null;
+  deliveryFee?: number | null;
+  discount?: number | null;
+  subtotal?: number | null;
+  total?: number | null;
+  paymentMethod?: string | null;
+  changeFor?: number | null;
+  generalNote?: string | null;
+  orderId?: string | null;
+  orderShortId?: string | null;
+  serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
+}
+
+export function buildEscPosDelivery(
+  input: DeliveryPayloadInput,
+  config: PrintConfig
+): Uint8Array {
+  const layout = createReceiptLayoutModel(
+    {
+      docType: "DELIVERY",
+      items: input.items,
+      total: input.total ?? undefined,
+      subtotal: input.subtotal ?? undefined,
+      deliveryFee: input.deliveryFee ?? undefined,
+      discount: input.discount ?? undefined,
+      paymentMethod: input.paymentMethod ?? undefined,
+      changeFor: input.changeFor ?? undefined,
+      customerName: input.customerName ?? undefined,
+      customerPhone: input.customerPhone ?? undefined,
+      deliveryAddress: input.deliveryAddress ?? undefined,
+      generalNote: input.generalNote ?? undefined,
+      orderId: input.orderId ?? undefined,
+      orderShortId: input.orderShortId ?? undefined,
+      serviceType: input.serviceType ?? "delivery",
+    },
+    config
+  );
+  return renderLayout(layout.blocks, config);
+}
+
