@@ -581,7 +581,7 @@ export default function PublicMenu() {
         />
       )}
 
-      {!isPreview && <GiftFab />}
+      
 
       <PublicGroupVariantSheet
         open={!!openGroup}
