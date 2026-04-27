@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, Archive, History, Trash2, Info } from "lucide-react";
+import { RefreshCw, Archive, History, Trash2, Info, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFeedback } from "@/hooks/use-feedback";
 import { useToast } from "@/hooks/use-toast";
 import { getAppVersion } from "@/lib/version-check";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import AdvancedSection from "./AdvancedSection";
 
 type RetentionLog = {
   id: number;
@@ -152,13 +153,17 @@ export const SystemTab = () => {
 
   return (
     <div className="max-w-2xl mx-auto py-4 space-y-6">
-      <div className="rounded-xl border border-border bg-muted/40 p-3 flex items-start gap-3 text-sm">
-        <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-        <p className="text-muted-foreground">
-          Procurando erros, impressões travadas ou o resumo diário?
-          {" "}
-          <span className="font-bold text-foreground">Veja a aba “Erros &amp; Saúde”.</span>
-        </p>
+      <div className="rounded-xl border-2 border-border bg-muted/30 p-4 flex items-start gap-3">
+        <div className="rounded-lg bg-primary/10 p-2.5 shrink-0">
+          <Wrench className="w-5 h-5 text-primary" />
+        </div>
+        <div className="text-sm">
+          <h2 className="font-black text-base text-foreground">Manutenção do sistema</h2>
+          <p className="text-muted-foreground mt-1">
+            Forçar atualização do app, limpar dados de teste e arquivar pedidos antigos.
+            Procurando erros ou impressões travadas? Veja a seção <strong>Erros &amp; Saúde</strong>.
+          </p>
+        </div>
       </div>
       <div className="rounded-xl border-2 border-destructive/60 bg-destructive/5 p-5 space-y-4">
         <div className="flex items-start gap-3">
