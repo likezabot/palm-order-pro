@@ -90,6 +90,18 @@ function safe(v: string | null | undefined): string {
   return s;
 }
 
+/**
+ * Detecta valores "vazios" para campos opcionais (waiter, customer).
+ * Diferente de `safe()`: aqui retornamos true para omitir o bloco completamente,
+ * em vez de imprimir "NAO INFORMADO".
+ */
+function isBlank(v: string | null | undefined): boolean {
+  if (v == null) return true;
+  const s = String(v).trim();
+  if (!s) return true;
+  return /^(n\/?a|undefined|null|---|—|-)$/i.test(s);
+}
+
 function moneyBr(n: number): string {
   return `R$ ${n.toFixed(2).replace(".", ",")}`;
 }
