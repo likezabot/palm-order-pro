@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams, Navigate, Link } from "react-router-dom";
 import { ArrowLeft, Gift } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +16,7 @@ import {
   validatePhone,
   formatPhone,
   computeDeliveryFee,
+  fetchLastCustomerAddress,
   DELIVERY_FEE_FIXED,
   type ServiceType,
   type PaymentMethod,
