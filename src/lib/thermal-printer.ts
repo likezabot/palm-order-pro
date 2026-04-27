@@ -329,6 +329,57 @@ export async function sendOriginTest(input: {
   }
 }
 
+/**
+ * "Teste config atual" — imprime cupom curto provando QUAL config está
+ * efetivamente sendo aplicada nesta instância (header/footer/largura/timestamp)
+ * + APP_BUILD e PRINT_ENGINE. Se o papel não bater com o Admin, esta
+ * instância não é a que está imprimindo os pedidos reais.
+ */
+export async function sendConfigSelfTest(input: {
+  bridgeUrl: string;
+  appBuild: string;
+  engineVersion: string;
+  configSource: string;
+  configUpdatedAt: string;
+  headerText: string;
+  footerText: string;
+  paperWidth: string;
+  printSize: string;
+}): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  const b = new EscPosBuilder();
+  b.reset()
+    .align("center").bold(true).size(true, true).line("TESTE CONFIG ATUAL").resetStyle()
+    .feed(1)
+    .align("center").line("=".repeat(32)).resetStyle()
+    .align("left")
+    .bold(true).text("HEADER:    ").bold(false).line(String(input.headerText || "—").slice(0, 32))
+    .bold(true).text("FOOTER:    ").bold(false).line(String(input.footerText || "—").slice(0, 32))
+    .bold(true).text("WIDTH:     ").bold(false).line(input.paperWidth)
+    .bold(true).text("SIZE:      ").bold(false).line(input.printSize)
+    .bold(true).text("CFG_SRC:   ").bold(false).line(input.configSource)
+    .bold(true).text("UPDATED:   ").bold(false).line(input.configUpdatedAt.slice(0, 25) || "—")
+    .align("center").line("-".repeat(32))
+    .align("left")
+    .bold(true).text("APP_BUILD: ").bold(false).line(input.appBuild.slice(0, 25))
+    .bold(true).text("ENGINE:    ").bold(false).line(input.engineVersion)
+    .bold(true).text("BRIDGE:    ").bold(false).line(input.bridgeUrl.slice(0, 28))
+    .bold(true).text("HORA:      ").bold(false).line(new Date().toLocaleString("pt-BR"))
+    .align("center").line("=".repeat(32))
+    .bold(true).line("Compare HEADER/FOOTER")
+    .line("com o Admin.")
+    .bold(false)
+    .feed(3)
+    .cut();
+  const payload = b.getPayload();
+  const t0 = performance.now();
+  try {
+    const ok = await sendToBridge(payload, input.bridgeUrl);
+    return { ok, latencyMs: Math.round(performance.now() - t0) };
+  } catch (e: any) {
+    return { ok: false, latencyMs: Math.round(performance.now() - t0), error: e?.message ?? String(e) };
+  }
+}
+
 export async function sendToBridge(payload: Uint8Array, url: string): Promise<boolean> {
   const t0 = performance.now();
   const printUrl = bridgePrintUrl(url);
