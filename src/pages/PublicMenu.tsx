@@ -34,7 +34,7 @@ import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 import TopSellersSection from "@/components/public-menu/TopSellersSection";
 import PublicGroupVariantSheet from "@/components/public-menu/PublicGroupVariantSheet";
 import LoyaltyCTACard from "@/components/public-menu/LoyaltyCTACard";
-import GiftFab from "@/components/public-menu/GiftFab";
+
 import { usePublicProductGroups, buildCategoryEntries } from "@/lib/public-menu-groups";
 import type { ProductGroup } from "@/lib/product-groups";
 
@@ -581,7 +581,7 @@ export default function PublicMenu() {
         />
       )}
 
-      {!isPreview && <GiftFab />}
+      
 
       <PublicGroupVariantSheet
         open={!!openGroup}
