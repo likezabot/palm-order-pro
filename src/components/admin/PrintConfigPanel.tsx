@@ -39,6 +39,7 @@ import { buildHtmlFromLayout } from "@/lib/receipt-html";
 import { checkBridgeStatus, type BridgeHealth } from "@/lib/thermal-printer";
 import { PRINT_ENGINE_VERSION, APP_BUILD } from "@/lib/print-engine";
 import PrinterDiagnostics from "./PrinterDiagnostics";
+import BridgeOriginDiagnostics from "./BridgeOriginDiagnostics";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -508,7 +509,14 @@ export default function PrintConfigPanel() {
           </CardContent>
         </Card>
 
-        {/* 6. DIAGNÓSTICO */}
+        {/* 6. DIAGNÓSTICO DE ORIGEM (novo — prova de qual instância sai o papel) */}
+        <BridgeOriginDiagnostics
+          bridgeUrl={cfg.bridgeUrl}
+          configSource={cfg.configSource ?? "default"}
+          onBridgeUrlChange={(url) => persist({ ...cfg, bridgeUrl: url, printMode: "bridge" })}
+        />
+
+        {/* 7. DIAGNÓSTICO AVANÇADO (existente) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-bold uppercase tracking-wide">Diagnóstico avançado</CardTitle>
