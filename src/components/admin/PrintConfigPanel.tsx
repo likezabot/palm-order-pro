@@ -608,54 +608,80 @@ function StatusCard({
   onReset: () => void;
 }) {
   const isLocalStale = cfg.configSource && cfg.configSource !== "db";
+  const configOk = cfg.configSource === "db";
+  const bridgeOk = !!bridgeStatus?.online;
+  const usbOk = !!bridgeStatus?.printer_connected;
+
+  // Status global resumido
+  const allOk = configOk && bridgeOk && usbOk;
+  const partial = configOk || bridgeOk;
+  const statusLabel = allOk
+    ? "Tudo certo"
+    : partial
+    ? "Atenção"
+    : "Com problemas";
+  const statusTone = allOk ? "success" : partial ? "warning" : "danger";
+  const StatusIcon = allOk ? CheckCircle2 : partial ? AlertTriangle : XCircle;
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center justify-between">
-          <span>Status da impressão</span>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            Status da impressão
+            <DetailsDialog
+              cfg={cfg}
+              bridgeStatus={bridgeStatus}
+              syncing={syncing}
+            />
+          </span>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={onSync} disabled={syncing}>
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-              <span className="text-xs">Sincronizar</span>
+              <span className="text-xs hidden sm:inline">Sincronizar</span>
             </Button>
             <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={onReset}>
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="text-xs">Padrão</span>
+              <span className="text-xs hidden sm:inline">Padrão</span>
             </Button>
           </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-mono">
-          <Row label="APP_BUILD" value={APP_BUILD} />
-          <Row label="PRINT_ENGINE" value={PRINT_ENGINE_VERSION} />
-          <Row
-            label="CONFIG_SOURCE"
-            value={cfg.configSource ?? "default"}
-            tone={cfg.configSource === "db" ? "success" : "warning"}
+        {/* Resumo visual compacto — só o essencial */}
+        <div className="grid grid-cols-3 gap-2">
+          <StatusPill
+            label="Config"
+            value={configOk ? "Banco" : "Local"}
+            tone={configOk ? "success" : "warning"}
           />
-          <Row
-            label="CONFIG_UPDATED_AT"
-            value={cfg.configUpdatedAt ? new Date(cfg.configUpdatedAt).toLocaleString("pt-BR") : "—"}
+          <StatusPill
+            label="Ponte"
+            value={bridgeOk ? "Online" : bridgeStatus ? "Offline" : "—"}
+            tone={bridgeOk ? "success" : bridgeStatus ? "danger" : "neutral"}
           />
-          <Row label="PRINT_MODE" value={cfg.printMode} />
-          <Row label="BRIDGE_URL" value={cfg.bridgeUrl} mono />
-          <Row
-            label="BRIDGE_STATUS"
-            value={bridgeStatus?.online ? "ONLINE" : bridgeStatus ? "OFFLINE" : "—"}
-            tone={bridgeStatus?.online ? "success" : bridgeStatus ? "danger" : undefined}
-          />
-          <Row
-            label="LAST_SYNC"
-            value={syncing ? "..." : cfg.configUpdatedAt ? new Date(cfg.configUpdatedAt).toLocaleTimeString("pt-BR") : "—"}
+          <StatusPill
+            label="Impressora"
+            value={usbOk ? "OK" : bridgeOk ? "N/D" : "—"}
+            tone={usbOk ? "success" : bridgeOk ? "warning" : "neutral"}
           />
         </div>
 
-        {saving && (
-          <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Save className="w-3 h-3 animate-pulse" /> Salvando no banco...
-          </div>
-        )}
+        <div className={`mt-3 flex items-center gap-2 text-xs font-bold ${
+          statusTone === "success"
+            ? "text-emerald-600 dark:text-emerald-400"
+            : statusTone === "warning"
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-rose-600 dark:text-rose-400"
+        }`}>
+          <StatusIcon className="w-3.5 h-3.5" />
+          <span>{statusLabel}</span>
+          {saving && (
+            <span className="ml-auto flex items-center gap-1 text-muted-foreground font-normal">
+              <Save className="w-3 h-3 animate-pulse" /> Salvando...
+            </span>
+          )}
+        </div>
 
         {isLocalStale && (
           <div className="mt-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2 text-[11px] text-amber-800 dark:text-amber-200">
@@ -665,6 +691,167 @@ function StatusCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function StatusPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+}) {
+  const cls =
+    tone === "success"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900"
+      : tone === "warning"
+      ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900"
+      : tone === "danger"
+      ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-900"
+      : "bg-muted text-muted-foreground border-border";
+  return (
+    <div className={`rounded-md border px-2 py-1.5 text-center ${cls}`}>
+      <div className="text-[9px] uppercase font-bold opacity-70 tracking-wide">{label}</div>
+      <div className="text-xs font-bold truncate">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Bolinha "i" — abre Dialog com TODAS as informações técnicas detalhadas
+ * (APP_BUILD, PRINT_ENGINE, CONFIG_SOURCE, BRIDGE_URL, versões, latência, etc.)
+ */
+function DetailsDialog({
+  cfg,
+  bridgeStatus,
+  syncing,
+}: {
+  cfg: PrintConfig;
+  bridgeStatus: BridgeHealth | null;
+  syncing: boolean;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label="Ver informações técnicas completas"
+          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
+        >
+          <Info className="w-3 h-3" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-primary" />
+            Informações técnicas
+          </DialogTitle>
+          <DialogDescription>
+            Diagnóstico completo desta instância do Admin. Use ao reportar bugs ou
+            quando o papel impresso não bater com o preview.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          <Section title="Versões">
+            <Row label="APP_BUILD" value={APP_BUILD} mono />
+            <Row label="PRINT_ENGINE" value={PRINT_ENGINE_VERSION} mono />
+          </Section>
+
+          <Section title="Configuração">
+            <Row
+              label="CONFIG_SOURCE"
+              value={cfg.configSource ?? "default"}
+              tone={cfg.configSource === "db" ? "success" : "warning"}
+            />
+            <Row
+              label="CONFIG_UPDATED_AT"
+              value={
+                cfg.configUpdatedAt
+                  ? new Date(cfg.configUpdatedAt).toLocaleString("pt-BR")
+                  : "—"
+              }
+            />
+            <Row
+              label="LAST_SYNC"
+              value={
+                syncing
+                  ? "..."
+                  : cfg.configUpdatedAt
+                  ? new Date(cfg.configUpdatedAt).toLocaleTimeString("pt-BR")
+                  : "—"
+              }
+            />
+          </Section>
+
+          <Section title="Impressão">
+            <Row label="PRINT_MODE" value={cfg.printMode} />
+            <Row label="BRIDGE_URL" value={cfg.bridgeUrl || "—"} mono />
+            <Row
+              label="BRIDGE_STATUS"
+              value={bridgeStatus?.online ? "ONLINE" : bridgeStatus ? "OFFLINE" : "—"}
+              tone={
+                bridgeStatus?.online
+                  ? "success"
+                  : bridgeStatus
+                  ? "danger"
+                  : undefined
+              }
+            />
+            <Row
+              label="USB_PRINTER"
+              value={
+                bridgeStatus?.printer_connected
+                  ? "DETECTADA"
+                  : bridgeStatus?.online
+                  ? "N/D"
+                  : "—"
+              }
+              tone={bridgeStatus?.printer_connected ? "success" : undefined}
+            />
+            {bridgeStatus?.bridge_version && (
+              <Row label="BRIDGE_VERSION" value={bridgeStatus.bridge_version} mono />
+            )}
+            {typeof bridgeStatus?.queue_depth === "number" && (
+              <Row label="QUEUE_DEPTH" value={String(bridgeStatus.queue_depth)} />
+            )}
+            {typeof bridgeStatus?.latencyMs === "number" && (
+              <Row label="LATENCY" value={`${bridgeStatus.latencyMs}ms`} />
+            )}
+            {bridgeStatus?.error && (
+              <Row label="LAST_ERROR" value={bridgeStatus.error} tone="danger" />
+            )}
+          </Section>
+
+          <Section title="Layout">
+            <Row label="PAPER_WIDTH" value={cfg.paperWidth} />
+            <Row label="PRINT_SIZE" value={cfg.printSize} />
+            <Row label="LAYOUT_PRESET" value={cfg.layoutPreset} />
+            <Row label="CONTENT_ALIGN" value={cfg.contentAlign} />
+          </Section>
+
+          <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2.5 text-[11px] text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="w-3.5 h-3.5 inline mr-1 mb-0.5" />
+            Se o papel impresso não exibir <strong>PRINT_ENGINE: {PRINT_ENGINE_VERSION}</strong>,
+            o EXE/bridge está rodando uma versão antiga em cache.
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b pb-1">
+        {title}
+      </div>
+      <div className="space-y-1 text-[11px] font-mono">{children}</div>
+    </div>
   );
 }
 
