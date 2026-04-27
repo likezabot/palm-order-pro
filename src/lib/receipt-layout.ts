@@ -8,6 +8,7 @@
  */
 
 import type { PrintConfig } from "./print-config";
+import { APP_BUILD, PRINT_ENGINE_FOOTER } from "./print-engine";
 
 export type DocType = "PEDIDO" | "ACRESCIMO" | "CONTA" | "SENHA" | "DELIVERY";
 
