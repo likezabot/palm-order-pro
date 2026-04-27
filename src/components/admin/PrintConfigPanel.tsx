@@ -236,6 +236,7 @@ export default function PrintConfigPanel() {
         case "mesa":
           ok = await printReceipt("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
             serviceType: "dine_in",
+            fingerprint: { printPath: "admin.test.mesa", source: "test" },
           });
           break;
         case "retirada":
@@ -243,6 +244,7 @@ export default function PrintConfigPanel() {
             serviceType: "pickup",
             customerName: "João Pereira",
             customerPhone: "(11) 98888-2222",
+            fingerprint: { printPath: "admin.test.retirada", source: "test" },
           });
           break;
         case "delivery":
@@ -259,11 +261,13 @@ export default function PrintConfigPanel() {
             orderId: "test-delivery-001",
             orderShortId: "T001",
             serviceType: "delivery",
+            fingerprint: { printPath: "admin.test.delivery", source: "test" },
           });
           break;
         case "conta":
           ok = await printBill("Mesa 5", "Carlos", SAMPLE_ITEMS, SAMPLE_TOTAL, {
             serviceType: "dine_in",
+            fingerprint: { printPath: "admin.test.conta", source: "test" },
           });
           break;
         case "senha":
@@ -273,6 +277,7 @@ export default function PrintConfigPanel() {
             customerName: "CONSUMIDOR FINAL",
             total: SAMPLE_TOTAL,
             force: true,
+            source: "test",
           });
           break;
       }
