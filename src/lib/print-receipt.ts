@@ -167,12 +167,19 @@ export async function printReceipt(
   logPrintCall("printReceipt", cfg, {
     serviceType: extras.serviceType ?? null,
     tableName,
+    orderId: extras.orderId ?? null,
   });
   console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg, extras);
-    const success = await sendToBridge(payload, cfg.bridgeUrl);
+    const success = await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: extras.fingerprint?.printPath ?? "printReceipt",
+      source: (extras.fingerprint?.source as any) ?? "unknown",
+      orderId: extras.orderId ?? null,
+      serviceType: extras.serviceType ?? null,
+      tableName,
+    });
     if (!success) {
       console.warn("[print] Falha na ponte térmica.");
       return false;
@@ -194,12 +201,19 @@ export async function printDelta(
   logPrintCall("printDelta", cfg, {
     serviceType: extras.serviceType ?? null,
     tableName,
+    orderId: extras.orderId ?? null,
   });
   console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosDelta(tableName, waiterName, deltaItems, cfg, extras);
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    return await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: extras.fingerprint?.printPath ?? "printDelta",
+      source: (extras.fingerprint?.source as any) ?? "unknown",
+      orderId: extras.orderId ?? null,
+      serviceType: extras.serviceType ?? null,
+      tableName,
+    });
   }
 
   buildHtmlFromLayout(
@@ -232,12 +246,19 @@ export async function printBill(
   logPrintCall("printBill", cfg, {
     serviceType: extras.serviceType ?? null,
     tableName,
+    orderId: extras.orderId ?? null,
   });
   console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosBill(tableName, waiterName, items, total, cfg, extras);
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    return await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: extras.fingerprint?.printPath ?? "printBill",
+      source: (extras.fingerprint?.source as any) ?? "unknown",
+      orderId: extras.orderId ?? null,
+      serviceType: extras.serviceType ?? null,
+      tableName,
+    });
   }
 
   buildHtmlFromLayout("CONTA", "Conta", {
@@ -325,7 +346,13 @@ export async function printDelivery(
 
   if (cfg.printMode === "bridge") {
     const payload = buildEscPosDelivery(input, cfg);
-    return await sendToBridge(payload, cfg.bridgeUrl);
+    return await sendToBridge(payload, cfg.bridgeUrl, {
+      printPath: input.fingerprint?.printPath ?? "printDelivery",
+      source: (input.fingerprint?.source as any) ?? "unknown",
+      orderId: input.orderId ?? null,
+      serviceType: input.serviceType ?? "delivery",
+      tableName: input.orderShortId ?? null,
+    });
   }
 
   buildHtmlFromLayout(

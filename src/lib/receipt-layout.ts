@@ -79,6 +79,15 @@ export interface BuildLayoutInput {
   orderShortId?: string | null;
   /** Tipo de serviço (delivery/pickup/dine_in) — usado p/ legendas extras. */
   serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
+  /**
+   * Fingerprint de rastreamento — adicionado ao rodapé de TODO cupom real
+   * para provar qual caminho/instância gerou o papel. Se um pedido real sai
+   * sem esse bloco, ele não passou pelo motor novo.
+   */
+  fingerprint?: {
+    printPath: string;       // ex.: "dispatcher.delivery", "dispatcher.dine_in_full"
+    source?: string | null;  // "auto" | "manual" | "reprint" | "queue"
+  } | null;
 }
 
 const NOT_PROVIDED = "NAO INFORMADO";
@@ -118,6 +127,26 @@ function paymentLabel(m?: string | null): string {
     debit: "CARTAO DEBITO",
   };
   return map[m.toLowerCase()] ?? m.toUpperCase();
+}
+
+/**
+ * Adiciona o bloco de fingerprint obrigatório no rodapé.
+ * Inclui: PRINT_ENGINE, APP_BUILD, PRINT_PATH, ORDER_ID, SERVICE_TYPE.
+ * Se o papel real não mostrar essas linhas → não passou por este motor.
+ */
+function pushFingerprint(blocks: LayoutBlock[], input: BuildLayoutInput) {
+  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
+  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
+  const fp = input.fingerprint;
+  if (fp?.printPath) {
+    const src = fp.source ? ` [${fp.source}]` : "";
+    blocks.push({ kind: "footer", text: `PRINT_PATH: ${fp.printPath}${src}` });
+  }
+  const oid = input.orderId ? input.orderId.slice(0, 8) : null;
+  if (oid) blocks.push({ kind: "footer", text: `ORDER: ${oid}` });
+  if (input.serviceType) {
+    blocks.push({ kind: "footer", text: `SERVICE: ${input.serviceType}` });
+  }
 }
 
 function buildAddressLines(addr?: DeliveryAddressData | null): string[] {
@@ -239,8 +268,7 @@ export function createReceiptLayoutModel(
   if (v.footer && cfg.footerText) {
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
-  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
-  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
+  pushFingerprint(blocks, input);
 
   // 9. Marca de corte (visual, só usada no HTML)
   blocks.push({ kind: "cutMark" });
@@ -360,8 +388,7 @@ function buildDeliveryLayout(
   if (v.footer && cfg.footerText) {
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
-  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
-  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
+  pushFingerprint(blocks, input);
 
   blocks.push({ kind: "cutMark" });
   return { blocks, docType: "DELIVERY" };
@@ -419,8 +446,7 @@ function buildSenhaLayout(
   });
   blocks.push({ kind: "sep", bold: true });
   if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
-  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
-  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
+  pushFingerprint(blocks, input);
   blocks.push({ kind: "cutMark" });
   return { blocks, docType: "SENHA" };
 }

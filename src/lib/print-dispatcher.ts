@@ -78,8 +78,11 @@ async function loadItemsWithRetry(orderId: string) {
  * Sanitiza extras: NUNCA imprimir N/A. Campos vazios são removidos para que
  * o layout simplesmente não renderize a linha.
  */
-function buildExtras(o: OrderRow): ReceiptExtras {
-  const extras: ReceiptExtras = {};
+function buildExtras(o: OrderRow, printPath: string, source: "auto" | "manual" | "reprint" | "queue" | "unknown"): ReceiptExtras {
+  const extras: ReceiptExtras = {
+    orderId: o.id,
+    fingerprint: { printPath, source },
+  };
   if (o.service_type) extras.serviceType = o.service_type;
   if (o.customer_name_snapshot && o.customer_name_snapshot.trim())
     extras.customerName = o.customer_name_snapshot.trim();
@@ -190,6 +193,7 @@ export async function printOrderByServiceType(
       orderId,
       orderShortId: order.table_name?.replace(/^.*#/, "") || null,
       serviceType: "delivery",
+      fingerprint: { printPath: "dispatcher.delivery", source: "auto" },
     };
 
     const ok = await printDelivery(input);
@@ -202,7 +206,9 @@ export async function printOrderByServiceType(
 
   // ---- PICKUP: layout receipt SEM bloco MESA (handled by serviceType extra) ----
   // ---- DINE_IN: layout normal de mesa ----
-  const extras = buildExtras(order);
+  const layoutKey = isPickup ? "pickup" : (mode === "delta" ? "dine_in_delta" : mode === "bill" ? "dine_in_bill" : "dine_in_full");
+  const printPath = `dispatcher.${layoutKey}.${mode}`;
+  const extras = buildExtras(order, printPath, "auto");
 
   if (mode === "delta") {
     const deltaItems = (order.delta_items ?? []) as any[];
