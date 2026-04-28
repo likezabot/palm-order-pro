@@ -104,7 +104,7 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
           return (
             <SidebarGroup key={group.title} className="p-0">
               {!collapsed && (
-                <SidebarGroupLabel className="px-4 pt-6 pb-2 text-[11px] font-black uppercase tracking-widest !text-black opacity-100 h-auto">
+                <SidebarGroupLabel className="px-4 pt-8 pb-3 text-[14px] font-black uppercase tracking-widest !text-black opacity-100 h-auto">
                   {group.title}
                 </SidebarGroupLabel>
               )}
