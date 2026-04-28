@@ -1359,7 +1359,22 @@ export type Database = {
       }
       admin_loyalty_list_rewards: {
         Args: { p_restaurant_id: string }
-        Returns: Json
+        Returns: {
+          active: boolean
+          allow_delivery: boolean
+          allow_pickup: boolean
+          description: string
+          display_name: string
+          effective_cost_per_point: number
+          id: string
+          min_order_subtotal: number
+          points_cost: number
+          product_id: string
+          product_name: string
+          product_price: number
+          restaurant_id: string
+          sort_order: number
+        }[]
       }
       admin_loyalty_search_customer: {
         Args: { p_phone: string }
@@ -1371,19 +1386,36 @@ export type Database = {
         Returns: undefined
       }
       admin_loyalty_top_customers: { Args: { p_limit?: number }; Returns: Json }
-      admin_loyalty_upsert_reward: {
-        Args: {
-          p_active: boolean
-          p_display_name: string
-          p_id: string
-          p_min_order_subtotal: number
-          p_points_cost: number
-          p_product_id?: string
-          p_restaurant_id: string
-          p_sort_order: number
-        }
-        Returns: string
-      }
+      admin_loyalty_upsert_reward:
+        | {
+            Args: {
+              p_active?: boolean
+              p_allow_delivery?: boolean
+              p_allow_pickup?: boolean
+              p_description?: string
+              p_display_name: string
+              p_id: string
+              p_min_order_subtotal?: number
+              p_points_cost: number
+              p_product_id?: string
+              p_restaurant_id: string
+              p_sort_order?: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_active: boolean
+              p_display_name: string
+              p_id: string
+              p_min_order_subtotal: number
+              p_points_cost: number
+              p_product_id?: string
+              p_restaurant_id: string
+              p_sort_order: number
+            }
+            Returns: string
+          }
       admin_reorder_products: {
         Args: { p_ids: string[]; p_orders: number[] }
         Returns: undefined
