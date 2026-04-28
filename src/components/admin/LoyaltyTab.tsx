@@ -218,6 +218,9 @@ export default function LoyaltyTab() {
         p_active: form.active,
         p_sort_order: Number(form.sort_order) || 0,
         p_product_id: form.product_id || null,
+        p_allow_pickup: form.allow_pickup,
+        p_allow_delivery: form.allow_delivery,
+        p_description: form.description.trim() || null,
       } as never,
     );
     if (error) {
