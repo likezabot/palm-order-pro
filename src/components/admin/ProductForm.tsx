@@ -117,6 +117,11 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         category,
         active,
         aliases: cleanAliases,
+        image_url: imageUrl.trim() || null,
+        description: description.trim() || null,
+        is_featured: isFeatured,
+        is_available_online: isAvailableOnline,
+        is_sold_out: isSoldOut,
       };
 
       const { withPin } = await import("@/lib/manager-pin");
