@@ -123,6 +123,8 @@ function formatWhatsAppMessage(opts: {
   deliveryFee?: number;
   total: number;
   address?: LocAddress | null;
+  rewardName?: string | null;
+  pointsUsed?: number | null;
 }): string {
   const lines: string[] = [];
   lines.push(`🔥 *NOVO PEDIDO - ${opts.restaurantName.toUpperCase()}*`);
@@ -159,6 +161,10 @@ function formatWhatsAppMessage(opts: {
     }
   } else {
     lines.push("• (itens não disponíveis)");
+  }
+
+  if (opts.rewardName) {
+    lines.push(`🎁 *BRINDE RESGATADO:* ${opts.rewardName} — ${opts.pointsUsed || 0} pts`);
   }
 
   lines.push("");
