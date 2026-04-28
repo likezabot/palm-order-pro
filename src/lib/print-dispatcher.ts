@@ -217,6 +217,13 @@ export async function printOrderByServiceType(
       const latencyMs = Date.now() - startTime;
 
       // LOG OBRIGATÓRIO: DEPOIS DA BRIDGE
+      await logPrinterEvent(
+        result.ok ? "Impressão concluída via Bridge" : `Falha na Bridge: ${result.error}`,
+        orderId,
+        result.ok ? "success" : "error",
+        { ok: result.ok, error: result.error, latencyMs, printPath }
+      );
+
       console.log("[PRINT_PIPELINE] RESPOSTA DA BRIDGE:", {
         orderId,
         ok: result.ok,
