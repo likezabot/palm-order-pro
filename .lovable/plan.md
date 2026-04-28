@@ -1,71 +1,65 @@
-# Remodelar página /pdv
+## Plano
 
-A página `/pdv` hoje tem cards de pedido com altura variável que estouram a tela em estabelecimentos com muitos pedidos abertos, e não há um caminho claro para **cancelar** um pedido (apenas avançar status ou pagar). Edição existe mas redireciona ao Palm sem aviso.
+Vou aplicar uma correção cirúrgica para fazer o checkout voltar a finalizar sem redesenhar a tela.
 
-## O que vai mudar
+### Diagnóstico confirmado
+O erro atual não está na busca do cliente nem nos pontos. O envio do pedido está falhando porque o checkout está chamando a função de criação com o slug literal `:slug` em vez do slug real do restaurante.
 
-### 1. Cards compactos com tamanho fixo (caber na tela)
-- Reescrever `OrderRow.tsx` em modo **compacto**: altura fixa (~140px), padding reduzido, fontes menores no título (text-base) e no valor (text-xl).
-- Remover sub-linha duplicada (badge tipo + canal vira um chip único: "🛵 ONLINE", "🛍 RETIRADA", "🍽 MESA").
-- Grid responsivo mais denso:
-  - Entregas: `grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5`
-  - Mesas: `grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6`
-- Ícones dos botões de ação (Imprimir/Editar/Avançar) reduzidos a 14px com tooltip.
-- Aplicar `auto-rows-[140px]` para garantir altura uniforme — sem cards "saltando" de tamanho.
+Evidência encontrada:
+- rota ativa no preview: `/menu/:slug/checkout`
+- payload enviado ao backend: `p_restaurant_slug: ":slug"`
+- resposta do backend: `restaurant_not_found`
 
-### 2. Editar pedidos com confirmação e atalho contextual
-- O botão **Editar** hoje navega direto para `/palm?orderId=...`. Adicionar:
-  - Tooltip claro: "Adicionar/remover itens"
-  - Bloqueio visual quando `status === "done"` (pedido pronto) — exibir aviso "Pedido pronto, edição requer reabrir".
-- No painel de detalhe (direito), reorganizar botões em duas linhas:
-  - Linha 1: **Editar itens**, **Imprimir**, **Cancelar pedido**
-  - Linha 2: **Avançar status** ou **Fechar mesa** (ação principal, destaque)
+Ou seja: o pedido quebra antes da gravação porque o restaurante não é localizado.
 
-### 3. Cancelamento de pedidos (NOVO)
-Backend já suporta — `update_order_status` aceita `cancelled` e o trigger limpa stats automaticamente.
+### O que vou corrigir
+1. Criar uma resolução segura do slug do restaurante nas páginas públicas.
+   - Se o parâmetro da rota vier inválido (`:slug`, vazio, placeholder ou valor malformado), usar o slug real do restaurante carregado do backend.
+   - Se necessário, usar fallback pelo restaurante principal do sistema.
 
-- Botão **"Cancelar pedido"** vermelho no painel direito (apenas quando `status !== "done"` ou com confirmação reforçada se já preparado).
-- Botão também acessível no card via menu compacto (ícone X discreto no canto, só aparece em hover/long-press).
-- AlertDialog de confirmação com:
-  - Aviso forte ("Esta ação não pode ser desfeita")
-  - Campo opcional **motivo** (texto livre) — salvo em `orders.rejected_reason`
-  - Botões "Voltar" e "Sim, cancelar pedido" (destrutivo)
-- Após cancelar: chamar `supabase.rpc("update_order_status", { p_order_id, p_status: "cancelled" })`, salvar motivo via update direto em `orders.rejected_reason`, invalidar query, fechar painel, toast de sucesso.
+2. Aplicar essa resolução no checkout público.
+   - Usar o slug resolvido em:
+     - busca do restaurante
+     - busca do cliente por telefone
+     - consulta de fidelidade
+     - criação do pedido
+     - navegação para sucesso/voltar ao cardápio
+   - Isso mantém a tela igual, mudando só a origem do dado.
 
-### 4. Outras melhorias funcionais
-- **Filtro rápido por tipo** no topo de cada seção (chips: Todos / Mesa / Balcão / Delivery / Retirada).
-- **Contagem total de itens** no header de cada seção (ex.: "Mesas (5) · 23 itens").
-- **Ordenação**: pedidos críticos (>25 min) sempre no topo, depois por horário.
-- **Atalho de teclado**: tecla `Esc` fecha o painel direito; `Enter` confirma ação principal quando há pedido selecionado.
-- **Painel direito sticky** em telas grandes — não rola junto com a lista.
+3. Melhorar a tolerância de erro no submit.
+   - Tratar `restaurant_not_found` com mensagem clara caso ainda ocorra.
+   - Evitar que o usuário fique preso num erro genérico quando o problema for o slug.
 
-## Arquivos afetados
+4. Validar os cenários críticos sem refatoração ampla.
+   - checkout em rota correta: `/menu/plano-b-espetaria/checkout`
+   - checkout em rota com placeholder: `/menu/:slug/checkout`
+   - cliente encontrado por telefone
+   - entrega com endereço salvo
+   - retirada sem endereço
+   - pedido com e sem brinde
 
-```text
-src/components/pdv/OrderRow.tsx          (refatorar para modo compacto + altura fixa)
-src/pages/Pdv.tsx                        (grid mais denso, filtros por tipo, botão cancelar, atalhos)
-src/components/pdv/CancelOrderDialog.tsx (NOVO — modal de confirmação com motivo)
-src/lib/order-actions.ts                 (NOVO — helper cancelOrder(id, reason))
-```
+## Arquivos mais prováveis
+- `src/pages/PublicCheckout.tsx`
+- `src/lib/public-menu.ts`
+- possivelmente `src/pages/PublicOrderSuccess.tsx` se eu precisar alinhar a navegação pós-pedido com o slug resolvido
+
+## Resultado esperado
+Após a correção:
+- o botão Confirmar pedido volta a funcionar
+- a busca de cliente continua funcionando
+- pontos/brindes não bloqueiam o envio indevidamente
+- a interface permanece praticamente igual
 
 ## Detalhes técnicos
+Estratégia prevista:
 
-**Helper `cancelOrder`:**
-```ts
-export async function cancelOrder(orderId: string, reason?: string) {
-  const { error: e1 } = await supabase.rpc("update_order_status", {
-    p_order_id: orderId,
-    p_status: "cancelled",
-  });
-  if (e1) throw e1;
-  if (reason?.trim()) {
-    await supabase.from("orders").update({ rejected_reason: reason.trim() }).eq("id", orderId);
-  }
-}
+```text
+useParams().slug
+   -> validar
+   -> se inválido, usar restaurantQuery.data?.slug
+   -> se ainda faltar, buscar fetchCurrentRestaurant()
+   -> resolvedSlug
+   -> usar resolvedSlug em todas as RPCs e navegações do checkout
 ```
 
-**Card compacto (OrderRow):** mantém todos os estados visuais (urgência, isUnseen, selected) mas reduz padding de `p-3` → `p-2.5`, título de `text-xl` → `text-base font-black`, valor de `text-2xl` → `text-xl`. Container fixo: `h-[140px] flex flex-col justify-between`.
-
-**Filtro por tipo:** estado local `tableFilter` e `deliveryFilter` (`'all' | 'dine_in' | 'counter' | 'delivery' | 'pickup'`), aplicado via `useMemo` no `tablesOrders`/`deliveryOrders`.
-
-Sem migrations — usa colunas e RPCs existentes.
+Também vou manter a correção focada, sem mexer em preços, estoque, categorias, carrinho, checkout visual ou regras fora do envio do pedido.
