@@ -235,6 +235,13 @@ export async function printOrderByServiceType(
       return result;
     } catch (err) {
       const latencyMs = Date.now() - startTime;
+      await logPrinterEvent(
+        `Erro fatal ao tentar imprimir: ${String(err)}`,
+        orderId,
+        "error",
+        { error: String(err), latencyMs, printPath }
+      );
+
       console.log("[PRINT_PIPELINE] ERRO FATAL NA BRIDGE:", {
         orderId,
         ok: false,
