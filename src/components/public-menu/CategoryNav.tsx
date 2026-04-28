@@ -60,7 +60,10 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
-      <div ref={scrollRef} className="flex flex-nowrap overflow-x-auto gap-3 py-4 no-scrollbar scroll-smooth">
+      <div 
+        ref={scrollRef} 
+        className="flex flex-nowrap overflow-x-auto gap-3 py-4 no-scrollbar scroll-smooth snap-x snap-mandatory"
+      >
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
@@ -70,7 +73,7 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
-                "shrink-0 rounded-full px-5 py-2.5 text-[13px] font-bold transition-all duration-300 uppercase tracking-tight",
+                "shrink-0 rounded-full px-5 py-2.5 text-[13px] font-bold transition-all duration-300 uppercase tracking-tight snap-center",
                 "min-h-[42px] flex items-center justify-center whitespace-nowrap border",
                 isActive
                   ? "text-white border-white/30 shadow-[0_4px_12px_rgba(255,106,0,0.4)] scale-[1.05]"
