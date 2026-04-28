@@ -102,9 +102,9 @@ export function markRealtimeHeartbeat() {
 
 /**
  * Detecta degradação por ausência de heartbeat.
- * Chamado pelo monitor periodicamente.
+ * Restaurante pode ficar parado, então usamos um threshold longo (10 min).
  */
-export function checkRealtimeStaleness(thresholdMs = 45_000) {
+export function checkRealtimeStaleness(thresholdMs = 600_000) {
   if (state.realtime !== "online") return;
   const since = Date.now() - state.lastRealtimeHeartbeat;
   if (since > thresholdMs) {
