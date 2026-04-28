@@ -26,7 +26,8 @@ const DebugPrint = () => {
         </div>
       </div>
 
-      <div className="py-8">
+      <div className="py-8 space-y-8 px-4 max-w-4xl mx-auto">
+        <PrinterLogsViewer />
         <PrintAuditChecklist />
       </div>
     </div>
