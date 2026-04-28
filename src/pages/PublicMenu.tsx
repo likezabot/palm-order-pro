@@ -342,15 +342,28 @@ export default function PublicMenu() {
             )}
 
             {(settings?.show_category_nav ?? true) && (
-              <CategoryNav
-                categories={categories}
-                activeSlug={activeCat}
-                onSelect={(s) => {
-                  setActiveCat(s);
-                  const el = document.getElementById(`cat-${s}`);
-                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
-              />
+              <div className="mt-4 -mb-2">
+                <CategoryNav
+                  categories={categories}
+                  activeSlug={activeCat}
+                  onSelect={(s) => {
+                    setActiveCat(s);
+                    const el = document.getElementById(`cat-${s}`);
+                    if (el) {
+                      const offset = 80; // Compensar o sticky nav
+                      const bodyRect = document.body.getBoundingClientRect().top;
+                      const elementRect = el.getBoundingClientRect().top;
+                      const elementPosition = elementRect - bodyRect;
+                      const offsetPosition = elementPosition - offset;
+
+                      window.scrollTo({
+                        top: offsetPosition,
+                        behavior: "smooth"
+                      });
+                    }
+                  }}
+                />
+              </div>
             )}
 
             {(settings?.show_categories_section_title ?? true) && (

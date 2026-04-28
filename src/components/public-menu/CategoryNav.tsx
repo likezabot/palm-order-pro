@@ -36,13 +36,17 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-20 -mx-4 mt-3 px-4 transition-all",
+        "sticky top-0 z-20 -mx-4 px-4 transition-all duration-300",
         stuck
-          ? "border-b border-primary/10 bg-background/85 backdrop-blur-md shadow-[0_4px_20px_-12px_hsl(var(--primary)/0.25)]"
-          : "bg-transparent",
+          ? "border-b border-primary/20 bg-background/95 backdrop-blur-xl shadow-[0_8px_32px_-12px_hsl(var(--primary)/0.35)] translate-y-0"
+          : "bg-transparent translate-y-1",
       )}
     >
-      <div className="flex flex-wrap gap-1.5 py-2">
+      <style dangerouslySetInnerHTML={{ __html: `
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}} />
+      <div className="flex flex-nowrap overflow-x-auto gap-2 py-3 no-scrollbar scroll-smooth">
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
@@ -51,11 +55,11 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
-                "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200",
-                "min-h-[32px]",
+                "shrink-0 rounded-2xl px-5 py-2.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider",
+                "min-h-[42px] flex items-center justify-center whitespace-nowrap",
                 isActive
-                  ? "text-primary-foreground shadow-[0_6px_18px_-4px_hsl(var(--primary)/0.55)] scale-[1.02]"
-                  : "border border-border/70 bg-card/80 text-foreground/75 hover:bg-card hover:text-foreground hover:border-primary/30",
+                  ? "text-primary-foreground shadow-[0_8px_20px_-4px_hsl(var(--primary)/0.6)] scale-[1.05] ring-2 ring-primary/20"
+                  : "border border-border/50 bg-card/40 text-foreground/60 hover:bg-card hover:text-foreground hover:border-primary/40 backdrop-blur-sm",
               )}
               style={isActive ? { background: "var(--brand-gradient)" } : undefined}
             >
