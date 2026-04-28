@@ -31,6 +31,7 @@ const PublicOrderSuccess = lazy(() => import("./pages/PublicOrderSuccess"));
 const PublicMyOrders = lazy(() => import("./pages/PublicMyOrders"));
 const PublicLoyalty = lazy(() => import("./pages/PublicLoyalty"));
 const OrderEditor = lazy(() => import("./pages/OrderEditor"));
+const DebugPrint = lazy(() => import("./pages/DebugPrint"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">
@@ -76,6 +77,7 @@ const AnimatedRoutes = () => {
           <Route path="/atualizar" element={<StaffGate><ForceUpdate /></StaffGate>} />
           <Route path="/instalar/palm" element={<StaffGate><InstallPalm /></StaffGate>} />
           <Route path="/instalar/cozinha" element={<StaffGate><InstallKitchen /></StaffGate>} />
+          <Route path="/debug/print" element={<StaffGate><DebugPrint /></StaffGate>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
