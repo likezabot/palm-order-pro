@@ -101,10 +101,12 @@ export default function LoyaltyRewardCard({ reward, balance, onChoose }: Props) 
         className="w-full font-bold"
       >
         {isPickupOnly
-          ? "Disponível apenas para retirada"
-          : enoughPoints
-            ? "Escolher este brinde"
-            : "Continue acumulando"}
+          ? "Apenas para retirada"
+          : isDeliveryOnly
+            ? "Apenas para entrega"
+            : enoughPoints
+              ? "Escolher este brinde"
+              : "Continue acumulando"}
       </Button>
     </div>
   );
