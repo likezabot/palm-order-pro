@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft, Plus, Minus, Trash2, Save, Printer, 
-  User, Phone, MapPin, Hash, Wallet, Clock, Info, Search
+  User, Phone, MapPin, Hash, Wallet, Clock, Info, Search,
+  ShoppingBag, Bike, UtensilsCrossed
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
