@@ -368,20 +368,82 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           </p>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
-          <span className="font-semibold">Ativo no cardápio</span>
-          <button
-            onClick={() => setActive(!active)}
-            className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
-              active ? "bg-success" : "bg-muted"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
-                active ? "translate-x-5" : "translate-x-0.5"
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Em destaque</span>
+              <span className="text-[11px] text-muted-foreground">Exibe no topo do cardápio online</span>
+            </div>
+            <button
+              onClick={() => setIsFeatured(!isFeatured)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                isFeatured ? "bg-primary" : "bg-muted"
               }`}
-            />
-          </button>
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  isFeatured ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Disponível Online</span>
+              <span className="text-[11px] text-muted-foreground">Oculta do cardápio público se desativado</span>
+            </div>
+            <button
+              onClick={() => setIsAvailableOnline(!isAvailableOnline)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                isAvailableOnline ? "bg-success" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  isAvailableOnline ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Esgotado</span>
+              <span className="text-[11px] text-muted-foreground">Impede a compra no cardápio online</span>
+            </div>
+            <button
+              onClick={() => setIsSoldOut(!isSoldOut)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                isSoldOut ? "bg-destructive" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  isSoldOut ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Ativo (Geral)</span>
+              <span className="text-[11px] text-muted-foreground">Ativa/Desativa o produto em todo o sistema</span>
+            </div>
+            <button
+              onClick={() => setActive(!active)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                active ? "bg-success" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  active ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         <button
