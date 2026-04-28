@@ -101,6 +101,7 @@ export default function ProductCard({
   layout = "list",
   showImage = true,
   showDescription = true,
+  fullDescription = false,
   imageAspect = "square",
   cardStyle = "detailed",
   elevated = true,
