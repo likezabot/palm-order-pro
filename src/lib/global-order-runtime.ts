@@ -12,7 +12,7 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { autoPrintOrder, autoPrintUpdate } from "@/lib/print-service";
+import { autoPrintOrder } from "@/lib/print-service";
 import { debugLog } from "@/lib/debug-logger";
 import {
   markRealtimeHeartbeat,
@@ -24,16 +24,14 @@ import type { Order } from "@/lib/types";
 let started = false;
 let channel: ReturnType<typeof supabase.channel> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
-let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let unsubConn: (() => void) | null = null;
 
 /** IDs em processamento neste tab (evita disparar 2x do mesmo evento). */
 const inFlight = new Set<string>();
 /** Eventos já tratados (idempotência por evento, não por order). */
 const handledEvents = new Set<string>();
-/** Cooldown por order_id — circuit breaker contra loops de re-impressão. */
-const recentlyAttempted = new Map<string, number>();
-const COOLDOWN_MS = 30_000;
+/** Trava conservadora: autoimpressão automática roda no máximo 1x por order.id nesta sessão. */
+const autoAttempted = new Set<string>();
 
 function invalidateOrderCaches(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["pdv-orders"] });
@@ -42,25 +40,32 @@ function invalidateOrderCaches(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["kitchen-items"] });
 }
 
-async function runAutoPrint(order: Order, isUpdate: boolean) {
+async function runAutoPrint(order: Order) {
   if (inFlight.has(order.id)) {
     debugLog.info("global-print", `skip — já em processamento ${order.id}`);
     return;
   }
-  const lastAttempt = recentlyAttempted.get(order.id);
-  if (lastAttempt && Date.now() - lastAttempt < COOLDOWN_MS) {
-    debugLog.info(
-      "global-print",
-      `skip — cooldown ativo ${order.id} (último há ${Date.now() - lastAttempt}ms)`,
-    );
+  if ((order as any).printed_at || order.print_status === "printed") {
+    debugLog.info("global-print", `skip — pedido já impresso ${order.id}`);
     return;
   }
-  recentlyAttempted.set(order.id, Date.now());
+  if (order.print_status === "printing") {
+    debugLog.info("global-print", `skip — pedido já em impressão ${order.id}`);
+    return;
+  }
+  if (order.print_status === "failed") {
+    debugLog.info("global-print", `skip — pedido falhou e exige ação manual ${order.id}`);
+    return;
+  }
+  if (autoAttempted.has(order.id)) {
+    debugLog.info("global-print", `skip — autoimpressão já tentada para ${order.id}`);
+    return;
+  }
+
+  autoAttempted.add(order.id);
   inFlight.add(order.id);
   try {
-    const result = isUpdate
-      ? await autoPrintUpdate(order)
-      : await autoPrintOrder(order);
+    const result = await autoPrintOrder(order);
 
     if (result.printed) {
       debugLog.success(
@@ -69,8 +74,6 @@ async function runAutoPrint(order: Order, isUpdate: boolean) {
       );
     } else if (result.reason === "already_claimed") {
       debugLog.info("global-print", `claim recusado (outra instância) ${order.id}`);
-    } else if (result.reason === "bridge_offline_queued") {
-      debugLog.warn("global-print", `queued bridge_offline pedido ${order.id}`);
     } else {
       debugLog.warn("global-print", `não imprimiu motivo=${result.reason} ${order.id}`);
     }
@@ -82,53 +85,10 @@ async function runAutoPrint(order: Order, isUpdate: boolean) {
 }
 
 async function bootstrapPending() {
-  try {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("print_status", "pending")
-      .in("status", ["new", "preparing", "done", "paid"])
-      .order("created_at", { ascending: true })
-      .limit(50);
-
-    if (error) {
-      debugLog.error("global-orders", "bootstrap query falhou", error);
-      return;
-    }
-
-    const list = (data || []) as Order[];
-    debugLog.info("global-orders", `bootstrap pendentes: ${list.length}`);
-
-    for (const order of list) {
-      const isUpdate = !!(order.print_type || (order as any).delta_items);
-      debugLog.info(
-        "global-orders",
-        `bootstrap recuperado pedido ${order.id} mesa ${order.table_name} updateMode=${isUpdate}`,
-      );
-      // Sequencial para não saturar a impressora
-      await runAutoPrint(order, isUpdate);
-    }
-  } catch (err) {
-    debugLog.error("global-orders", "bootstrap falhou", err);
-  }
-}
-
-async function runWatchdog() {
-  try {
-    const { data, error } = await supabase.rpc("requeue_stuck_print_jobs", {
-      p_seconds: 45,
-    } as any);
-    if (error) {
-      debugLog.error("global-orders", "watchdog requeue erro", error);
-      return;
-    }
-    const requeued = (data as any)?.requeued ?? 0;
-    if (requeued > 0) {
-      debugLog.warn("global-orders", `watchdog: requeued=${requeued}`);
-    }
-  } catch (err) {
-    debugLog.error("global-orders", "watchdog exception", err);
-  }
+  debugLog.warn(
+    "global-orders",
+    "bootstrap de pendentes desativado no modo conservador para evitar reimpressão de backlog",
+  );
 }
 
 export function startGlobalOrderRuntime(queryClient: QueryClient): void {
@@ -158,7 +118,9 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
           "global-orders",
           `INSERT pedido ${order.id} mesa ${order.table_name} waiter=${order.waiter_name ?? "-"}`,
         );
-        runAutoPrint(order, false);
+        if (order.print_status === "pending") {
+          runAutoPrint(order);
+        }
       },
     )
     .on(
@@ -171,24 +133,12 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
 
         invalidateOrderCaches(queryClient);
 
-        const totalChanged = updated.total !== old.total;
-        // printReset: só se passou de algum estado terminal/intermediário PARA pending.
-        // Crucial: ignora 'queued' → 'pending' (acontece se o worker completou)
-        // e ignora 'pending' → 'pending' (no-op).
-        const printReset =
-          updated.print_status === "pending" &&
-          old.print_status !== "pending";
-
-        if (totalChanged || printReset) {
-          const eventKey = `${updated.id}:upd:${updated.updated_at}`;
-          if (handledEvents.has(eventKey)) return;
-          handledEvents.add(eventKey);
-
+        const printStateChanged = updated.print_status !== old.print_status;
+        if (printStateChanged) {
           debugLog.info(
             "global-orders",
-            `UPDATE relevante pedido ${updated.id} mesa ${updated.table_name} totalChanged=${totalChanged} printReset=${printReset}`,
+            `UPDATE pedido ${updated.id} print_status ${old.print_status ?? "-"} -> ${updated.print_status}`,
           );
-          runAutoPrint(updated, true);
         }
       },
     )
@@ -209,10 +159,7 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
       );
       reportRealtime(status);
 
-      if (online) {
-        // Ao (re)conectar, rebusca pendentes — recobre lacuna offline.
-        bootstrapPending();
-      }
+      if (online) bootstrapPending();
     });
 
   // Fallback polling quando realtime degradado/offline
@@ -230,10 +177,7 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
     }
   });
 
-  // Watchdog: a cada 45s recupera jobs presos em "printing"
-  watchdogTimer = setInterval(runWatchdog, 45_000);
-
-  // Bootstrap inicial — pega pedidos pendentes que chegaram com app fechado
+  // Bootstrap inicial desativado no modo conservador.
   void bootstrapPending();
 
   // Limpa cache de eventos antigos a cada 5min p/ não vazar memória
@@ -256,15 +200,12 @@ export function stopGlobalOrderRuntime(): void {
     clearInterval(pollTimer);
     pollTimer = null;
   }
-  if (watchdogTimer) {
-    clearInterval(watchdogTimer);
-    watchdogTimer = null;
-  }
   if (unsubConn) {
     unsubConn();
     unsubConn = null;
   }
   inFlight.clear();
+  autoAttempted.clear();
   handledEvents.clear();
   debugLog.info("global-orders", "runtime parado");
 }
