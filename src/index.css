@@ -21,13 +21,13 @@
     --primary-glow: 20 85% 50%;
 
     --secondary: 60 6% 95%;
-    --secondary-foreground: 0 0% 6%;
+    --secondary-foreground: 0 0% 0%;
 
-    --muted: 60 6% 95%;
-    --muted-foreground: 0 0% 36%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 12%;
 
-    --accent: 60 6% 95%;
-    --accent-foreground: 0 0% 6%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 0%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
