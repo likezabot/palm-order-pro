@@ -453,8 +453,7 @@ export default function PublicOrderSuccess() {
         )}
 
         {!cancelled &&
-          ((serviceType === "pickup" &&
-            state.loyalty_points_pending &&
+          ((state.loyalty_points_pending &&
             state.loyalty_points_pending > 0) ||
             state.loyalty_reward_name) && (
             <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-5 shadow-[var(--shadow-warm)] space-y-3">
@@ -464,8 +463,7 @@ export default function PublicOrderSuccess() {
                   Plano B Pontos
                 </h2>
               </div>
-              {serviceType === "pickup" &&
-                state.loyalty_points_pending &&
+              {state.loyalty_points_pending &&
                 state.loyalty_points_pending > 0 && (
                   <p className="text-sm text-foreground">
                     Você vai ganhar{" "}
@@ -475,11 +473,6 @@ export default function PublicOrderSuccess() {
                     quando o pedido for finalizado.
                   </p>
                 )}
-              {serviceType && serviceType !== "pickup" && (
-                <p className="text-xs text-muted-foreground">
-                  Pedidos de entrega não acumulam pontos.
-                </p>
-              )}
               {state.loyalty_reward_name && (
                 <div className="flex items-start gap-2 text-sm">
                   <Gift size={14} className="mt-0.5 text-primary shrink-0" />
