@@ -114,7 +114,7 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
       }
     >
       {isUnseen && (
-        <span className="absolute -top-1.5 -right-1.5 z-10 rounded-full bg-orange-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-lg">
+        <span className="absolute -top-1.5 -left-1.5 z-30 rounded-full bg-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-lg border border-white/20">
           NOVO
         </span>
       )}
