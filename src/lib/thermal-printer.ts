@@ -391,8 +391,12 @@ export interface SendToBridgeMeta {
   printPath: string;
   source: "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
   orderId?: string | null;
+  orderShortId?: string | null;
   serviceType?: string | null;
   tableName?: string | null;
+  customerName?: string | null;
+  total?: number | null;
+  itemsCount?: number | null;
 }
 
 export async function sendToBridge(
