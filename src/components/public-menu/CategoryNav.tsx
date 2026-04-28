@@ -63,12 +63,12 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
         <div 
           className={cn(
             "grid gap-2",
-            // Ajuste dinâmico de colunas baseado no número de itens
             categories.length <= 3 ? "grid-cols-3" : 
-            categories.length <= 4 ? "grid-cols-2 sm:grid-cols-4" :
+            categories.length <= 6 ? "grid-cols-3 sm:grid-cols-6" :
             "grid-cols-3 sm:grid-cols-4 md:grid-cols-6"
           )}
         >
+
           {categories.map((c) => {
             const isActive = activeSlug === c.slug;
             return (
