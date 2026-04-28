@@ -380,12 +380,22 @@ export default function PublicMenu() {
                   categories={categories}
                   activeSlug={activeCat}
                   onSelect={(s) => {
+                    // Bloqueia o IntersectionObserver durante o scroll
+                    isScrollingRef.current = true;
                     setActiveCat(s);
+                    
                     const el = document.getElementById(`categoria-${s}`);
                     if (el) {
                       el.scrollIntoView({ behavior: "smooth", block: "start" });
                     }
+
+                    // Libera o observer após o término esperado do scroll
+                    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                    scrollTimeoutRef.current = setTimeout(() => {
+                      isScrollingRef.current = false;
+                    }, 1000);
                   }}
+
                 />
               </div>
             )}
