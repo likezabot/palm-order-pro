@@ -191,7 +191,7 @@ export default function ProductCard({
             {product.is_sold_out && <SoldOutBadge />}
           </div>
           {effectiveShowDescription && product.description && (
-            <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">{product.description}</p>
+            <p className={cn("mt-1 text-[11px] text-muted-foreground", !fullDescription && "line-clamp-1")}>{product.description}</p>
           )}
           <div className="mt-auto flex items-end justify-between gap-2 pt-2">
             <p className="text-base font-black text-primary leading-none tracking-tight tabular-nums">
