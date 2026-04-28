@@ -227,7 +227,7 @@ export async function printOrderByServiceType(
       itemsCount: items.length
     };
 
-    const ok = await printDelivery(input);
+    const ok = bridgeActuallyOnline ? await printDelivery(input) : { ok: false };
     if (ok.ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
 
     const payload = buildEscPosDelivery(input, cfg);
@@ -241,7 +241,7 @@ export async function printOrderByServiceType(
     if (deltaItems.length === 0)
       return { ok: false, reason: "no_delta", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
 
-    const ok = await printDelta(tableValue, waiter, deltaItems, extras);
+    const ok = bridgeActuallyOnline ? await printDelta(tableValue, waiter, deltaItems, extras) : { ok: false };
     if (ok.ok) return { ok: true, reason: "delta_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
     const payload = buildEscPosDelta(tableValue, waiter, deltaItems, cfg, extras);
     const queued = await tryEnqueue(orderId, tableValue, "delta", payload);
@@ -252,14 +252,14 @@ export async function printOrderByServiceType(
     return { ok: false, reason: "no_items", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
 
   if (mode === "bill") {
-    const ok = await printBill(tableValue, waiter, items as any[], order.total ?? 0, extras);
+    const ok = bridgeActuallyOnline ? await printBill(tableValue, waiter, items as any[], order.total ?? 0, extras) : { ok: false };
     if (ok.ok) return { ok: true, reason: "bill_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
     const payload = buildEscPosBill(tableValue, waiter, items as any[], order.total ?? 0, cfg, extras);
     const queued = await tryEnqueue(orderId, tableValue, "bill", payload);
     return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
   }
 
-  const ok = await printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras);
+  const ok = bridgeActuallyOnline ? await printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras) : { ok: false };
   if (ok.ok) return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
   const payload = buildEscPosReceipt(tableValue, waiter, items as any[], order.total ?? 0, cfg, extras);
   const queued = await tryEnqueue(orderId, tableValue, "full", payload);
