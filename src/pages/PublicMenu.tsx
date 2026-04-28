@@ -452,11 +452,12 @@ export default function PublicMenu() {
                 if (!entries.length) return null;
 
                 return (
-                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-[130px] md:scroll-mt-[150px]">
+                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-[60px] md:scroll-mt-[80px]">
                     <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
                     {/* Mobile: respeita colunas específicas se solicitado */}
                     <div className={cn("sm:hidden", mobileGridClass)}>
-                      {entries.map((entry) => {
+                      {entries.map((entry, idx) => {
+                        const alternatingBg = idx % 2 === 0 ? "bg-white/[0.045]" : "bg-white/[0.075]";
                         if (entry.kind === "product") {
                           const p = entry.product;
                           return (
@@ -473,6 +474,7 @@ export default function PublicMenu() {
                               elevated={cardElevated}
                               onClick={(prod) => setSelected(prod)}
                               onQuickAdd={quickAdd}
+                              className={alternatingBg}
                             />
                           );
                         }
@@ -493,6 +495,7 @@ export default function PublicMenu() {
                             elevated={cardElevated}
                             priceLabel={`a partir de ${minBRL}`}
                             trailingHint
+                            className={alternatingBg}
                             onClick={() =>
                               setOpenGroup({
                                 group: entry.group,
@@ -507,7 +510,8 @@ export default function PublicMenu() {
                     {/* Tablet/Desktop: respeita layout escolhido */}
                     <div className={cn("hidden sm:block")}>
                       <div className={gridClass}>
-                        {entries.map((entry) => {
+                        {entries.map((entry, idx) => {
+                          const alternatingBg = idx % 2 === 0 ? "bg-white/[0.045]" : "bg-white/[0.075]";
                           if (entry.kind === "product") {
                             const p = entry.product;
                             return (
@@ -524,6 +528,7 @@ export default function PublicMenu() {
                                 elevated={cardElevated}
                                 onClick={(prod) => setSelected(prod)}
                                 onQuickAdd={quickAdd}
+                                className={alternatingBg}
                               />
                             );
                           }
@@ -544,6 +549,7 @@ export default function PublicMenu() {
                               elevated={cardElevated}
                               priceLabel={`a partir de ${minBRL}`}
                               trailingHint
+                              className={alternatingBg}
                               onClick={() =>
                                 setOpenGroup({
                                   group: entry.group,

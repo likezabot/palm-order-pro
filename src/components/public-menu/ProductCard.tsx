@@ -23,6 +23,7 @@ type Props = {
   priceLabel?: string;
   /** Mostra um chevron "›" indicando que o card abre algo (popup de variantes). */
   trailingHint?: boolean;
+  className?: string;
 };
 
 
@@ -109,6 +110,7 @@ export default function ProductCard({
   onQuickAdd,
   priceLabel,
   trailingHint,
+  className,
 }: Props) {
   const isBlocked = disabled || product.is_sold_out;
   const interactive = !isBlocked && !!onClick;
@@ -131,6 +133,7 @@ export default function ProductCard({
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 active:scale-[0.99]",
+          className
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
@@ -169,6 +172,7 @@ export default function ProductCard({
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 hover:-translate-y-0.5 active:scale-[0.99]",
+          className
         )}
       >
         {effectiveShowImage && (
@@ -220,6 +224,7 @@ export default function ProductCard({
         isBlocked
           ? "opacity-60 cursor-not-allowed"
           : "hover:border-primary/40 active:scale-[0.99]",
+        className
       )}
     >
       {effectiveShowImage && (
