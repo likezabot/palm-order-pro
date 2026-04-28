@@ -30,6 +30,7 @@ const PublicCheckout = lazy(() => import("./pages/PublicCheckout"));
 const PublicOrderSuccess = lazy(() => import("./pages/PublicOrderSuccess"));
 const PublicMyOrders = lazy(() => import("./pages/PublicMyOrders"));
 const PublicLoyalty = lazy(() => import("./pages/PublicLoyalty"));
+const OrderEditor = lazy(() => import("./pages/OrderEditor"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">
