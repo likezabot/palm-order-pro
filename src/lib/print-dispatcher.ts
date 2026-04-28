@@ -172,7 +172,7 @@ export async function printOrderByServiceType(
     extra: { mode, isDelivery, isPickup, dispatchSource: source },
   });
 
-  let bridgeActuallyOnline = true;
+  let bridgeActuallyOnline = false;
   if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
     const { checkBridgeStatus } = await import("./thermal-printer");
     const health = await checkBridgeStatus(cfg.bridgeUrl, true);
