@@ -16,6 +16,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { debugLog } from "@/lib/debug-logger";
+import { logPrinterEvent } from "@/lib/printer-logger";
 
 export type PrintJobType = "order" | "extra" | "bill" | "manual";
 
