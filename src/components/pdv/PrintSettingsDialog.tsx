@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Settings, AlertCircle, Printer, RefreshCw } from "lucide-react";
+import { Settings, AlertCircle, Printer, RefreshCw, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
