@@ -36,14 +36,14 @@ export default function CartDrawer({
   }, []);
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="h-[88vh] flex flex-col rounded-t-2xl p-0">
+      <SheetContent side="bottom" className="h-[88vh] flex flex-col rounded-t-2xl p-0 bg-white border-none">
         <SheetHeader className="px-5 py-4 border-b border-border">
-          <SheetTitle>Seu pedido</SheetTitle>
+          <SheetTitle className="text-black">Seu pedido</SheetTitle>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {items.length === 0 && (
-            <p className="text-center text-muted-foreground py-12">
+            <p className="text-center text-black/60 py-12">
               Seu carrinho está vazio
             </p>
           )}
@@ -61,11 +61,11 @@ export default function CartDrawer({
                 />
               )}
               <div className="flex-1 min-w-0">
-                <p className="font-semibold">{it.product_name}</p>
+                <p className="font-semibold text-black">{it.product_name}</p>
                 {it.note && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{it.note}</p>
+                  <p className="text-xs text-black/60 line-clamp-2">{it.note}</p>
                 )}
-                <p className="text-sm font-bold brand-gradient-text mt-0.5">
+                <p className="text-sm font-bold text-black mt-0.5">
                   R$ {(it.product_price * it.quantity).toFixed(2)}
                 </p>
                 <div className="mt-2 flex items-center gap-2">
@@ -76,7 +76,7 @@ export default function CartDrawer({
                   >
                     <Minus size={14} />
                   </button>
-                  <span className="w-6 text-center text-sm font-bold tabular-nums">
+                  <span className="w-6 text-center text-sm font-bold tabular-nums text-black">
                     {it.quantity}
                   </span>
                   <button
@@ -102,8 +102,8 @@ export default function CartDrawer({
         {items.length > 0 && (
           <div className="border-t border-border px-5 py-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Subtotal</span>
-              <span className="text-xl font-black tabular-nums">
+              <span className="text-sm text-black/60">Subtotal</span>
+              <span className="text-xl font-black tabular-nums text-black">
                 R$ {subtotal.toFixed(2)}
               </span>
             </div>

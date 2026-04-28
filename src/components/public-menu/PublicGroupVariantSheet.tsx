@@ -47,18 +47,18 @@ export default function PublicGroupVariantSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="rounded-t-2xl border-t bg-background p-0 max-h-[85vh] overflow-hidden flex flex-col"
+        className="rounded-t-2xl border-none bg-white p-0 max-h-[85vh] overflow-hidden flex flex-col"
       >
         <SheetHeader className="px-4 pt-5 pb-3 text-left">
-          <SheetTitle className="text-lg font-black tracking-tight">
+          <SheetTitle className="text-lg font-black tracking-tight text-black">
             {group?.name ?? trigger?.name ?? ""}
           </SheetTitle>
           {trigger?.description ? (
-            <SheetDescription className="text-sm text-muted-foreground">
+            <SheetDescription className="text-sm text-black/60">
               {trigger.description}
             </SheetDescription>
           ) : (
-            <SheetDescription className="text-xs text-muted-foreground">
+            <SheetDescription className="text-xs text-black/60">
               Escolha uma opção:
             </SheetDescription>
           )}
@@ -117,10 +117,10 @@ function VariantRow({
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-bold">{variant.name}</p>
+          <p className="truncate text-sm font-bold text-black">{variant.name}</p>
           {variant.is_sold_out && <SoldOutBadge />}
         </div>
-        <p className="mt-0.5 text-base font-black text-primary tabular-nums">
+        <p className="mt-0.5 text-base font-black text-black tabular-nums">
           {formatBRL(variant.price)}
         </p>
       </div>
