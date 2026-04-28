@@ -375,29 +375,26 @@ export default function PublicMenu() {
             )}
 
             {(settings?.show_category_nav ?? true) && (
-              <div className="mt-4 mb-2">
-                <CategoryNav
-                  categories={categories}
-                  activeSlug={activeCat}
-                  onSelect={(s) => {
-                    // Bloqueia o IntersectionObserver durante o scroll
-                    isScrollingRef.current = true;
-                    setActiveCat(s);
-                    
-                    const el = document.getElementById(`categoria-${s}`);
-                    if (el) {
-                      el.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }
+              <CategoryNav
+                categories={categories}
+                activeSlug={activeCat}
+                onSelect={(s) => {
+                  // Bloqueia o IntersectionObserver durante o scroll
+                  isScrollingRef.current = true;
+                  setActiveCat(s);
+                  
+                  const el = document.getElementById(`categoria-${s}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
 
-                    // Libera o observer após o término esperado do scroll
-                    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-                    scrollTimeoutRef.current = setTimeout(() => {
-                      isScrollingRef.current = false;
-                    }, 1000);
-                  }}
-
-                />
-              </div>
+                  // Libera o observer após o término esperado do scroll
+                  if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                  scrollTimeoutRef.current = setTimeout(() => {
+                    isScrollingRef.current = false;
+                  }, 1000);
+                }}
+              />
             )}
 
             {(settings?.show_categories_section_title ?? true) && (
