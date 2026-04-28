@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate, useParams, Navigate, Link } from "react-router-dom";
+import { useNavigate, useParams, Navigate } from "react-router-dom";
 import { ArrowLeft, Gift, UserCheck, Loader2, MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
   type ServiceType,
   type PaymentMethod,
 } from "@/lib/public-cart";
-import { fetchRestaurantBySlug } from "@/lib/public-menu";
+import { fetchCurrentRestaurant, fetchRestaurantBySlug } from "@/lib/public-menu";
 import { fetchLoyaltyStatus, normalizePhoneClient } from "@/lib/loyalty";
 import { logError, extractErrorCode } from "@/lib/error-log";
 import LoyaltySection from "@/components/public-menu/LoyaltySection";
@@ -31,19 +31,36 @@ import { cn } from "@/lib/utils";
 const PHONE_KEY = "pb_loyalty_phone";
 const REWARD_KEY = "pb_pending_reward";
 
+function isValidRestaurantSlug(value?: string): boolean {
+  const slug = (value ?? "").trim();
+  return !!slug && slug !== ":slug" && !slug.includes(":") && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(slug);
+}
+
 export default function PublicCheckout() {
   const { slug } = useParams<{ slug: string }>();
   const nav = useNavigate();
   const { toast } = useToast();
   const cart = usePublicCart();
   const isPreview = usePreviewMode();
+  const routeSlug = (slug ?? "").trim();
+  const hasValidRouteSlug = isValidRestaurantSlug(routeSlug);
 
   const restaurantQuery = useQuery({
-    queryKey: ["pmenu", "restaurant", slug],
-    queryFn: () => fetchRestaurantBySlug(slug ?? ""),
-    enabled: !!slug,
+    queryKey: ["pmenu", "restaurant", routeSlug],
+    queryFn: () => fetchRestaurantBySlug(routeSlug),
+    enabled: hasValidRouteSlug,
     staleTime: 60_000,
   });
+
+  const currentRestaurantQuery = useQuery({
+    queryKey: ["pmenu", "restaurant", "current"],
+    queryFn: fetchCurrentRestaurant,
+    enabled: !hasValidRouteSlug || (!restaurantQuery.isLoading && !restaurantQuery.data),
+    staleTime: 60_000,
+  });
+
+  const restaurant = restaurantQuery.data ?? currentRestaurantQuery.data ?? null;
+  const resolvedSlug = restaurant?.slug ?? (hasValidRouteSlug ? routeSlug : "");
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -80,17 +97,19 @@ export default function PublicCheckout() {
 
   useEffect(() => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
+    const lookupKey = `${resolvedSlug}:${digits}`;
+    if (digits.length < 10 || !resolvedSlug) {
+      lastFetchedPhoneRef.current = "";
       setCustomerFound(null);
       return;
     }
-    if (lastFetchedPhoneRef.current === digits) return;
+    if (lastFetchedPhoneRef.current === lookupKey) return;
 
     const handle = setTimeout(async () => {
-      lastFetchedPhoneRef.current = digits;
+      lastFetchedPhoneRef.current = lookupKey;
       setSearchingCustomer(true);
       try {
-        const profile = await fetchCustomerProfile(digits, slug ?? "");
+        const profile = await fetchCustomerProfile(digits, resolvedSlug);
         if (profile) {
           setCustomerFound(profile);
           
@@ -133,7 +152,7 @@ export default function PublicCheckout() {
     }, 600);
 
     return () => clearTimeout(handle);
-  }, [phone, slug]);
+  }, [phone, resolvedSlug]);
 
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
@@ -146,15 +165,15 @@ export default function PublicCheckout() {
   const phoneDigits = normalizePhoneClient(phone);
   const phoneOk = phoneDigits.length >= 10;
   const loyaltyQuery = useQuery({
-    queryKey: ["loyalty-status", slug, phoneDigits, subtotal, serviceType],
+    queryKey: ["loyalty-status", resolvedSlug, phoneDigits, subtotal, serviceType],
     queryFn: () =>
       fetchLoyaltyStatus({
         phone: phoneDigits,
-        restaurantSlug: slug ?? "",
+        restaurantSlug: resolvedSlug,
         orderSubtotal: subtotal,
         serviceType,
       }),
-    enabled: phoneOk && !!slug,
+    enabled: phoneOk && !!resolvedSlug,
     staleTime: 10_000,
   });
 
@@ -189,7 +208,7 @@ export default function PublicCheckout() {
   }, [cart.items.length, name, phone, serviceType, street, number, neighborhood]);
 
   if (cart.items.length === 0 && !submitting) {
-    const fallback = slug ? `/menu/${slug}` : "/";
+    const fallback = resolvedSlug ? `/menu/${resolvedSlug}` : "/";
     return <Navigate to={fallback} replace />;
   }
 
@@ -199,10 +218,18 @@ export default function PublicCheckout() {
       toast({ title: "Modo preview", description: "Pedidos estão desativados nesta visualização." });
       return;
     }
+    if (!resolvedSlug) {
+      toast({
+        title: "Erro ao enviar pedido",
+        description: "Não conseguimos identificar o cardápio deste link. Reabra o cardápio e tente novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await createPublicOrder({
-        restaurant_slug: slug ?? "",
+        restaurant_slug: resolvedSlug,
         customer: { name: name.trim(), phone },
         service_type: serviceType,
         payment_method: paymentMethod,
@@ -239,7 +266,7 @@ export default function PublicCheckout() {
         0,
         balanceBefore - (selectedReward?.points_cost ?? 0),
       ) + projectedEarn;
-      nav(`/menu/${slug}/sucesso/${result.id}${tokenParam}`, {
+      nav(`/menu/${resolvedSlug}/sucesso/${result.id}${tokenParam}`, {
         replace: true,
         state: {
           estimated_ready_at: result.estimated_ready_at,
@@ -279,6 +306,7 @@ export default function PublicCheckout() {
       const code = extractErrorCode(e);
       let friendly = "Não foi possível enviar o pedido. Tente novamente.";
       if (msg.includes("restaurant_closed")) friendly = "A loja está fechada no momento.";
+      else if (msg.includes("restaurant_not_found")) friendly = "Não conseguimos identificar o cardápio deste link. Reabra o cardápio e tente novamente.";
       else if (msg.includes("neighborhood_not_served")) friendly = "Não entregamos nesse bairro.";
       else if (msg.includes("product_unavailable")) friendly = "Um item do carrinho ficou indisponível. Revise o pedido.";
       else if (msg.includes("invalid_phone")) friendly = "Telefone inválido.";
@@ -300,6 +328,7 @@ export default function PublicCheckout() {
         code,
         context: {
           slug,
+          resolved_slug: resolvedSlug,
           service_type: serviceType,
           payment_method: paymentMethod,
           item_count: cart.itemCount,
@@ -332,7 +361,7 @@ export default function PublicCheckout() {
       )}
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <button
-          onClick={() => nav(`/menu/${slug}`)}
+          onClick={() => nav(resolvedSlug ? `/menu/${resolvedSlug}` : "/")}
           aria-label="Voltar"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary"
         >
@@ -492,7 +521,7 @@ export default function PublicCheckout() {
 
         <LoyaltySection
           phone={phone}
-          restaurantSlug={slug ?? ""}
+          restaurantSlug={resolvedSlug}
           subtotal={subtotal}
           serviceType={serviceType}
           selectedRewardId={loyaltyRewardId}
