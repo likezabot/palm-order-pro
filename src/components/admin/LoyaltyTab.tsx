@@ -179,6 +179,9 @@ export default function LoyaltyTab() {
       sort_order: "0",
       active: true,
       product_id: "",
+      allow_pickup: true,
+      allow_delivery: false,
+      description: "",
     });
   }
 
