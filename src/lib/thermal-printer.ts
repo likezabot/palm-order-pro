@@ -179,8 +179,7 @@ export async function checkBridgeStatus(
     const printerOk = !!(
       data.printer_connected === true ||
       data.printer_ok === true ||
-      data.printer_ready === true ||
-      (typeof data.printer_name === "string" && data.printer_name.length > 0)
+      data.printer_ready === true || (typeof data.printer_name === "string" && data.printer_name.length > 0)
     );
 
     const reallyOnline = isOnline || printerOk;
@@ -592,21 +591,30 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         break;
       }
       case "item": {
-        b.resetStyle().align(align).size(itemsLarge, false);
+        // Layout Profissional de Cozinha: {qtd}x {NOME} {valor}
+        // Alinhado à esquerda com valor à direita, sem quebra de linha.
+        b.resetStyle().align("left");
         const qtyStr = `${blk.quantity}x `;
-        const priceStr = blk.subtotal > 0 ? ` R$${blk.subtotal.toFixed(2)}` : "";
         const name = blk.name.toUpperCase();
+        const priceStr = `R$ ${blk.subtotal.toFixed(2).replace(".", ",")}`;
+        
+        // Se houver multiplicador de tamanho (itemsLarge), a largura efetiva em chars cai pela metade
         const effectiveCols = itemsLarge ? Math.floor(cols / 2) : cols;
-        const maxName = Math.max(1, effectiveCols - qtyStr.length - priceStr.length);
-        const displayName =
-          name.length > maxName ? name.substring(0, maxName - 2) + ".." : name;
-        b.bold(true).text(qtyStr).bold(false).text(displayName);
-        if (priceStr) b.line(priceStr);
-        else b.line("");
+        const availableForName = effectiveCols - qtyStr.length - priceStr.length - 1; // 1 espaço garantido
+        
+        // Truncar nome se necessário para evitar quebra de linha
+        const displayName = name.length > availableForName 
+          ? name.substring(0, availableForName - 2) + ".." 
+          : name;
+          
+        const paddingN = Math.max(1, effectiveCols - qtyStr.length - displayName.length - priceStr.length);
+        const padding = " ".repeat(paddingN);
+        
+        b.bold(true).size(itemsLarge, itemsLarge).text(qtyStr).bold(false).text(displayName).text(padding).line(priceStr);
         b.resetStyle();
 
         if (blk.note) {
-          b.size(notesLarge, false).align(align).line(`(${blk.note})`);
+          b.size(notesLarge, false).align("left").line(`(${blk.note.toUpperCase()})`);
           b.resetStyle();
         }
         break;

@@ -176,69 +176,51 @@ export function createReceiptLayoutModel(
   const blocks: LayoutBlock[] = [];
   const now = new Date();
   const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const date = now.toLocaleDateString("pt-BR");
+  const date = now.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
-  // SENHA tem layout próprio (recibo de caixa) — trata antes de qualquer outro bloco.
   if (input.docType === "SENHA") {
     return buildSenhaLayout(input, cfg, { date, time });
   }
 
-  // DELIVERY tem layout próprio — separado de mesa.
   if (input.docType === "DELIVERY") {
     return buildDeliveryLayout(input, cfg, { date, time });
   }
 
-  // 1. Título
-  if (v.title && cfg.headerText) {
-    blocks.push({ kind: "title", text: cfg.headerText });
-    blocks.push({ kind: "sep", bold: true });
+  // --- TOPO ---
+  if (cfg.headerText) {
+    blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
 
-  // 2. Banner do tipo de documento (exceto PEDIDO normal)
-  if (input.docType === "ACRESCIMO") {
-    blocks.push({ kind: "banner", text: "*** ACRESCIMO ***" });
-    blocks.push({ kind: "sep", bold: true });
-  } else if (input.docType === "CONTA") {
-    blocks.push({ kind: "banner", text: "*** CONTA ***" });
-    blocks.push({ kind: "sep", bold: true });
-  }
+  const shortId = input.orderShortId || input.tableName || input.orderId?.slice(-6).toUpperCase() || "---";
+  blocks.push({ kind: "banner", text: `PEDIDO #${shortId.replace(/^#/, "")}` });
 
-  // 4. Info (mesa / garçom / data) — diferenciação por service_type
-  const isDineIn = !input.serviceType || input.serviceType === "dine_in";
-  const isPickup = input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão";
-  if (input.tableName && isDineIn) {
-    blocks.push({ kind: "info", label: "Mesa", value: input.tableName });
-  } else if (isPickup) {
-    // Banner em destaque para retirada/balcão (não imprime "MESA")
-    blocks.push({ kind: "banner", text: "*** RETIRADA / BALCAO ***" });
-    blocks.push({ kind: "sep" });
-    if (input.tableName && !isBlank(input.tableName)) {
-      blocks.push({ kind: "info", label: "Pedido", value: input.tableName });
-    }
-  } else if (input.tableName && !isDineIn) {
-    blocks.push({ kind: "info", label: "Pedido", value: input.tableName });
+  let typeText = "MESA";
+  if (input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão") {
+    typeText = "RETIRADA";
+  } else if (input.serviceType === "delivery") {
+    typeText = "ENTREGA";
   }
-  // Garçom: só imprime se houver nome real (omite "N/A", vazio, "---")
-  if (v.waiter && isDineIn && !isBlank(input.waiterName)) {
-    blocks.push({ kind: "info", label: "Garcom", value: input.waiterName! });
+  blocks.push({ kind: "banner", text: `TIPO: ${typeText}` });
+  blocks.push({ kind: "info", label: "DATA", value: `${date} ${time}` });
+  blocks.push({ kind: "sep", bold: true });
+
+  // --- CLIENTE ---
+  let hasClientInfo = false;
+  if (!isBlank(input.customerName)) {
+    blocks.push({ kind: "info", label: "Cliente", value: input.customerName!.toUpperCase() });
+    hasClientInfo = true;
   }
-  // Cliente / telefone para pickup/balcão e não-dine-in (só se existirem)
-  if (!isDineIn && !isBlank(input.customerName)) {
-    blocks.push({ kind: "info", label: "Cliente", value: input.customerName! });
-  }
-  if (!isDineIn && !isBlank(input.customerPhone)) {
+  if (!isBlank(input.customerPhone)) {
     blocks.push({ kind: "info", label: "Telefone", value: input.customerPhone! });
+    hasClientInfo = true;
   }
-  if (v.date) {
-    blocks.push({ kind: "info", label: "Data", value: `${date} ${time}` });
-  }
-  blocks.push({ kind: "sep" });
+  if (hasClientInfo) blocks.push({ kind: "sep" });
 
-  // 5. Itens
+  // --- ITENS ---
   input.items.forEach((it) => {
     blocks.push({
       kind: "item",
-      name: it.product_name,
+      name: it.product_name.toUpperCase(),
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
       note: v.notes ? it.note ?? null : null,
@@ -246,31 +228,28 @@ export function createReceiptLayoutModel(
   });
   blocks.push({ kind: "sep", bold: true });
 
-  // 6. Total
-  const totalLabel =
-    input.docType === "ACRESCIMO" ? "SUBTOTAL" : input.docType === "CONTA" ? "TOTAL" : "TOTAL";
+  // --- TOTAL E PAGAMENTO ---
   blocks.push({
     kind: "total",
-    label: totalLabel,
-    value: `R$ ${(input.total ?? 0).toFixed(2)}`,
+    label: "TOTAL",
+    value: moneyBr(input.total ?? 0),
   });
+  
+  if (!isBlank(input.paymentMethod)) {
+    blocks.push({ kind: "info", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
+  }
+  blocks.push({ kind: "sep" });
 
-  // 7. Linha de quantidade (apenas pedido normal)
-  if (input.docType === "PEDIDO") {
-    const totalQty = input.items.reduce((s, i) => s + i.quantity, 0);
-    blocks.push({ kind: "sep" });
-    blocks.push({ kind: "qtyLine", text: `Qtd itens: ${totalQty}` });
-  } else {
+  // --- OPCIONAL (OBSERVAÇÃO) ---
+  if (input.generalNote && input.generalNote.trim() && v.notes) {
+    blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim().toUpperCase() });
     blocks.push({ kind: "sep" });
   }
 
-  // 8. Rodapé
   if (v.footer && cfg.footerText) {
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
   pushFingerprint(blocks, input);
-
-  // 9. Marca de corte (visual, só usada no HTML)
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: input.docType };
@@ -285,112 +264,82 @@ function buildDeliveryLayout(
   const v = cfg.visibleSections;
   const blocks: LayoutBlock[] = [];
 
-  // 1. Título do estabelecimento
-  if (v.title && cfg.headerText) {
-    blocks.push({ kind: "title", text: cfg.headerText });
-    blocks.push({ kind: "sep", bold: true });
+  // --- TOPO ---
+  if (cfg.headerText) {
+    blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
 
-  // 2. Banner DELIVERY em destaque (não imprime "MESA", não imprime "GARCOM")
-  blocks.push({ kind: "banner", text: "*** DELIVERY ***" });
+  const shortId = input.orderShortId || input.orderId?.slice(-6).toUpperCase() || "---";
+  blocks.push({ kind: "banner", text: `PEDIDO #${shortId.replace(/^#/, "")}` });
+
+  const isPickup = input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão";
+  const typeText = isPickup ? "RETIRADA" : "ENTREGA";
+  blocks.push({ kind: "banner", text: `TIPO: ${typeText}` });
+  blocks.push({ kind: "info", label: "DATA", value: `${ctx.date} ${ctx.time}` });
   blocks.push({ kind: "sep", bold: true });
 
-  // 3. Identificação do pedido
-  const shortId = input.orderShortId
-    ? `#${input.orderShortId.replace(/^#/, "").toUpperCase()}`
-    : input.orderId
-    ? `#${input.orderId.replace(/-/g, "").slice(-6).toUpperCase()}`
-    : NOT_PROVIDED;
-  blocks.push({ kind: "info", label: "Pedido", value: shortId });
-  if (v.date) {
-    blocks.push({ kind: "info", label: "Data", value: `${ctx.date} ${ctx.time}` });
-  }
-
-  // 4. Dados do cliente (obrigatórios em delivery)
-  blocks.push({ kind: "sep" });
-  blocks.push({ kind: "info", label: "Cliente", value: safe(input.customerName) });
+  // --- CLIENTE ---
+  blocks.push({ kind: "info", label: "Cliente", value: safe(input.customerName).toUpperCase() });
   blocks.push({ kind: "info", label: "Telefone", value: safe(input.customerPhone) });
 
-  // 5. Endereço — bloco multilinha
-  const addrLines = buildAddressLines(input.deliveryAddress);
-  blocks.push({ kind: "info", label: "Endereco", value: "" });
-  if (addrLines.length === 0) {
-    blocks.push({ kind: "addressBlock", lines: [NOT_PROVIDED] });
-  } else {
-    blocks.push({ kind: "addressBlock", lines: addrLines });
+  if (!isPickup) {
+    const addrLines = buildAddressLines(input.deliveryAddress);
+    blocks.push({ kind: "info", label: "Endereco", value: "" });
+    if (addrLines.length === 0) {
+      blocks.push({ kind: "addressBlock", lines: [NOT_PROVIDED] });
+    } else {
+      blocks.push({ kind: "addressBlock", lines: addrLines.map(l => l.toUpperCase()) });
+    }
+    
+    const neighborhood = (input.deliveryAddress?.neighborhood ?? "").trim();
+    if (neighborhood) {
+      blocks.push({ kind: "info", label: "Bairro", value: neighborhood.toUpperCase() });
+    }
+    
+    const ref = (input.deliveryAddress?.reference ?? "").trim();
+    if (ref) {
+      blocks.push({ kind: "info", label: "Referencia", value: ref.toUpperCase() });
+    }
   }
-  blocks.push({
-    kind: "info",
-    label: "Bairro",
-    value: safe(input.deliveryAddress?.neighborhood),
-  });
-  const ref = (input.deliveryAddress?.reference ?? "").trim();
-  if (ref) {
-    blocks.push({ kind: "info", label: "Referencia", value: ref });
-  }
-
-  // 6. Observação geral, se houver
-  if (input.generalNote && input.generalNote.trim() && v.notes) {
-    blocks.push({ kind: "sep" });
-    blocks.push({ kind: "noteBlock", label: "OBS DO PEDIDO", text: input.generalNote.trim() });
-  }
-
-  // 7. Itens
-  blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "banner", text: "ITENS" });
   blocks.push({ kind: "sep" });
+
+  // --- ITENS ---
   input.items.forEach((it) => {
     blocks.push({
       kind: "item",
-      name: it.product_name,
+      name: it.product_name.toUpperCase(),
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
       note: v.notes ? it.note ?? null : null,
     });
   });
-
-  // 8. Resumo financeiro: subtotal + taxa - desconto = total
-  const computedSubtotal =
-    input.subtotal ?? input.items.reduce((s, i) => s + i.product_price * i.quantity, 0);
-  const fee = Number(input.deliveryFee ?? 0);
-  const discount = Number(input.discount ?? 0);
-  const total = input.total ?? computedSubtotal + fee - discount;
-
   blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "banner", text: "RESUMO" });
-  blocks.push({ kind: "sep" });
-  blocks.push({ kind: "summaryRow", label: "SUBTOTAL", value: moneyBr(computedSubtotal) });
-  if (fee > 0) {
-    blocks.push({ kind: "summaryRow", label: "TAXA ENTREGA", value: moneyBr(fee) });
-  }
-  if (discount > 0) {
-    blocks.push({ kind: "summaryRow", label: "DESCONTO", value: `- ${moneyBr(discount)}` });
-  }
-  blocks.push({ kind: "summaryRow", label: "TOTAL", value: moneyBr(total), bold: true });
 
-  // 9. Pagamento
+  // --- TOTAL E PAGAMENTO ---
+  const total = input.total ?? (input.subtotal ?? 0) + Number(input.deliveryFee ?? 0) - Number(input.discount ?? 0);
+  blocks.push({
+    kind: "total",
+    label: "TOTAL",
+    value: moneyBr(total),
+  });
+  
+  if (!isBlank(input.paymentMethod)) {
+    blocks.push({ kind: "info", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
+  }
   blocks.push({ kind: "sep" });
-  blocks.push({ kind: "info", label: "Pagamento", value: paymentLabel(input.paymentMethod) });
-  if (input.paymentMethod && input.paymentMethod.toLowerCase() === "cash") {
-    if (input.changeFor && input.changeFor > 0) {
-      blocks.push({ kind: "info", label: "Troco para", value: moneyBr(input.changeFor) });
-    } else {
-      blocks.push({ kind: "info", label: "Troco para", value: "NAO PRECISA" });
-    }
+
+  // --- OPCIONAL (OBSERVAÇÃO) ---
+  if (input.generalNote && input.generalNote.trim() && v.notes) {
+    blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim().toUpperCase() });
+    blocks.push({ kind: "sep" });
   }
 
-  // 10. Quantidade total de itens
-  const totalQty = input.items.reduce((s, i) => s + i.quantity, 0);
-  blocks.push({ kind: "sep" });
-  blocks.push({ kind: "qtyLine", text: `Qtd itens: ${totalQty}` });
-
-  // 11. Rodapé
   if (v.footer && cfg.footerText) {
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
   pushFingerprint(blocks, input);
-
   blocks.push({ kind: "cutMark" });
+
   return { blocks, docType: "DELIVERY" };
 }
 
@@ -404,47 +353,41 @@ function buildSenhaLayout(
   const blocks: LayoutBlock[] = [];
   const senhaNum = (input.senha || "").replace(/^#/, "");
 
-  blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}` });
-  if (v.title && cfg.headerText) {
-    blocks.push({ kind: "title", text: cfg.headerText });
+  // --- TOPO ---
+  if (cfg.headerText) {
+    blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
+  blocks.push({ kind: "banner", text: `PEDIDO #${senhaNum}` });
+  blocks.push({ kind: "banner", text: "TIPO: RETIRADA" });
+  blocks.push({ kind: "info", label: "DATA", value: `${ctx.date} ${ctx.time}` });
   blocks.push({ kind: "sep", bold: true });
 
-  if (v.date) {
-    blocks.push({ kind: "info", label: "Data", value: `${ctx.date} ${ctx.time}` });
+  // --- CLIENTE ---
+  if (!isBlank(input.customerName)) {
+    blocks.push({ kind: "info", label: "Cliente", value: input.customerName!.toUpperCase() });
+    blocks.push({ kind: "sep" });
   }
-  if (input.orderId) {
-    const venda = input.orderId.replace(/-/g, "").slice(-6).toUpperCase();
-    blocks.push({ kind: "info", label: "Venda", value: venda });
-  }
-  blocks.push({ kind: "info", label: "Vendedor", value: "BALCAO" });
-  if (input.waiterName) {
-    blocks.push({ kind: "info", label: "Caixa", value: input.waiterName });
-  }
-  blocks.push({
-    kind: "info",
-    label: "Cliente",
-    value: input.customerName || "CONSUMIDOR FINAL",
-  });
 
-  blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "itemTableHeader" });
-  blocks.push({ kind: "sep", bold: true });
+  // --- ITENS ---
   input.items.forEach((it) =>
     blocks.push({
-      kind: "itemTableRow",
+      kind: "item",
+      name: it.product_name.toUpperCase(),
       quantity: it.quantity,
-      name: it.product_name,
-      unit: it.product_price,
       subtotal: it.product_price * it.quantity,
+      note: v.notes ? it.note ?? null : null,
     })
   );
-  blocks.push({ kind: "sep" });
-  blocks.push({
-    kind: "itemTableTotal",
-    value: `R$ ${(input.total ?? 0).toFixed(2)}`,
-  });
   blocks.push({ kind: "sep", bold: true });
+
+  // --- TOTAL E PAGAMENTO ---
+  blocks.push({
+    kind: "total",
+    label: "TOTAL",
+    value: moneyBr(input.total ?? 0),
+  });
+  blocks.push({ kind: "sep" });
+
   if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
   pushFingerprint(blocks, input);
   blocks.push({ kind: "cutMark" });

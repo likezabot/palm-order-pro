@@ -25,7 +25,7 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
         break;
       case "banner":
         parts.push(
-          `<div class="center bold" style="font-size:${f.total}px;margin:6px 0;">${escapeHtml(blk.text)}</div>`
+          `<div class="center bold" style="font-size:${Math.round(f.total * 1.25)}px;margin:8px 0;text-transform:uppercase;">${escapeHtml(blk.text)}</div>`
         );
         break;
       case "sep":
@@ -58,13 +58,16 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
       case "item": {
         const right =
           blk.subtotal > 0
-            ? `<span class="item-right">R$${blk.subtotal.toFixed(2)}</span>`
+            ? `<span class="item-right">R$ ${blk.subtotal.toFixed(2).replace(".", ",")}</span>`
             : "";
         const note = blk.note
-          ? `<div class="item-note">↳ ${escapeHtml(blk.note)}</div>`
+          ? `<div class="item-note">↳ ${escapeHtml(blk.note.toUpperCase())}</div>`
           : "";
         parts.push(
-          `<div class="item-row"><span class="item-left"><span class="item-qty">${blk.quantity}x</span> ${escapeHtml(blk.name)}</span>${right}</div>${note}`
+          `<div class="item-row">
+            <span class="item-left"><span class="item-qty">${blk.quantity}x</span> ${escapeHtml(blk.name.toUpperCase())}</span>
+            ${right}
+          </div>${note}`
         );
         break;
       }
@@ -149,8 +152,9 @@ export function thermalCSS(cfg: PrintConfig): string {
     .info-label { font-weight: bold !important; text-transform: uppercase !important; font-size: ${f.base - 1}px !important; }
     .info-value { font-weight: 900 !important; }
     .item-row {
-      display: block !important;
-      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: baseline !important;
       padding: 3px 0 !important; font-size: ${f.base}px !important;
     }
     .item-left { display: inline !important; word-break: break-word !important; }
