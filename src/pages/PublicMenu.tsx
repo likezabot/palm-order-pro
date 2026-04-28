@@ -662,6 +662,7 @@ export default function PublicMenu() {
         onAdd={(p) => blockIfPreview(() => cart.add(p, 1, ""))}
         disabled={!isOpen && !isPreview}
       />
+      </div>
     </PublicMenuLayout>
   );
 }
