@@ -38,7 +38,9 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-40 w-full transition-all duration-300",
+        "sticky z-40 w-full transition-all duration-300",
+        // Ajusta o top se estiver no modo preview para não sobrepor o banner
+        "top-0 [[data-preview-mode=true]_&]:top-[32px]",
         stuck 
           ? "bg-[#0A0504]/95 backdrop-blur-md border-b border-white/5 py-1.5 px-3" 
           : "bg-transparent py-3 px-0"
