@@ -524,7 +524,7 @@ const Pdv = () => {
                     onSelect={() => { setSelectedId(order.id); setShowPayment(false); setPaymentsHistory([]); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
-                    onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
+                    onEdit={(o) => navigate(`/orders/${o.id}/edit`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setPaymentsHistory([]); }}
                     onCancel={(o) => setCancelTarget(o)}
                   />
