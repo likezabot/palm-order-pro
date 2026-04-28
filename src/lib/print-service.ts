@@ -56,7 +56,12 @@ export async function claimOrderForPrint(orderId: string): Promise<boolean> {
 
   if (error) {
     console.error("[print-service] Erro ao clamar pedido:", error);
+    await logPrinterEvent(`Erro ao clamar pedido: ${error.message}`, orderId, "error");
     return false;
+  }
+
+  if (!data) {
+    await logPrinterEvent("Pedido já está sendo impresso por outro dispositivo (already claimed)", orderId, "warning");
   }
 
   return !!data;
