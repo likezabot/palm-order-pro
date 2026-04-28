@@ -509,12 +509,19 @@ export default function LoyaltyTab() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}
-                    {r.product_name && ` · vinc. ${r.product_name} (R$ ${Number(r.product_price ?? 0).toFixed(2)})`}
-                    {r.effective_cost_per_point !== null &&
-                      ` · custo efetivo R$ ${r.effective_cost_per_point.toFixed(2)}/pt`}
+                  <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                    <span>{r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}</span>
+                    <span className="flex items-center gap-1 font-medium">
+                      {r.allow_pickup ? <Check className="h-3 w-3 text-success" /> : <XCircle className="h-3 w-3 text-destructive" />}
+                      Retirada
+                    </span>
+                    <span className="flex items-center gap-1 font-medium">
+                      {r.allow_delivery ? <Check className="h-3 w-3 text-success" /> : <XCircle className="h-3 w-3 text-destructive" />}
+                      Entrega
+                    </span>
+                    {r.product_name && ` · vinc. ${r.product_name}`}
                   </div>
+                  {r.description && <div className="text-[10px] italic text-muted-foreground mt-0.5">{r.description}</div>}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <Button size="sm" variant="outline" onClick={() => editReward(r)}>
