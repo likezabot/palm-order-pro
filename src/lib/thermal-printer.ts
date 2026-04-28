@@ -753,12 +753,12 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
       case "kvLine": {
         b.resetStyle().align("left");
         if (blk.bold) b.bold(true).size(false, true);
-        const line = `- ${blk.label}: ${blk.value}`;
+        const prefix = blk.dash ? "- " : "";
+        const line = `${prefix}${blk.label}: ${blk.value}`;
         if (line.length <= cols) {
           b.line(line);
         } else {
-          // quebra: label na primeira, valor indentado na segunda
-          b.line(`- ${blk.label}:`);
+          b.line(`${prefix}${blk.label}:`);
           const val = blk.value;
           for (let i = 0; i < val.length; i += cols - 4) {
             b.line("    " + val.slice(i, i + cols - 4));
