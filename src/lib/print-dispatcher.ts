@@ -121,19 +121,6 @@ export async function printOrderByServiceType(
   }
 
   const cfg = await ensureFreshPrintConfig();
-
-  // O health check aqui serve para tentar impressão direta.
-  // Se estiver offline, prosseguimos para gerar o payload e enfileirar.
-  let bridgeActuallyOnline = true;
-  if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
-    const { checkBridgeStatus } = await import("./thermal-printer");
-    const health = await checkBridgeStatus(cfg.bridgeUrl, true);
-    bridgeActuallyOnline = health.online;
-    if (!bridgeActuallyOnline) {
-      debugLog.warn("print", `Ponte offline em ${cfg.bridgeUrl}; o pedido será enfileirado localmente.`);
-    }
-  }
-
   const serviceType = order.service_type ?? "dine_in";
   const isDelivery = serviceType === "delivery";
   const isPickup = serviceType === "pickup" || serviceType === "balcao" || serviceType === "balcão";
@@ -144,17 +131,20 @@ export async function printOrderByServiceType(
   const deltaItems = (mode === "delta") ? (order.delta_items ?? []) as any[] : [];
   const activeItems = mode === "delta" ? deltaItems : items;
 
-  const extras = buildExtras(order, `dispatcher.${serviceType}.${mode}`, source, activeItems);
+  const printPath = `dispatcher.${serviceType}.${mode}`;
+  const extras = buildExtras(order, printPath, source, activeItems);
 
-  console.log("[PRINT_DISPATCHER_LOG]", {
+  // LOG OBRIGATÓRIO: ANTES DE IMPRIMIR
+  console.log("[PRINT_PIPELINE] ANTES DE IMPRIMIR:", {
     orderId,
     shortId: extras.orderShortId,
     customer: extras.customerName,
-    service: serviceType,
-    mode,
+    serviceType,
     total: order.total,
     itemsCount: activeItems.length,
-    source
+    printStatus: "loading", // será atualizado pelo service
+    source,
+    printPath
   });
 
   logPrintEngine({
@@ -168,6 +158,49 @@ export async function printOrderByServiceType(
     configMeta: { updatedAt: cfg.configUpdatedAt ?? null, source: cfg.configSource ?? null },
     extra: { mode, isDelivery, isPickup, dispatchSource: source },
   });
+
+  let bridgeActuallyOnline = true;
+  if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
+    const { checkBridgeStatus } = await import("./thermal-printer");
+    const health = await checkBridgeStatus(cfg.bridgeUrl, true);
+    bridgeActuallyOnline = health.online;
+  }
+
+  const sendToBridge = async (printFn: () => Promise<{ ok: boolean; error?: string }>) => {
+    // LOG OBRIGATÓRIO: ANTES DE ENVIAR PARA BRIDGE
+    console.log("[PRINT_PIPELINE] ENVIANDO PARA BRIDGE:", {
+      bridgeUrl: cfg.bridgeUrl,
+      orderId,
+      printPath,
+      source
+    });
+
+    const startTime = Date.now();
+    try {
+      const result = await printFn();
+      const latencyMs = Date.now() - startTime;
+
+      // LOG OBRIGATÓRIO: DEPOIS DA BRIDGE
+      console.log("[PRINT_PIPELINE] RESPOSTA DA BRIDGE:", {
+        orderId,
+        ok: result.ok,
+        error: result.error || null,
+        latencyMs,
+        printPath
+      });
+      return result;
+    } catch (err) {
+      const latencyMs = Date.now() - startTime;
+      console.log("[PRINT_PIPELINE] ERRO FATAL NA BRIDGE:", {
+        orderId,
+        ok: false,
+        error: String(err),
+        latencyMs,
+        printPath
+      });
+      return { ok: false, error: String(err) };
+    }
+  };
 
   if (isDelivery) {
     if (items.length === 0)
@@ -195,11 +228,9 @@ export async function printOrderByServiceType(
       itemsCount: items.length
     };
 
-    const ok = bridgeActuallyOnline ? await printDelivery(input) : { ok: false };
-    if (ok.ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
-
-    debugLog.warn("print", `bridge offline/falhou para delivery ${orderId}; aguardando reimpressão manual`);
-    return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: "delivery" };
+    const res = bridgeActuallyOnline ? await sendToBridge(() => printDelivery(input)) : { ok: false, error: "bridge_offline" };
+    if (res.ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
+    return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: "delivery" };
   }
 
   const layoutKey = isPickup ? "pickup" : (mode === "delta" ? "dine_in_delta" : mode === "bill" ? "dine_in_bill" : "dine_in_full");
@@ -208,24 +239,21 @@ export async function printOrderByServiceType(
     if (deltaItems.length === 0)
       return { ok: false, reason: "no_delta", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
 
-    const ok = bridgeActuallyOnline ? await printDelta(tableValue, waiter, deltaItems, extras) : { ok: false };
-    if (ok.ok) return { ok: true, reason: "delta_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
-    debugLog.warn("print", `bridge offline/falhou para delta ${orderId}; aguardando reimpressão manual`);
-    return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
+    const res = bridgeActuallyOnline ? await sendToBridge(() => printDelta(tableValue, waiter, deltaItems, extras)) : { ok: false, error: "bridge_offline" };
+    if (res.ok) return { ok: true, reason: "delta_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
+    return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
   }
 
   if (items.length === 0)
     return { ok: false, reason: "no_items", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
 
   if (mode === "bill") {
-    const ok = bridgeActuallyOnline ? await printBill(tableValue, waiter, items as any[], order.total ?? 0, extras) : { ok: false };
-    if (ok.ok) return { ok: true, reason: "bill_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
-    debugLog.warn("print", `bridge offline/falhou para bill ${orderId}; aguardando reimpressão manual`);
-    return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
+    const res = bridgeActuallyOnline ? await sendToBridge(() => printBill(tableValue, waiter, items as any[], order.total ?? 0, extras)) : { ok: false, error: "bridge_offline" };
+    if (res.ok) return { ok: true, reason: "bill_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
+    return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
   }
 
-  const ok = bridgeActuallyOnline ? await printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras) : { ok: false };
-  if (ok.ok) return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
-  debugLog.warn("print", `bridge offline/falhou para full ${orderId}; aguardando reimpressão manual`);
-  return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
+  const res = bridgeActuallyOnline ? await sendToBridge(() => printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras)) : { ok: false, error: "bridge_offline" };
+  if (res.ok) return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
+  return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
 }
