@@ -274,10 +274,19 @@ export default function PublicCheckout() {
       // Lógica de limpeza agressiva do carrinho
       cart.clear();
       try {
-        sessionStorage.removeItem(CART_STORAGE_KEY);
+        // Limpa todas as formas possíveis de persistência do carrinho
+        sessionStorage.removeItem("public_cart_v1");
         sessionStorage.removeItem(REWARD_KEY);
-        localStorage.removeItem(CART_STORAGE_KEY);
+        localStorage.removeItem("public_cart_v1");
+        
+        // Também tenta limpar com o valor vazio para garantir disparo de eventos de storage
+        sessionStorage.setItem("public_cart_v1", "[]");
+        localStorage.setItem("public_cart_v1", "[]");
+        
         if (phoneDigits) localStorage.setItem(PHONE_KEY, phoneDigits);
+        
+        // Força o window a saber que o storage mudou (útil para abas/componentes ouvindo)
+        window.dispatchEvent(new Event("storage"));
       } catch (e) {
         console.warn("Erro ao limpar storage:", e);
       }
