@@ -34,6 +34,9 @@ export type PublicCartItem = {
 export type CheckoutCustomer = {
   name: string;
   phone: string;
+  points_balance?: number;
+  last_service_type?: ServiceType;
+  last_payment_method?: PaymentMethod;
 };
 
 export type CheckoutAddress = {
