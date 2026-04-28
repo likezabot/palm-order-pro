@@ -15,6 +15,7 @@ import { ensureFreshPrintConfig } from "@/lib/print-config";
 import { formatPrintTableValue } from "@/lib/utils";
 import { debugLog } from "@/lib/debug-logger";
 import { logPrintEngine } from "@/lib/print-engine";
+import { auditTestLogger } from "@/lib/audit-test-logger";
 import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
 import { type DeliveryPayloadInput, type ReceiptExtras } from "@/lib/thermal-printer";
 
@@ -188,6 +189,7 @@ export async function printOrderByServiceType(
         latencyMs,
         printPath
       });
+      auditTestLogger.logEvent("BRIDGE_RESPONSE", orderId, { ok: result.ok, error: result.error, latencyMs });
       return result;
     } catch (err) {
       const latencyMs = Date.now() - startTime;
@@ -198,6 +200,7 @@ export async function printOrderByServiceType(
         latencyMs,
         printPath
       });
+      auditTestLogger.logEvent("BRIDGE_FATAL_ERROR", orderId, { error: String(err), latencyMs });
       return { ok: false, error: String(err) };
     }
   };
