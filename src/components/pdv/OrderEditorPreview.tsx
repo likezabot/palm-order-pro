@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import { createReceiptLayoutModel, type LayoutBlock, type BuildLayoutInput } from "@/lib/receipt-layout";
 import { loadPrintConfig } from "@/lib/print-config";
 import { buildHtmlFromBlocks } from "@/lib/receipt-html";
+import { Printer } from "lucide-react";
 
 interface Props {
   input: BuildLayoutInput;
