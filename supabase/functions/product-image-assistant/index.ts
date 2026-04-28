@@ -73,8 +73,9 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       )
 
+      const safeSlug = productSlug.replace(/[^a-z0-9]/gi, '-').toLowerCase();
       const fileExt = blob.type.split('/')[1] || 'jpg';
-      const fileName = `${productSlug}.${fileExt}`;
+      const fileName = `${safeSlug}-${Date.now()}.${fileExt}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('product-images')
