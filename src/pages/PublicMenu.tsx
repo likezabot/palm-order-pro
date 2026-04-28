@@ -368,8 +368,14 @@ export default function PublicMenu() {
 
                 // Resolve overrides por categoria (caem no padrão global se ausentes)
                 const ov = settings?.category_overrides?.[cat.slug] ?? {};
-                const catLayoutKey =
-                  ov.layout ?? (layoutMode === "grid" ? "grid-2" : "list");
+                let catLayoutKey = ov.layout ?? (layoutMode === "grid" ? "grid-2" : "list");
+                
+                // Força layouts específicos conforme pedido do usuário para categorias chave
+                if (!ov.layout) {
+                  const slugLower = cat.slug.toLowerCase();
+                  if (slugLower.includes("espeto")) catLayoutKey = "grid-2";
+                  if (slugLower.includes("bebida")) catLayoutKey = "grid-3";
+                }
                 const catAspect = ov.image_aspect ?? imageAspect;
                 const catCardStyle = ov.card_style ?? "detailed";
                 // Mobile sempre lista compacta; grid só em sm+ (tablet/desktop)
