@@ -435,7 +435,7 @@ export default function PublicMenu() {
                             key={`group-${entry.group.id}`}
                             product={{ ...entry.trigger, is_sold_out: entry.allSoldOut }}
                             disabled={!isOpen && !isPreview}
-                            layout="list"
+                            layout={mobileLayout}
                             showImage={showImages}
                             showDescription={false}
                             imageAspect={catAspect}
