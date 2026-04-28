@@ -62,12 +62,10 @@ export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnlin
     const queue = (await getPrintQueue()).filter((j) => !j.dead);
     if (queue.length === 0) return { processed: 0, bridgeOnline: true };
 
-    // Usa o bridgeUrl do primeiro job para o health check
-    const sampleUrl = queue[0].bridgeUrl;
-    const status = await checkBridgeStatus(sampleUrl);
-    if (!status.online) {
-      return { processed: 0, bridgeOnline: false };
-    }
+    // O health check inicial é apenas informativo para o retorno do tick.
+    // O processamento individual de cada job já lida com falhas de conexão.
+    const cfg = await import("@/lib/print-config").then(m => m.loadPrintConfig());
+    const bridgeOnline = cfg.bridgeUrl ? (await checkBridgeStatus(cfg.bridgeUrl)).online : false;
 
     let processed = 0;
     for (const job of queue) {
