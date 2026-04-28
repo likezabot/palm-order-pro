@@ -821,6 +821,7 @@ export type Database = {
           printed_at: string | null
           public_token: string | null
           rejected_reason: string | null
+          restaurant_id: string | null
           served_at: string | null
           service_type: string
           status: string
@@ -855,6 +856,7 @@ export type Database = {
           printed_at?: string | null
           public_token?: string | null
           rejected_reason?: string | null
+          restaurant_id?: string | null
           served_at?: string | null
           service_type?: string
           status?: string
@@ -889,6 +891,7 @@ export type Database = {
           printed_at?: string | null
           public_token?: string | null
           rejected_reason?: string | null
+          restaurant_id?: string | null
           served_at?: string | null
           service_type?: string
           status?: string
@@ -898,7 +901,15 @@ export type Database = {
           version?: number
           waiter_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pin_attempt_log: {
         Row: {
