@@ -107,7 +107,7 @@ export const PrintSettingsDialog = () => {
             <Button
               variant="ghost"
               className="w-full gap-2 text-xs text-muted-foreground hover:text-primary mt-2"
-              onClick={() => navigate("/debug-print")}
+              onClick={() => navigate("/debug/print")}
             >
               <FileText className="w-3 h-3" />
               Ver Logs de Movimentos e Erros
