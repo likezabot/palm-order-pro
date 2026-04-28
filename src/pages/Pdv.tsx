@@ -759,7 +759,7 @@ const Pdv = () => {
                   <Printer size={16} /> Imprimir
                 </button>
                 <button
-                  onClick={() => navigate(`/palm?orderId=${selectedOrder.id}&tableName=${selectedOrder.table_name}`)}
+                  onClick={() => navigate(`/orders/${selectedOrder.id}/edit`)}
                   disabled={selectedOrder.status === "done"}
                   title={selectedOrder.status === "done" ? "Pedido pronto — avance o status para reabrir e editar" : "Adicionar/remover itens"}
                   className="rounded-lg border border-border bg-card px-2 py-2.5 font-bold text-sm text-foreground active:scale-95 transition-transform flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
