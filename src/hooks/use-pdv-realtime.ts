@@ -61,6 +61,8 @@ export function usePdvRealtime() {
         markRealtimeHeartbeat();
         const updated = payload.new as Order;
         const activeStatuses = ["new", "preparing", "done"];
+        const isCancelled = updated.status === "cancelled";
+
         
         queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
           if (!old) return old;
@@ -68,10 +70,18 @@ export function usePdvRealtime() {
           const isCurrentlyActive = activeStatuses.includes(updated.status);
           const existsInCache = old.some(o => o.id === updated.id);
 
-          // Se mudou para um status não ativo (ex: paid), remove do cache
+          // Se mudou para um status não ativo (ex: paid, cancelled), remove do cache
           if (!isCurrentlyActive) {
+            if (isCancelled) {
+              playFeedbackRef.current("error");
+              toastRef.current({ 
+                title: `Pedido cancelado: ${updated.table_name}`, 
+                variant: "destructive" 
+              });
+            }
             return old.filter(o => o.id !== updated.id);
           }
+
 
           // Se é ativo mas não estava no cache, adiciona
           if (!existsInCache) {
