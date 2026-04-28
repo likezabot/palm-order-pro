@@ -38,7 +38,7 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
       className={cn(
         "sticky top-0 z-20 -mx-4 px-4 transition-all duration-300",
         stuck
-          ? "border-b border-primary/20 bg-background/95 backdrop-blur-xl shadow-[0_8px_32px_-12px_hsl(var(--primary)/0.35)] translate-y-0"
+          ? "border-b border-primary/20 bg-white/95 backdrop-blur-xl shadow-[0_8px_32px_-12px_hsl(var(--primary)/0.35)] translate-y-0"
           : "bg-transparent translate-y-1",
       )}
     >
