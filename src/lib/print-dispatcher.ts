@@ -79,14 +79,16 @@ async function loadItemsWithRetry(orderId: string) {
  * Sanitiza extras: NUNCA imprimir N/A. Campos vazios são removidos para que
  * o layout simplesmente não renderize a linha.
  */
-function buildExtras(o: OrderRow, printPath: string, source: DispatchSource): ReceiptExtras {
+function buildExtras(o: OrderRow, printPath: string, source: DispatchSource, items?: any[]): ReceiptExtras {
   const extras: ReceiptExtras = {
     orderId: o.id,
+    orderShortId: o.table_name?.replace(/^.*#/, "") || o.id.slice(0, 8).toUpperCase(),
+    customerName: o.customer_name_snapshot?.trim() || null,
+    total: o.total ?? 0,
+    itemsCount: items?.length ?? 0,
     fingerprint: { printPath, source },
   };
   if (o.service_type) extras.serviceType = o.service_type;
-  if (o.customer_name_snapshot && o.customer_name_snapshot.trim())
-    extras.customerName = o.customer_name_snapshot.trim();
   if (o.customer_phone_snapshot && o.customer_phone_snapshot.trim())
     extras.customerPhone = o.customer_phone_snapshot.trim();
   return extras;
@@ -94,18 +96,16 @@ function buildExtras(o: OrderRow, printPath: string, source: DispatchSource): Re
 
 /** Garante que delivery/pickup nunca usem nome de mesa fake como "Delivery #123". */
 function safeTableValue(o: OrderRow): string {
-  // Para dine_in usa o formato normal; para outros tipos passa string vazia
-  // (o layout suprime o bloco MESA quando service_type não é dine_in).
   if (!o.service_type || o.service_type === "dine_in") {
     return formatPrintTableValue(o.table_name, o.original_table_name);
   }
-  return ""; // o layout não imprimirá MESA
+  return ""; 
 }
 
 /** Garante waiter sem virar "N/A". */
 function safeWaiter(o: OrderRow): string {
   const w = (o.waiter_name ?? "").trim();
-  return w; // string vazia => layout omite a linha
+  return w; 
 }
 
 async function tryEnqueue(
@@ -154,7 +154,6 @@ export async function printOrderByServiceType(
 
   const cfg = await ensureFreshPrintConfig();
 
-  // REQUISITO: Antes de imprimir pedido real, sempre executar checkBridgeStatus com cache bypass.
   if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
     const { checkBridgeStatus } = await import("./thermal-printer");
     const health = await checkBridgeStatus(cfg.bridgeUrl, true);
@@ -173,9 +172,26 @@ export async function printOrderByServiceType(
 
   const serviceType = order.service_type ?? "dine_in";
   const isDelivery = serviceType === "delivery";
-  const isPickup = serviceType === "pickup" || serviceType === "balcao";
+  const isPickup = serviceType === "pickup" || serviceType === "balcao" || serviceType === "balcão";
   const tableValue = safeTableValue(order);
   const waiter = safeWaiter(order);
+
+  const items = (mode === "delta") ? [] : await loadItemsWithRetry(orderId);
+  const deltaItems = (mode === "delta") ? (order.delta_items ?? []) as any[] : [];
+  const activeItems = mode === "delta" ? deltaItems : items;
+
+  const extras = buildExtras(order, `dispatcher.${serviceType}.${mode}`, source, activeItems);
+
+  console.log("[PRINT_DISPATCHER_LOG]", {
+    orderId,
+    shortId: extras.orderShortId,
+    customer: extras.customerName,
+    service: serviceType,
+    mode,
+    total: order.total,
+    itemsCount: activeItems.length,
+    source
+  });
 
   logPrintEngine({
     functionName: `printOrderByServiceType:${mode}:${source}`,
@@ -189,9 +205,7 @@ export async function printOrderByServiceType(
     extra: { mode, isDelivery, isPickup, dispatchSource: source },
   });
 
-  // ---- DELIVERY: SEMPRE comanda completa, nunca delta/bill em layout mesa ----
   if (isDelivery) {
-    const items = await loadItemsWithRetry(orderId);
     if (items.length === 0)
       return { ok: false, reason: "no_items", bridgeOk: false, queued: false, serviceType, layoutUsed: "delivery" };
 
@@ -211,52 +225,46 @@ export async function printOrderByServiceType(
       paymentMethod: order.payment_method,
       changeFor: order.change_for != null ? Number(order.change_for) : null,
       orderId,
-      orderShortId: order.table_name?.replace(/^.*#/, "") || null,
+      orderShortId: extras.orderShortId,
       serviceType: "delivery",
       fingerprint: { printPath: "dispatcher.delivery", source },
+      itemsCount: items.length
     };
 
     const ok = await printDelivery(input);
-    if (ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
+    if (ok.ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
 
     const payload = buildEscPosDelivery(input, cfg);
     const queued = await tryEnqueue(orderId, tableValue, "full", payload);
     return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: "delivery" };
   }
 
-  // ---- PICKUP: layout receipt SEM bloco MESA (handled by serviceType extra) ----
-  // ---- DINE_IN: layout normal de mesa ----
   const layoutKey = isPickup ? "pickup" : (mode === "delta" ? "dine_in_delta" : mode === "bill" ? "dine_in_bill" : "dine_in_full");
-  const printPath = `dispatcher.${layoutKey}.${mode}`;
-  const extras = buildExtras(order, printPath, source);
-
+  
   if (mode === "delta") {
-    const deltaItems = (order.delta_items ?? []) as any[];
-    if (!deltaItems || deltaItems.length === 0)
+    if (deltaItems.length === 0)
       return { ok: false, reason: "no_delta", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
 
     const ok = await printDelta(tableValue, waiter, deltaItems, extras);
-    if (ok) return { ok: true, reason: "delta_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
+    if (ok.ok) return { ok: true, reason: "delta_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
     const payload = buildEscPosDelta(tableValue, waiter, deltaItems, cfg, extras);
     const queued = await tryEnqueue(orderId, tableValue, "delta", payload);
     return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
   }
 
-  const items = await loadItemsWithRetry(orderId);
   if (items.length === 0)
     return { ok: false, reason: "no_items", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
 
   if (mode === "bill") {
     const ok = await printBill(tableValue, waiter, items as any[], order.total ?? 0, extras);
-    if (ok) return { ok: true, reason: "bill_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
+    if (ok.ok) return { ok: true, reason: "bill_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
     const payload = buildEscPosBill(tableValue, waiter, items as any[], order.total ?? 0, cfg, extras);
     const queued = await tryEnqueue(orderId, tableValue, "bill", payload);
     return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
   }
 
-  // mode === "full"
   const ok = await printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras);
-  if (ok) return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
+  if (ok.ok) return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
   const payload = buildEscPosReceipt(tableValue, waiter, items as any[], order.total ?? 0, cfg, extras);
   const queued = await tryEnqueue(orderId, tableValue, "full", payload);
   return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };

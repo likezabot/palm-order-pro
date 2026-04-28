@@ -1,11 +1,12 @@
 import { forwardRef, memo } from "react";
-import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed, Bike, ShoppingBag, Wifi, X } from "lucide-react";
+import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed, Bike, ShoppingBag, Wifi, X, AlertTriangle } from "lucide-react";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
 import { usePrintJobsStatus } from "@/hooks/use-print-jobs-status";
 import { PrintStatusBadge } from "@/components/pdv/PrintStatusBadge";
 import { getOrderKind, isOnlineOrder, KIND_LABEL, KIND_BADGE_CLASS } from "@/lib/order-classification";
 import type { Order } from "@/lib/types";
+import { getPrintOriginRecords } from "@/lib/print-origin-tracker";
 
 const STATUS_LABEL: Record<string, string> = {
   new: "AGUARDANDO",
@@ -57,6 +58,11 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
   const next = NEXT_STATUS[status];
   const kind = getOrderKind(order);
   const online = isOnlineOrder(order);
+  
+  // Verifica se impresso POR ESTA ABA
+  const printedAt = (order as any).printed_at || (order as any).print_status === "printed";
+  const printedLocally = getPrintOriginRecords().some(r => r.orderId === order.id && r.ok);
+  const showPrintWarning = printedAt && !printedLocally;
 
   const stageMs = Date.now() - new Date(order.updated_at || order.created_at).getTime();
   const stageMin = Math.floor(stageMs / 60000);
@@ -165,7 +171,12 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
             <span className="font-medium text-foreground">{getTimeLabel()}</span>
           </span>
         </div>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-1.5">
+          {showPrintWarning && (
+            <div className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase" title="Impresso por outra aba ou instância antiga">
+              <AlertTriangle className="w-2.5 h-2.5" /> ORIGEM EXTERNA
+            </div>
+          )}
           <PrintStatusBadge jobInfo={jobInfo} legacyStatus={order.print_status} />
         </div>
       </div>

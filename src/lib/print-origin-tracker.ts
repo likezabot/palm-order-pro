@@ -12,8 +12,12 @@ export interface PrintOriginRecord {
   printPath: string;                       // ex.: "dispatcher.delivery"
   source: "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
   orderId?: string | null;
+  orderShortId?: string | null;
   serviceType?: string | null;
   tableName?: string | null;
+  customerName?: string | null;
+  total?: number | null;
+  itemsCount?: number | null;
   bridgeUrl?: string | null;
   bytes?: number | null;
   ok: boolean;

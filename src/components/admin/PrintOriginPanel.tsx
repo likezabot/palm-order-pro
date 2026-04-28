@@ -34,7 +34,11 @@ function buildInstanceDiagnostic(record: PrintOriginRecord): string {
     `printPath: ${record.printPath}`,
     `source: ${record.source}`,
     `orderId: ${record.orderId ?? "—"}`,
+    `orderShortId: ${record.orderShortId ?? "—"}`,
     `serviceType: ${record.serviceType ?? "—"}`,
+    `customer: ${record.customerName ?? "—"}`,
+    `total: R$ ${record.total?.toFixed(2) ?? "—"}`,
+    `items: ${record.itemsCount ?? "—"}`,
     `tableName: ${record.tableName ?? "—"}`,
     `bytes: ${record.bytes ?? "—"}`,
     `APP_BUILD: ${record.appBuild}`,
@@ -189,6 +193,10 @@ function LastOriginCard({ record }: { record: PrintOriginRecord }) {
         <Field label="source" value={record.source} />
         <Field label="path" value={record.printPath} />
         <Field label="order" value={record.orderId ? record.orderId.slice(0, 8) : "—"} />
+        <Field label="shortId" value={record.orderShortId ?? "—"} />
+        <Field label="customer" value={record.customerName ?? "—"} truncate />
+        <Field label="total" value={record.total != null ? `R$ ${record.total.toFixed(2)}` : "—"} />
+        <Field label="items" value={record.itemsCount != null ? String(record.itemsCount) : "—"} />
         <Field label="service" value={record.serviceType ?? "—"} />
         <Field label="table" value={record.tableName ?? "—"} />
         <Field label="bytes" value={record.bytes != null ? String(record.bytes) : "—"} />

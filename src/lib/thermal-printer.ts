@@ -391,8 +391,12 @@ export interface SendToBridgeMeta {
   printPath: string;
   source: "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
   orderId?: string | null;
+  orderShortId?: string | null;
   serviceType?: string | null;
   tableName?: string | null;
+  customerName?: string | null;
+  total?: number | null;
+  itemsCount?: number | null;
 }
 
 export async function sendToBridge(
@@ -403,9 +407,23 @@ export async function sendToBridge(
   const t0 = performance.now();
   const printUrl = bridgePrintUrl(url);
   const metaInfo = meta
-    ? ` path=${meta.printPath} src=${meta.source} order=${meta.orderId ?? "-"} svc=${meta.serviceType ?? "-"}`
+    ? ` path=${meta.printPath} src=${meta.source} order=${meta.orderId ?? "-"} short=${meta.orderShortId ?? "-"} svc=${meta.serviceType ?? "-"} total=R$${meta.total?.toFixed(2) ?? "-"} items=${meta.itemsCount ?? "-"}`
     : "";
   debugLog.info("print", `→ enviando ${payload.length} bytes para bridge${metaInfo}`, { url: printUrl, meta });
+
+  if (meta) {
+    console.log("[PRINT_DEBUG_BEFORE]", {
+      orderId: meta.orderId,
+      shortId: meta.orderShortId,
+      customer: meta.customerName,
+      service: meta.serviceType,
+      total: meta.total,
+      items: meta.itemsCount,
+      path: meta.printPath,
+      source: meta.source
+    });
+  }
+
   const base64 = btoa(String.fromCharCode(...payload));
 
   const recordOrigin = (ok: boolean, errorMsg?: string) => {
@@ -415,8 +433,12 @@ export async function sendToBridge(
         printPath: meta.printPath,
         source: meta.source,
         orderId: meta.orderId ?? null,
+        orderShortId: meta.orderShortId ?? null,
         serviceType: meta.serviceType ?? null,
         tableName: meta.tableName ?? null,
+        customerName: meta.customerName ?? null,
+        total: meta.total ?? null,
+        itemsCount: meta.itemsCount ?? null,
         bridgeUrl: url,
         bytes: payload.length,
         ok,
@@ -695,9 +717,10 @@ export interface ReceiptExtras {
   serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
   customerName?: string | null;
   customerPhone?: string | null;
-  /** Order id usado para fingerprint do rodapé. */
   orderId?: string | null;
-  /** Fingerprint propagado para o rodapé do cupom. */
+  orderShortId?: string | null;
+  total?: number | null;
+  itemsCount?: number | null;
   fingerprint?: import("./receipt-layout").BuildLayoutInput["fingerprint"];
 }
 
@@ -836,6 +859,7 @@ export interface DeliveryPayloadInput {
   discount?: number | null;
   subtotal?: number | null;
   total?: number | null;
+  itemsCount?: number | null;
   paymentMethod?: string | null;
   changeFor?: number | null;
   generalNote?: string | null;
