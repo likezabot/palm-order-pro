@@ -56,8 +56,8 @@ export type LayoutBlock =
   | { kind: "rawLine"; text: string; muted?: boolean }
   /** Item em formato bullet: "• {qtd} x {nome} - R$ {preço}". */
   | { kind: "bulletItem"; quantity: number; name: string; subtotal: number; note?: string | null }
-  /** Linha "- Label: valor" alinhada à esquerda (sub-item de PAGAMENTO). */
-  | { kind: "kvLine"; label: string; value: string; bold?: boolean };
+  /** Linha "Label: valor" alinhada à esquerda. Quando dash=true, vira "- Label: valor" (PAGAMENTO). */
+  | { kind: "kvLine"; label: string; value: string; bold?: boolean; dash?: boolean };
 
 export interface ReceiptLayout {
   blocks: LayoutBlock[];
