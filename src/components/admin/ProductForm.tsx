@@ -35,6 +35,11 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   const [price, setPrice] = useState(product?.price?.toString() || "");
   const [category, setCategory] = useState(product?.category || initialCategory || "espetos");
   const [active, setActive] = useState(product?.active ?? true);
+  const [imageUrl, setImageUrl] = useState(product?.image_url || "");
+  const [description, setDescription] = useState(product?.description || "");
+  const [isFeatured, setIsFeatured] = useState(product?.is_featured ?? false);
+  const [isAvailableOnline, setIsAvailableOnline] = useState(product?.is_available_online ?? true);
+  const [isSoldOut, setIsSoldOut] = useState(product?.is_sold_out ?? false);
   const [aliases, setAliases] = useState<string[]>(
     Array.isArray(product?.aliases) ? (product!.aliases as string[]) : []
   );
