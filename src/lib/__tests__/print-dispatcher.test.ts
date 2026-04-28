@@ -40,6 +40,7 @@ vi.mock("@/lib/thermal-printer", () => ({
   buildEscPosDelta: vi.fn().mockReturnValue(new Uint8Array()),
   buildEscPosBill: vi.fn().mockReturnValue(new Uint8Array()),
   buildEscPosDelivery: vi.fn().mockReturnValue(new Uint8Array()),
+  checkBridgeStatus: vi.fn().mockResolvedValue({ online: true, printer_connected: true }),
 }));
 
 vi.mock("@/lib/print-queue", () => ({
