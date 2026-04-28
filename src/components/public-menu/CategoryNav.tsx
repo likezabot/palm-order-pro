@@ -36,9 +36,9 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-20 -mx-4 px-4 transition-all duration-300",
+        "sticky top-0 z-30 -mx-4 px-4 transition-all duration-300",
         stuck
-          ? "border-b border-white/10 bg-black/60 backdrop-blur-xl shadow-lg translate-y-0"
+          ? "border-b border-white/10 bg-black/80 backdrop-blur-xl shadow-xl translate-y-0"
           : "bg-transparent translate-y-0",
       )}
     >
@@ -46,7 +46,7 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
-      <div className="flex flex-nowrap overflow-x-auto gap-2.5 py-4 no-scrollbar scroll-smooth">
+      <div className="flex flex-nowrap overflow-x-auto gap-3 py-4 no-scrollbar scroll-smooth">
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
@@ -55,20 +55,24 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
-                "shrink-0 rounded-full px-5 py-2.5 text-[13px] font-bold transition-all duration-200 uppercase tracking-tight",
-                "min-h-[40px] flex items-center justify-center whitespace-nowrap",
+                "shrink-0 rounded-full px-5 py-2.5 text-[13px] font-bold transition-all duration-300 uppercase tracking-tight",
+                "min-h-[42px] flex items-center justify-center whitespace-nowrap border",
                 isActive
-                  ? "text-white border-white/20 shadow-[0_4px_12px_rgba(255,106,0,0.3)] scale-[1.02]"
-                  : "bg-white/10 text-white border border-white/20 hover:bg-white/15 active:bg-white/20",
+                  ? "text-white border-white/30 shadow-[0_4px_12px_rgba(255,106,0,0.4)] scale-[1.05]"
+                  : "text-white border-white/15 hover:bg-white/10 active:scale-95",
               )}
-              style={isActive ? { background: "var(--brand-gradient)" } : { background: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.18)" }}
+              style={
+                isActive 
+                  ? { background: "var(--brand-gradient)" } 
+                  : { background: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.18)" }
+              }
             >
               {c.name}
             </button>
           );
         })}
-        {/* Spacer for horizontal scroll padding at the end */}
-        <div className="shrink-0 w-4 h-1" aria-hidden="true" />
+        {/* Espaçador final para garantir que o último item não cole na borda */}
+        <div className="shrink-0 w-8 h-1" aria-hidden="true" />
       </div>
     </div>
   );
