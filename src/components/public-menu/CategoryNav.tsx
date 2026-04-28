@@ -50,10 +50,10 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-30 -mx-4 px-4 transition-all duration-300",
+        "sticky top-0 z-30 w-full transition-all duration-300",
         stuck
-          ? "border-b border-white/10 bg-black/80 backdrop-blur-xl shadow-xl translate-y-0"
-          : "bg-transparent translate-y-0",
+          ? "border-b border-white/10 bg-black/80 backdrop-blur-xl shadow-xl"
+          : "bg-transparent",
       )}
     >
       <style dangerouslySetInnerHTML={{ __html: `
@@ -62,7 +62,7 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
       `}} />
       <div 
         ref={scrollRef} 
-        className="flex flex-nowrap overflow-x-auto gap-3 py-4 no-scrollbar scroll-smooth snap-x snap-mandatory"
+        className="flex flex-nowrap overflow-x-auto overflow-y-hidden gap-[clamp(8px,2vw,16px)] px-[clamp(16px,4vw,32px)] py-4 no-scrollbar scroll-smooth snap-x snap-mandatory lg:justify-center lg:max-w-7xl lg:mx-auto"
       >
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
@@ -73,24 +73,32 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
-                "shrink-0 rounded-full px-5 py-2.5 text-[13px] font-bold transition-all duration-300 uppercase tracking-tight snap-center",
-                "min-h-[42px] flex items-center justify-center whitespace-nowrap border",
+                "shrink-0 rounded-xl transition-all duration-300 uppercase tracking-tight snap-center",
+                "flex items-center justify-center whitespace-nowrap border",
                 isActive
                   ? "text-white border-white/30 shadow-[0_4px_12px_rgba(255,106,0,0.4)] scale-[1.05]"
                   : "text-white border-white/15 hover:bg-white/10 active:scale-95",
               )}
-              style={
-                isActive 
+              style={{
+                minWidth: "clamp(120px, 32vw, 180px)",
+                height: "clamp(52px, 7vw, 68px)",
+                padding: "clamp(10px, 2vw, 18px)",
+                fontSize: "clamp(14px, 3.5vw, 18px)",
+                fontWeight: 700,
+                ...(isActive 
                   ? { background: "var(--brand-gradient)" } 
                   : { background: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.18)" }
-              }
+                )
+              }}
             >
-              {c.name}
+              <span className="truncate w-full text-center">
+                {c.name}
+              </span>
             </button>
           );
         })}
         {/* Espaçador final para garantir que o último item não cole na borda */}
-        <div className="shrink-0 w-8 h-1" aria-hidden="true" />
+        <div className="shrink-0 w-[clamp(16px,4vw,32px)] h-1" aria-hidden="true" />
       </div>
     </div>
   );
