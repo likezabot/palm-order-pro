@@ -1,10 +1,10 @@
-import { ArrowLeft, Eye, EyeOff, Plus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Plus, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import DuplicatesResolver from "@/components/admin/DuplicatesResolver";
 import SettingsDialog from "@/components/admin/SettingsDialog";
 import TabIdBadge from "@/components/TabIdBadge";
 import { useFeedback } from "@/hooks/use-feedback";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 
 interface Props {
   staffMode: boolean;
