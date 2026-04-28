@@ -149,8 +149,9 @@ export function thermalCSS(cfg: PrintConfig): string {
     .info-label { font-weight: bold !important; text-transform: uppercase !important; font-size: ${f.base - 1}px !important; }
     .info-value { font-weight: 900 !important; }
     .item-row {
-      display: block !important;
-      text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: baseline !important;
       padding: 3px 0 !important; font-size: ${f.base}px !important;
     }
     .item-left { display: inline !important; word-break: break-word !important; }
