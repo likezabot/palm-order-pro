@@ -405,8 +405,8 @@ export default function PublicMenu() {
                 return (
                   <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
                     <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
-                    {/* Mobile: lista compacta sempre */}
-                    <div className="grid grid-cols-1 gap-2 sm:hidden">
+                    {/* Mobile: respeita colunas específicas se solicitado */}
+                    <div className={cn("sm:hidden", mobileGridClass)}>
                       {entries.map((entry) => {
                         if (entry.kind === "product") {
                           const p = entry.product;
@@ -415,7 +415,7 @@ export default function PublicMenu() {
                               key={p.id}
                               product={p}
                               disabled={!isOpen && !isPreview}
-                              layout="list"
+                              layout={mobileLayout}
                               showImage={showImages}
                               showDescription={showDescriptions}
                               imageAspect={catAspect}
