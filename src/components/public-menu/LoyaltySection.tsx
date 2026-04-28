@@ -41,11 +41,17 @@ export default function LoyaltySection({
   const [status, setStatus] = useState<LoyaltyStatus>(EMPTY);
   const [loading, setLoading] = useState(false);
   const isPickup = serviceType === "pickup";
+  const isDelivery = serviceType === "delivery";
 
-  // Limpa brinde selecionado se mudar para delivery/dine_in
+  // Se o método de serviço mudar, verifica se o brinde selecionado ainda é válido
   useEffect(() => {
-    if (!isPickup && selectedRewardId) onChange(null);
-  }, [isPickup, selectedRewardId, onChange]);
+    if (selectedRewardId && status.rewards.length > 0) {
+      const reward = status.rewards.find(r => r.id === selectedRewardId);
+      if (reward && !reward.available) {
+        onChange(null);
+      }
+    }
+  }, [serviceType, status.rewards, selectedRewardId, onChange]);
 
   const phoneDigits = phone.replace(/\D/g, "");
   const phoneOk = phoneDigits.length >= 10;
