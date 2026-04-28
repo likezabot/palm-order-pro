@@ -382,7 +382,7 @@ export default function PublicCheckout() {
                   <p className="text-xs text-muted-foreground">
                     Você tem <span className="font-bold text-foreground">{customerFound.points_balance || 0}</span> pontos.
                   </p>
-                  {customerFound.street && (
+                  {customerFound.street ? (
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
                       <MapPin size={10} />
                       <span className="truncate max-w-[200px]">
