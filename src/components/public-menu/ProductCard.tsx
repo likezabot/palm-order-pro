@@ -167,7 +167,8 @@ export default function ProductCard({
         type={interactive ? "button" : undefined}
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
-          "group relative flex w-full flex-col text-left overflow-hidden rounded-xl border border-border/60 bg-card transition-all duration-300",
+          "group relative flex w-full flex-col text-left overflow-hidden rounded-xl border border-border/60 transition-all duration-300",
+          !className?.includes("bg-") && "bg-card",
           shadowClass,
           isBlocked
             ? "opacity-60 cursor-not-allowed"
