@@ -412,15 +412,13 @@ export default function PublicCheckout() {
                 </div>
               </div>
 
-              {phoneOk && !searchingCustomer && customerFound && (
-                <div className="bg-orange-50/80 border border-orange-200 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="bg-white p-2 rounded-xl shadow-sm">
-                    <UserCheck className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-slate-800 leading-tight">Cliente cadastrado</p>
-                    <p className="text-xs text-slate-600 mt-0.5">Olá, <span className="font-bold text-primary">{customerFound.name}</span>! Que bom ver você de novo.</p>
-                  </div>
+              {/* Welcome message simplified if needed, or removed to favor the discrete address card */}
+              {phoneOk && !searchingCustomer && customerFound && !showAddressFoundCard && (
+                <div className="bg-success/5 border border-success/20 rounded-2xl p-4 flex items-center gap-3 animate-in fade-in">
+                  <UserCheck className="h-5 w-5 text-success shrink-0" />
+                  <p className="text-xs text-slate-600">
+                    Olá, <span className="font-bold text-slate-800">{customerFound.name}</span>! Que bom ter você de volta.
+                  </p>
                 </div>
               )}
 
