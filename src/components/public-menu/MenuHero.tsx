@@ -48,6 +48,14 @@ export default function MenuHero({
   showLogo = true,
   showOverlay = true,
 }: Props) {
+  const { slug } = useParams<{ slug: string }>();
+  const nav = useNavigate();
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+
+  useEffect(() => {
+    fetchLoyaltyEnabled().then(setLoyaltyEnabled);
+  }, []);
+
   const prep = restaurant.default_prep_minutes ?? 0;
   const deliveryTotal = prep + ((restaurant as any).delivery_prep_buffer ?? 0);
   const displayTitle = title?.trim() || restaurant.name;
