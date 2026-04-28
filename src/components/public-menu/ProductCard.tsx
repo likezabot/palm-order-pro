@@ -112,6 +112,7 @@ export default function ProductCard({
   trailingHint,
   className,
 }: Props) {
+  const [imgError, setImgError] = useState(false);
   const isBlocked = disabled || product.is_sold_out;
   const interactive = !isBlocked && !!onClick;
   const Tag: any = interactive ? "button" : "article";
@@ -121,6 +122,11 @@ export default function ProductCard({
   const effectiveShowDescription = cardStyle === "compact" ? false : showDescription;
   const effectiveShowImage = cardStyle === "compact" ? false : showImage;
   const shadowClass = elevated ? "shadow-[var(--shadow-warm)]" : "";
+
+  const isDrink = product.category === "bebidas" || product.category === "cervejas";
+  const objectFitClass = isDrink ? "object-contain p-1" : "object-cover";
+  const placeholderEmoji = isDrink ? "🥤" : "🍢";
+
 
   // ---- Modo compacto: renderização enxuta (igual em list/grid) ----
   if (cardStyle === "compact") {
