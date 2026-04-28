@@ -310,6 +310,14 @@ export default function PublicCheckout() {
         },
       });
 
+      console.error('[CHECKOUT_SUBMIT_ERROR]', {
+        message: msg,
+        code,
+        details: e?.details,
+        hint: e?.hint,
+        error: e
+      });
+
       toast({ title: "Erro ao enviar pedido", description: friendly, variant: "destructive" });
       setSubmitting(false);
     }
@@ -374,13 +382,17 @@ export default function PublicCheckout() {
                   <p className="text-xs text-muted-foreground">
                     Você tem <span className="font-bold text-foreground">{customerFound.points_balance || 0}</span> pontos.
                   </p>
-                  {customerFound.street && (
+                  {customerFound.street ? (
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
                       <MapPin size={10} />
                       <span className="truncate max-w-[200px]">
                         {customerFound.street}, {customerFound.number} - {customerFound.neighborhood}
                       </span>
                     </div>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground pt-1 italic">
+                      Endereço ainda não cadastrado
+                    </p>
                   )}
                 </div>
               </Card>

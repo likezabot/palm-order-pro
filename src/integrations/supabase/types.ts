@@ -1332,6 +1332,10 @@ export type Database = {
         Returns: number
       }
       _require_manager_pin: { Args: { p_pin: string }; Returns: undefined }
+      _setting_bool: {
+        Args: { p_default: boolean; p_key: string }
+        Returns: boolean
+      }
       admin_bulk_set_active: {
         Args: { p_active: boolean; p_ids: string[]; p_pin: string }
         Returns: number
@@ -1821,6 +1825,10 @@ export type Database = {
       preview_operational_data_period: {
         Args: { p_days?: number }
         Returns: Json
+      }
+      process_order_loyalty: {
+        Args: { p_order_id: string }
+        Returns: undefined
       }
       recover_stuck_prints: { Args: never; Returns: Json }
       reject_online_order: {
