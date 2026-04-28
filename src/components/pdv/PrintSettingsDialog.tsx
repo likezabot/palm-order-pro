@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Settings, AlertCircle, Printer, RefreshCw } from "lucide-react";
+import { Settings, AlertCircle, Printer, RefreshCw, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +103,14 @@ export const PrintSettingsDialog = () => {
             >
               <RefreshCw className="w-4 h-4" />
               ABRIR ESTAÇÃO DE IMPRESSÃO
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full gap-2 text-xs text-muted-foreground hover:text-primary mt-2"
+              onClick={() => navigate("/debug/print")}
+            >
+              <FileText className="w-3 h-3" />
+              Ver Logs de Movimentos e Erros
             </Button>
           </div>
         </div>

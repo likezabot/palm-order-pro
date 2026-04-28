@@ -18,6 +18,7 @@ import { logPrintEngine } from "@/lib/print-engine";
 import { auditTestLogger } from "@/lib/audit-test-logger";
 import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
 import { type DeliveryPayloadInput, type ReceiptExtras } from "@/lib/thermal-printer";
+import { logPrinterEvent } from "@/lib/printer-logger";
 
 export type DispatchMode = "full" | "delta" | "bill";
 export type DispatchSource = "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
@@ -112,6 +113,7 @@ export async function printOrderByServiceType(
 ): Promise<DispatchResult> {
   const order = await loadOrderForPrint(orderId);
   if (!order) {
+    await logPrinterEvent("Pedido não encontrado para impressão", orderId, "error");
     return {
       ok: false,
       reason: "order_not_found",
@@ -148,6 +150,20 @@ export async function printOrderByServiceType(
   const extras = buildExtras(order, printPath, source, activeItems);
 
   // LOG OBRIGATÓRIO: ANTES DE IMPRIMIR
+  await logPrinterEvent(
+    `Iniciando despacho de impressão (${source})`,
+    orderId,
+    "info",
+    {
+      shortId: extras.orderShortId,
+      serviceType,
+      total: order.total,
+      itemsCount: activeItems.length,
+      mode,
+      source
+    }
+  );
+
   console.log("[PRINT_PIPELINE] ANTES DE IMPRIMIR:", {
     orderId,
     shortId: extras.orderShortId,
@@ -181,6 +197,13 @@ export async function printOrderByServiceType(
 
   const sendToBridge = async (printFn: () => Promise<{ ok: boolean; error?: string }>) => {
     // LOG OBRIGATÓRIO: ANTES DE ENVIAR PARA BRIDGE
+    await logPrinterEvent(
+      "Enviando dados para a Bridge Térmica",
+      orderId,
+      "info",
+      { bridgeUrl: cfg.bridgeUrl, printPath, source }
+    );
+
     console.log("[PRINT_PIPELINE] ENVIANDO PARA BRIDGE:", {
       bridgeUrl: cfg.bridgeUrl,
       orderId,
@@ -194,6 +217,13 @@ export async function printOrderByServiceType(
       const latencyMs = Date.now() - startTime;
 
       // LOG OBRIGATÓRIO: DEPOIS DA BRIDGE
+      await logPrinterEvent(
+        result.ok ? "Impressão concluída via Bridge" : `Falha na Bridge: ${result.error}`,
+        orderId,
+        result.ok ? "success" : "error",
+        { ok: result.ok, error: result.error, latencyMs, printPath }
+      );
+
       console.log("[PRINT_PIPELINE] RESPOSTA DA BRIDGE:", {
         orderId,
         ok: result.ok,
@@ -205,6 +235,13 @@ export async function printOrderByServiceType(
       return result;
     } catch (err) {
       const latencyMs = Date.now() - startTime;
+      await logPrinterEvent(
+        `Erro fatal ao tentar imprimir: ${String(err)}`,
+        orderId,
+        "error",
+        { error: String(err), latencyMs, printPath }
+      );
+
       console.log("[PRINT_PIPELINE] ERRO FATAL NA BRIDGE:", {
         orderId,
         ok: false,
@@ -244,6 +281,9 @@ export async function printOrderByServiceType(
     };
 
     const res = bridgeActuallyOnline ? await sendToBridge(() => printDelivery(input)) : { ok: false, error: "bridge_offline" };
+    if (!bridgeActuallyOnline) {
+      await logPrinterEvent("Impressão falhou: Bridge Offline", orderId, "warning", { bridgeUrl: cfg.bridgeUrl });
+    }
     if (res.ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
     return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: "delivery" };
   }

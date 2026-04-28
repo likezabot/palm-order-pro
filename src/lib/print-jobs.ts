@@ -16,6 +16,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { debugLog } from "@/lib/debug-logger";
+import { logPrinterEvent } from "@/lib/printer-logger";
 
 export type PrintJobType = "order" | "extra" | "bill" | "manual";
 
@@ -33,9 +34,11 @@ export async function enqueuePrintJob(
     });
     if (error) {
       debugLog.warn("queue", `print-job enqueue ${jobType} falhou`, error);
+      await logPrinterEvent(`Falha ao enfileirar job ${jobType}: ${error.message}`, orderId, "error");
       return null;
     }
     debugLog.success("queue", `print-job ${jobType} criado pedido ${orderId}`);
+    await logPrinterEvent(`Job de impressão ${jobType} enfileirado para o App Desktop`, orderId, "info");
     return (data as string) ?? null;
   } catch (e) {
     debugLog.warn("queue", `print-job enqueue ${jobType} exceção`, e);

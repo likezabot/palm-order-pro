@@ -1,4 +1,5 @@
 import { PrintAuditChecklist } from "@/components/debug/PrintAuditChecklist";
+import { PrinterLogsViewer } from "@/components/debug/PrinterLogsViewer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bug } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -25,7 +26,8 @@ const DebugPrint = () => {
         </div>
       </div>
 
-      <div className="py-8">
+      <div className="py-8 space-y-8 px-4 max-w-4xl mx-auto">
+        <PrinterLogsViewer />
         <PrintAuditChecklist />
       </div>
     </div>

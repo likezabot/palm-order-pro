@@ -7,6 +7,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { debugLog } from "@/lib/debug-logger";
+import { logPrinterEvent } from "@/lib/printer-logger";
 
 interface PrintableItem {
   product_name: string;
@@ -55,7 +56,12 @@ export async function claimOrderForPrint(orderId: string): Promise<boolean> {
 
   if (error) {
     console.error("[print-service] Erro ao clamar pedido:", error);
+    await logPrinterEvent(`Erro ao clamar pedido: ${error.message}`, orderId, "error");
     return false;
+  }
+
+  if (!data) {
+    await logPrinterEvent("Pedido já está sendo impresso por outro dispositivo (already claimed)", orderId, "warning");
   }
 
   return !!data;
@@ -68,7 +74,12 @@ async function completePrint(orderId: string): Promise<void> {
   const { error } = await supabase.rpc("complete_order_print", {
     p_order_id: orderId,
   } as any);
-  if (error) console.error("[print-service] Erro ao completar print:", error);
+  if (error) {
+    console.error("[print-service] Erro ao completar print:", error);
+    await logPrinterEvent(`Erro ao completar status de impressão: ${error.message}`, orderId, "error");
+  } else {
+    await logPrinterEvent("Status de impressão atualizado para: IMPRESSO", orderId, "success");
+  }
 }
 
 /**
@@ -79,7 +90,12 @@ async function failPrint(orderId: string, errorMsg?: string): Promise<void> {
     p_order_id: orderId,
     p_error: errorMsg || null,
   } as any);
-  if (error) console.error("[print-service] Erro ao registrar falha:", error);
+  if (error) {
+    console.error("[print-service] Erro ao registrar falha:", error);
+    await logPrinterEvent(`Erro ao registrar falha de impressão: ${error.message}`, orderId, "error");
+  } else {
+    await logPrinterEvent(`Status de impressão atualizado para: FALHA (${errorMsg})`, orderId, "warning");
+  }
 }
 
 export async function isOrderPrinted(orderId: string): Promise<boolean> {
