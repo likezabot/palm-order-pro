@@ -268,6 +268,8 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
                 />
               </div>
             )}
+          </div>
+        </div>
         <div>
           <label className="text-sm font-semibold text-muted-foreground mb-1 block">Categoria</label>
           <div className="grid grid-cols-2 gap-2">
