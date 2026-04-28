@@ -6,6 +6,7 @@ import { usePrintJobsStatus } from "@/hooks/use-print-jobs-status";
 import { PrintStatusBadge } from "@/components/pdv/PrintStatusBadge";
 import { getOrderKind, isOnlineOrder, KIND_LABEL, KIND_BADGE_CLASS } from "@/lib/order-classification";
 import type { Order } from "@/lib/types";
+import { getPrintOriginRecords } from "@/lib/print-origin-tracker";
 
 const STATUS_LABEL: Record<string, string> = {
   new: "AGUARDANDO",
