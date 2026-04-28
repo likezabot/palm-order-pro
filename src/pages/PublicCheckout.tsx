@@ -443,6 +443,37 @@ export default function PublicCheckout() {
               <h2 className="text-lg font-black text-slate-800">Entrega ou Retirada?</h2>
             </div>
 
+            {showAddressFoundCard && (
+              <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 mb-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-start gap-3">
+                  <div className="bg-primary/20 p-2 rounded-xl text-primary mt-0.5">
+                    <MapPin size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 leading-tight">Encontramos seus dados anteriores</p>
+                    <p className="text-xs text-slate-600 mt-0.5">Deseja usar o endereço do seu último pedido?</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    onClick={applySavedAddress}
+                    size="sm" 
+                    className="bg-primary hover:bg-primary/90 text-white font-bold h-9 rounded-xl px-4"
+                  >
+                    Usar endereço salvo para entrega
+                  </Button>
+                  <Button 
+                    onClick={() => setShowAddressFoundCard(false)}
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-slate-500 hover:text-slate-700 font-bold h-9 rounded-xl"
+                  >
+                    Continuar como {serviceType === "pickup" ? "retirada" : serviceType === "dine_in" ? "balcão" : "retirada"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <RadioGroup
               value={serviceType}
               onValueChange={(v) => setServiceType(v as ServiceType)}
