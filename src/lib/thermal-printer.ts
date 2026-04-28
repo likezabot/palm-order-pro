@@ -703,6 +703,70 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         b.feed(3).cut();
         break;
       }
+      case "sectionHeader": {
+        b.resetStyle().align("left").bold(true).line(blk.text.toUpperCase()).bold(false);
+        b.resetStyle();
+        break;
+      }
+      case "rawLine": {
+        b.resetStyle().align("left");
+        // quebra automática se exceder colunas
+        const txt = blk.text;
+        if (txt.length <= cols) {
+          b.line(txt);
+        } else {
+          for (let i = 0; i < txt.length; i += cols) b.line(txt.slice(i, i + cols));
+        }
+        b.resetStyle();
+        break;
+      }
+      case "bulletItem": {
+        b.resetStyle().align("left");
+        const price = `R$ ${blk.subtotal.toFixed(2).replace(".", ",")}`;
+        const head = `* ${blk.quantity} x ${blk.name.toUpperCase()} - ${price}`;
+        // quebra a linha em palavras se exceder largura
+        if (head.length <= cols) {
+          b.line(head);
+        } else {
+          // quebra simples por largura, com indent na continuação
+          let remaining = head;
+          let first = true;
+          while (remaining.length > 0) {
+            const width = first ? cols : cols - 4;
+            let chunk = remaining.slice(0, width);
+            // tenta cortar no último espaço
+            if (remaining.length > width) {
+              const sp = chunk.lastIndexOf(" ");
+              if (sp > width / 2) chunk = chunk.slice(0, sp);
+            }
+            b.line(first ? chunk : "    " + chunk);
+            remaining = remaining.slice(chunk.length).replace(/^\s+/, "");
+            first = false;
+          }
+        }
+        if (blk.note) {
+          b.line(`    (${blk.note.toUpperCase()})`);
+        }
+        b.resetStyle();
+        break;
+      }
+      case "kvLine": {
+        b.resetStyle().align("left");
+        if (blk.bold) b.bold(true).size(false, true);
+        const line = `- ${blk.label}: ${blk.value}`;
+        if (line.length <= cols) {
+          b.line(line);
+        } else {
+          // quebra: label na primeira, valor indentado na segunda
+          b.line(`- ${blk.label}:`);
+          const val = blk.value;
+          for (let i = 0; i < val.length; i += cols - 4) {
+            b.line("    " + val.slice(i, i + cols - 4));
+          }
+        }
+        b.resetStyle();
+        break;
+      }
     }
   }
 

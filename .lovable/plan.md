@@ -1,114 +1,99 @@
-## Diagnóstico confirmado
+## Objetivo
 
-O problema real não é mais genérico de “checkout quebrado”. O erro atual é específico:
+Alinhar o layout de impressão térmica ao padrão visual do recibo de referência (foto), ajustando organização, alinhamento e tamanhos de fonte. Mudanças isoladas em `receipt-layout.ts` e `receipt-html.ts` — nenhum fluxo de checkout, RPC ou lógica de pedido será tocado.
 
-- o app chama `create_public_order` com a assinatura nova, incluindo `p_loyalty_reward_id`
-- mas a função ativa no backend está tentando inserir em colunas antigas/inexistentes da tabela `orders`
-- evidência capturada: `POST /rpc/create_public_order -> 400` com `column "items_subtotal" of relation "orders" does not exist`
-
-Hoje a tabela `orders` tem, entre outras, estas colunas relevantes:
-- `table_name`
-- `delivery_address`
-- `delivery_fee`
-- `change_for`
-- `delta_items`
-- não existe `items_subtotal`
-- não existe `address_snapshot`
-
-Também encontrei versões conflitantes da mesma função nas migrations:
-- uma versão antiga tenta inserir `items_subtotal` e `address_snapshot`
-- versões mais novas já usam `delivery_address` e não tentam gravar `items_subtotal`
-
-Arquivos isolados como origem do problema:
-- `src/pages/PublicCheckout.tsx`
-- `supabase/migrations/20260428164220_8fdea7ba-6bcc-44b9-a32d-79d4fe32f124.sql`
-- `supabase/migrations/20260428185050_b4e994e3-688a-4aaf-a977-40fa3b3666e4.sql`
-
-Do I know what the issue is?
-Sim. A causa provável é drift/regressão de migration/função: o frontend e a tipagem já estão no formato novo, mas a função efetivamente atendendo o RPC ainda contém SQL de uma versão intermediária que escreve em colunas antigas da tabela `orders`.
-
-## Plano de correção
-
-1. Padronizar `create_public_order` em uma única versão compatível com o schema atual
-- manter a assinatura já usada pelo app, incluindo `p_loyalty_reward_id`
-- garantir que o `INSERT INTO public.orders` use somente colunas reais da tabela atual
-- usar `delivery_address` em vez de `address_snapshot`
-- não inserir `items_subtotal`
-- manter `change_for`, `delta_items`, `channel`, `public_token`, `estimated_ready_at`
-
-2. Remover a fonte da regressão
-- revisar a cadeia de migrations relacionadas a `create_public_order`
-- criar uma migration corretiva final, idempotente, que sobrescreva a função com a versão canônica
-- evitar que uma versão antiga da função continue prevalecendo por ordem de aplicação ou restauração
-
-3. Validar compatibilidade completa com o checkout público
-- conferir que `src/pages/PublicCheckout.tsx` envia exatamente os argumentos aceitos pela função final
-- validar o fluxo com e sem brinde/fidelidade
-- validar `pickup` e `delivery`
-- confirmar que erros amigáveis continuam aparecendo só quando houver falha real de negócio
-
-4. Adicionar um guardrail técnico para não “quebrar o que já estava certo”
-- consolidar uma checagem de consistência para `create_public_order`
-- fazer a verificação comparar:
-  - assinatura da função
-  - colunas usadas no `INSERT`
-  - colunas reais da tabela `orders`
-- se houver divergência, registrar erro explícito de consistência em vez de deixar quebrar em produção
-
-5. Entregar o prompt pré-definido que você poderá reutilizar em futuras correções
+## Padrão de referência (extraído da foto)
 
 ```text
-ANTES DE ALTERAR QUALQUER COISA:
-1. Não refatore nem “melhore” fluxos adjacentes.
-2. Identifique a causa exata com evidência (erro de rede, erro SQL, log ou arquivo específico).
-3. Liste os arquivos diretamente envolvidos.
-4. Compare o schema atual do banco com as funções SQL e com o frontend antes de editar.
-5. Não altere nome de coluna, payload, RPC ou migration sem provar compatibilidade com o schema atual.
-6. Se existir mais de uma migration/função para o mesmo fluxo, encontre qual versão está correta e preserve somente a canônica.
-7. Não mexa em partes já estáveis só por “padronização”.
-8. Toda correção deve incluir:
-   - causa raiz
-   - evidência
-   - menor patch possível
-   - teste do cenário que falhava
-9. Se o erro estiver no checkout/PDV/impressão, não tocar em outros módulos sem evidência direta.
-10. Antes de concluir, verificar: “essa mudança remove a causa raiz ou só mascara o sintoma?”
-
-OBJETIVO:
-Corrigir somente o defeito confirmado, com o menor impacto possível, sem regressão em fluxos já funcionando.
+        PLANO B ESPETARIA          ← título, centralizado, bold
+        --------------------
+        RETIRADA                   ← banner de tipo (grande, bold)
+        27/04/2026 19:29           ← data/hora simples, sem "DATA:"
+        --------------------
+Pedido: #2                         ← labels alinhados à esquerda
+Cliente: Gustavo
+Telefone: (67) 99178-2979
+69eff14a15a1d872008db063           ← order id curto (hash)
+        --------------------
+ITENS                              ← seção label, esquerda
+ • 3 x Bovino - R$ 30,00          ← bullet, qtd x nome - preço
+ • 1 x Pão de alho - R$ 8,00
+ • 1 x Medalhão de Frango - R$
+   10,00                           ← quebra com indentação
+        --------------------
+PAGAMENTO
+ - Forma: Cartão de Débito
+ - Total: R$ 58,00
 ```
 
-## Detalhes técnicos
+Características-chave:
+- Título e blocos divisores centralizados; linhas de info alinhadas à **esquerda**
+- Sem coluna de preço à direita — preço vem em linha junto ao nome (`qtd x nome - R$ valor`)
+- Sem labels em CAIXA ALTA forçada nos valores (manter capitalização natural do nome do cliente/produto)
+- Seções `ITENS` e `PAGAMENTO` aparecem como cabeçalho de bloco à esquerda, não centralizados grandes
+- `Total` aparece **dentro** do bloco PAGAMENTO como linha simples (não como banner gigante)
+- Bullet `•` para itens; sub-itens de pagamento usam `-`
+- Espaçamento entre itens generoso (linha em branco entre eles)
 
-Estado atual confirmado:
+## Mudanças por arquivo
 
-```text
-Frontend -> RPC create_public_order(p_loyalty_reward_id incluído)
-        -> função ativa tenta INSERT com items_subtotal/address_snapshot
-        -> tabela orders real não tem essas colunas
-        -> PostgreSQL 42703
-        -> pedido online falha no botão “Confirmar pedido”
-```
+### 1. `src/lib/receipt-layout.ts`
 
-Sinais que confirmam isso:
-- snapshot de rede mostra `400` no RPC
-- mensagem exata: `column "items_subtotal" of relation "orders" does not exist`
-- tipagem gerada já aceita `p_loyalty_reward_id`
-- schema atual da tabela `orders` tem `delivery_address` e não tem `items_subtotal`
-- migrations recentes já mostram uma versão corrigida da função, então a função ativa ficou desalinhada
+Reescrever `createReceiptLayoutModel` (mesa) e `buildDeliveryLayout`/`buildSenhaLayout` para emitirem a sequência:
 
-## Implementação após sua aprovação
+1. `title` — nome da loja
+2. `sep`
+3. `banner` — tipo (RETIRADA / ENTREGA / MESA)
+4. `info` simples sem label — `dd/mm/aaaa HH:MM`
+5. `sep`
+6. `info` esquerda: `Pedido: #N`, `Cliente: ...`, `Telefone: ...`
+7. `info` esquerda (novo bloco `rawLine`): hash curto do order id (12-20 chars)
+8. `sep`
+9. `banner` pequeno alinhado esquerda: `ITENS` (novo `kind: "sectionHeader"`)
+10. itens com novo formato `qtd x nome - R$ preço` numa linha só (sem coluna direita)
+11. `sep`
+12. `sectionHeader`: `PAGAMENTO`
+13. linhas tipo ` - Forma: ...`, ` - Total: R$ ...` (novo `kind: "kvLine"` com prefixo `- `)
+14. footer + fingerprint + cutMark
 
-Vou executar exatamente este escopo:
-- criar a migration corretiva final para `create_public_order`
-- validar o checkout online no cenário do print enviado
-- preservar o restante do sistema sem mexer em impressão/PDV agora
-- manter o guardrail/prompt documentado para próximas intervenções
+Novos blocos:
+- `{ kind: "sectionHeader"; text: string }` — label de seção, esquerda, bold, sem fundo
+- `{ kind: "rawLine"; text: string }` — linha solta esquerda (hash)
+- `{ kind: "bulletItem"; text: string }` — `• {qtd} x {nome} - R$ {preço}`
+- `{ kind: "kvLine"; label: string; value: string }` — `- Label: valor`
 
-<lov-actions>
-  <lov-open-history>View History</lov-open-history>
-</lov-actions>
+### 2. `src/lib/receipt-html.ts`
 
-<lov-actions>
-<lov-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</lov-link>
-</lov-actions>
+- Adicionar `case`s para os 4 novos blocos em `renderBlocksToHtml`
+- Em `thermalCSS`:
+  - `.info-row` → mudar `text-align` padrão para **left** (sem depender de `contentAlign`)
+  - Nova classe `.section-header` (esquerda, bold, font-size = `f.total * 0.95`, margin-top maior)
+  - Nova classe `.bullet-item` (esquerda, padding-left pequeno, espaçamento vertical maior)
+  - Nova classe `.kv-line` (esquerda, padding-left)
+  - `.banner` (RETIRADA) — manter centralizado e grande (já está), mas reduzir margem inferior
+  - `.header-text` — manter como está
+- Itens em formato livre permitem quebra de linha automática com indentação na continuação (como "Medalhão de Frango - R$ 10,00" quebra para a linha de baixo)
+
+### 3. `src/lib/thermal-printer.ts` (ESC/POS)
+
+Como `receipt-layout.ts` é fonte única, espelhar o tratamento dos 4 novos blocos no renderer ESC/POS para impressão real (não só preview HTML). Mudança puramente aditiva — blocos antigos continuam funcionando para retrocompatibilidade.
+
+## O que NÃO será alterado
+
+- `create_public_order` e qualquer função SQL
+- Schema do banco (orders, order_items, customers)
+- `PublicCheckout.tsx`, fluxo de pedido online
+- `print-config.ts`, `print-dispatcher.ts`, `print-service.ts` (mantêm contratos)
+- PDV, fila de impressão, kanban da cozinha
+- Lógica de fingerprint (continua no rodapé)
+
+## Validação
+
+1. Preview HTML dos 3 docTypes (mesa, delivery, senha) abre lado a lado com a foto e bate visualmente
+2. Smoke tests existentes em `src/test/` continuam verdes
+3. Reprint de pedido antigo (que não tem os campos novos) ainda renderiza sem quebrar
+4. Largura 58mm e 80mm ambas testadas no preview
+
+## Risco de regressão
+
+Baixo. Mudanças confinadas a 2 (3 com ESC/POS) arquivos de renderização. Blocos antigos preservados. Nenhuma coluna/RPC/payload alterado. Se algo sair errado, basta reverter os arquivos de layout.

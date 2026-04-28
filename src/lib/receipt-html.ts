@@ -106,6 +106,27 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
       case "cutMark":
         parts.push(`<div class="cut">✂ --------------------------------</div>`);
         break;
+      case "sectionHeader":
+        parts.push(`<div class="section-header">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "rawLine":
+        parts.push(`<div class="raw-line${blk.muted ? " raw-line-muted" : ""}">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "bulletItem": {
+        const price = `R$ ${blk.subtotal.toFixed(2).replace(".", ",")}`;
+        const note = blk.note
+          ? `<div class="bullet-note">↳ ${escapeHtml(blk.note)}</div>`
+          : "";
+        parts.push(
+          `<div class="bullet-item">• ${blk.quantity} x ${escapeHtml(blk.name)} - ${price}</div>${note}`
+        );
+        break;
+      }
+      case "kvLine":
+        parts.push(
+          `<div class="kv-line${blk.bold ? " kv-line-bold" : ""}"><span class="kv-dash">-</span> <span class="kv-label">${escapeHtml(blk.label)}:</span> <span class="kv-value">${escapeHtml(blk.value)}</span></div>`
+        );
+        break;
     }
   }
   return parts.join("\n");
@@ -217,6 +238,47 @@ export function thermalCSS(cfg: PrintConfig): string {
     .summary-row-bold { font-size: ${f.total}px !important; padding: 4px 0 !important; border-top: 1px dashed #000 !important; margin-top: 4px !important; }
     .summary-row-bold span { font-weight: 900 !important; }
     .info-label-only .info-label { display: block !important; padding-bottom: 1px !important; }
+    .section-header {
+      text-align: left !important;
+      font-weight: 900 !important;
+      font-size: ${f.base + 2}px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      margin: 6px 0 4px 0 !important;
+    }
+    .raw-line {
+      text-align: left !important;
+      font-size: ${f.base}px !important;
+      padding: 2px 0 !important;
+      word-break: break-all !important;
+    }
+    .raw-line-muted { color: #444 !important; font-size: ${f.base - 1}px !important; }
+    .bullet-item {
+      text-align: left !important;
+      font-size: ${f.base + 1}px !important;
+      padding: 4px 0 4px 6px !important;
+      text-indent: -6px !important;
+      margin-left: 6px !important;
+      font-weight: 600 !important;
+      word-break: break-word !important;
+    }
+    .bullet-note {
+      text-align: left !important;
+      font-size: ${f.note}px !important;
+      font-style: italic !important;
+      color: #333 !important;
+      padding-left: 18px !important;
+    }
+    .kv-line {
+      text-align: left !important;
+      font-size: ${f.base}px !important;
+      padding: 2px 0 2px 6px !important;
+      word-break: break-word !important;
+    }
+    .kv-line-bold { font-weight: 900 !important; font-size: ${f.base + 2}px !important; }
+    .kv-dash { font-weight: 700 !important; }
+    .kv-label { font-weight: 700 !important; }
+    .kv-value { font-weight: 700 !important; }
     @media print {
       html, body {
         width: ${paper} !important; max-width: ${paper} !important; min-width: ${paper} !important;
