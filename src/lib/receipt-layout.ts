@@ -262,30 +262,32 @@ function buildDeliveryLayout(
   cfg: PrintConfig,
   ctx: { date: string; time: string }
 ): ReceiptLayout {
-  const v = cfg.visibleSections;
   const blocks: LayoutBlock[] = [];
 
-  // --- TOPO ---
+  // 1. Cabeçalho Compacto
   if (cfg.headerText) {
     blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
 
   const shortId = input.orderShortId || input.orderId?.slice(-6).toUpperCase() || "---";
-  blocks.push({ kind: "banner", text: `PEDIDO #${shortId.replace(/^#/, "")}` });
-
   const isPickup = input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão";
-  const typeText = isPickup ? "RETIRADA" : "ENTREGA";
-  blocks.push({ kind: "banner", text: `TIPO: ${typeText}` });
+  const typeText = isPickup ? "RETIRADA" : "DELIVERY";
+  
+  blocks.push({ kind: "banner", text: `${typeText} #${shortId.replace(/^#/, "")}` });
   blocks.push({ kind: "info", label: "DATA", value: `${ctx.date} ${ctx.time}` });
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep" });
 
-  // --- CLIENTE ---
-  blocks.push({ kind: "info", label: "Cliente", value: safe(input.customerName).toUpperCase() });
-  blocks.push({ kind: "info", label: "Telefone", value: safe(input.customerPhone) });
+  // 2. Cliente
+  blocks.push({ kind: "banner", text: "CLIENTE" });
+  blocks.push({ kind: "info", label: "", value: safe(input.customerName).toUpperCase() });
+  if (!isBlank(input.customerPhone)) {
+    blocks.push({ kind: "info", label: "Tel", value: input.customerPhone! });
+  }
 
+  // 3. Entrega (se não for pickup)
   if (!isPickup) {
+    blocks.push({ kind: "banner", text: "ENTREGA" });
     const addrLines = buildAddressLines(input.deliveryAddress);
-    blocks.push({ kind: "info", label: "Endereco", value: "" });
     if (addrLines.length === 0) {
       blocks.push({ kind: "addressBlock", lines: [NOT_PROVIDED] });
     } else {
@@ -299,45 +301,58 @@ function buildDeliveryLayout(
     
     const ref = (input.deliveryAddress?.reference ?? "").trim();
     if (ref) {
-      blocks.push({ kind: "info", label: "Referencia", value: ref.toUpperCase() });
+      blocks.push({ kind: "info", label: "Ref", value: ref.toUpperCase() });
     }
   }
   blocks.push({ kind: "sep" });
 
-  // --- ITENS ---
+  // 4. Pagamento
+  if (!isBlank(input.paymentMethod)) {
+    blocks.push({ kind: "banner", text: "PAGAMENTO" });
+    blocks.push({ kind: "info", label: "", value: paymentLabel(input.paymentMethod) });
+    if (input.changeFor && input.changeFor > 0) {
+      blocks.push({ kind: "info", label: "Troco p/", value: moneyBr(input.changeFor) });
+    }
+    blocks.push({ kind: "sep" });
+  }
+
+  // 5. Itens
+  blocks.push({ kind: "banner", text: "ITENS" });
   input.items.forEach((it) => {
     blocks.push({
       kind: "item",
       name: it.product_name.toUpperCase(),
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
-      note: v.notes ? it.note ?? null : null,
+      note: (cfg.visibleSections.notes) ? it.note ?? null : null,
     });
   });
+
+  if (!isPickup && input.deliveryFee && input.deliveryFee > 0) {
+    blocks.push({ kind: "summaryRow", label: "TAXA ENTREGA", value: moneyBr(input.deliveryFee) });
+  }
+  if (input.discount && input.discount > 0) {
+    blocks.push({ kind: "summaryRow", label: "DESCONTO", value: "-" + moneyBr(input.discount) });
+  }
+
   blocks.push({ kind: "sep", bold: true });
 
-  // --- TOTAL E PAGAMENTO ---
+  // 6. Total
   const total = input.total ?? (input.subtotal ?? 0) + Number(input.deliveryFee ?? 0) - Number(input.discount ?? 0);
   blocks.push({
     kind: "total",
     label: "TOTAL",
     value: moneyBr(total),
   });
-  
-  if (!isBlank(input.paymentMethod)) {
-    blocks.push({ kind: "info", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
-  }
   blocks.push({ kind: "sep" });
 
-  // --- OPCIONAL (OBSERVAÇÃO) ---
-  if (input.generalNote && input.generalNote.trim() && v.notes) {
-    blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim().toUpperCase() });
+  // 7. Observação Geral
+  if (input.generalNote && input.generalNote.trim() && cfg.visibleSections.notes) {
+    blocks.push({ kind: "noteBlock", label: "OBS", text: input.generalNote.trim().toUpperCase() });
     blocks.push({ kind: "sep" });
   }
 
-  if (v.footer && cfg.footerText) {
-    blocks.push({ kind: "footer", text: cfg.footerText });
-  }
+  blocks.push({ kind: "footer", text: "Obrigado pela preferencia!" });
   pushFingerprint(blocks, input);
   blocks.push({ kind: "cutMark" });
 
