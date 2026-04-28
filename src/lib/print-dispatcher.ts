@@ -150,6 +150,20 @@ export async function printOrderByServiceType(
   const extras = buildExtras(order, printPath, source, activeItems);
 
   // LOG OBRIGATÓRIO: ANTES DE IMPRIMIR
+  await logPrinterEvent(
+    `Iniciando despacho de impressão (${source})`,
+    orderId,
+    "info",
+    {
+      shortId: extras.orderShortId,
+      serviceType,
+      total: order.total,
+      itemsCount: activeItems.length,
+      mode,
+      source
+    }
+  );
+
   console.log("[PRINT_PIPELINE] ANTES DE IMPRIMIR:", {
     orderId,
     shortId: extras.orderShortId,
