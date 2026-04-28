@@ -1,6 +1,20 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams, Navigate } from "react-router-dom";
-import { ArrowLeft, Gift, UserCheck, Loader2, MapPin } from "lucide-react";
+import { 
+  ArrowLeft, 
+  Gift, 
+  UserCheck, 
+  Loader2, 
+  MapPin, 
+  Phone, 
+  User, 
+  Truck, 
+  ShoppingBag, 
+  CreditCard, 
+  MessageSquare,
+  AlertCircle,
+  Info
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +44,7 @@ import { cn } from "@/lib/utils";
 
 const PHONE_KEY = "pb_loyalty_phone";
 const REWARD_KEY = "pb_pending_reward";
+const CART_STORAGE_KEY = "public_cart_v1";
 
 function isValidRestaurantSlug(value?: string): boolean {
   const slug = (value ?? "").trim();
@@ -113,12 +128,10 @@ export default function PublicCheckout() {
         if (profile) {
           setCustomerFound(profile);
           
-          // Auto-preenche nome se estiver vazio
           if (!name.trim() && profile.name) {
             setName(profile.name);
           }
           
-          // Auto-preenche endereço se todos os campos estiverem vazios
           const addressEmpty = !street.trim() && !number.trim() && !neighborhood.trim();
           if (addressEmpty && profile.street) {
             setStreet(profile.street);
@@ -128,19 +141,17 @@ export default function PublicCheckout() {
             if (profile.reference) setReference(profile.reference);
             
             toast({
-              title: "Endereço preenchido",
-              description: "Usamos o endereço do seu último pedido.",
+              title: "Endereço encontrado!",
+              description: "Preenchemos com os dados do seu último pedido.",
             });
           }
 
-          // Auto-preenche última forma de recebimento e pagamento se não selecionados/vazios
           if (profile.last_service_type) {
             setServiceType(profile.last_service_type as ServiceType);
           }
           if (profile.last_payment_method) {
             setPaymentMethod(profile.last_payment_method as PaymentMethod);
           }
-
         } else {
           setCustomerFound(null);
         }
@@ -152,18 +163,17 @@ export default function PublicCheckout() {
     }, 600);
 
     return () => clearTimeout(handle);
-  }, [phone, resolvedSlug]);
+  }, [phone, resolvedSlug, name, street, number, neighborhood, toast]);
 
-  // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
 
   const subtotal = cart.subtotal;
   const deliveryFee = computeDeliveryFee(serviceType);
   const total = subtotal + deliveryFee;
 
-  // Status de fidelidade — usado para resumo, botão e tela de sucesso
   const phoneDigits = normalizePhoneClient(phone);
   const phoneOk = phoneDigits.length >= 10;
+  
   const loyaltyQuery = useQuery({
     queryKey: ["loyalty-status", resolvedSlug, phoneDigits, subtotal, serviceType],
     queryFn: () =>
@@ -177,18 +187,12 @@ export default function PublicCheckout() {
     staleTime: 10_000,
   });
 
-  // Aplica brinde pendente quando rewards carregam
   useEffect(() => {
     if (!pendingRewardId || !loyaltyQuery.data?.enabled) return;
-    
     const reward = loyaltyQuery.data.rewards.find((r) => r.id === pendingRewardId);
-    // Se o brinde estiver disponível para o método de serviço atual, aplica
     if (reward && reward.available) {
       setLoyaltyRewardId(pendingRewardId);
       setPendingRewardId(null);
-    } else if (reward && !reward.available && reward.blocked_reason === "pickup_only" && serviceType !== "pickup") {
-      // Se for apenas retirada e estamos em entrega, não aplica mas mantém o alerta se necessário
-      // Não descartamos o pendingRewardId aqui para caso o usuário mude para retirada
     }
   }, [pendingRewardId, loyaltyQuery.data, serviceType]);
 
@@ -221,13 +225,20 @@ export default function PublicCheckout() {
     if (!resolvedSlug) {
       toast({
         title: "Erro ao enviar pedido",
-        description: "Não conseguimos identificar o cardápio deste link. Reabra o cardápio e tente novamente.",
+        description: "Não conseguimos identificar o cardápio deste link.",
         variant: "destructive",
       });
       return;
     }
     setSubmitting(true);
     try {
+      const itemsSnapshot = cart.items.map((it) => ({
+        product_name: it.product_name,
+        quantity: it.quantity,
+        product_price: it.product_price,
+        note: it.note,
+      }));
+
       const result = await createPublicOrder({
         restaurant_slug: resolvedSlug,
         customer: { name: name.trim(), phone },
@@ -250,15 +261,17 @@ export default function PublicCheckout() {
         loyalty_reward_id: loyaltyRewardId,
       });
 
+      // Lógica de limpeza agressiva do carrinho
       cart.clear();
-      // Limpa brinde pendente — só após o pedido ter sido criado com sucesso
       try {
+        sessionStorage.removeItem(CART_STORAGE_KEY);
         sessionStorage.removeItem(REWARD_KEY);
-        // Salva telefone para próximas visitas
+        localStorage.removeItem(CART_STORAGE_KEY);
         if (phoneDigits) localStorage.setItem(PHONE_KEY, phoneDigits);
-      } catch {
-        /* ignore */
+      } catch (e) {
+        console.warn("Erro ao limpar storage:", e);
       }
+
       const tokenParam = result.public_token ? `?t=${result.public_token}` : "";
       const projectedEarn = loyaltyQuery.data?.projected_earn ?? 0;
       const balanceBefore = loyaltyQuery.data?.balance ?? 0;
@@ -266,6 +279,7 @@ export default function PublicCheckout() {
         0,
         balanceBefore - (selectedReward?.points_cost ?? 0),
       ) + projectedEarn;
+
       nav(`/menu/${resolvedSlug}/sucesso/${result.id}${tokenParam}`, {
         replace: true,
         state: {
@@ -279,12 +293,7 @@ export default function PublicCheckout() {
           delivery_fee: deliveryFee,
           subtotal,
           note: note.trim(),
-          items: cart.items.map((it) => ({
-            product_name: it.product_name,
-            quantity: it.quantity,
-            product_price: it.product_price,
-            note: it.note,
-          })),
+          items: itemsSnapshot,
           address:
             serviceType === "delivery"
               ? {
@@ -305,46 +314,19 @@ export default function PublicCheckout() {
       const msg = String(e?.message ?? e ?? "");
       const code = extractErrorCode(e);
       let friendly = "Não foi possível enviar o pedido. Tente novamente.";
+      
       if (msg.includes("restaurant_closed")) friendly = "A loja está fechada no momento.";
-      else if (msg.includes("restaurant_not_found")) friendly = "Não conseguimos identificar o cardápio deste link. Reabra o cardápio e tente novamente.";
+      else if (msg.includes("restaurant_not_found")) friendly = "Restaurante não encontrado.";
       else if (msg.includes("neighborhood_not_served")) friendly = "Não entregamos nesse bairro.";
-      else if (msg.includes("product_unavailable")) friendly = "Um item do carrinho ficou indisponível. Revise o pedido.";
+      else if (msg.includes("product_unavailable")) friendly = "Um item ficou indisponível.";
       else if (msg.includes("invalid_phone")) friendly = "Telefone inválido.";
-      else if (msg.includes("invalid_name")) friendly = "Informe seu nome.";
-      else if (msg.includes("invalid_address")) friendly = "Endereço é obrigatório para entrega.";
-      else if (msg.includes("empty_cart")) friendly = "Carrinho vazio.";
-      else if (msg.includes("invalid_quantity")) friendly = "Quantidade inválida em algum item.";
-      else if (msg.includes("insufficient_points")) friendly = "Você não tem pontos suficientes para esse brinde.";
-      else if (msg.includes("reward_inactive")) friendly = "Esse brinde não está mais disponível.";
-      else if (msg.includes("reward_pickup_only")) friendly = "Resgate de brindes disponível apenas para retirada.";
-      else if (msg.includes("reward_below_min_points")) friendly = "Esse brinde precisa de no mínimo 100 pontos.";
-      else if (msg.includes("min_subtotal_not_met")) friendly = "Pedido abaixo do mínimo exigido para esse brinde.";
-      else if (msg.includes("loyalty_disabled")) friendly = "Programa de fidelidade indisponível no momento.";
-      else if (msg.includes("not unique") || msg.includes("PGRST203")) friendly = "Erro temporário do servidor. Tente novamente.";
+      else if (msg.includes("min_subtotal_not_met")) friendly = "Pedido abaixo do mínimo exigido.";
 
-      void logError({
+      logError({
         source: "public_checkout",
-        message: msg || "erro desconhecido no checkout",
-        code,
-        context: {
-          slug,
-          resolved_slug: resolvedSlug,
-          service_type: serviceType,
-          payment_method: paymentMethod,
-          item_count: cart.itemCount,
-          total,
-          error_details: e?.details ?? null,
-          error_hint: e?.hint ?? null,
-          error_status: e?.status ?? null,
-        },
-      });
-
-      console.error('[CHECKOUT_SUBMIT_ERROR]', {
         message: msg,
         code,
-        details: e?.details,
-        hint: e?.hint,
-        error: e
+        context: { resolved_slug: resolvedSlug, service_type: serviceType, total },
       });
 
       toast({ title: "Erro ao enviar pedido", description: friendly, variant: "destructive" });
@@ -353,236 +335,360 @@ export default function PublicCheckout() {
   }
 
   return (
-    <div className="public-menu-theme min-h-screen bg-background pb-32">
+    <div className="min-h-screen bg-orange-50/20 pb-40 md:pb-20">
       {isPreview && (
-        <div className="bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground">
+        <div className="bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground animate-in slide-in-from-top duration-300">
           Modo preview — pedidos desativados
         </div>
       )}
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+      
+      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-orange-100 bg-white/80 px-4 py-4 backdrop-blur-md">
         <button
           onClick={() => nav(resolvedSlug ? `/menu/${resolvedSlug}` : "/")}
-          aria-label="Voltar"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={20} />
         </button>
-        <h1 className="text-lg font-bold">Finalizar pedido</h1>
+        <div className="flex-1">
+          <h1 className="text-xl font-black tracking-tight text-slate-800">Finalizar Pedido</h1>
+          <p className="text-[10px] uppercase font-bold text-orange-600 tracking-wider">Passo final</p>
+        </div>
       </header>
 
-      <main className="mx-auto max-w-xl px-4 py-5 space-y-6">
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold uppercase text-muted-foreground">Seus dados</h2>
-          <div>
-            <Label htmlFor="name">Nome</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Seu nome"
-              maxLength={80}
-            />
-          </div>
-          <div>
-            <Label htmlFor="phone">Telefone (WhatsApp)</Label>
-            <div className="relative">
-              <Input
-                id="phone"
-                value={phone}
-                onChange={(e) => setPhone(formatPhone(e.target.value))}
-                placeholder="(11) 99999-9999"
-                inputMode="tel"
-                className={cn(searchingCustomer && "pr-10")}
-              />
-              {searchingCustomer && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      <main className="mx-auto max-w-5xl px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-7 space-y-6">
+          
+          {/* 1. Telefone e Nome */}
+          <section className="bg-white rounded-3xl p-6 shadow-[var(--shadow-soft)] border border-orange-100 space-y-5">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-primary/10 p-2 rounded-xl text-primary">
+                <Phone size={20} />
+              </div>
+              <h2 className="text-lg font-black text-slate-800">Seu Contato</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="phone" className="text-xs font-bold uppercase text-muted-foreground ml-1 mb-1.5 block">
+                  Telefone / WhatsApp
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
+                    placeholder="(00) 00000-0000"
+                    inputMode="tel"
+                    className="h-14 text-lg font-bold rounded-2xl border-orange-100 focus-visible:ring-primary focus-visible:border-primary transition-all pr-12"
+                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    {searchingCustomer ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    ) : phoneOk ? (
+                      <UserCheck className="h-5 w-5 text-success animate-in zoom-in" />
+                    ) : (
+                      <Phone className="h-5 w-5 text-muted-foreground/30" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {phoneOk && !searchingCustomer && customerFound && (
+                <div className="bg-orange-50/80 border border-orange-200 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="bg-white p-2 rounded-xl shadow-sm">
+                    <UserCheck className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-slate-800 leading-tight">Cliente cadastrado</p>
+                    <p className="text-xs text-slate-600 mt-0.5">Olá, <span className="font-bold text-primary">{customerFound.name}</span>! Que bom ver você de novo.</p>
+                  </div>
                 </div>
               )}
-            </div>
-            {phoneOk && !searchingCustomer && customerFound && (
-              <Card className="mt-2 p-3 bg-primary/5 border-primary/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                <div className="mt-1 bg-primary/10 p-1.5 rounded-full">
-                  <UserCheck className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1 space-y-0.5">
-                  <p className="text-sm font-bold text-primary">Cliente encontrado</p>
-                  <p className="text-xs font-medium">Olá, {customerFound.name || "Cliente"}!</p>
-                  <p className="text-xs text-muted-foreground">
-                    Você tem <span className="font-bold text-foreground">{customerFound.points_balance || 0}</span> pontos.
-                  </p>
-                  {customerFound.street ? (
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
-                      <MapPin size={10} />
-                      <span className="truncate max-w-[200px]">
-                        {customerFound.street}, {customerFound.number} - {customerFound.neighborhood}
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground pt-1 italic">
-                      Endereço ainda não cadastrado
-                    </p>
-                  )}
-                </div>
-              </Card>
-            )}
-            {phoneOk && !searchingCustomer && !customerFound && phoneDigits.length >= 10 && (
-              <p className="text-[10px] text-muted-foreground mt-1 px-1">
-                Primeira vez por aqui? Seja bem-vindo!
-              </p>
-            )}
-          </div>
-        </section>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold uppercase text-muted-foreground">Como receber</h2>
-          <RadioGroup
-            value={serviceType}
-            onValueChange={(v) => setServiceType(v as ServiceType)}
-            className="grid grid-cols-1 gap-2"
-          >
-            {[
-              { v: "pickup", t: "Retirar no local" },
-              { v: "delivery", t: "Entrega" },
-              { v: "dine_in", t: "Vou no balcão" },
-            ].map((o) => (
-              <label
-                key={o.v}
-                className="flex items-center gap-3 rounded-xl border border-border p-4 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-              >
-                <RadioGroupItem value={o.v} />
-                <span className="font-medium">{o.t}</span>
-              </label>
-            ))}
-          </RadioGroup>
-        </section>
-
-        {serviceType === "delivery" && (
-          <section className="space-y-3">
-            <h2 className="text-sm font-bold uppercase text-muted-foreground">Endereço de entrega</h2>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <Label>Rua</Label>
-                <Input value={street} onChange={(e) => setStreet(e.target.value)} maxLength={120} />
+              <div className="animate-in fade-in slide-in-from-top-2">
+                <Label htmlFor="name" className="text-xs font-bold uppercase text-muted-foreground ml-1 mb-1.5 block">
+                  Seu Nome
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Como devemos chamar você?"
+                    maxLength={80}
+                    className="h-14 text-lg rounded-2xl border-orange-100 focus-visible:ring-primary focus-visible:border-primary transition-all pl-12"
+                  />
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/40" />
+                </div>
               </div>
-              <div>
-                <Label>Número</Label>
-                <Input value={number} onChange={(e) => setNumber(e.target.value)} maxLength={20} inputMode="numeric" pattern="[0-9]*" />
-              </div>
-            </div>
-            <div>
-              <Label>Bairro</Label>
-              <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} maxLength={80} />
-            </div>
-            <div>
-              <Label>Complemento (opcional)</Label>
-              <Input value={complement} onChange={(e) => setComplement(e.target.value)} maxLength={80} />
-            </div>
-            <div>
-              <Label>Ponto de referência (opcional)</Label>
-              <Input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={120} />
             </div>
           </section>
-        )}
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold uppercase text-muted-foreground">Pagamento</h2>
-          <RadioGroup
-            value={paymentMethod}
-            onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
-            className="grid grid-cols-1 gap-2"
-          >
-            {[
-              { v: "pix", t: "PIX" },
-              { v: "cash", t: "Dinheiro" },
-              { v: "card", t: "Cartão (na entrega/retirada)" },
-            ].map((o) => (
-              <label
-                key={o.v}
-                className="flex items-center gap-3 rounded-xl border border-border p-4 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-              >
-                <RadioGroupItem value={o.v} />
-                <span className="font-medium">{o.t}</span>
-              </label>
-            ))}
-          </RadioGroup>
-          {paymentMethod === "cash" && (
-            <div>
-              <Label>Troco para quanto? (opcional)</Label>
-              <Input
-                value={changeFor}
-                onChange={(e) => setChangeFor(e.target.value.replace(/[^\d.,]/g, ""))}
-                placeholder="Ex: 100"
-                inputMode="decimal"
-              />
+          {/* 2. Como receber */}
+          <section className="bg-white rounded-3xl p-6 shadow-[var(--shadow-soft)] border border-orange-100 space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-primary/10 p-2 rounded-xl text-primary">
+                <Truck size={20} />
+              </div>
+              <h2 className="text-lg font-black text-slate-800">Entrega ou Retirada?</h2>
             </div>
-          )}
-        </section>
 
-        <LoyaltySection
-          phone={phone}
-          restaurantSlug={resolvedSlug}
-          subtotal={subtotal}
-          serviceType={serviceType}
-          selectedRewardId={loyaltyRewardId}
-          onChange={setLoyaltyRewardId}
-        />
+            <RadioGroup
+              value={serviceType}
+              onValueChange={(v) => setServiceType(v as ServiceType)}
+              className="grid grid-cols-1 md:grid-cols-3 gap-3"
+            >
+              {[
+                { v: "pickup", t: "Retirada", i: ShoppingBag, d: "Vou buscar no local" },
+                { v: "delivery", t: "Entrega", i: Truck, d: "Entregue em minha casa" },
+                { v: "dine_in", t: "Balcão", i: User, d: "Estou no restaurante" },
+              ].map((o) => {
+                const Icon = o.i;
+                const isSelected = serviceType === o.v;
+                return (
+                  <label
+                    key={o.v}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all cursor-pointer group",
+                      isSelected 
+                        ? "border-primary bg-orange-50/50 ring-1 ring-primary/20 shadow-sm" 
+                        : "border-orange-50 hover:border-orange-200 bg-orange-50/10"
+                    )}
+                  >
+                    <RadioGroupItem value={o.v} className="sr-only" />
+                    <Icon className={cn("h-6 w-6 mb-1", isSelected ? "text-primary" : "text-slate-400 group-hover:text-primary/60")} />
+                    <div className="text-center">
+                      <p className={cn("text-sm font-black uppercase tracking-tight", isSelected ? "text-primary" : "text-slate-600")}>
+                        {o.t}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-medium leading-none mt-1">{o.d}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </RadioGroup>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold uppercase text-muted-foreground">Observação</h2>
-          <Textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value.slice(0, 300))}
-            placeholder="Algo que precisamos saber?"
-            rows={3}
+            {serviceType === "delivery" && (
+              <div className="grid grid-cols-6 gap-4 mt-6 p-5 bg-orange-50/30 rounded-2xl border border-orange-100 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="col-span-4">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground ml-1 mb-1.5 block">Rua</Label>
+                  <Input value={street} onChange={(e) => setStreet(e.target.value)} className="h-12 rounded-xl border-orange-100" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground ml-1 mb-1.5 block">Nº</Label>
+                  <Input value={number} onChange={(e) => setNumber(e.target.value)} className="h-12 rounded-xl border-orange-100" />
+                </div>
+                <div className="col-span-6 md:col-span-3">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground ml-1 mb-1.5 block">Bairro</Label>
+                  <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className="h-12 rounded-xl border-orange-100" />
+                </div>
+                <div className="col-span-6 md:col-span-3">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground ml-1 mb-1.5 block">Complemento</Label>
+                  <Input value={complement} onChange={(e) => setComplement(e.target.value)} className="h-12 rounded-xl border-orange-100" />
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* 3. Pagamento */}
+          <section className="bg-white rounded-3xl p-6 shadow-[var(--shadow-soft)] border border-orange-100 space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-primary/10 p-2 rounded-xl text-primary">
+                <CreditCard size={20} />
+              </div>
+              <h2 className="text-lg font-black text-slate-800">Pagamento</h2>
+            </div>
+
+            <RadioGroup
+              value={paymentMethod}
+              onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+              className="grid grid-cols-1 md:grid-cols-3 gap-3"
+            >
+              {[
+                { v: "pix", t: "PIX", d: "Rápido e seguro" },
+                { v: "cash", t: "Dinheiro", d: "Pagamento na entrega" },
+                { v: "card", t: "Cartão", d: "Maquininha" },
+              ].map((o) => {
+                const isSelected = paymentMethod === o.v;
+                return (
+                  <label
+                    key={o.v}
+                    className={cn(
+                      "flex flex-col items-center gap-1 p-4 rounded-2xl border-2 transition-all cursor-pointer",
+                      isSelected ? "border-primary bg-orange-50/50 shadow-sm" : "border-orange-50 bg-orange-50/10 hover:border-orange-200"
+                    )}
+                  >
+                    <RadioGroupItem value={o.v} className="sr-only" />
+                    <p className={cn("text-sm font-black uppercase tracking-tight", isSelected ? "text-primary" : "text-slate-600")}>
+                      {o.t}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-medium">{o.d}</p>
+                  </label>
+                );
+              })}
+            </RadioGroup>
+
+            {paymentMethod === "cash" && (
+              <div className="mt-4 p-4 bg-orange-50/30 rounded-2xl animate-in zoom-in-95">
+                <Label className="text-xs font-bold text-slate-600 mb-1.5 block">Precisa de troco?</Label>
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-400 font-bold">R$</span>
+                  <Input
+                    value={changeFor}
+                    onChange={(e) => setChangeFor(e.target.value.replace(/[^\d.,]/g, ""))}
+                    placeholder="Ex: 100"
+                    inputMode="decimal"
+                    className="h-12 rounded-xl border-orange-100"
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* 4. Fidelidade e Brindes */}
+          <LoyaltySection
+            phone={phone}
+            restaurantSlug={resolvedSlug}
+            subtotal={subtotal}
+            serviceType={serviceType}
+            selectedRewardId={loyaltyRewardId}
+            onChange={setLoyaltyRewardId}
           />
-        </section>
 
-        <section className="rounded-xl border border-border bg-card p-4 space-y-1.5">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Subtotal ({cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"})</span>
-            <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">
-              Taxa de entrega {serviceType !== "delivery" && "(não se aplica)"}
-            </span>
-            <span className={serviceType === "delivery" ? "font-medium" : "text-muted-foreground"}>
-              {serviceType === "delivery" ? `R$ ${DELIVERY_FEE_FIXED.toFixed(2)}` : "R$ 0,00"}
-            </span>
-          </div>
-          {selectedReward && (
-            <div className="flex justify-between text-sm pt-1 border-t border-dashed border-border/60">
-              <span className="flex items-center gap-1.5 text-primary font-semibold">
-                <Gift size={13} />
-                Brinde: {selectedReward.display_name}
-              </span>
-              <span className="font-medium text-primary">R$ 0,00</span>
+          {/* 5. Observação */}
+          <section className="bg-white rounded-3xl p-6 shadow-[var(--shadow-soft)] border border-orange-100 space-y-4">
+             <div className="flex items-center gap-3 mb-2">
+              <div className="bg-primary/10 p-2 rounded-xl text-primary">
+                <MessageSquare size={20} />
+              </div>
+              <h2 className="text-lg font-black text-slate-800">Observações</h2>
             </div>
-          )}
-          <div className="mt-2 flex justify-between border-t border-border pt-2 text-lg font-bold">
-            <span>Total</span>
-            <span className="brand-gradient-text">R$ {total.toFixed(2)}</span>
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value.slice(0, 300))}
+              placeholder="Ex: tirar cebola, caprichar no molho..."
+              rows={3}
+              className="rounded-2xl border-orange-100 focus-visible:ring-primary min-h-[100px]"
+            />
+          </section>
+        </div>
+
+        {/* Resumo do Pedido - Coluna Direita (Desktop) */}
+        <aside className="lg:col-span-5 relative">
+          <div className="lg:sticky lg:top-24 space-y-6">
+            <Card className="rounded-3xl border-orange-200 overflow-hidden shadow-xl">
+              <div className="bg-slate-800 p-5 text-white">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-base font-black uppercase tracking-widest">Resumo do Pedido</h3>
+                  <div className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                    {cart.itemCount} {cart.itemCount === 1 ? "item" : "itens"}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 bg-white space-y-4">
+                <div className="max-h-[30vh] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                  {cart.items.map((item, idx) => (
+                    <div key={idx} className="flex gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0 text-xs font-black text-primary">
+                        {item.quantity}x
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{item.product_name}</p>
+                        {item.note && <p className="text-[10px] text-muted-foreground italic truncate">Obs: {item.note}</p>}
+                      </div>
+                      <p className="text-sm font-bold text-slate-800 shrink-0">
+                        R$ {(item.product_price * item.quantity).toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-4 border-t border-orange-100 space-y-2">
+                  <div className="flex justify-between text-sm text-slate-500 font-medium">
+                    <span>Subtotal</span>
+                    <span className="font-bold">R$ {subtotal.toFixed(2)}</span>
+                  </div>
+                  
+                  {serviceType === "delivery" && (
+                    <div className="flex justify-between text-sm text-slate-500 font-medium">
+                      <span>Taxa de Entrega</span>
+                      <span className="font-bold text-orange-600">R$ {DELIVERY_FEE_FIXED.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {selectedReward && (
+                    <div className="flex justify-between text-sm text-primary font-bold bg-primary/5 px-3 py-2 rounded-xl border border-primary/20 animate-in zoom-in-95">
+                      <span className="flex items-center gap-1.5"><Gift size={14} /> Brinde: {selectedReward.display_name}</span>
+                      <span>Grátis</span>
+                    </div>
+                  )}
+
+                  <div className="pt-4 mt-2 border-t-2 border-orange-100 flex justify-between items-baseline">
+                    <span className="text-lg font-black text-slate-800 uppercase tracking-tighter">Total</span>
+                    <span className="text-3xl font-black text-primary">R$ {total.toFixed(2)}</span>
+                  </div>
+                </div>
+                
+                <div className="hidden lg:block pt-2">
+                  <Button
+                    size="lg"
+                    className="w-full h-16 rounded-2xl text-lg font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+                    disabled={!canSubmit || submitting}
+                    onClick={handleSubmit}
+                  >
+                    {submitting ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        ENVIANDO...
+                      </div>
+                    ) : (
+                      "CONFIRMAR PEDIDO"
+                    )}
+                  </Button>
+                  <p className="text-center text-[10px] text-muted-foreground mt-3 uppercase font-bold tracking-widest opacity-60">
+                    Ao confirmar, você aceita nossos termos
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            <div className="bg-white/60 rounded-2xl p-4 border border-orange-100/50 flex items-start gap-3">
+              <div className="bg-orange-100 p-1.5 rounded-lg text-orange-600">
+                <Info size={16} />
+              </div>
+              <p className="text-[10px] text-orange-800/70 font-bold uppercase leading-relaxed tracking-wider">
+                Verifique se o seu número de WhatsApp está correto para receber as atualizações do pedido.
+              </p>
+            </div>
           </div>
-        </section>
+        </aside>
       </main>
 
-      <div
-        className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur"
-        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
-      >
-        <Button
-          size="lg"
-          className="w-full h-14 text-base font-bold"
-          disabled={!canSubmit || submitting}
-          onClick={handleSubmit}
-        >
-          {submitting
-            ? "Enviando..."
-            : selectedReward
-              ? `Confirmar pedido com brinde • R$ ${total.toFixed(2)}`
-              : `Confirmar pedido • R$ ${total.toFixed(2)}`}
-        </Button>
+      {/* Botão Fixo Mobile */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-orange-100 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] animate-in slide-in-from-bottom duration-500">
+        <div className="max-w-xl mx-auto space-y-3">
+          <div className="flex justify-between items-baseline px-2">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total do Pedido</span>
+            <span className="text-2xl font-black text-primary">R$ {total.toFixed(2)}</span>
+          </div>
+          <Button
+            size="lg"
+            className="w-full h-16 rounded-2xl text-lg font-black shadow-lg shadow-primary/20"
+            disabled={!canSubmit || submitting}
+            onClick={handleSubmit}
+          >
+            {submitting ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                ENVIANDO...
+              </div>
+            ) : (
+              "CONFIRMAR PEDIDO"
+            )}
+          </Button>
+        </div>
+        <div className="h-safe" />
       </div>
     </div>
   );
