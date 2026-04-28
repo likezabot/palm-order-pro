@@ -215,62 +215,73 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-muted-foreground mb-1 block">URL da Imagem</label>
-          <div className="space-y-3">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-semibold text-muted-foreground block">Imagem do Produto</label>
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://exemplo.com/imagem.jpg"
-                className="flex-1 rounded-lg border border-border bg-card p-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
               {imageUrl && (
                 <button
                   type="button"
                   onClick={() => setImageUrl("")}
-                  className="rounded-lg bg-muted px-4 text-muted-foreground hover:bg-muted/80"
+                  className="text-[10px] font-bold text-destructive hover:underline flex items-center gap-1"
                 >
-                  <X size={20} />
+                  <ImageOff size={12} /> Remover
+                </button>
+              )}
+              {imageUrl !== originalImageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl(originalImageUrl)}
+                  className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <RotateCcw size={12} /> Restaurar anterior
                 </button>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                // Heurística básica de sugestão baseada no nome
-                const query = encodeURIComponent(name);
-                toast({ 
-                  title: "Sugestão de imagem", 
-                  description: "Busque no Google e copie a URL da imagem desejada.",
-                  action: (
-                    <button 
-                      onClick={() => window.open(`https://www.google.com/search?tbm=isch&q=${query}`, '_blank')}
-                      className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded"
-                    >
-                      Abrir busca
-                    </button>
-                  )
-                });
-              }}
-              className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors flex items-center gap-1"
-            >
-              <Plus size={14} /> Sugerir imagem (Google)
-            </button>
-
-            {imageUrl && (
-              <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted flex items-center justify-center">
+          </div>
+          
+          <div className="space-y-3">
+            <div className="relative group overflow-hidden rounded-xl border border-border bg-muted/30 flex items-center justify-center aspect-video sm:aspect-auto sm:h-48">
+              {imageUrl ? (
                 <img
                   src={imageUrl}
                   alt="Preview"
-                  className={category === "bebidas" || category === "cervejas" ? "h-full object-contain" : "h-full w-full object-cover"}
+                  className={category === "bebidas" || category === "cervejas" ? "h-full object-contain p-2" : "w-full h-full object-cover"}
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x225?text=Imagem+Inv%C3%A1lida";
+                    (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x225?text=Imagem+N%C3%A3o+Encontrada";
                   }}
                 />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-muted-foreground gap-2">
+                  <Search size={32} className="opacity-20" />
+                  <span className="text-xs">Sem imagem cadastrada</span>
+                </div>
+              )}
+              
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
+                <button
+                  type="button"
+                  onClick={() => setShowImageSearch(true)}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 shadow-lg hover:scale-105 transition-transform"
+                >
+                  <Search size={16} /> {imageUrl ? "Substituir" : "Adicionar"} Imagem
+                </button>
               </div>
-            )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="Ou cole uma URL externa aqui..."
+                  className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground px-1">
+                Recomendado: Use o botão "Buscar Imagem Online" para baixar e salvar a imagem internamente.
+              </p>
+            </div>
           </div>
         </div>
         <div>
