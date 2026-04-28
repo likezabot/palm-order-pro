@@ -1,11 +1,3 @@
-/**
- * AdminSidebar — navegação lateral do /admin agrupada por seção.
- *
- * Substitui a lista horizontal de 11 abas. Mantém a regra `admin-only`
- * (itens ocultos no modo Garçom) e exibe o badge de erros não resolvidos.
- *
- * Comunicação: lê/escreve `?section=` na URL via callback.
- */
 import {
   ShoppingBag,
   Printer,
@@ -28,7 +20,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +27,7 @@ type Item = {
   value: string;
   label: string;
   shortLabel?: string;
-  icon: any; // Allow any icon component with standard props
+  icon: any;
   adminOnly?: boolean;
   badge?: number;
 };
@@ -51,9 +42,6 @@ interface Props {
 }
 
 export default function AdminSidebar({ active, onChange, staffMode, unresolvedErrors }: Props) {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   const groups: Group[] = [
     {
       title: "Cardápio",
@@ -96,18 +84,20 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
   ];
 
   return (
-    <Sidebar collapsible="offcanvas" className="!bg-white border-r border-gray-200">
-      <SidebarContent className="!bg-white">
+    <Sidebar 
+      collapsible="none" 
+      className="!bg-white border-r border-[#E5E5E5] w-[260px] min-w-[240px] max-w-[280px] h-screen sticky top-0"
+      style={{ "--sidebar-width": "260px" } as React.CSSProperties}
+    >
+      <SidebarContent className="!bg-white p-3">
         {groups.map((group) => {
           const visible = group.items.filter((i) => !i.adminOnly || !staffMode);
           if (visible.length === 0) return null;
           return (
             <SidebarGroup key={group.title} className="p-0">
-              {!collapsed && (
-                <SidebarGroupLabel className="px-4 pt-8 pb-3 text-[14px] font-black uppercase tracking-widest !text-black opacity-100 h-auto">
-                  {group.title}
-                </SidebarGroupLabel>
-              )}
+              <SidebarGroupLabel className="px-4 pt-8 pb-3 text-[14px] font-black uppercase tracking-widest !text-black opacity-100 h-auto">
+                {group.title}
+              </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-0">
                   {visible.map((item) => {
@@ -118,7 +108,6 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
                         <SidebarMenuButton
                           asChild
                           isActive={isActive}
-                          tooltip={item.label}
                           className={cn(
                             "w-full h-auto p-0 rounded-none border-none transition-none",
                             "hover:!bg-[#F3F3F3] hover:!text-black",
@@ -129,13 +118,11 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
                           <button
                             type="button"
                             onClick={() => onChange(item.value)}
-                            className={cn(
-                              "w-full flex items-center gap-3 py-3 px-4 font-semibold text-sm transition-none !text-black",
-                            )}
+                            className="w-full flex items-center gap-3 py-3 px-4 font-semibold text-sm transition-none !text-black"
                           >
                             <Icon className="w-5 h-5 shrink-0 !text-black" />
-                            {!collapsed && <span className="truncate">{item.label}</span>}
-                            {!collapsed && item.badge != null && item.badge > 0 && (
+                            <span className="truncate whitespace-nowrap">{item.label}</span>
+                            {item.badge != null && item.badge > 0 && (
                               <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-black text-white text-[10px] font-black leading-none">
                                 {item.badge > 99 ? "99+" : item.badge}
                               </span>

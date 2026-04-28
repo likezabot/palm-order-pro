@@ -226,7 +226,7 @@ const Admin = () => {
   }
 
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={true}>
       <div className={`min-h-screen-safe flex w-full ${staffMode ? "staff-mode" : ""}`}>
         <AdminSidebar
           active={activeTab}
