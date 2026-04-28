@@ -177,8 +177,7 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
         // e ignora 'pending' → 'pending' (no-op).
         const printReset =
           updated.print_status === "pending" &&
-          old.print_status !== "pending" &&
-          old.print_status !== "queued";
+          old.print_status !== "pending";
 
         if (totalChanged || printReset) {
           const eventKey = `${updated.id}:upd:${updated.updated_at}`;
