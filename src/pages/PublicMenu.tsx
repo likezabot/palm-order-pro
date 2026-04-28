@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -51,6 +51,8 @@ export default function PublicMenu() {
   const [cartOpen, setCartOpen] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const isScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [openGroup, setOpenGroup] = useState<{
     group: ProductGroup;
     trigger: PublicProduct;
@@ -58,6 +60,7 @@ export default function PublicMenu() {
   } | null>(null);
 
   const groupsQuery = usePublicProductGroups();
+
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
@@ -232,6 +235,9 @@ export default function PublicMenu() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
+        // Se estivermos em scroll manual (clique no botão), ignoramos o observer
+        if (isScrollingRef.current) return;
+
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const id = entry.target.id;
@@ -241,7 +247,7 @@ export default function PublicMenu() {
         });
       },
       {
-        rootMargin: "-110px 0px -85% 0px", // Zona de ativação estreita logo abaixo do nav sticky
+        rootMargin: "-120px 0px -70% 0px", // Ajustado para evitar disparos falsos
         threshold: 0,
       }
     );
@@ -253,6 +259,7 @@ export default function PublicMenu() {
       sections.forEach((section) => observer.unobserve(section));
     };
   }, [categories]); // Re-executa se as categorias mudarem
+
 
   const blockIfPreview = (action: () => void) => {
     if (isPreview) {
@@ -373,12 +380,22 @@ export default function PublicMenu() {
                   categories={categories}
                   activeSlug={activeCat}
                   onSelect={(s) => {
+                    // Bloqueia o IntersectionObserver durante o scroll
+                    isScrollingRef.current = true;
                     setActiveCat(s);
+                    
                     const el = document.getElementById(`categoria-${s}`);
                     if (el) {
                       el.scrollIntoView({ behavior: "smooth", block: "start" });
                     }
+
+                    // Libera o observer após o término esperado do scroll
+                    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                    scrollTimeoutRef.current = setTimeout(() => {
+                      isScrollingRef.current = false;
+                    }, 1000);
                   }}
+
                 />
               </div>
             )}
@@ -435,7 +452,7 @@ export default function PublicMenu() {
                 if (!entries.length) return null;
 
                 return (
-                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-[110px] md:scroll-mt-[120px]">
+                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-[130px] md:scroll-mt-[150px]">
                     <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
                     {/* Mobile: respeita colunas específicas se solicitado */}
                     <div className={cn("sm:hidden", mobileGridClass)}>
