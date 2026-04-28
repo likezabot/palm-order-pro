@@ -97,17 +97,19 @@ export default function PublicCheckout() {
 
   useEffect(() => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
+    const lookupKey = `${resolvedSlug}:${digits}`;
+    if (digits.length < 10 || !resolvedSlug) {
+      lastFetchedPhoneRef.current = "";
       setCustomerFound(null);
       return;
     }
-    if (lastFetchedPhoneRef.current === digits) return;
+    if (lastFetchedPhoneRef.current === lookupKey) return;
 
     const handle = setTimeout(async () => {
-      lastFetchedPhoneRef.current = digits;
+      lastFetchedPhoneRef.current = lookupKey;
       setSearchingCustomer(true);
       try {
-        const profile = await fetchCustomerProfile(digits, slug ?? "");
+        const profile = await fetchCustomerProfile(digits, resolvedSlug);
         if (profile) {
           setCustomerFound(profile);
           
@@ -150,7 +152,7 @@ export default function PublicCheckout() {
     }, 600);
 
     return () => clearTimeout(handle);
-  }, [phone, slug]);
+  }, [phone, resolvedSlug]);
 
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
@@ -163,15 +165,15 @@ export default function PublicCheckout() {
   const phoneDigits = normalizePhoneClient(phone);
   const phoneOk = phoneDigits.length >= 10;
   const loyaltyQuery = useQuery({
-    queryKey: ["loyalty-status", slug, phoneDigits, subtotal, serviceType],
+    queryKey: ["loyalty-status", resolvedSlug, phoneDigits, subtotal, serviceType],
     queryFn: () =>
       fetchLoyaltyStatus({
         phone: phoneDigits,
-        restaurantSlug: slug ?? "",
+        restaurantSlug: resolvedSlug,
         orderSubtotal: subtotal,
         serviceType,
       }),
-    enabled: phoneOk && !!slug,
+    enabled: phoneOk && !!resolvedSlug,
     staleTime: 10_000,
   });
 
@@ -206,7 +208,7 @@ export default function PublicCheckout() {
   }, [cart.items.length, name, phone, serviceType, street, number, neighborhood]);
 
   if (cart.items.length === 0 && !submitting) {
-    const fallback = slug ? `/menu/${slug}` : "/";
+    const fallback = resolvedSlug ? `/menu/${resolvedSlug}` : "/";
     return <Navigate to={fallback} replace />;
   }
 
@@ -216,10 +218,18 @@ export default function PublicCheckout() {
       toast({ title: "Modo preview", description: "Pedidos estão desativados nesta visualização." });
       return;
     }
+    if (!resolvedSlug) {
+      toast({
+        title: "Erro ao enviar pedido",
+        description: "Não conseguimos identificar o cardápio deste link. Reabra o cardápio e tente novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await createPublicOrder({
-        restaurant_slug: slug ?? "",
+        restaurant_slug: resolvedSlug,
         customer: { name: name.trim(), phone },
         service_type: serviceType,
         payment_method: paymentMethod,
@@ -256,7 +266,7 @@ export default function PublicCheckout() {
         0,
         balanceBefore - (selectedReward?.points_cost ?? 0),
       ) + projectedEarn;
-      nav(`/menu/${slug}/sucesso/${result.id}${tokenParam}`, {
+      nav(`/menu/${resolvedSlug}/sucesso/${result.id}${tokenParam}`, {
         replace: true,
         state: {
           estimated_ready_at: result.estimated_ready_at,
@@ -296,6 +306,7 @@ export default function PublicCheckout() {
       const code = extractErrorCode(e);
       let friendly = "Não foi possível enviar o pedido. Tente novamente.";
       if (msg.includes("restaurant_closed")) friendly = "A loja está fechada no momento.";
+      else if (msg.includes("restaurant_not_found")) friendly = "Não conseguimos identificar o cardápio deste link. Reabra o cardápio e tente novamente.";
       else if (msg.includes("neighborhood_not_served")) friendly = "Não entregamos nesse bairro.";
       else if (msg.includes("product_unavailable")) friendly = "Um item do carrinho ficou indisponível. Revise o pedido.";
       else if (msg.includes("invalid_phone")) friendly = "Telefone inválido.";
@@ -317,6 +328,7 @@ export default function PublicCheckout() {
         code,
         context: {
           slug,
+          resolved_slug: resolvedSlug,
           service_type: serviceType,
           payment_method: paymentMethod,
           item_count: cart.itemCount,
