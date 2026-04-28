@@ -379,7 +379,8 @@ export default function PublicMenu() {
                 categories={categories}
                 activeSlug={activeCat}
                 onSelect={(s) => {
-                  // Bloqueia o IntersectionObserver durante o scroll
+                  if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                  
                   isScrollingRef.current = true;
                   setActiveCat(s);
                   
@@ -388,11 +389,21 @@ export default function PublicMenu() {
                     el.scrollIntoView({ behavior: "smooth", block: "start" });
                   }
 
-                  // Libera o observer após o término esperado do scroll
-                  if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                  const handleScrollEnd = () => {
+                    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                    scrollTimeoutRef.current = setTimeout(() => {
+                      isScrollingRef.current = false;
+                      window.removeEventListener('scroll', handleScrollEnd);
+                    }, 150);
+                  };
+
+                  window.addEventListener('scroll', handleScrollEnd, { passive: true });
+                  
+                  // Fallback para caso o scroll não ocorra (ex: já está na posição)
                   scrollTimeoutRef.current = setTimeout(() => {
                     isScrollingRef.current = false;
-                  }, 1000);
+                    window.removeEventListener('scroll', handleScrollEnd);
+                  }, 800);
                 }}
               />
             )}
