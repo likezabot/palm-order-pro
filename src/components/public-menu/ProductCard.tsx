@@ -244,15 +244,16 @@ export default function ProductCard({
             "h-[72px] w-[72px] sm:h-24 sm:w-24",
           )}
         >
-          {product.image_url ? (
+          {product.image_url && !imgError ? (
             <img
               src={product.image_url}
               alt={product.name}
               loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={cn("h-full w-full transition-transform duration-300 group-hover:scale-105", objectFitClass)}
+              onError={() => setImgError(true)}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-2xl opacity-80">🍢</div>
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[hsl(28_45%_92%)] to-[hsl(36_50%_96%)] text-2xl opacity-80">{placeholderEmoji}</div>
           )}
         </div>
       )}
