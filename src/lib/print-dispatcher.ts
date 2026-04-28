@@ -16,14 +16,7 @@ import { formatPrintTableValue } from "@/lib/utils";
 import { debugLog } from "@/lib/debug-logger";
 import { logPrintEngine } from "@/lib/print-engine";
 import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
-import {
-  buildEscPosReceipt,
-  buildEscPosDelta,
-  buildEscPosBill,
-  buildEscPosDelivery,
-  type DeliveryPayloadInput,
-  type ReceiptExtras,
-} from "@/lib/thermal-printer";
+import { type DeliveryPayloadInput, type ReceiptExtras } from "@/lib/thermal-printer";
 
 export type DispatchMode = "full" | "delta" | "bill";
 export type DispatchSource = "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
