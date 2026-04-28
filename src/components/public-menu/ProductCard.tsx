@@ -220,7 +220,8 @@ export default function ProductCard({
       type={interactive ? "button" : undefined}
       onClick={interactive ? () => onClick!(product) : undefined}
       className={cn(
-        "group relative flex w-full text-left items-stretch gap-3 rounded-xl border border-border/60 bg-card p-2.5 transition-all duration-200",
+        "group relative flex w-full text-left items-stretch gap-3 rounded-xl border border-border/60 p-2.5 transition-all duration-200",
+        !className?.includes("bg-") && "bg-card",
         shadowClass,
         isBlocked
           ? "opacity-60 cursor-not-allowed"
