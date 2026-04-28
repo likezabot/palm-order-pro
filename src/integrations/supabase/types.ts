@@ -1555,19 +1555,38 @@ export type Database = {
         }
         Returns: string
       }
-      admin_upsert_product: {
-        Args: {
-          p_active?: boolean
-          p_aliases?: string[]
-          p_category: string
-          p_id: string
-          p_name: string
-          p_pin: string
-          p_price: number
-          p_unit?: string
-        }
-        Returns: string
-      }
+      admin_upsert_product:
+        | {
+            Args: {
+              p_active?: boolean
+              p_aliases?: string[]
+              p_category: string
+              p_id: string
+              p_name: string
+              p_pin: string
+              p_price: number
+              p_unit?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_active: boolean
+              p_aliases: string[]
+              p_category: string
+              p_description?: string
+              p_id: string
+              p_image_url?: string
+              p_is_available_online?: boolean
+              p_is_featured?: boolean
+              p_is_sold_out?: boolean
+              p_name: string
+              p_pin: string
+              p_price: number
+              p_unit?: string
+            }
+            Returns: string
+          }
       annotate_error_log_resolution: {
         Args: { p_code?: string; p_ids?: number[]; p_reason?: string }
         Returns: number
