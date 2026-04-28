@@ -26,18 +26,6 @@ type Props = {
 
 /**
  * Hero do cardápio público.
- *
- * Acessibilidade / contraste:
- * - Quando há foto de fundo, aplicamos uma pilha de overlays:
- *   1) tom de marca leve (mood gastronômico)
- *   2) escurecimento base (~55% no centro, mais forte embaixo)
- *   3) vinheta sutil nas bordas
- *   Isso garante que o título branco tenha contraste WCAG AA (≥ 4.5:1)
- *   sobre praticamente qualquer foto, clara ou escura.
- * - O título usa text-shadow para reforçar legibilidade quando a foto
- *   tem áreas brilhantes localizadas (ex.: fogo, brasa).
- * - Sem foto, caímos num gradiente de marca (foreground escuro nativo
- *   da paleta pública), também de alto contraste.
  */
 export default function MenuHero({
   restaurant,
@@ -63,12 +51,6 @@ export default function MenuHero({
   const isCenter = alignment === "center";
   const hasHero = !!restaurant.hero_url;
 
-  // --- Overlay adaptativo WCAG ---
-  // 1) Lemos cache síncrono (localStorage) no init → evita "flash" e poupa
-  //    rede em internet instável.
-  // 2) Se não houver cache, amostramos a foto, calculamos α e gravamos.
-  // 3) Default 0.55 (forte) só aparece quando não há hero ou cache nem
-  //    amostragem responderam ainda.
   const [overlayAlpha, setOverlayAlpha] = useState<number>(() => {
     if (!hasHero) return 0.55;
     const cached = getCachedOverlayAlpha(restaurant.hero_url!);
@@ -78,39 +60,18 @@ export default function MenuHero({
   useEffect(() => {
     if (!hasHero) return;
     const url = restaurant.hero_url!;
-
-    // Cache hit → nada a fazer (já aplicado no init).
     if (getCachedOverlayAlpha(url) != null) return;
 
     const ctrl = new AbortController();
     sampleImageLuminance(url, ctrl.signal).then((L) => {
-      if (L == null) return; // CORS/erro: mantém default forte
-      // alvo AA = 4.5:1; min 0.30 p/ preservar mood; max 0.85
+      if (L == null) return;
       const alpha = overlayAlphaForWhiteText(L, 4.5, 0.3, 0.85);
       setOverlayAlpha(alpha);
       setCachedOverlayAlpha(url, alpha);
-
-      // Verificação automática de acessibilidade (apenas em dev)
-      if (import.meta.env.DEV) {
-        const composedL = Math.max(0, L * (1 - alpha));
-        const ratio = contrastRatio(1.0, composedL);
-        const grade = ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : "FAIL";
-        // eslint-disable-next-line no-console
-        console.info(
-          `[MenuHero/WCAG] bgLuminance=${L.toFixed(3)} α=${alpha.toFixed(2)} ratio=${ratio.toFixed(2)} → ${grade}`,
-        );
-        if (grade === "FAIL") {
-          // eslint-disable-next-line no-console
-          console.warn(
-            "[MenuHero/WCAG] Contraste abaixo de AA mesmo com overlay máximo — considere trocar a foto.",
-          );
-        }
-      }
     });
     return () => ctrl.abort();
   }, [hasHero, restaurant.hero_url]);
 
-  // Sombra densa de texto = legibilidade adicional sobre fotos com brilho local.
   const titleShadow = hasHero
     ? { textShadow: "0 2px 12px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.45)" }
     : undefined;
@@ -120,9 +81,7 @@ export default function MenuHero({
 
   return (
     <header className="relative">
-      {/* Container do hero com altura generosa para destaque visual */}
       <div className="relative h-56 w-full overflow-hidden sm:h-72">
-        {/* Camada 1 — imagem ou gradiente de marca */}
         <div
           className={cn(
             "absolute inset-0",
@@ -140,10 +99,8 @@ export default function MenuHero({
           aria-hidden
         />
 
-        {/* Camada 2 — escurecimento adaptativo (garante WCAG AA p/ texto branco) */}
         {hasHero && showOverlay && (
           <>
-            {/* tom quente sutil (mood gastronômico) */}
             <div
               className="pointer-events-none absolute inset-0"
               style={{
@@ -152,7 +109,6 @@ export default function MenuHero({
               }}
               aria-hidden
             />
-            {/* escurecimento base p/ contraste de texto — α dinâmico WCAG AA */}
             <div
               className="pointer-events-none absolute inset-0 transition-opacity duration-500"
               style={{
@@ -160,7 +116,6 @@ export default function MenuHero({
               }}
               aria-hidden
             />
-            {/* vinheta */}
             <div
               className="pointer-events-none absolute inset-0"
               style={{
@@ -172,13 +127,11 @@ export default function MenuHero({
           </>
         )}
 
-        {/* Camada 3 — fade orgânico que une o hero ao conteúdo */}
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background via-background/70 to-transparent"
           aria-hidden
         />
 
-        {/* Conteúdo sobre o hero — título + subtítulo flutuando */}
         <div className="relative z-10 mx-auto flex h-full max-w-3xl items-end px-4 pb-16">
           <div className={cn("min-w-0 flex-1", isCenter && "text-center")}>
             <h1
@@ -199,7 +152,6 @@ export default function MenuHero({
         </div>
       </div>
 
-      {/* Faixa de identidade — logo + info-chips, integrada ao conteúdo */}
       <div className="mx-auto max-w-3xl px-4">
         <div
           className={cn(
@@ -229,41 +181,38 @@ export default function MenuHero({
                 <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary via-primary-glow to-accent text-2xl font-black text-primary-foreground">
                   {restaurant.name.charAt(0)}
                 </div>
+              )}
+            </div>
           )}
-          
+
           {loyaltyEnabled && slug && (
             <button
               onClick={() => nav(`/menu/${slug}/pontos`)}
               className={cn(
-                "group relative mt-1 flex h-14 items-center gap-2 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-white/90 via-amber-50/80 to-amber-100/90 px-4 py-2 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.25)] backdrop-blur-md transition-all hover:scale-[1.02] hover:border-amber-500/50 hover:shadow-[0_12px_24px_-4px_rgba(245,158,11,0.35)] active:scale-[0.98]",
+                "group relative mt-1 flex h-14 items-center gap-2 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-white/95 via-amber-50/90 to-amber-100/95 px-4 py-2 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.25)] backdrop-blur-md transition-all hover:scale-[1.02] hover:border-amber-500/50 hover:shadow-[0_12px_24px_-4px_rgba(245,158,11,0.35)] active:scale-[0.98]",
                 !isCenter && "ml-auto sm:ml-0"
               )}
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-inner">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white shadow-[0_2px_8px_rgba(217,119,6,0.4)]">
                 <Gift size={18} className="drop-shadow-sm" />
               </div>
               <div className="flex flex-col text-left">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700/80">
+                <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-amber-700/80">
                   Fidelidade
                 </span>
                 <span className="text-[13px] font-black leading-tight text-amber-900">
                   Meus Pontos
                 </span>
               </div>
-              {/* Pontinho de atenção discreto */}
-              <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-background animate-pulse" />
+              <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-background animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
             </button>
           )}
-            </div>
-          )}
 
-          {/* Slot direito (ex.: badge "aberto") em layout left */}
           {rightSlot && !isCenter && (
             <div className="ml-auto shrink-0 self-end pb-1">{rightSlot}</div>
           )}
         </div>
 
-        {/* Linha de informações — sempre logo abaixo do logo, com bom contraste */}
         {(prep > 0 || rightSlot) && (
           <div
             className={cn(
