@@ -48,6 +48,7 @@ type LocState = {
   address?: LocAddress | null;
   loyalty_points_pending?: number;
   loyalty_reward_name?: string | null;
+  loyalty_reward_points?: number | null;
   loyalty_balance_after?: number;
 };
 
