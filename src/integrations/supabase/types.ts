@@ -1876,16 +1876,14 @@ export type Database = {
         }
         Returns: Json
       }
-      update_order_status:
-        | { Args: { p_order_id: string; p_status: string }; Returns: undefined }
-        | {
-            Args: {
-              p_order_id: string
-              p_rejected_reason?: string
-              p_status: string
-            }
-            Returns: undefined
-          }
+      update_order_status: {
+        Args: {
+          p_order_id: string
+          p_rejected_reason?: string
+          p_status: string
+        }
+        Returns: undefined
+      }
       verify_manager_pin: {
         Args: { p_fingerprint?: string; p_pin: string }
         Returns: boolean
