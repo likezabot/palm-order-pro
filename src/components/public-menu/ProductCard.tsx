@@ -129,7 +129,8 @@ export default function ProductCard({
         type={interactive ? "button" : undefined}
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
-          "flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors",
+          "flex w-full items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-left transition-colors",
+          !className?.includes("bg-") && "bg-card",
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 active:scale-[0.99]",
