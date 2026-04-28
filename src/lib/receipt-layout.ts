@@ -353,47 +353,41 @@ function buildSenhaLayout(
   const blocks: LayoutBlock[] = [];
   const senhaNum = (input.senha || "").replace(/^#/, "");
 
-  blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}` });
-  if (v.title && cfg.headerText) {
-    blocks.push({ kind: "title", text: cfg.headerText });
+  // --- TOPO ---
+  if (cfg.headerText) {
+    blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
+  blocks.push({ kind: "banner", text: `PEDIDO #${senhaNum}` });
+  blocks.push({ kind: "banner", text: "TIPO: RETIRADA" });
+  blocks.push({ kind: "info", label: "DATA", value: `${ctx.date} ${ctx.time}` });
   blocks.push({ kind: "sep", bold: true });
 
-  if (v.date) {
-    blocks.push({ kind: "info", label: "Data", value: `${ctx.date} ${ctx.time}` });
+  // --- CLIENTE ---
+  if (!isBlank(input.customerName)) {
+    blocks.push({ kind: "info", label: "Cliente", value: input.customerName!.toUpperCase() });
+    blocks.push({ kind: "sep" });
   }
-  if (input.orderId) {
-    const venda = input.orderId.replace(/-/g, "").slice(-6).toUpperCase();
-    blocks.push({ kind: "info", label: "Venda", value: venda });
-  }
-  blocks.push({ kind: "info", label: "Vendedor", value: "BALCAO" });
-  if (input.waiterName) {
-    blocks.push({ kind: "info", label: "Caixa", value: input.waiterName });
-  }
-  blocks.push({
-    kind: "info",
-    label: "Cliente",
-    value: input.customerName || "CONSUMIDOR FINAL",
-  });
 
-  blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "itemTableHeader" });
-  blocks.push({ kind: "sep", bold: true });
+  // --- ITENS ---
   input.items.forEach((it) =>
     blocks.push({
-      kind: "itemTableRow",
+      kind: "item",
+      name: it.product_name.toUpperCase(),
       quantity: it.quantity,
-      name: it.product_name,
-      unit: it.product_price,
       subtotal: it.product_price * it.quantity,
+      note: v.notes ? it.note ?? null : null,
     })
   );
-  blocks.push({ kind: "sep" });
-  blocks.push({
-    kind: "itemTableTotal",
-    value: `R$ ${(input.total ?? 0).toFixed(2)}`,
-  });
   blocks.push({ kind: "sep", bold: true });
+
+  // --- TOTAL E PAGAMENTO ---
+  blocks.push({
+    kind: "total",
+    label: "TOTAL",
+    value: moneyBr(input.total ?? 0),
+  });
+  blocks.push({ kind: "sep" });
+
   if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
   pushFingerprint(blocks, input);
   blocks.push({ kind: "cutMark" });
