@@ -195,9 +195,23 @@ const Admin = () => {
 
   const handlePrintOrder = async (order: Order) => {
     playFeedback("click");
-    const success = await manualPrintOrder(order);
-    if (success) {
-      toast({ title: `Imprimindo Mesa ${order.table_name}` });
+    const result = await manualPrintOrder(order);
+    if (result.ok) {
+      if (result.bridgeOk) {
+        toast({ title: `Imprimindo Mesa ${order.table_name}` });
+      } else {
+        toast({ 
+          title: `Pedido enfileirado (Mesa ${order.table_name})`,
+          description: "Impressora offline. O pedido imprimirá automaticamente quando a ponte voltar.",
+          variant: "default"
+        });
+      }
+    } else {
+      toast({ 
+        title: "Falha na impressão", 
+        description: result.error || result.reason,
+        variant: "destructive"
+      });
     }
   };
 
