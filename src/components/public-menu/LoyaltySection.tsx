@@ -5,12 +5,15 @@
  * - Falha silenciosa: se RPC der erro, NÃO bloqueia o checkout.
  */
 import { useEffect, useState } from "react";
-import { Gift, Loader2, Check, ExternalLink, Info } from "lucide-react";
+import { Gift, Loader2, Check, ExternalLink, Info, Sparkles, AlertCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import {
   fetchLoyaltyStatus,
   type LoyaltyStatus,
+  blockedReasonText,
 } from "@/lib/loyalty";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 type Props = {
   phone: string;
@@ -40,8 +43,6 @@ export default function LoyaltySection({
   const { slug } = useParams<{ slug: string }>();
   const [status, setStatus] = useState<LoyaltyStatus>(EMPTY);
   const [loading, setLoading] = useState(false);
-  const isPickup = serviceType === "pickup";
-  const isDelivery = serviceType === "delivery";
 
   // Se o método de serviço mudar, verifica se o brinde selecionado ainda é válido
   useEffect(() => {
@@ -68,6 +69,7 @@ export default function LoyaltySection({
         phone: phoneDigits,
         restaurantSlug,
         orderSubtotal: subtotal,
+        serviceType,
       });
       if (!cancelled) {
         setStatus(s);
@@ -83,8 +85,7 @@ export default function LoyaltySection({
       cancelled = true;
       window.clearTimeout(t);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phoneDigits, restaurantSlug, subtotal]);
+  }, [phoneDigits, restaurantSlug, subtotal, serviceType]);
 
   if (!phoneOk) return null;
   if (!status.enabled && !loading) return null;
@@ -93,151 +94,148 @@ export default function LoyaltySection({
     ? status.rewards.find((r) => r.id === selectedRewardId) ?? null
     : null;
 
+  const balanceAfter = Math.max(0, status.balance - (selectedReward?.points_cost ?? 0)) + status.projected_earn;
+
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-bold uppercase text-muted-foreground flex items-center gap-2">
-        <Gift size={16} className="text-primary" />
-        Resgatar brindes
-      </h2>
-      <div className="rounded-xl border border-border bg-card p-4 space-y-3 shadow-[var(--shadow-soft)]">
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 size={14} className="animate-spin" />
-            Buscando seu saldo…
-          </div>
-        ) : (
-          <>
-            <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2.5 space-y-1">
-              <div className="flex flex-wrap items-baseline justify-between gap-1">
-                <span className="text-sm">
-                  Você tem <strong className="text-primary text-base">{status.balance}</strong> pontos
-                </span>
-              </div>
-              {status.projected_earn > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Você vai ganhar <strong className="text-success">+{status.projected_earn}</strong>{" "}
-                  pontos quando este pedido for finalizado
-                </p>
-              )}
-              <p className="text-[11px] text-muted-foreground pt-1">
-                Saldo vinculado ao WhatsApp:{" "}
-                <strong className="font-mono text-foreground">{phoneDigits}</strong>
-              </p>
+    <section className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <Gift size={20} className="text-primary" />
+          Fidelidade & Brindes
+        </h2>
+        {slug && (
+          <Link
+            to={`/menu/${slug}/pontos`}
+            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+          >
+            Regras
+            <ExternalLink size={12} />
+          </Link>
+        )}
+      </div>
+
+      <Card className="overflow-hidden border-orange-100 shadow-sm">
+        <div className="bg-gradient-to-br from-orange-500 to-primary p-4 text-white">
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm opacity-90">
+              <Loader2 size={16} className="animate-spin" />
+              Buscando saldo...
             </div>
-
-            {selectedReward && (
-              <div className="flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
-                <Check size={14} className="mt-0.5 text-primary shrink-0" />
-                <span>
-                  <strong className="text-primary">Brinde aplicado:</strong>{" "}
-                  {selectedReward.display_name} — R$ 0,00 no pedido
-                </span>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[10px] uppercase font-bold tracking-wider opacity-80">Saldo Atual</p>
+                  <p className="text-2xl font-black">{status.balance} <span className="text-xs font-normal">pontos</span></p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] uppercase font-bold tracking-wider opacity-80">Ganha hoje</p>
+                  <p className="text-lg font-bold">+{status.projected_earn}</p>
+                </div>
               </div>
-            )}
+              
+              <div className="pt-2 border-t border-white/20 flex justify-between items-center text-[10px] font-bold uppercase tracking-wider opacity-90">
+                <span>Saldo previsto após pedido</span>
+                <span className="text-sm">{balanceAfter} pts</span>
+              </div>
+            </div>
+          )}
+        </div>
 
-            {status.rewards.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase text-muted-foreground">
-                  Escolha 1 brinde
-                </p>
-                <label className="flex items-center gap-3 rounded-lg border border-border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                  <input
-                    type="radio"
-                    name="loyalty-reward"
-                    checked={selectedRewardId === null}
-                    onChange={() => onChange(null)}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <span className="text-sm font-medium">Não quero resgatar agora</span>
-                </label>
+        <div className="p-4 space-y-4 bg-white">
+          {selectedReward && (
+            <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 animate-in zoom-in-95">
+              <div className="bg-primary p-1.5 rounded-full text-white">
+                <Check size={14} />
+              </div>
+              <div className="flex-1 space-y-0.5">
+                <p className="text-xs font-bold text-primary uppercase tracking-tight">Brinde selecionado</p>
+                <p className="text-sm font-semibold">{selectedReward.display_name}</p>
+                <p className="text-[10px] text-muted-foreground">Custo: {selectedReward.points_cost} pontos</p>
+              </div>
+              <button 
+                onClick={() => onChange(null)}
+                className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
+              >
+                Remover
+              </button>
+            </div>
+          )}
+
+          {!loading && status.rewards.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">
+                Brindes Disponíveis
+              </p>
+              
+              <div className="grid grid-cols-1 gap-2">
                 {status.rewards.map((r) => {
+                  const isSelected = selectedRewardId === r.id;
                   const disabled = !r.available;
-                  let badge: { label: string; cls: string } | null = null;
-                  
-                  if (r.available) {
-                    badge = {
-                      label: "Disponível",
-                      cls: "bg-success/15 text-success border-success/30",
-                    };
-                  } else if (r.blocked_reason === "pickup_only") {
-                    badge = {
-                      label: "Apenas para retirada",
-                      cls: "bg-warning/15 text-warning border-warning/30",
-                    };
-                  } else if (r.blocked_reason === "delivery_only") {
-                    badge = {
-                      label: "Apenas para entrega",
-                      cls: "bg-warning/15 text-warning border-warning/30",
-                    };
-                  } else if (r.blocked_reason?.startsWith("missing_points:")) {
-                    const n = r.blocked_reason.split(":")[1];
-                    badge = {
-                      label: `Faltam ${n} pontos`,
-                      cls: "bg-muted text-muted-foreground border-border",
-                    };
-                  } else if (r.blocked_reason?.startsWith("min_subtotal:")) {
-                    const v = Number(r.blocked_reason.split(":")[1] || 0);
-                    badge = {
-                      label: `Pedido mínimo R$ ${v.toFixed(2)}`,
-                      cls: "bg-accent/15 text-accent border-accent/30",
-                    };
-                  }
+                  const reason = blockedReasonText(r.blocked_reason);
+
                   return (
-                    <label
+                    <button
                       key={r.id}
-                      className={`flex items-start gap-3 rounded-lg border border-border p-3 ${
-                        disabled
-                          ? "opacity-60 cursor-not-allowed"
-                          : "cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                      }`}
+                      disabled={disabled && !isSelected}
+                      onClick={() => onChange(isSelected ? null : r.id)}
+                      className={cn(
+                        "relative flex items-center gap-3 w-full text-left p-3 rounded-xl border transition-all duration-200",
+                        isSelected 
+                          ? "border-primary bg-primary/5 ring-1 ring-primary" 
+                          : disabled 
+                            ? "opacity-60 border-dashed border-muted bg-muted/20 grayscale-[0.5]" 
+                            : "border-orange-100 hover:border-primary/40 hover:bg-orange-50/50"
+                      )}
                     >
-                      <input
-                        type="radio"
-                        name="loyalty-reward"
-                        disabled={disabled}
-                        checked={selectedRewardId === r.id}
-                        onChange={() => onChange(r.id)}
-                        className="h-4 w-4 mt-0.5 accent-primary"
-                      />
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold truncate">
-                            {r.display_name}
-                          </span>
-                          <span className="text-xs font-bold text-primary whitespace-nowrap">
-                            {r.points_cost} pts
-                          </span>
+                      <div className={cn(
+                        "w-10 h-10 flex items-center justify-center rounded-lg shrink-0",
+                        isSelected ? "bg-primary text-white" : "bg-orange-100 text-primary"
+                      )}>
+                        <Gift size={20} />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <h3 className="text-sm font-bold truncate leading-tight">{r.display_name}</h3>
+                          <span className={cn(
+                            "text-xs font-black shrink-0",
+                            isSelected ? "text-primary" : "text-muted-foreground"
+                          )}>{r.points_cost} pts</span>
                         </div>
-                        {badge && (
-                          <span
-                            className={`inline-block text-[10px] font-bold uppercase tracking-wide rounded-full border px-2 py-0.5 ${badge.cls}`}
-                          >
-                            {badge.label}
-                          </span>
+                        
+                        {disabled && reason && (
+                          <div className="flex items-center gap-1 mt-1 text-[10px] font-bold text-orange-600 bg-orange-100/50 px-2 py-0.5 rounded-full w-fit">
+                            <AlertCircle size={10} />
+                            {reason}
+                          </div>
+                        )}
+                        
+                        {!disabled && !isSelected && (
+                          <p className="text-[10px] text-success font-bold uppercase mt-1">Disponível</p>
                         )}
                       </div>
-                    </label>
+
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border flex items-center justify-center transition-colors",
+                        isSelected ? "bg-primary border-primary text-white" : "border-muted"
+                      )}>
+                        {isSelected && <Check size={12} strokeWidth={4} />}
+                      </div>
+                    </button>
                   );
                 })}
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Nenhum brinde disponível agora. Continue acumulando!
-              </p>
-            )}
-
-            {slug && (
-              <Link
-                to={`/menu/${slug}/pontos`}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-              >
-                Ver todos os brindes
-                <ExternalLink size={11} />
-              </Link>
-            )}
-          </>
-        )}
-      </div>
+            </div>
+          ) : !loading && (
+            <div className="text-center py-6 px-4 bg-orange-50/50 rounded-xl border border-dashed border-orange-200">
+              <Gift size={24} className="mx-auto text-orange-200 mb-2" />
+              <p className="text-xs font-bold text-orange-800">Continue acumulando pontos!</p>
+              <p className="text-[10px] text-orange-600/70 mt-1">Você ganha 1 ponto a cada R$ 1,00 em compras.</p>
+            </div>
+          )}
+        </div>
+      </Card>
     </section>
   );
 }
