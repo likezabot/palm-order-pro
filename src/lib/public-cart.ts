@@ -189,28 +189,38 @@ export async function createPublicOrder(payload: CheckoutPayload): Promise<Creat
   return data as CreateOrderResult;
 }
 
-export async function fetchLastCustomerAddress(
+export async function fetchCustomerProfile(
   phone: string,
-): Promise<CheckoutAddress | null> {
+  restaurantSlug: string
+): Promise<(CheckoutCustomer & CheckoutAddress) | null> {
   try {
     const digits = phone.replace(/\D/g, "");
     if (digits.length < 10) return null;
     const { data, error } = await supabase.rpc(
-      "get_last_customer_address" as any,
-      { p_phone: digits },
+      "get_customer_profile" as any,
+      { p_phone: digits, p_restaurant_slug: restaurantSlug },
     );
-    if (error) return null;
-    if (!data || typeof data !== "object") return null;
-    const d = data as Record<string, string | null>;
-    const addr: CheckoutAddress = {
-      street: d.street ?? undefined,
-      number: d.number ?? undefined,
-      neighborhood: d.neighborhood ?? undefined,
-      complement: d.complement ?? undefined,
-      reference: d.reference ?? undefined,
+    if (error || !data) return null;
+    return data as any;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchLastCustomerAddress(
+  phone: string,
+): Promise<CheckoutAddress | null> {
+  // Mantido por retrocompatibilidade, mas agora usa fetchCustomerProfile internamente
+  try {
+    const profile = await fetchCustomerProfile(phone, "plano-b"); // Slug genérico ou fixo se não soubermos
+    if (!profile) return null;
+    return {
+      street: profile.street,
+      number: profile.number,
+      neighborhood: profile.neighborhood,
+      complement: profile.complement,
+      reference: profile.reference,
     };
-    if (!addr.street && !addr.number && !addr.neighborhood) return null;
-    return addr;
   } catch {
     return null;
   }
