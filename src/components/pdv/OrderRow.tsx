@@ -1,5 +1,5 @@
 import { forwardRef, memo } from "react";
-import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed, Bike, ShoppingBag, Wifi, X } from "lucide-react";
+import { Clock, Users, Package, Printer, Pencil, ChevronRight, DollarSign, UtensilsCrossed, Bike, ShoppingBag, Wifi, X, AlertTriangle } from "lucide-react";
 import { useElapsedTime } from "@/hooks/use-elapsed-time";
 import { formatTableLabel } from "@/lib/utils";
 import { usePrintJobsStatus } from "@/hooks/use-print-jobs-status";
