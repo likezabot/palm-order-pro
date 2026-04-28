@@ -22,8 +22,17 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     const handleScroll = () => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      // Ativa o estado stuck quando o topo do container encosta no topo da tela
-      setStuck(rect.top <= 0);
+      const isStuck = rect.top <= (document.querySelector('[data-preview-mode="true"]') ? 32 : 0);
+      setStuck(isStuck);
+      
+      // Atualiza a altura real da barra para o scroll-margin-top
+      if (isStuck) {
+        const height = containerRef.current.offsetHeight;
+        const bannerHeight = document.querySelector('[data-preview-mode="true"]') ? 32 : 0;
+        document.documentElement.style.setProperty('--sticky-nav-height', `${height + bannerHeight + 10}px`);
+      } else {
+        document.documentElement.style.setProperty('--sticky-nav-height', '70px');
+      }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
