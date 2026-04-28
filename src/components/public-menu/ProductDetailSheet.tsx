@@ -59,9 +59,9 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
           </div>
         )}
         <SheetHeader className="px-5 pt-4 text-left">
-          <SheetTitle className="text-2xl leading-tight">{product.name}</SheetTitle>
+          <SheetTitle className="text-2xl leading-tight text-black">{product.name}</SheetTitle>
           {product.description && (
-            <p className="text-sm text-muted-foreground">{product.description}</p>
+            <p className="text-sm text-black/60">{product.description}</p>
           )}
         </SheetHeader>
 
@@ -69,13 +69,13 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
           className="px-5 pt-3 pb-6 space-y-4"
           style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}
         >
-          <p className="text-2xl font-black brand-gradient-text">
+          <p className="text-2xl font-black text-black">
             R$ {product.price.toFixed(2)}
           </p>
 
           {/* Atalhos rápidos */}
           <div>
-            <div className="text-xs font-bold uppercase text-muted-foreground mb-2">
+            <div className="text-xs font-bold uppercase text-black/60 mb-2">
               Quantidade
             </div>
             <div className="flex flex-wrap gap-2">
@@ -88,8 +88,8 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
                   className={cn(
                     "min-w-[52px] h-11 rounded-xl px-3 text-base font-bold tabular-nums transition-colors border-2",
                     qty === q
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-secondary text-foreground hover:bg-muted",
+                      ? "border-primary bg-primary text-black"
+                      : "border-border bg-secondary text-black hover:bg-muted",
                   )}
                 >
                   {q}
@@ -108,7 +108,7 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
               >
                 <Minus size={22} />
               </button>
-              <span className="w-10 text-center text-xl font-black tabular-nums">
+              <span className="w-10 text-center text-xl font-black tabular-nums text-black">
                 {qty}
               </span>
               <button
@@ -120,14 +120,14 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
               </button>
             </div>
             <div className="flex-1 text-right">
-              <div className="text-xs uppercase text-muted-foreground">Total</div>
-              <div className="text-lg font-black">R$ {lineTotal.toFixed(2)}</div>
+              <div className="text-xs uppercase text-black/60">Total</div>
+              <div className="text-lg font-black text-black">R$ {lineTotal.toFixed(2)}</div>
             </div>
           </div>
 
           {/* Observação */}
           <div>
-            <label className="text-xs font-bold uppercase text-muted-foreground">
+            <label className="text-xs font-bold uppercase text-black/60">
               Observação (opcional)
             </label>
             <Textarea
