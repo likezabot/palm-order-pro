@@ -86,7 +86,7 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
   return (
     <Sidebar 
       collapsible="none" 
-      className="!bg-white border-r border-[#E5E5E5] w-[260px] min-w-[240px] max-w-[280px]"
+      className="!bg-white border-r border-[#E5E5E5] w-[260px] min-w-[240px] max-w-[280px] h-screen sticky top-0"
       style={{ "--sidebar-width": "260px" } as React.CSSProperties}
     >
       <SidebarContent className="!bg-white p-3">
