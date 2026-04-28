@@ -14,6 +14,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { autoPrintOrder } from "@/lib/print-service";
 import { debugLog } from "@/lib/debug-logger";
+import { auditTestLogger } from "@/lib/audit-test-logger";
 import {
   markRealtimeHeartbeat,
   reportRealtime,
@@ -65,6 +66,7 @@ async function runAutoPrint(order: Order) {
   }
 
   debugLog.info("global-print", "iniciando autoimpressão", logCtx);
+  auditTestLogger.logEvent("START_AUTO_PRINT", order.id, { autoAttempted: Array.from(autoAttempted) });
   autoAttempted.add(order.id);
   inFlight.add(order.id);
   try {
@@ -76,10 +78,13 @@ async function runAutoPrint(order: Order) {
         `autoimpressão CONCLUÍDA`,
         { ...logCtx, reason: result.reason }
       );
+      auditTestLogger.logEvent("AUTO_PRINT_SUCCESS", order.id, { reason: result.reason });
     } else if (result.reason === "already_claimed") {
       debugLog.info("global-print", `claim recusado (já processado por outro)`, logCtx);
+      auditTestLogger.logEvent("AUTO_PRINT_CLAIM_DENIED", order.id, { reason: result.reason });
     } else {
       debugLog.warn("global-print", `autoimpressão FALHOU/RECUSADA`, { ...logCtx, reason: result.reason });
+      auditTestLogger.logEvent("AUTO_PRINT_FAILED", order.id, { reason: result.reason });
     }
   } catch (err) {
     debugLog.error("global-print", `erro fatal na autoimpressão`, { ...logCtx, error: String(err) });
