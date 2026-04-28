@@ -229,7 +229,31 @@ export default function MenuHero({
                 <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary via-primary-glow to-accent text-2xl font-black text-primary-foreground">
                   {restaurant.name.charAt(0)}
                 </div>
+          )}
+          
+          {loyaltyEnabled && slug && (
+            <button
+              onClick={() => nav(`/menu/${slug}/pontos`)}
+              className={cn(
+                "group relative mt-1 flex h-14 items-center gap-2 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-white/90 via-amber-50/80 to-amber-100/90 px-4 py-2 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.25)] backdrop-blur-md transition-all hover:scale-[1.02] hover:border-amber-500/50 hover:shadow-[0_12px_24px_-4px_rgba(245,158,11,0.35)] active:scale-[0.98]",
+                !isCenter && "ml-auto sm:ml-0"
               )}
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-inner">
+                <Gift size={18} className="drop-shadow-sm" />
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700/80">
+                  Fidelidade
+                </span>
+                <span className="text-[13px] font-black leading-tight text-amber-900">
+                  Meus Pontos
+                </span>
+              </div>
+              {/* Pontinho de atenção discreto */}
+              <div className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-background animate-pulse" />
+            </button>
+          )}
             </div>
           )}
 
