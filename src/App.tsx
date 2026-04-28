@@ -30,6 +30,7 @@ const PublicCheckout = lazy(() => import("./pages/PublicCheckout"));
 const PublicOrderSuccess = lazy(() => import("./pages/PublicOrderSuccess"));
 const PublicMyOrders = lazy(() => import("./pages/PublicMyOrders"));
 const PublicLoyalty = lazy(() => import("./pages/PublicLoyalty"));
+const OrderEditor = lazy(() => import("./pages/OrderEditor"));
 
 const RouteFallback = () => (
   <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">
@@ -70,6 +71,8 @@ const AnimatedRoutes = () => {
           />
           <Route path="/pdv" element={<StaffGate><Pdv /></StaffGate>} />
           <Route path="/print-station" element={<StaffGate><PrintStation /></StaffGate>} />
+          <Route path="/orders/:id/edit" element={<StaffGate><OrderEditor /></StaffGate>} />
+          <Route path="/orders/new" element={<StaffGate><OrderEditor /></StaffGate>} />
           <Route path="/atualizar" element={<StaffGate><ForceUpdate /></StaffGate>} />
           <Route path="/instalar/palm" element={<StaffGate><InstallPalm /></StaffGate>} />
           <Route path="/instalar/cozinha" element={<StaffGate><InstallKitchen /></StaffGate>} />

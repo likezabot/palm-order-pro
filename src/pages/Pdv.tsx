@@ -405,6 +405,13 @@ const Pdv = () => {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
+            onClick={() => navigate("/orders/new")}
+            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs sm:text-sm font-black shadow-md hover:brightness-110 active:scale-95 transition-all"
+          >
+            <FilePlus size={18} />
+            <span className="hidden xs:inline sm:inline">NOVO PEDIDO</span>
+          </button>
+          <button
             onClick={toggleStaffMode}
             title={staffMode ? "Desativar modo garçom (mostrar admin)" : "Ativar modo garçom (ocultar admin)"}
             className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs sm:text-sm font-bold transition-colors ${
@@ -489,7 +496,7 @@ const Pdv = () => {
                     }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
-                    onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
+                    onEdit={(o) => navigate(`/orders/${o.id}/edit`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); }}
                     onCancel={(o) => setCancelTarget(o)}
                   />
@@ -524,7 +531,7 @@ const Pdv = () => {
                     onSelect={() => { setSelectedId(order.id); setShowPayment(false); setPaymentsHistory([]); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
-                    onEdit={(o) => navigate(`/palm?orderId=${o.id}&tableName=${o.table_name}`)}
+                    onEdit={(o) => navigate(`/orders/${o.id}/edit`)}
                     onClose={(o) => { setSelectedId(o.id); setShowPayment(true); setPaymentsHistory([]); }}
                     onCancel={(o) => setCancelTarget(o)}
                   />
@@ -759,7 +766,7 @@ const Pdv = () => {
                   <Printer size={16} /> Imprimir
                 </button>
                 <button
-                  onClick={() => navigate(`/palm?orderId=${selectedOrder.id}&tableName=${selectedOrder.table_name}`)}
+                  onClick={() => navigate(`/orders/${selectedOrder.id}/edit`)}
                   disabled={selectedOrder.status === "done"}
                   title={selectedOrder.status === "done" ? "Pedido pronto — avance o status para reabrir e editar" : "Adicionar/remover itens"}
                   className="rounded-lg border border-border bg-card px-2 py-2.5 font-bold text-sm text-foreground active:scale-95 transition-transform flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
