@@ -241,7 +241,7 @@ export default function PublicMenu() {
         });
       },
       {
-        rootMargin: "-100px 0px -70% 0px", // Ajusta para disparar quando o topo da seção estiver próximo do topo
+        rootMargin: "-110px 0px -85% 0px", // Zona de ativação estreita logo abaixo do nav sticky
         threshold: 0,
       }
     );
