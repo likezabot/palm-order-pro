@@ -270,92 +270,80 @@ function buildDeliveryLayout(
   const v = cfg.visibleSections;
   const blocks: LayoutBlock[] = [];
 
-  // 1. Cabeçalho Compacto
+  // 1. Cabeçalho
   if (cfg.headerText) {
     blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
+  blocks.push({ kind: "sep" });
 
-  const shortId = input.orderShortId || input.orderId?.slice(-6).toUpperCase() || "---";
   const isPickup = input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão";
-  const typeText = isPickup ? "RETIRADA" : "DELIVERY";
-  
-  blocks.push({ kind: "banner", text: `${typeText} #${shortId.replace(/^#/, "")}` });
-  blocks.push({ kind: "info", label: "DATA", value: `${ctx.date} ${ctx.time}` });
+  const typeText = isPickup ? "RETIRADA" : "ENTREGA";
+  blocks.push({ kind: "banner", text: typeText });
+  blocks.push({ kind: "rawLine", text: `${ctx.date} ${ctx.time}` });
   blocks.push({ kind: "sep" });
 
-  // 2. Cliente
-  blocks.push({ kind: "banner", text: "CLIENTE" });
-  blocks.push({ kind: "info", label: "", value: safe(input.customerName).toUpperCase() });
+  // 2. Pedido / Cliente
+  const shortId = (input.orderShortId || input.orderId?.slice(-6).toUpperCase() || "---").replace(/^#/, "");
+  blocks.push({ kind: "kvLine", label: "Pedido", value: `#${shortId}` });
+  if (!isBlank(input.customerName)) {
+    blocks.push({ kind: "kvLine", label: "Cliente", value: input.customerName!.trim() });
+  }
   if (!isBlank(input.customerPhone)) {
-    blocks.push({ kind: "info", label: "Tel", value: input.customerPhone! });
+    blocks.push({ kind: "kvLine", label: "Telefone", value: input.customerPhone! });
   }
-
-  // 3. Entrega (se não for pickup)
-  if (!isPickup) {
-    blocks.push({ kind: "banner", text: "ENTREGA" });
-    const addrLines = buildAddressLines(input.deliveryAddress);
-    if (addrLines.length === 0) {
-      blocks.push({ kind: "addressBlock", lines: [NOT_PROVIDED] });
-    } else {
-      blocks.push({ kind: "addressBlock", lines: addrLines.map(l => l.toUpperCase()) });
-    }
-    
-    const neighborhood = (input.deliveryAddress?.neighborhood ?? "").trim();
-    if (neighborhood) {
-      blocks.push({ kind: "info", label: "Bairro", value: neighborhood.toUpperCase() });
-    }
-    
-    const ref = (input.deliveryAddress?.reference ?? "").trim();
-    if (ref) {
-      blocks.push({ kind: "info", label: "Ref", value: ref.toUpperCase() });
-    }
+  if (input.orderId) {
+    blocks.push({ kind: "rawLine", text: input.orderId.replace(/-/g, "").slice(0, 24), muted: true });
   }
   blocks.push({ kind: "sep" });
 
-  // 4. Pagamento
-  if (!isBlank(input.paymentMethod)) {
-    blocks.push({ kind: "banner", text: "PAGAMENTO" });
-    blocks.push({ kind: "info", label: "", value: paymentLabel(input.paymentMethod) });
-    if (input.changeFor && input.changeFor > 0) {
-      blocks.push({ kind: "info", label: "Troco p/", value: moneyBr(input.changeFor) });
-    }
+  // 3. Entrega (apenas se delivery)
+  if (!isPickup) {
+    blocks.push({ kind: "sectionHeader", text: "ENTREGA" });
+    const addrLines = buildAddressLines(input.deliveryAddress);
+    (addrLines.length ? addrLines : [NOT_PROVIDED]).forEach((l) =>
+      blocks.push({ kind: "rawLine", text: l })
+    );
+    const neighborhood = (input.deliveryAddress?.neighborhood ?? "").trim();
+    if (neighborhood) blocks.push({ kind: "kvLine", label: "Bairro", value: neighborhood });
+    const ref = (input.deliveryAddress?.reference ?? "").trim();
+    if (ref) blocks.push({ kind: "kvLine", label: "Ref", value: ref });
     blocks.push({ kind: "sep" });
   }
 
-  // 5. Itens
-  blocks.push({ kind: "banner", text: "ITENS" });
+  // 4. Itens
+  blocks.push({ kind: "sectionHeader", text: "ITENS" });
   input.items.forEach((it) => {
     blocks.push({
-      kind: "item",
-      name: it.product_name.toUpperCase(),
+      kind: "bulletItem",
+      name: it.product_name,
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
-      note: (cfg.visibleSections.notes) ? it.note ?? null : null,
+      note: v.notes ? it.note ?? null : null,
     });
-  });
-
-  if (!isPickup && input.deliveryFee && input.deliveryFee > 0) {
-    blocks.push({ kind: "summaryRow", label: "TAXA ENTREGA", value: moneyBr(input.deliveryFee) });
-  }
-  if (input.discount && input.discount > 0) {
-    blocks.push({ kind: "summaryRow", label: "DESCONTO", value: "-" + moneyBr(input.discount) });
-  }
-
-  blocks.push({ kind: "sep", bold: true });
-
-  // 6. Total
-  const total = input.total ?? (input.subtotal ?? 0) + Number(input.deliveryFee ?? 0) - Number(input.discount ?? 0);
-  blocks.push({
-    kind: "total",
-    label: "TOTAL",
-    value: moneyBr(total),
   });
   blocks.push({ kind: "sep" });
 
-  // 7. Observação Geral
-  if (input.generalNote && input.generalNote.trim() && cfg.visibleSections.notes) {
-    blocks.push({ kind: "noteBlock", label: "OBS", text: input.generalNote.trim().toUpperCase() });
+  // 5. Pagamento
+  blocks.push({ kind: "sectionHeader", text: "PAGAMENTO" });
+  if (!isBlank(input.paymentMethod)) {
+    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) });
+  }
+  if (input.changeFor && input.changeFor > 0) {
+    blocks.push({ kind: "kvLine", label: "Troco p/", value: moneyBr(input.changeFor) });
+  }
+  if (!isPickup && input.deliveryFee && input.deliveryFee > 0) {
+    blocks.push({ kind: "kvLine", label: "Taxa entrega", value: moneyBr(input.deliveryFee) });
+  }
+  if (input.discount && input.discount > 0) {
+    blocks.push({ kind: "kvLine", label: "Desconto", value: "-" + moneyBr(input.discount) });
+  }
+  const total = input.total ?? (input.subtotal ?? 0) + Number(input.deliveryFee ?? 0) - Number(input.discount ?? 0);
+  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(total), bold: true });
+
+  // 6. Observação
+  if (input.generalNote && input.generalNote.trim() && v.notes) {
     blocks.push({ kind: "sep" });
+    blocks.push({ kind: "noteBlock", label: "OBS", text: input.generalNote.trim() });
   }
 
   blocks.push({ kind: "footer", text: "Obrigado pela preferencia!" });
@@ -365,7 +353,7 @@ function buildDeliveryLayout(
   return { blocks, docType: "DELIVERY" };
 }
 
-/** Layout do cupom SENHA (BALCÃO) — estilo recibo de caixa. */
+/** Layout do cupom SENHA (BALCÃO) — mesmo padrão do recibo de retirada. */
 function buildSenhaLayout(
   input: BuildLayoutInput,
   cfg: PrintConfig,
@@ -375,40 +363,40 @@ function buildSenhaLayout(
   const blocks: LayoutBlock[] = [];
   const senhaNum = (input.senha || "").replace(/^#/, "");
 
-  // --- TOPO ---
   if (cfg.headerText) {
     blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
-  blocks.push({ kind: "banner", text: `PEDIDO #${senhaNum}` });
-  blocks.push({ kind: "banner", text: "TIPO: RETIRADA" });
-  blocks.push({ kind: "info", label: "DATA", value: `${ctx.date} ${ctx.time}` });
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "banner", text: "RETIRADA" });
+  blocks.push({ kind: "rawLine", text: `${ctx.date} ${ctx.time}` });
+  blocks.push({ kind: "sep" });
 
-  // --- CLIENTE ---
+  blocks.push({ kind: "kvLine", label: "Pedido", value: `#${senhaNum}` });
   if (!isBlank(input.customerName)) {
-    blocks.push({ kind: "info", label: "Cliente", value: input.customerName!.toUpperCase() });
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "kvLine", label: "Cliente", value: input.customerName!.trim() });
   }
+  if (input.orderId) {
+    blocks.push({ kind: "rawLine", text: input.orderId.replace(/-/g, "").slice(0, 24), muted: true });
+  }
+  blocks.push({ kind: "sep" });
 
-  // --- ITENS ---
+  blocks.push({ kind: "sectionHeader", text: "ITENS" });
   input.items.forEach((it) =>
     blocks.push({
-      kind: "item",
-      name: it.product_name.toUpperCase(),
+      kind: "bulletItem",
+      name: it.product_name,
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
       note: v.notes ? it.note ?? null : null,
     })
   );
-  blocks.push({ kind: "sep", bold: true });
-
-  // --- TOTAL E PAGAMENTO ---
-  blocks.push({
-    kind: "total",
-    label: "TOTAL",
-    value: moneyBr(input.total ?? 0),
-  });
   blocks.push({ kind: "sep" });
+
+  blocks.push({ kind: "sectionHeader", text: "PAGAMENTO" });
+  if (!isBlank(input.paymentMethod)) {
+    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) });
+  }
+  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(input.total ?? 0), bold: true });
 
   if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
   pushFingerprint(blocks, input);
