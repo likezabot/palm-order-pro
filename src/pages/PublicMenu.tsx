@@ -387,8 +387,17 @@ export default function PublicMenu() {
                     : catLayoutKey === "grid-2"
                       ? "grid grid-cols-1 gap-2 sm:grid-cols-2"
                       : "grid grid-cols-1 gap-2";
-                // No mobile, força layout=list mesmo se admin escolheu grid (foto pequena)
-                const mobileLayout: "list" | "grid" = "list";
+
+                // Mobile: se for grid-2 ou grid-3, permite colunas também no celular
+                const mobileGridClass =
+                  catLayoutKey === "grid-3"
+                    ? "grid grid-cols-3 gap-2"
+                    : catLayoutKey === "grid-2"
+                      ? "grid grid-cols-2 gap-2"
+                      : "grid grid-cols-1 gap-2";
+                
+                const mobileLayout: "list" | "grid" = 
+                  catLayoutKey === "list" ? "list" : "grid";
 
                 const entries = buildCategoryEntries(items, groupsQuery.data ?? [], cat.slug);
                 if (!entries.length) return null;
