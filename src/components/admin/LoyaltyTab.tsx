@@ -405,21 +405,29 @@ export default function LoyaltyTab() {
               placeholder="Ex: Espeto de frango grátis"
             />
           </div>
+          <div className="sm:col-span-2">
+            <Label>Descrição curta (opcional)</Label>
+            <Input
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Ex: Coca-cola lata 350ml bem gelada"
+              maxLength={150}
+            />
+          </div>
           <div>
-            <Label>Custo (pontos) — mínimo 100</Label>
+            <Label>Custo (pontos)</Label>
             <Input
               type="number" inputMode="decimal"
-              min={100}
+              min={0}
               value={form.points_cost}
               onChange={(e) => setForm({ ...form, points_cost: e.target.value })}
             />
           </div>
           <div>
-            <Label>Pedido mínimo (R$) — máximo 80</Label>
+            <Label>Pedido mínimo (R$)</Label>
             <Input
               type="number" inputMode="decimal"
               step="0.01"
-              max={80}
               value={form.min_order_subtotal}
               onChange={(e) => setForm({ ...form, min_order_subtotal: e.target.value })}
             />
@@ -440,12 +448,28 @@ export default function LoyaltyTab() {
               placeholder="uuid do produto"
             />
           </div>
-          <div className="flex items-center gap-2 pt-6">
-            <Switch
-              checked={form.active}
-              onCheckedChange={(v) => setForm({ ...form, active: v })}
-            />
-            <span className="text-sm">Ativo</span>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.active}
+                onCheckedChange={(v) => setForm({ ...form, active: v })}
+              />
+              <span className="text-sm font-medium">Ativo</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.allow_pickup}
+                onCheckedChange={(v) => setForm({ ...form, allow_pickup: v })}
+              />
+              <span className="text-sm font-medium">Permitir na Retirada</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.allow_delivery}
+                onCheckedChange={(v) => setForm({ ...form, allow_delivery: v })}
+              />
+              <span className="text-sm font-medium font-bold text-primary">Permitir na Entrega</span>
+            </div>
           </div>
           <div className="sm:col-span-2 flex gap-2">
             <Button onClick={saveReward}>
