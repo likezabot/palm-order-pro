@@ -58,6 +58,11 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
   const next = NEXT_STATUS[status];
   const kind = getOrderKind(order);
   const online = isOnlineOrder(order);
+  
+  // Verifica se impresso POR ESTA ABA
+  const printedAt = (order as any).printed_at || (order as any).print_status === "printed";
+  const printedLocally = getPrintOriginRecords().some(r => r.orderId === order.id && r.ok);
+  const showPrintWarning = printedAt && !printedLocally;
 
   const stageMs = Date.now() - new Date(order.updated_at || order.created_at).getTime();
   const stageMin = Math.floor(stageMs / 60000);
