@@ -133,6 +133,7 @@ export default function ProductCard({
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 active:scale-[0.99]",
+          className
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
