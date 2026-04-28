@@ -110,6 +110,7 @@ export default function ProductCard({
   onQuickAdd,
   priceLabel,
   trailingHint,
+  className,
 }: Props) {
   const isBlocked = disabled || product.is_sold_out;
   const interactive = !isBlocked && !!onClick;
