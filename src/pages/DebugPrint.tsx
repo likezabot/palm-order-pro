@@ -1,4 +1,5 @@
 import { PrintAuditChecklist } from "@/components/debug/PrintAuditChecklist";
+import { PrinterLogsViewer } from "@/components/debug/PrinterLogsViewer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bug } from "lucide-react";
 import { useNavigate } from "react-router-dom";
