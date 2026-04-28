@@ -368,7 +368,7 @@ export default function PublicMenu() {
             )}
 
             {(settings?.show_category_nav ?? true) && (
-              <div className="mt-4 -mb-2">
+              <div className="mt-4 mb-2">
                 <CategoryNav
                   categories={categories}
                   activeSlug={activeCat}
