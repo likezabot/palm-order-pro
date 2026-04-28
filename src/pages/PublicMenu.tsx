@@ -368,8 +368,14 @@ export default function PublicMenu() {
 
                 // Resolve overrides por categoria (caem no padrão global se ausentes)
                 const ov = settings?.category_overrides?.[cat.slug] ?? {};
-                const catLayoutKey =
-                  ov.layout ?? (layoutMode === "grid" ? "grid-2" : "list");
+                let catLayoutKey = ov.layout ?? (layoutMode === "grid" ? "grid-2" : "list");
+                
+                // Força layouts específicos conforme pedido do usuário para categorias chave
+                if (!ov.layout) {
+                  const slugLower = cat.slug.toLowerCase();
+                  if (slugLower.includes("espeto")) catLayoutKey = "grid-2";
+                  if (slugLower.includes("bebida")) catLayoutKey = "grid-3";
+                }
                 const catAspect = ov.image_aspect ?? imageAspect;
                 const catCardStyle = ov.card_style ?? "detailed";
                 // Mobile sempre lista compacta; grid só em sm+ (tablet/desktop)
@@ -381,8 +387,17 @@ export default function PublicMenu() {
                     : catLayoutKey === "grid-2"
                       ? "grid grid-cols-1 gap-2 sm:grid-cols-2"
                       : "grid grid-cols-1 gap-2";
-                // No mobile, força layout=list mesmo se admin escolheu grid (foto pequena)
-                const mobileLayout: "list" | "grid" = "list";
+
+                // Mobile: se for grid-2 ou grid-3, permite colunas também no celular
+                const mobileGridClass =
+                  catLayoutKey === "grid-3"
+                    ? "grid grid-cols-3 gap-2"
+                    : catLayoutKey === "grid-2"
+                      ? "grid grid-cols-2 gap-2"
+                      : "grid grid-cols-1 gap-2";
+                
+                const mobileLayout: "list" | "grid" = 
+                  catLayoutKey === "list" ? "list" : "grid";
 
                 const entries = buildCategoryEntries(items, groupsQuery.data ?? [], cat.slug);
                 if (!entries.length) return null;
@@ -390,8 +405,8 @@ export default function PublicMenu() {
                 return (
                   <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
                     <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
-                    {/* Mobile: lista compacta sempre */}
-                    <div className="grid grid-cols-1 gap-2 sm:hidden">
+                    {/* Mobile: respeita colunas específicas se solicitado */}
+                    <div className={cn("sm:hidden", mobileGridClass)}>
                       {entries.map((entry) => {
                         if (entry.kind === "product") {
                           const p = entry.product;
@@ -400,7 +415,7 @@ export default function PublicMenu() {
                               key={p.id}
                               product={p}
                               disabled={!isOpen && !isPreview}
-                              layout="list"
+                              layout={mobileLayout}
                               showImage={showImages}
                               showDescription={showDescriptions}
                               imageAspect={catAspect}
@@ -420,7 +435,7 @@ export default function PublicMenu() {
                             key={`group-${entry.group.id}`}
                             product={{ ...entry.trigger, is_sold_out: entry.allSoldOut }}
                             disabled={!isOpen && !isPreview}
-                            layout="list"
+                            layout={mobileLayout}
                             showImage={showImages}
                             showDescription={false}
                             imageAspect={catAspect}
