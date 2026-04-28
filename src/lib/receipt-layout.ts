@@ -56,8 +56,8 @@ export type LayoutBlock =
   | { kind: "rawLine"; text: string; muted?: boolean }
   /** Item em formato bullet: "• {qtd} x {nome} - R$ {preço}". */
   | { kind: "bulletItem"; quantity: number; name: string; subtotal: number; note?: string | null }
-  /** Linha "- Label: valor" alinhada à esquerda (sub-item de PAGAMENTO). */
-  | { kind: "kvLine"; label: string; value: string; bold?: boolean };
+  /** Linha "Label: valor" alinhada à esquerda. Quando dash=true, vira "- Label: valor" (PAGAMENTO). */
+  | { kind: "kvLine"; label: string; value: string; bold?: boolean; dash?: boolean };
 
 export interface ReceiptLayout {
   blocks: LayoutBlock[];
@@ -242,9 +242,9 @@ export function createReceiptLayoutModel(
   // --- PAGAMENTO ---
   blocks.push({ kind: "sectionHeader", text: "PAGAMENTO" });
   if (!isBlank(input.paymentMethod)) {
-    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) });
+    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) , dash: true });
   }
-  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(input.total ?? 0), bold: true });
+  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(input.total ?? 0), bold: true, dash: true });
 
   // --- OPCIONAL (OBSERVAÇÃO) ---
   if (input.generalNote && input.generalNote.trim() && v.notes) {
@@ -326,19 +326,19 @@ function buildDeliveryLayout(
   // 5. Pagamento
   blocks.push({ kind: "sectionHeader", text: "PAGAMENTO" });
   if (!isBlank(input.paymentMethod)) {
-    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) });
+    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) , dash: true });
   }
   if (input.changeFor && input.changeFor > 0) {
-    blocks.push({ kind: "kvLine", label: "Troco p/", value: moneyBr(input.changeFor) });
+    blocks.push({ kind: "kvLine", label: "Troco p/", value: moneyBr(input.changeFor) , dash: true });
   }
   if (!isPickup && input.deliveryFee && input.deliveryFee > 0) {
-    blocks.push({ kind: "kvLine", label: "Taxa entrega", value: moneyBr(input.deliveryFee) });
+    blocks.push({ kind: "kvLine", label: "Taxa entrega", value: moneyBr(input.deliveryFee) , dash: true });
   }
   if (input.discount && input.discount > 0) {
-    blocks.push({ kind: "kvLine", label: "Desconto", value: "-" + moneyBr(input.discount) });
+    blocks.push({ kind: "kvLine", label: "Desconto", value: "-" + moneyBr(input.discount) , dash: true });
   }
   const total = input.total ?? (input.subtotal ?? 0) + Number(input.deliveryFee ?? 0) - Number(input.discount ?? 0);
-  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(total), bold: true });
+  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(total), bold: true, dash: true });
 
   // 6. Observação
   if (input.generalNote && input.generalNote.trim() && v.notes) {
@@ -394,9 +394,9 @@ function buildSenhaLayout(
 
   blocks.push({ kind: "sectionHeader", text: "PAGAMENTO" });
   if (!isBlank(input.paymentMethod)) {
-    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) });
+    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) , dash: true });
   }
-  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(input.total ?? 0), bold: true });
+  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(input.total ?? 0), bold: true, dash: true });
 
   if (v.footer && cfg.footerText) blocks.push({ kind: "footer", text: cfg.footerText });
   pushFingerprint(blocks, input);

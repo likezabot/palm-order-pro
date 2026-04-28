@@ -122,11 +122,13 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
         );
         break;
       }
-      case "kvLine":
+      case "kvLine": {
+        const dashHtml = blk.dash ? `<span class="kv-dash">-</span> ` : "";
         parts.push(
-          `<div class="kv-line${blk.bold ? " kv-line-bold" : ""}"><span class="kv-dash">-</span> <span class="kv-label">${escapeHtml(blk.label)}:</span> <span class="kv-value">${escapeHtml(blk.value)}</span></div>`
+          `<div class="kv-line${blk.bold ? " kv-line-bold" : ""}">${dashHtml}<span class="kv-label">${escapeHtml(blk.label)}:</span> <span class="kv-value">${escapeHtml(blk.value)}</span></div>`
         );
         break;
+      }
     }
   }
   return parts.join("\n");
