@@ -361,7 +361,7 @@ export default function PublicCheckout() {
       )}
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <button
-          onClick={() => nav(`/menu/${slug}`)}
+          onClick={() => nav(resolvedSlug ? `/menu/${resolvedSlug}` : "/")}
           aria-label="Voltar"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary"
         >
@@ -521,7 +521,7 @@ export default function PublicCheckout() {
 
         <LoyaltySection
           phone={phone}
-          restaurantSlug={slug ?? ""}
+          restaurantSlug={resolvedSlug}
           subtotal={subtotal}
           serviceType={serviceType}
           selectedRewardId={loyaltyRewardId}
