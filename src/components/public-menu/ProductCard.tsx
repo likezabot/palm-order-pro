@@ -172,6 +172,7 @@ export default function ProductCard({
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 hover:-translate-y-0.5 active:scale-[0.99]",
+          className
         )}
       >
         {effectiveShowImage && (
