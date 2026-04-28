@@ -113,6 +113,7 @@ export async function printOrderByServiceType(
 ): Promise<DispatchResult> {
   const order = await loadOrderForPrint(orderId);
   if (!order) {
+    await logPrinterEvent("Pedido não encontrado para impressão", orderId, "error");
     return {
       ok: false,
       reason: "order_not_found",
