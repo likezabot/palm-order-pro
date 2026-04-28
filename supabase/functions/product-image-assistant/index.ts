@@ -32,18 +32,18 @@ serve(async (req) => {
       });
       
       const html = await response.text();
-      // More robust regex to find image data in Bing's results
       const results = [];
-      const murlRegex = /"murl":"([^"]+)"/g;
-      const turlRegex = /"turl":"([^"]+)"/g;
-      const titleRegex = /"t":"([^"]+)"/g;
+      
+      // regex that worked in the terminal: murl&quot;:&quot;([^&]+)&quot;
+      const murlRegex = /murl&quot;:&quot;([^&]+)&quot;/g;
+      const titleRegex = /&quot;t&quot;:&quot;([^&]+)&quot;/g;
+      const turlRegex = /&quot;turl&quot;:&quot;([^&]+)&quot;/g;
       
       let murlMatch;
       while ((murlMatch = murlRegex.exec(html)) !== null && results.length < 15) {
         const murl = murlMatch[1];
-        // Try to find corresponding thumbnail and title nearby if possible, or just use murl
         results.push({
-          thumbnail: murl, // Fallback to murl if thumbnail not found
+          thumbnail: murl, // fallback
           url: murl,
           title: 'Produto',
           source: murl,
