@@ -271,7 +271,7 @@ export default function PublicOrderSuccess() {
     total: Number(total),
     address: state.address,
     rewardName: state.loyalty_reward_name,
-    pointsUsed: state.loyalty_points_pending, // Note: loyalty_points_pending might be earn points, better use selected reward points if available.
+    pointsUsed: state.loyalty_reward_points,
   });
 
   const waUrl = restaurantWa
