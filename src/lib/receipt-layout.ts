@@ -135,18 +135,19 @@ function paymentLabel(m?: string | null): string {
  * Se o papel real não mostrar essas linhas → não passou por este motor.
  */
 function pushFingerprint(blocks: LayoutBlock[], input: BuildLayoutInput) {
-  blocks.push({ kind: "footer", text: PRINT_ENGINE_FOOTER });
-  blocks.push({ kind: "footer", text: `APP_BUILD: ${APP_BUILD}` });
   const fp = input.fingerprint;
-  if (fp?.printPath) {
-    const src = fp.source ? ` [${fp.source}]` : "";
-    blocks.push({ kind: "footer", text: `PRINT_PATH: ${fp.printPath}${src}` });
-  }
-  const oid = input.orderId ? input.orderId.slice(0, 8) : null;
+  const src = fp?.source ? ` [${fp.source}]` : "";
+  const oid = input.orderId ? input.orderId.slice(0, 8) : "";
+  
+  // Linhas compactas
+  blocks.push({ kind: "footer", text: `ENGINE: ${PRINT_ENGINE_FOOTER.replace("PRINT_ENGINE: ", "")}` });
+  blocks.push({ kind: "footer", text: `APP: ${APP_BUILD.slice(0, 16)}` });
+  
+  let pathSvc = `PATH: ${fp?.printPath || "unknown"}${src}`;
+  if (input.serviceType) pathSvc += ` SVC: ${input.serviceType}`;
+  blocks.push({ kind: "footer", text: pathSvc });
+  
   if (oid) blocks.push({ kind: "footer", text: `ORDER: ${oid}` });
-  if (input.serviceType) {
-    blocks.push({ kind: "footer", text: `SERVICE: ${input.serviceType}` });
-  }
 }
 
 function buildAddressLines(addr?: DeliveryAddressData | null): string[] {
