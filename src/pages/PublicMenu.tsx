@@ -51,6 +51,8 @@ export default function PublicMenu() {
   const [cartOpen, setCartOpen] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const isScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [openGroup, setOpenGroup] = useState<{
     group: ProductGroup;
     trigger: PublicProduct;
@@ -58,6 +60,7 @@ export default function PublicMenu() {
   } | null>(null);
 
   const groupsQuery = usePublicProductGroups();
+
 
   const restaurantQuery = useQuery({
     queryKey: ["pmenu", "restaurant", slug],
