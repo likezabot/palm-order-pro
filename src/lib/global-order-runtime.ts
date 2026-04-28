@@ -13,6 +13,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { autoPrintOrder } from "@/lib/print-service";
+import { loadPrintConfig } from "@/lib/print-config";
 import { debugLog } from "@/lib/debug-logger";
 import { auditTestLogger } from "@/lib/audit-test-logger";
 import {
@@ -48,6 +49,18 @@ async function runAutoPrint(order: Order) {
     debugLog.info("global-print", "skip — pedido cancelado", logCtx);
     return;
   }
+
+  // REQUISITO: Apenas dispositivos com ponte térmica configurada devem "clamar" autoimpressão.
+  // Isso evita que o celular do cliente ou de garçons sem impressora "roubem" o claim e 
+  // marquem como impresso (ou falha) sem que o papel saia no caixa.
+  const cfg = loadPrintConfig();
+  const canPrint = cfg.printMode === "bridge" && !!cfg.bridgeUrl;
+  
+  if (!canPrint) {
+    // Não loga como skip para não poluir o console de quem não é o caixa
+    return;
+  }
+
   if (inFlight.has(order.id)) {
     debugLog.info("global-print", "skip — já em processamento local", logCtx);
     return;
@@ -68,6 +81,7 @@ async function runAutoPrint(order: Order) {
     debugLog.info("global-print", "skip — autoimpressão já tentada nesta sessão", logCtx);
     return;
   }
+
 
   debugLog.info("global-print", "iniciando autoimpressão", logCtx);
   auditTestLogger.logEvent("START_AUTO_PRINT", order.id, { autoAttempted: Array.from(autoAttempted) });
