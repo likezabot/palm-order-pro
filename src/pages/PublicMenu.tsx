@@ -470,7 +470,8 @@ export default function PublicMenu() {
                                 disabled={!isOpen && !isPreview}
                                 layout={productLayout}
                                 showImage={showImages}
-                                showDescription={showDescriptions}
+                                showDescription={catShowDescription}
+                                fullDescription={cat.slug === "refeicoes"}
                                 imageAspect={catAspect}
                                 cardStyle={catCardStyle}
                                 elevated={cardElevated}
