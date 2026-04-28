@@ -25,7 +25,7 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
         break;
       case "banner":
         parts.push(
-          `<div class="center bold" style="font-size:${f.total}px;margin:6px 0;">${escapeHtml(blk.text)}</div>`
+          `<div class="center bold" style="font-size:${Math.round(f.total * 1.25)}px;margin:8px 0;text-transform:uppercase;">${escapeHtml(blk.text)}</div>`
         );
         break;
       case "sep":
