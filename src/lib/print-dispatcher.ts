@@ -197,6 +197,13 @@ export async function printOrderByServiceType(
 
   const sendToBridge = async (printFn: () => Promise<{ ok: boolean; error?: string }>) => {
     // LOG OBRIGATÓRIO: ANTES DE ENVIAR PARA BRIDGE
+    await logPrinterEvent(
+      "Enviando dados para a Bridge Térmica",
+      orderId,
+      "info",
+      { bridgeUrl: cfg.bridgeUrl, printPath, source }
+    );
+
     console.log("[PRINT_PIPELINE] ENVIANDO PARA BRIDGE:", {
       bridgeUrl: cfg.bridgeUrl,
       orderId,
