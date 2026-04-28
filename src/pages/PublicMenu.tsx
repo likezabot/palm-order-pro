@@ -509,7 +509,7 @@ export default function PublicMenu() {
         </div>
       )}
 
-      <LoyaltyCTACard />
+      
       {sectionOrder.map(renderSection)}
 
       {!isOpen && !isPreview && (
