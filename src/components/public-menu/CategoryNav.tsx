@@ -16,6 +16,7 @@ type Props = {
  */
 export default function CategoryNav({ categories, activeSlug, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
@@ -23,12 +24,25 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     if (!el) return;
     const onScroll = () => {
       const top = el.getBoundingClientRect().top;
-      setStuck(top <= 0);
+      setStuck(top <= 1);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Faz scroll horizontal do botão ativo para dentro da visão
+  useEffect(() => {
+    if (!activeSlug || !scrollRef.current) return;
+    const activeButton = scrollRef.current.querySelector('[data-active="true"]');
+    if (activeButton) {
+      activeButton.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center"
+      });
+    }
+  }, [activeSlug]);
 
   if (!categories.length) return null;
 
