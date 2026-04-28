@@ -211,6 +211,21 @@ export default function PublicCheckout() {
     return <Navigate to={fallback} replace />;
   }
 
+  const applySavedAddress = () => {
+    if (!customerFound) return;
+    setStreet(customerFound.street || "");
+    setNumber(customerFound.number || "");
+    setNeighborhood(customerFound.neighborhood || "");
+    setComplement(customerFound.complement || "");
+    setReference(customerFound.reference || "");
+    setServiceType("delivery");
+    setShowAddressFoundCard(false);
+    toast({
+      title: "Endereço aplicado!",
+      description: "Agora você pode revisar os dados de entrega.",
+    });
+  };
+
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
     if (isPreview) {
