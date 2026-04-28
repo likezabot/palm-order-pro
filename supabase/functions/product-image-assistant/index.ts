@@ -24,21 +24,34 @@ serve(async (req) => {
       // or use a mock with some real-looking data if it's too hard to scrape.
       // Actually, I'll try to use a simple scraper for DuckDuckGo images.
       
-      const searchUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(query + " garrafa lata produto fundo transparente")}&o=json`;
+      const searchUrl = `https://www.bing.com/images/search?q=${encodeURIComponent(query + " produto fundo transparente")}`;
       const response = await fetch(searchUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
       });
       
-      const data = await response.json();
-      const results = (data.results || []).slice(0, 15).map((img: any) => ({
-        thumbnail: img.thumbnail,
-        url: img.image,
-        title: img.title,
-        source: img.source,
-        domain: new URL(img.url).hostname
-      }));
+      const html = await response.text();
+      // Regex to find the JSON-like data in Bing's results
+      const regex = /m="({&quot;murl&quot;:&quot;[^"]+&quot;,&quot;turl&quot;:&quot;[^"]+&quot;,&quot;t&quot;:&quot;[^"]+&quot;[^}]*})"/g;
+      const results = [];
+      let match;
+      
+      while ((match = regex.exec(html)) !== null && results.length < 15) {
+        try {
+          const jsonStr = match[1].replace(/&quot;/g, '"');
+          const data = JSON.parse(jsonStr);
+          results.push({
+            thumbnail: data.turl,
+            url: data.murl,
+            title: data.t || 'Sem título',
+            source: data.murl, // Fallback
+            domain: new URL(data.murl).hostname
+          });
+        } catch (e) {
+          console.error('Error parsing match', e);
+        }
+      }
 
       return new Response(JSON.stringify({ results }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
