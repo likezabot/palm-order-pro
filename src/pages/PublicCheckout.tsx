@@ -270,6 +270,7 @@ export default function PublicCheckout() {
               : null,
           loyalty_points_pending: projectedEarn,
           loyalty_reward_name: selectedReward?.display_name ?? null,
+          loyalty_reward_points: selectedReward?.points_cost ?? null,
           loyalty_balance_after: balanceAfter,
         },
       });
