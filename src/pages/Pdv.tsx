@@ -782,10 +782,10 @@ const Pdv = () => {
                 </button>
                 <button
                   onClick={() => setCancelTarget(selectedOrder)}
-                  className="rounded-lg border border-destructive/40 bg-destructive/5 px-2 py-2.5 font-bold text-sm text-destructive hover:bg-destructive/10 active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+                  className="rounded-lg border border-destructive/20 bg-destructive/10 px-2 py-2.5 font-black text-sm text-destructive hover:bg-destructive hover:text-white active:scale-95 transition-all flex items-center justify-center gap-1.5"
                   title="Cancelar pedido"
                 >
-                  <X size={16} /> Cancelar
+                  <X size={18} /> CANCELAR
                 </button>
               </div>
               {/* Linha 2: ação principal */}
