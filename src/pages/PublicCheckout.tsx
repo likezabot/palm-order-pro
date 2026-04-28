@@ -108,6 +108,7 @@ export default function PublicCheckout() {
   // Auto-preenche dados do cliente pelo telefone
   const [customerFound, setCustomerFound] = useState<any>(null);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [showAddressFoundCard, setShowAddressFoundCard] = useState(false);
   const lastFetchedPhoneRef = useRef<string>("");
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export default function PublicCheckout() {
     if (digits.length < 10 || !resolvedSlug) {
       lastFetchedPhoneRef.current = "";
       setCustomerFound(null);
+      setShowAddressFoundCard(false);
       return;
     }
     if (lastFetchedPhoneRef.current === lookupKey) return;
@@ -132,28 +134,21 @@ export default function PublicCheckout() {
             setName(profile.name);
           }
           
-          const addressEmpty = !street.trim() && !number.trim() && !neighborhood.trim();
-          if (addressEmpty && profile.street) {
-            setStreet(profile.street);
-            if (profile.number) setNumber(profile.number);
-            if (profile.neighborhood) setNeighborhood(profile.neighborhood);
-            if (profile.complement) setComplement(profile.complement);
-            if (profile.reference) setReference(profile.reference);
-            
-            toast({
-              title: "Endereço encontrado!",
-              description: "Preenchemos com os dados do seu último pedido.",
-            });
+          const hasSavedAddress = !!(profile.street && profile.number && profile.neighborhood);
+          const currentAddressEmpty = !street.trim() && !number.trim() && !neighborhood.trim();
+          
+          // Se encontrou endereço e o atual está vazio, mostra o card discreto
+          if (hasSavedAddress && currentAddressEmpty) {
+            setShowAddressFoundCard(true);
+          } else {
+            setShowAddressFoundCard(false);
           }
 
-          if (profile.last_service_type) {
-            setServiceType(profile.last_service_type as ServiceType);
-          }
-          if (profile.last_payment_method) {
-            setPaymentMethod(profile.last_payment_method as PaymentMethod);
-          }
+          // Não altera serviceType nem paymentMethod automaticamente
+          // Mantém a escolha atual do usuário como solicitado
         } else {
           setCustomerFound(null);
+          setShowAddressFoundCard(false);
         }
       } catch (err) {
         console.error("Erro ao buscar cliente:", err);
@@ -163,7 +158,7 @@ export default function PublicCheckout() {
     }, 600);
 
     return () => clearTimeout(handle);
-  }, [phone, resolvedSlug, name, street, number, neighborhood, toast]);
+  }, [phone, resolvedSlug, name, street, number, neighborhood]);
 
   const [requestId] = useState(() => newClientRequestId());
 
@@ -216,6 +211,21 @@ export default function PublicCheckout() {
     return <Navigate to={fallback} replace />;
   }
 
+  const applySavedAddress = () => {
+    if (!customerFound) return;
+    setStreet(customerFound.street || "");
+    setNumber(customerFound.number || "");
+    setNeighborhood(customerFound.neighborhood || "");
+    setComplement(customerFound.complement || "");
+    setReference(customerFound.reference || "");
+    setServiceType("delivery");
+    setShowAddressFoundCard(false);
+    toast({
+      title: "Endereço aplicado!",
+      description: "Agora você pode revisar os dados de entrega.",
+    });
+  };
+
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
     if (isPreview) {
@@ -264,10 +274,20 @@ export default function PublicCheckout() {
       // Lógica de limpeza agressiva do carrinho
       cart.clear();
       try {
-        sessionStorage.removeItem(CART_STORAGE_KEY);
+        // Limpa todas as formas possíveis de persistência do carrinho
+        sessionStorage.removeItem("public_cart_v1");
         sessionStorage.removeItem(REWARD_KEY);
-        localStorage.removeItem(CART_STORAGE_KEY);
+        localStorage.removeItem("public_cart_v1");
+        
+        // Também tenta limpar com o valor vazio para garantir disparo de eventos de storage
+        sessionStorage.setItem("public_cart_v1", "[]");
+        localStorage.setItem("public_cart_v1", "[]");
+        
         if (phoneDigits) localStorage.setItem(PHONE_KEY, phoneDigits);
+        
+        // Força o window a saber que o storage mudou (útil para abas/componentes ouvindo)
+        window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("public_cart_sync"));
       } catch (e) {
         console.warn("Erro ao limpar storage:", e);
       }
@@ -393,15 +413,13 @@ export default function PublicCheckout() {
                 </div>
               </div>
 
-              {phoneOk && !searchingCustomer && customerFound && (
-                <div className="bg-orange-50/80 border border-orange-200 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="bg-white p-2 rounded-xl shadow-sm">
-                    <UserCheck className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-slate-800 leading-tight">Cliente cadastrado</p>
-                    <p className="text-xs text-slate-600 mt-0.5">Olá, <span className="font-bold text-primary">{customerFound.name}</span>! Que bom ver você de novo.</p>
-                  </div>
+              {/* Welcome message simplified if needed, or removed to favor the discrete address card */}
+              {phoneOk && !searchingCustomer && customerFound && !showAddressFoundCard && (
+                <div className="bg-success/5 border border-success/20 rounded-2xl p-4 flex items-center gap-3 animate-in fade-in">
+                  <UserCheck className="h-5 w-5 text-success shrink-0" />
+                  <p className="text-xs text-slate-600">
+                    Olá, <span className="font-bold text-slate-800">{customerFound.name}</span>! Que bom ter você de volta.
+                  </p>
                 </div>
               )}
 
@@ -432,6 +450,37 @@ export default function PublicCheckout() {
               </div>
               <h2 className="text-lg font-black text-slate-800">Entrega ou Retirada?</h2>
             </div>
+
+            {showAddressFoundCard && (
+              <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 mb-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-start gap-3">
+                  <div className="bg-primary/20 p-2 rounded-xl text-primary mt-0.5">
+                    <MapPin size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 leading-tight">Encontramos seus dados anteriores</p>
+                    <p className="text-xs text-slate-600 mt-0.5">Deseja usar o endereço do seu último pedido?</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    onClick={applySavedAddress}
+                    size="sm" 
+                    className="bg-primary hover:bg-primary/90 text-white font-bold h-9 rounded-xl px-4"
+                  >
+                    Usar endereço salvo para entrega
+                  </Button>
+                  <Button 
+                    onClick={() => setShowAddressFoundCard(false)}
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-slate-500 hover:text-slate-700 font-bold h-9 rounded-xl"
+                  >
+                    Continuar como {serviceType === "pickup" ? "retirada" : serviceType === "dine_in" ? "balcão" : "retirada"}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <RadioGroup
               value={serviceType}

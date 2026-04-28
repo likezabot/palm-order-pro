@@ -101,6 +101,24 @@ export function usePublicCart() {
     writeCart(items);
   }, [items]);
 
+  // Sincroniza entre abas e instâncias do hook
+  useEffect(() => {
+    const sync = () => {
+      const current = readCart();
+      // Evita loops infinitos verificando se os itens mudaram
+      if (JSON.stringify(current) !== JSON.stringify(items)) {
+        setItems(current);
+      }
+    };
+    window.addEventListener("storage", sync);
+    // Também ouve eventos customizados disparados no mesmo window
+    window.addEventListener("public_cart_sync", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("public_cart_sync", sync);
+    };
+  }, [items]);
+
   const add = useCallback((product: PublicProduct, qty = 1, note = "") => {
     setItems((prev) => {
       const existing = prev.find((it) => it.product_id === product.id && (it.note ?? "") === note);
@@ -143,7 +161,11 @@ export function usePublicCart() {
     );
   }, []);
 
-  const clear = useCallback(() => setItems([]), []);
+  const clear = useCallback(() => {
+    setItems([]);
+    sessionStorage.setItem(STORAGE_KEY, "[]");
+    window.dispatchEvent(new Event("public_cart_sync"));
+  }, []);
 
   const itemCount = items.reduce((s, it) => s + it.quantity, 0);
   const subtotal = items.reduce((s, it) => s + it.product_price * it.quantity, 0);
