@@ -287,6 +287,7 @@ export default function PublicCheckout() {
         
         // Força o window a saber que o storage mudou (útil para abas/componentes ouvindo)
         window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("public_cart_sync"));
       } catch (e) {
         console.warn("Erro ao limpar storage:", e);
       }
