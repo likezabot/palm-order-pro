@@ -538,6 +538,15 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           {saving ? "SALVANDO..." : "SALVAR"}
         </button>
       </div>
+
+      <ImageSearchModal
+        isOpen={showImageSearch}
+        onClose={() => setShowImageSearch(false)}
+        productName={name}
+        productSlug={product?.id || name.toLowerCase().replace(/\s+/g, '-')}
+        onImageSelected={(url) => setImageUrl(url)}
+        category={category}
+      />
     </div>
   );
 };
