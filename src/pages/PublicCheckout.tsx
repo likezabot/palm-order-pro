@@ -108,6 +108,7 @@ export default function PublicCheckout() {
   // Auto-preenche dados do cliente pelo telefone
   const [customerFound, setCustomerFound] = useState<any>(null);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [showAddressFoundCard, setShowAddressFoundCard] = useState(false);
   const lastFetchedPhoneRef = useRef<string>("");
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export default function PublicCheckout() {
     if (digits.length < 10 || !resolvedSlug) {
       lastFetchedPhoneRef.current = "";
       setCustomerFound(null);
+      setShowAddressFoundCard(false);
       return;
     }
     if (lastFetchedPhoneRef.current === lookupKey) return;
@@ -132,28 +134,21 @@ export default function PublicCheckout() {
             setName(profile.name);
           }
           
-          const addressEmpty = !street.trim() && !number.trim() && !neighborhood.trim();
-          if (addressEmpty && profile.street) {
-            setStreet(profile.street);
-            if (profile.number) setNumber(profile.number);
-            if (profile.neighborhood) setNeighborhood(profile.neighborhood);
-            if (profile.complement) setComplement(profile.complement);
-            if (profile.reference) setReference(profile.reference);
-            
-            toast({
-              title: "Endereço encontrado!",
-              description: "Preenchemos com os dados do seu último pedido.",
-            });
+          const hasSavedAddress = !!(profile.street && profile.number && profile.neighborhood);
+          const currentAddressEmpty = !street.trim() && !number.trim() && !neighborhood.trim();
+          
+          // Se encontrou endereço e o atual está vazio, mostra o card discreto
+          if (hasSavedAddress && currentAddressEmpty) {
+            setShowAddressFoundCard(true);
+          } else {
+            setShowAddressFoundCard(false);
           }
 
-          if (profile.last_service_type) {
-            setServiceType(profile.last_service_type as ServiceType);
-          }
-          if (profile.last_payment_method) {
-            setPaymentMethod(profile.last_payment_method as PaymentMethod);
-          }
+          // Não altera serviceType nem paymentMethod automaticamente
+          // Mantém a escolha atual do usuário como solicitado
         } else {
           setCustomerFound(null);
+          setShowAddressFoundCard(false);
         }
       } catch (err) {
         console.error("Erro ao buscar cliente:", err);
@@ -163,7 +158,7 @@ export default function PublicCheckout() {
     }, 600);
 
     return () => clearTimeout(handle);
-  }, [phone, resolvedSlug, name, street, number, neighborhood, toast]);
+  }, [phone, resolvedSlug, name, street, number, neighborhood]);
 
   const [requestId] = useState(() => newClientRequestId());
 
