@@ -46,6 +46,8 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   );
   const [aliasDraft, setAliasDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showImageSearch, setShowImageSearch] = useState(false);
+  const [originalImageUrl] = useState(product?.image_url || "");
   const { toast } = useToast();
 
   const { data: groups = [] } = useProductGroups();
