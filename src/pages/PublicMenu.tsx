@@ -33,7 +33,7 @@ import UpsellDialog from "@/components/public-menu/UpsellDialog";
 import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 import TopSellersSection from "@/components/public-menu/TopSellersSection";
 import PublicGroupVariantSheet from "@/components/public-menu/PublicGroupVariantSheet";
-import LoyaltyCTACard from "@/components/public-menu/LoyaltyCTACard";
+
 
 import { usePublicProductGroups, buildCategoryEntries } from "@/lib/public-menu-groups";
 import type { ProductGroup } from "@/lib/product-groups";
