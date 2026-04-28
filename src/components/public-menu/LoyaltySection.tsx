@@ -107,31 +107,13 @@ export default function LoyaltySection({
           </div>
         ) : (
           <>
-            {!isPickup && (
-              <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2.5 space-y-1">
-                <div className="flex items-start gap-2 text-sm">
-                  <Info size={14} className="mt-0.5 text-warning shrink-0" />
-                  <div className="space-y-1">
-                    {serviceType === "delivery" && (
-                      <p className="font-semibold text-foreground">
-                        Pedidos de entrega não acumulam pontos.
-                      </p>
-                    )}
-                    <p className="text-muted-foreground text-xs">
-                      Resgate de brindes disponível apenas para retirada.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2.5 space-y-1">
               <div className="flex flex-wrap items-baseline justify-between gap-1">
                 <span className="text-sm">
                   Você tem <strong className="text-primary text-base">{status.balance}</strong> pontos
                 </span>
               </div>
-              {isPickup && status.projected_earn > 0 && (
+              {status.projected_earn > 0 && (
                 <p className="text-xs text-muted-foreground">
                   Você vai ganhar <strong className="text-success">+{status.projected_earn}</strong>{" "}
                   pontos quando este pedido for finalizado
