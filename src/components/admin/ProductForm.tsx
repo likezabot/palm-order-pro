@@ -1,8 +1,9 @@
-import { useState, useMemo, KeyboardEvent } from "react";
-import { ArrowLeft, X, Plus } from "lucide-react";
+import { useState, useMemo, KeyboardEvent, useEffect } from "react";
+import { ArrowLeft, X, Plus, Search, ImageOff, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Product, CATEGORY_LABELS, CATEGORIES } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { ImageSearchModal } from "./ImageSearchModal";
 import {
   useProductGroups,
   useInvalidateProductGroups,
