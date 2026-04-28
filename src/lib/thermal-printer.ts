@@ -407,9 +407,23 @@ export async function sendToBridge(
   const t0 = performance.now();
   const printUrl = bridgePrintUrl(url);
   const metaInfo = meta
-    ? ` path=${meta.printPath} src=${meta.source} order=${meta.orderId ?? "-"} svc=${meta.serviceType ?? "-"}`
+    ? ` path=${meta.printPath} src=${meta.source} order=${meta.orderId ?? "-"} short=${meta.orderShortId ?? "-"} svc=${meta.serviceType ?? "-"} total=R$${meta.total?.toFixed(2) ?? "-"} items=${meta.itemsCount ?? "-"}`
     : "";
   debugLog.info("print", `→ enviando ${payload.length} bytes para bridge${metaInfo}`, { url: printUrl, meta });
+
+  if (meta) {
+    console.log("[PRINT_DEBUG_BEFORE]", {
+      orderId: meta.orderId,
+      shortId: meta.orderShortId,
+      customer: meta.customerName,
+      service: meta.serviceType,
+      total: meta.total,
+      items: meta.itemsCount,
+      path: meta.printPath,
+      source: meta.source
+    });
+  }
+
   const base64 = btoa(String.fromCharCode(...payload));
 
   const recordOrigin = (ok: boolean, errorMsg?: string) => {
