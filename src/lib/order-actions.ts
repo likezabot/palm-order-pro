@@ -8,13 +8,7 @@ export async function cancelOrder(orderId: string, reason?: string) {
   const { error } = await supabase.rpc("update_order_status", {
     p_order_id: orderId,
     p_status: "cancelled",
+    p_rejected_reason: reason?.trim() || null
   });
   if (error) throw error;
-
-  if (reason && reason.trim()) {
-    await supabase
-      .from("orders")
-      .update({ rejected_reason: reason.trim() })
-      .eq("id", orderId);
-  }
 }
