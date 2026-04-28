@@ -34,6 +34,7 @@ export interface DispatchResult {
 interface OrderRow {
   id: string;
   table_name: string;
+  status: string;
   original_table_name: string | null;
   waiter_name: string | null;
   total: number | null;
@@ -52,7 +53,7 @@ async function loadOrderForPrint(orderId: string): Promise<OrderRow | null> {
   const { data } = await supabase
     .from("orders")
     .select(
-      "id, table_name, original_table_name, waiter_name, total, service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for, delta_items, print_type",
+      "id, table_name, status, original_table_name, waiter_name, total, service_type, delivery_address, delivery_fee, customer_name_snapshot, customer_phone_snapshot, payment_method, change_for, delta_items, print_type",
     )
     .eq("id", orderId)
     .single();
@@ -117,6 +118,17 @@ export async function printOrderByServiceType(
       bridgeOk: false,
       queued: false,
       serviceType: null,
+      layoutUsed: "dine_in_full",
+    };
+  }
+
+  if (order.status === "cancelled" && source !== "reprint") {
+    return {
+      ok: false,
+      reason: "order_cancelled",
+      bridgeOk: false,
+      queued: false,
+      serviceType: order.service_type,
       layoutUsed: "dine_in_full",
     };
   }
