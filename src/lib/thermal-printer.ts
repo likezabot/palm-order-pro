@@ -859,6 +859,7 @@ export interface DeliveryPayloadInput {
   discount?: number | null;
   subtotal?: number | null;
   total?: number | null;
+  itemsCount?: number | null;
   paymentMethod?: string | null;
   changeFor?: number | null;
   generalNote?: string | null;
