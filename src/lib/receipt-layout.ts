@@ -199,60 +199,57 @@ export function createReceiptLayoutModel(
   if (cfg.headerText) {
     blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
   }
+  blocks.push({ kind: "sep" });
 
-  const shortId = input.orderShortId || input.tableName || input.orderId?.slice(-6).toUpperCase() || "---";
-  blocks.push({ kind: "banner", text: `PEDIDO #${shortId.replace(/^#/, "")}` });
-
+  // Tipo de serviço (banner grande centralizado) + data/hora simples
   let typeText = "MESA";
   if (input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão") {
     typeText = "RETIRADA";
   } else if (input.serviceType === "delivery") {
     typeText = "ENTREGA";
   }
-  blocks.push({ kind: "banner", text: `TIPO: ${typeText}` });
-  blocks.push({ kind: "info", label: "DATA", value: `${date} ${time}` });
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "banner", text: typeText });
+  blocks.push({ kind: "rawLine", text: `${date} ${time}` });
+  blocks.push({ kind: "sep" });
 
-  // --- CLIENTE ---
-  let hasClientInfo = false;
+  // --- PEDIDO / CLIENTE (esquerda, formato "Label: valor") ---
+  const shortId = (input.orderShortId || input.tableName || input.orderId?.slice(-6).toUpperCase() || "---").replace(/^#/, "");
+  blocks.push({ kind: "kvLine", label: "Pedido", value: `#${shortId}` });
   if (!isBlank(input.customerName)) {
-    blocks.push({ kind: "info", label: "Cliente", value: input.customerName!.toUpperCase() });
-    hasClientInfo = true;
+    blocks.push({ kind: "kvLine", label: "Cliente", value: input.customerName!.trim() });
   }
   if (!isBlank(input.customerPhone)) {
-    blocks.push({ kind: "info", label: "Telefone", value: input.customerPhone! });
-    hasClientInfo = true;
+    blocks.push({ kind: "kvLine", label: "Telefone", value: input.customerPhone! });
   }
-  if (hasClientInfo) blocks.push({ kind: "sep" });
+  if (input.orderId) {
+    blocks.push({ kind: "rawLine", text: input.orderId.replace(/-/g, "").slice(0, 24), muted: true });
+  }
+  blocks.push({ kind: "sep" });
 
   // --- ITENS ---
+  blocks.push({ kind: "sectionHeader", text: "ITENS" });
   input.items.forEach((it) => {
     blocks.push({
-      kind: "item",
-      name: it.product_name.toUpperCase(),
+      kind: "bulletItem",
+      name: it.product_name,
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
       note: v.notes ? it.note ?? null : null,
     });
   });
-  blocks.push({ kind: "sep", bold: true });
-
-  // --- TOTAL E PAGAMENTO ---
-  blocks.push({
-    kind: "total",
-    label: "TOTAL",
-    value: moneyBr(input.total ?? 0),
-  });
-  
-  if (!isBlank(input.paymentMethod)) {
-    blocks.push({ kind: "info", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
-  }
   blocks.push({ kind: "sep" });
+
+  // --- PAGAMENTO ---
+  blocks.push({ kind: "sectionHeader", text: "PAGAMENTO" });
+  if (!isBlank(input.paymentMethod)) {
+    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) });
+  }
+  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(input.total ?? 0), bold: true });
 
   // --- OPCIONAL (OBSERVAÇÃO) ---
   if (input.generalNote && input.generalNote.trim() && v.notes) {
-    blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim().toUpperCase() });
     blocks.push({ kind: "sep" });
+    blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim() });
   }
 
   if (v.footer && cfg.footerText) {
@@ -264,12 +261,13 @@ export function createReceiptLayoutModel(
   return { blocks, docType: input.docType };
 }
 
-/** Layout do cupom DELIVERY — modelo dedicado (não confundir com mesa). */
+/** Layout do cupom DELIVERY — mesmo padrão visual de retirada. */
 function buildDeliveryLayout(
   input: BuildLayoutInput,
   cfg: PrintConfig,
   ctx: { date: string; time: string }
 ): ReceiptLayout {
+  const v = cfg.visibleSections;
   const blocks: LayoutBlock[] = [];
 
   // 1. Cabeçalho Compacto
