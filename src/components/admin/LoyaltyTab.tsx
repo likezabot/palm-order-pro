@@ -259,6 +259,9 @@ export default function LoyaltyTab() {
       sort_order: String(r.sort_order),
       active: r.active,
       product_id: r.product_id ?? "",
+      allow_pickup: r.allow_pickup,
+      allow_delivery: r.allow_delivery,
+      description: r.description ?? "",
     });
   }
 
