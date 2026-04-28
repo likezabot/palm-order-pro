@@ -348,18 +348,9 @@ export default function PublicMenu() {
                   activeSlug={activeCat}
                   onSelect={(s) => {
                     setActiveCat(s);
-                    const el = document.getElementById(`cat-${s}`);
+                    const el = document.getElementById(`categoria-${s}`);
                     if (el) {
-                      const offset = 80; // Compensar o sticky nav
-                      const bodyRect = document.body.getBoundingClientRect().top;
-                      const elementRect = el.getBoundingClientRect().top;
-                      const elementPosition = elementRect - bodyRect;
-                      const offsetPosition = elementPosition - offset;
-
-                      window.scrollTo({
-                        top: offsetPosition,
-                        behavior: "smooth"
-                      });
+                      el.scrollIntoView({ behavior: "smooth", block: "start" });
                     }
                   }}
                 />
