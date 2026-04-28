@@ -39,7 +39,7 @@ export default function ProductDetailSheet({ product, open, onClose, onAdd }: Pr
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="bottom"
-        className="max-h-[94vh] overflow-y-auto rounded-t-2xl p-0"
+        className="max-h-[94vh] overflow-y-auto rounded-t-2xl p-0 bg-white border-none"
       >
         <button
           onClick={onClose}

@@ -36,7 +36,7 @@ export default function CartDrawer({
   }, []);
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="h-[88vh] flex flex-col rounded-t-2xl p-0">
+      <SheetContent side="bottom" className="h-[88vh] flex flex-col rounded-t-2xl p-0 bg-white border-none">
         <SheetHeader className="px-5 py-4 border-b border-border">
           <SheetTitle className="text-black">Seu pedido</SheetTitle>
         </SheetHeader>
