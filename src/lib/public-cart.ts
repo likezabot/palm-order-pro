@@ -161,7 +161,11 @@ export function usePublicCart() {
     );
   }, []);
 
-  const clear = useCallback(() => setItems([]), []);
+  const clear = useCallback(() => {
+    setItems([]);
+    sessionStorage.setItem(STORAGE_KEY, "[]");
+    window.dispatchEvent(new Event("public_cart_sync"));
+  }, []);
 
   const itemCount = items.reduce((s, it) => s + it.quantity, 0);
   const subtotal = items.reduce((s, it) => s + it.product_price * it.quantity, 0);
