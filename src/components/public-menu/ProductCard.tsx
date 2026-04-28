@@ -23,6 +23,7 @@ type Props = {
   priceLabel?: string;
   /** Mostra um chevron "›" indicando que o card abre algo (popup de variantes). */
   trailingHint?: boolean;
+  className?: string;
 };
 
 
