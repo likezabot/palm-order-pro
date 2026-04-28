@@ -154,19 +154,15 @@ export async function printOrderByServiceType(
 
   const cfg = await ensureFreshPrintConfig();
 
+  // O health check aqui serve para tentar impressão direta.
+  // Se estiver offline, prosseguimos para gerar o payload e enfileirar.
+  let bridgeActuallyOnline = true;
   if (cfg.printMode === "bridge" && cfg.bridgeUrl) {
     const { checkBridgeStatus } = await import("./thermal-printer");
     const health = await checkBridgeStatus(cfg.bridgeUrl, true);
-    if (!health.online) {
-      debugLog.error("print", `✗ Abortando impressao: bridge offline em ${cfg.bridgeUrl}`, health);
-      return {
-        ok: false,
-        reason: health.error || "bridge_offline",
-        bridgeOk: false,
-        queued: false,
-        serviceType: order.service_type ?? null,
-        layoutUsed: "dine_in_full",
-      };
+    bridgeActuallyOnline = health.online;
+    if (!bridgeActuallyOnline) {
+      debugLog.warn("print", `Ponte offline em ${cfg.bridgeUrl}; o pedido será enfileirado localmente.`);
     }
   }
 
