@@ -21,7 +21,7 @@ import {
   type ServiceType,
   type PaymentMethod,
 } from "@/lib/public-cart";
-import { fetchRestaurantBySlug } from "@/lib/public-menu";
+import { fetchCurrentRestaurant, fetchRestaurantBySlug } from "@/lib/public-menu";
 import { fetchLoyaltyStatus, normalizePhoneClient } from "@/lib/loyalty";
 import { logError, extractErrorCode } from "@/lib/error-log";
 import LoyaltySection from "@/components/public-menu/LoyaltySection";
@@ -31,19 +31,36 @@ import { cn } from "@/lib/utils";
 const PHONE_KEY = "pb_loyalty_phone";
 const REWARD_KEY = "pb_pending_reward";
 
+function isValidRestaurantSlug(value?: string): boolean {
+  const slug = (value ?? "").trim();
+  return !!slug && slug !== ":slug" && !slug.includes(":") && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(slug);
+}
+
 export default function PublicCheckout() {
   const { slug } = useParams<{ slug: string }>();
   const nav = useNavigate();
   const { toast } = useToast();
   const cart = usePublicCart();
   const isPreview = usePreviewMode();
+  const routeSlug = (slug ?? "").trim();
+  const hasValidRouteSlug = isValidRestaurantSlug(routeSlug);
 
   const restaurantQuery = useQuery({
-    queryKey: ["pmenu", "restaurant", slug],
-    queryFn: () => fetchRestaurantBySlug(slug ?? ""),
-    enabled: !!slug,
+    queryKey: ["pmenu", "restaurant", routeSlug],
+    queryFn: () => fetchRestaurantBySlug(routeSlug),
+    enabled: hasValidRouteSlug,
     staleTime: 60_000,
   });
+
+  const currentRestaurantQuery = useQuery({
+    queryKey: ["pmenu", "restaurant", "current"],
+    queryFn: fetchCurrentRestaurant,
+    enabled: !hasValidRouteSlug || (!restaurantQuery.isLoading && !restaurantQuery.data),
+    staleTime: 60_000,
+  });
+
+  const restaurant = restaurantQuery.data ?? currentRestaurantQuery.data ?? null;
+  const resolvedSlug = restaurant?.slug ?? (hasValidRouteSlug ? routeSlug : "");
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
