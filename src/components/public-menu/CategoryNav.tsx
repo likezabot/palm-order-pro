@@ -60,12 +60,13 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
-      <div className="flex flex-nowrap overflow-x-auto gap-3 py-4 no-scrollbar scroll-smooth">
+      <div ref={scrollRef} className="flex flex-nowrap overflow-x-auto gap-3 py-4 no-scrollbar scroll-smooth">
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
             <button
               key={c.id}
+              data-active={isActive}
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
