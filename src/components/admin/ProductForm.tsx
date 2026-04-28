@@ -35,6 +35,11 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
   const [price, setPrice] = useState(product?.price?.toString() || "");
   const [category, setCategory] = useState(product?.category || initialCategory || "espetos");
   const [active, setActive] = useState(product?.active ?? true);
+  const [imageUrl, setImageUrl] = useState(product?.image_url || "");
+  const [description, setDescription] = useState(product?.description || "");
+  const [isFeatured, setIsFeatured] = useState(product?.is_featured ?? false);
+  const [isAvailableOnline, setIsAvailableOnline] = useState(product?.is_available_online ?? true);
+  const [isSoldOut, setIsSoldOut] = useState(product?.is_sold_out ?? false);
   const [aliases, setAliases] = useState<string[]>(
     Array.isArray(product?.aliases) ? (product!.aliases as string[]) : []
   );
@@ -112,6 +117,11 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         category,
         active,
         aliases: cleanAliases,
+        image_url: imageUrl.trim() || null,
+        description: description.trim() || null,
+        is_featured: isFeatured,
+        is_available_online: isAvailableOnline,
+        is_sold_out: isSoldOut,
       };
 
       const { withPin } = await import("@/lib/manager-pin");
@@ -125,6 +135,11 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           p_active: data.active,
           p_aliases: data.aliases,
           p_unit: "unidade",
+          p_image_url: data.image_url,
+          p_description: data.description,
+          p_is_featured: data.is_featured,
+          p_is_available_online: data.is_available_online,
+          p_is_sold_out: data.is_sold_out,
         });
         if (error) throw error;
       }, product ? "Editar produto" : "Criar produto");
@@ -185,6 +200,76 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           />
         </div>
 
+        <div>
+          <label className="text-sm font-semibold text-muted-foreground mb-1 block">Descrição (opcional)</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            className="w-full rounded-lg border border-border bg-card p-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            placeholder="Ex: Refrescante, lata 350ml."
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-semibold text-muted-foreground mb-1 block">URL da Imagem</label>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://exemplo.com/imagem.jpg"
+                className="flex-1 rounded-lg border border-border bg-card p-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl("")}
+                  className="rounded-lg bg-muted px-4 text-muted-foreground hover:bg-muted/80"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                // Heurística básica de sugestão baseada no nome
+                const query = encodeURIComponent(name);
+                toast({ 
+                  title: "Sugestão de imagem", 
+                  description: "Busque no Google e copie a URL da imagem desejada.",
+                  action: (
+                    <button 
+                      onClick={() => window.open(`https://www.google.com/search?tbm=isch&q=${query}`, '_blank')}
+                      className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded"
+                    >
+                      Abrir busca
+                    </button>
+                  )
+                });
+              }}
+              className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors flex items-center gap-1"
+            >
+              <Plus size={14} /> Sugerir imagem (Google)
+            </button>
+
+            {imageUrl && (
+              <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted flex items-center justify-center">
+                <img
+                  src={imageUrl}
+                  alt="Preview"
+                  className={category === "bebidas" || category === "cervejas" ? "h-full object-contain" : "h-full w-full object-cover"}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x225?text=Imagem+Inv%C3%A1lida";
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
         <div>
           <label className="text-sm font-semibold text-muted-foreground mb-1 block">Categoria</label>
           <div className="grid grid-cols-2 gap-2">
@@ -353,20 +438,82 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           </p>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
-          <span className="font-semibold">Ativo no cardápio</span>
-          <button
-            onClick={() => setActive(!active)}
-            className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
-              active ? "bg-success" : "bg-muted"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
-                active ? "translate-x-5" : "translate-x-0.5"
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Em destaque</span>
+              <span className="text-[11px] text-muted-foreground">Exibe no topo do cardápio online</span>
+            </div>
+            <button
+              onClick={() => setIsFeatured(!isFeatured)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                isFeatured ? "bg-primary" : "bg-muted"
               }`}
-            />
-          </button>
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  isFeatured ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Disponível Online</span>
+              <span className="text-[11px] text-muted-foreground">Oculta do cardápio público se desativado</span>
+            </div>
+            <button
+              onClick={() => setIsAvailableOnline(!isAvailableOnline)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                isAvailableOnline ? "bg-success" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  isAvailableOnline ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Esgotado</span>
+              <span className="text-[11px] text-muted-foreground">Impede a compra no cardápio online</span>
+            </div>
+            <button
+              onClick={() => setIsSoldOut(!isSoldOut)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                isSoldOut ? "bg-destructive" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  isSoldOut ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-card border border-border p-4">
+            <div>
+              <span className="font-semibold block">Ativo (Geral)</span>
+              <span className="text-[11px] text-muted-foreground">Ativa/Desativa o produto em todo o sistema</span>
+            </div>
+            <button
+              onClick={() => setActive(!active)}
+              className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
+                active ? "bg-success" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ${
+                  active ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         <button
