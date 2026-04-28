@@ -58,13 +58,16 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
       case "item": {
         const right =
           blk.subtotal > 0
-            ? `<span class="item-right">R$${blk.subtotal.toFixed(2)}</span>`
+            ? `<span class="item-right">R$ ${blk.subtotal.toFixed(2).replace(".", ",")}</span>`
             : "";
         const note = blk.note
-          ? `<div class="item-note">↳ ${escapeHtml(blk.note)}</div>`
+          ? `<div class="item-note">↳ ${escapeHtml(blk.note.toUpperCase())}</div>`
           : "";
         parts.push(
-          `<div class="item-row"><span class="item-left"><span class="item-qty">${blk.quantity}x</span> ${escapeHtml(blk.name)}</span>${right}</div>${note}`
+          `<div class="item-row">
+            <span class="item-left"><span class="item-qty">${blk.quantity}x</span> ${escapeHtml(blk.name.toUpperCase())}</span>
+            ${right}
+          </div>${note}`
         );
         break;
       }
