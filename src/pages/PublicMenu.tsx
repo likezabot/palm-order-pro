@@ -241,7 +241,7 @@ export default function PublicMenu() {
         });
       },
       {
-        rootMargin: "-100px 0px -70% 0px", // Ajusta para disparar quando o topo da seção estiver próximo do topo
+        rootMargin: "-110px 0px -85% 0px", // Zona de ativação estreita logo abaixo do nav sticky
         threshold: 0,
       }
     );
@@ -368,7 +368,7 @@ export default function PublicMenu() {
             )}
 
             {(settings?.show_category_nav ?? true) && (
-              <div className="mt-4 -mb-2">
+              <div className="mt-4 mb-2">
                 <CategoryNav
                   categories={categories}
                   activeSlug={activeCat}
@@ -435,7 +435,7 @@ export default function PublicMenu() {
                 if (!entries.length) return null;
 
                 return (
-                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-24">
+                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-[110px] md:scroll-mt-[120px]">
                     <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
                     {/* Mobile: respeita colunas específicas se solicitado */}
                     <div className={cn("sm:hidden", mobileGridClass)}>

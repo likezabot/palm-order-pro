@@ -52,7 +52,7 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
       className={cn(
         "sticky top-0 z-30 -mx-4 w-[calc(100%+2rem)] transition-all duration-300",
         stuck
-          ? "border-b border-white/10 bg-black/80 backdrop-blur-xl shadow-xl"
+          ? "border-b border-white/10 bg-black/90 backdrop-blur-xl shadow-2xl"
           : "bg-transparent",
       )}
     >
@@ -75,30 +75,31 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               className={cn(
                 "shrink-0 rounded-xl transition-all duration-300 uppercase tracking-tight snap-center",
                 "flex items-center justify-center whitespace-nowrap border",
+                "touch-manipulation select-none",
                 isActive
-                  ? "text-white border-white/30 shadow-[0_4px_12px_rgba(255,106,0,0.4)] scale-[1.05]"
-                  : "text-white border-white/15 hover:bg-white/10 active:scale-95",
+                  ? "text-white border-white/40 shadow-[0_8px_20px_rgba(255,106,0,0.3)] scale-[1.02]"
+                  : "text-white/90 border-white/10 hover:bg-white/10 hover:text-white active:scale-95",
               )}
               style={{
                 minWidth: "clamp(120px, 32vw, 180px)",
                 height: "clamp(52px, 7vw, 68px)",
                 padding: "clamp(10px, 2vw, 18px)",
                 fontSize: "clamp(14px, 3.5vw, 18px)",
-                fontWeight: 700,
+                fontWeight: 800,
                 ...(isActive 
                   ? { background: "var(--brand-gradient)" } 
-                  : { background: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.18)" }
+                  : { background: "rgba(255, 255, 255, 0.08)" }
                 )
               }}
             >
-              <span className="truncate w-full text-center">
+              <span className="truncate w-full text-center px-1">
                 {c.name}
               </span>
             </button>
           );
         })}
-        {/* Espaçador final para garantir que o último item não cole na borda */}
-        <div className="shrink-0 w-[clamp(16px,4vw,32px)] h-1" aria-hidden="true" />
+        {/* Espaçador final generoso para garantir que o último item apareça completo e com respiro */}
+        <div className="shrink-0 w-[clamp(24px,6vw,48px)] h-1" aria-hidden="true" />
       </div>
     </div>
   );
