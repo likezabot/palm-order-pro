@@ -36,7 +36,7 @@ type Item = {
   value: string;
   label: string;
   shortLabel?: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: any; // Allow any icon component with standard props
   adminOnly?: boolean;
   badge?: number;
 };
