@@ -348,13 +348,48 @@ export default function PublicCheckout() {
           </div>
           <div>
             <Label htmlFor="phone">Telefone (WhatsApp)</Label>
-            <Input
-              id="phone"
-              value={phone}
-              onChange={(e) => setPhone(formatPhone(e.target.value))}
-              placeholder="(11) 99999-9999"
-              inputMode="tel"
-            />
+            <div className="relative">
+              <Input
+                id="phone"
+                value={phone}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
+                placeholder="(11) 99999-9999"
+                inputMode="tel"
+                className={cn(searchingCustomer && "pr-10")}
+              />
+              {searchingCustomer && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            {phoneOk && !searchingCustomer && customerFound && (
+              <Card className="mt-2 p-3 bg-primary/5 border-primary/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="mt-1 bg-primary/10 p-1.5 rounded-full">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 space-y-0.5">
+                  <p className="text-sm font-bold text-primary">Cliente encontrado</p>
+                  <p className="text-xs font-medium">Olá, {customerFound.name || "Cliente"}!</p>
+                  <p className="text-xs text-muted-foreground">
+                    Você tem <span className="font-bold text-foreground">{customerFound.points_balance || 0}</span> pontos.
+                  </p>
+                  {customerFound.street && (
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
+                      <MapPin size={10} />
+                      <span className="truncate max-w-[200px]">
+                        {customerFound.street}, {customerFound.number} - {customerFound.neighborhood}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+            {phoneOk && !searchingCustomer && !customerFound && phoneDigits.length >= 10 && (
+              <p className="text-[10px] text-muted-foreground mt-1 px-1">
+                Primeira vez por aqui? Seja bem-vindo!
+              </p>
+            )}
           </div>
         </section>
 
