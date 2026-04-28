@@ -230,7 +230,7 @@ export async function printOrderByServiceType(
   // ---- DINE_IN: layout normal de mesa ----
   const layoutKey = isPickup ? "pickup" : (mode === "delta" ? "dine_in_delta" : mode === "bill" ? "dine_in_bill" : "dine_in_full");
   const printPath = `dispatcher.${layoutKey}.${mode}`;
-  const extras = buildExtras(order, printPath, source);
+  const extras = buildExtras(order, printPath, source, items);
 
   if (mode === "delta") {
     const deltaItems = (order.delta_items ?? []) as any[];
