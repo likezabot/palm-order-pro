@@ -50,7 +50,7 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-30 w-full transition-all duration-300",
+        "sticky top-0 z-30 -mx-4 w-[calc(100%+2rem)] transition-all duration-300",
         stuck
           ? "border-b border-white/10 bg-black/80 backdrop-blur-xl shadow-xl"
           : "bg-transparent",
