@@ -375,6 +375,15 @@ export default function PublicOrderSuccess() {
                 <span className="tabular-nums">R$ {Number(deliveryFee).toFixed(2)}</span>
               </div>
             )}
+            {state.loyalty_reward_name && (
+              <div className="flex justify-between text-primary font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <Gift size={13} />
+                  Brinde: {state.loyalty_reward_name}
+                </span>
+                <span className="tabular-nums">Grátis</span>
+              </div>
+            )}
             <div className="flex justify-between text-lg font-black border-t border-border pt-2 mt-1">
               <span>Total</span>
               <span className="brand-gradient-text">
