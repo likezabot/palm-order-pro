@@ -123,11 +123,11 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
       {onCancel && status !== "done" && (
         <button
           onClick={(e) => { stop(e); onCancel(order); }}
-          className="absolute top-1 right-1 z-10 p-1.5 rounded-md text-muted-foreground hover:bg-destructive hover:text-destructive-foreground sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity bg-card sm:bg-transparent shadow-sm sm:shadow-none"
+          className="absolute top-0 right-0 z-20 p-2.5 text-muted-foreground hover:text-destructive active:scale-90 transition-all bg-destructive/5 hover:bg-destructive/10 rounded-bl-xl border-l border-b border-border/50"
           title="Cancelar pedido"
           aria-label="Cancelar pedido"
         >
-          <X size={16} />
+          <X size={20} className="drop-shadow-sm" />
         </button>
       )}
 
