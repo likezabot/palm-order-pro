@@ -44,6 +44,10 @@ function invalidateOrderCaches(qc: QueryClient) {
 async function runAutoPrint(order: Order) {
   const logCtx = { orderId: order.id, status: order.print_status, table: order.table_name };
 
+  if (order.status === "cancelled") {
+    debugLog.info("global-print", "skip — pedido cancelado", logCtx);
+    return;
+  }
   if (inFlight.has(order.id)) {
     debugLog.info("global-print", "skip — já em processamento local", logCtx);
     return;
