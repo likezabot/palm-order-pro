@@ -73,36 +73,67 @@ export default function PublicCheckout() {
     }
   }, []);
 
-  // Auto-preenche endereço pelo telefone (apenas delivery, e só se campos vazios)
+  // Auto-preenche dados do cliente pelo telefone
+  const [customerFound, setCustomerFound] = useState<any>(null);
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
   const lastFetchedPhoneRef = useRef<string>("");
+
   useEffect(() => {
-    if (serviceType !== "delivery") return;
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) return;
+    if (digits.length < 10) {
+      setCustomerFound(null);
+      return;
+    }
     if (lastFetchedPhoneRef.current === digits) return;
-    // Não sobrescreve se cliente já começou a digitar
-    if (street.trim() || number.trim() || neighborhood.trim()) return;
 
     const handle = setTimeout(async () => {
       lastFetchedPhoneRef.current = digits;
-      const addr = await fetchLastCustomerAddress(digits);
-      if (!addr) return;
-      // Re-checa: se cliente digitou algo durante o debounce, não sobrescrever
-      if (street.trim() || number.trim() || neighborhood.trim()) return;
-      if (addr.street) setStreet(addr.street);
-      if (addr.number) setNumber(addr.number);
-      if (addr.neighborhood) setNeighborhood(addr.neighborhood);
-      if (addr.complement) setComplement(addr.complement);
-      if (addr.reference) setReference(addr.reference);
-      toast({
-        title: "Endereço preenchido",
-        description: "Usamos o endereço do seu último pedido.",
-      });
-    }, 500);
+      setSearchingCustomer(true);
+      try {
+        const profile = await fetchCustomerProfile(digits, slug ?? "");
+        if (profile) {
+          setCustomerFound(profile);
+          
+          // Auto-preenche nome se estiver vazio
+          if (!name.trim() && profile.name) {
+            setName(profile.name);
+          }
+          
+          // Auto-preenche endereço se todos os campos estiverem vazios
+          const addressEmpty = !street.trim() && !number.trim() && !neighborhood.trim();
+          if (addressEmpty && profile.street) {
+            setStreet(profile.street);
+            if (profile.number) setNumber(profile.number);
+            if (profile.neighborhood) setNeighborhood(profile.neighborhood);
+            if (profile.complement) setComplement(profile.complement);
+            if (profile.reference) setReference(profile.reference);
+            
+            toast({
+              title: "Endereço preenchido",
+              description: "Usamos o endereço do seu último pedido.",
+            });
+          }
+
+          // Auto-preenche última forma de recebimento e pagamento se não selecionados/vazios
+          if (profile.last_service_type) {
+            setServiceType(profile.last_service_type as ServiceType);
+          }
+          if (profile.last_payment_method) {
+            setPaymentMethod(profile.last_payment_method as PaymentMethod);
+          }
+
+        } else {
+          setCustomerFound(null);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar cliente:", err);
+      } finally {
+        setSearchingCustomer(false);
+      }
+    }, 600);
 
     return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, serviceType]);
+  }, [phone, slug]);
 
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
