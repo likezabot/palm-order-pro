@@ -281,6 +281,9 @@ export async function printOrderByServiceType(
     };
 
     const res = bridgeActuallyOnline ? await sendToBridge(() => printDelivery(input)) : { ok: false, error: "bridge_offline" };
+    if (!bridgeActuallyOnline) {
+      await logPrinterEvent("Impressão falhou: Bridge Offline", orderId, "warning", { bridgeUrl: cfg.bridgeUrl });
+    }
     if (res.ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
     return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: "delivery" };
   }
