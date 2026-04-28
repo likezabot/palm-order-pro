@@ -42,6 +42,10 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
           : "bg-transparent translate-y-1",
       )}
     >
+      <style dangerouslySetInnerHTML={{ __html: `
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}} />
       <div className="flex flex-nowrap overflow-x-auto gap-2 py-3 no-scrollbar scroll-smooth">
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
