@@ -74,7 +74,12 @@ async function completePrint(orderId: string): Promise<void> {
   const { error } = await supabase.rpc("complete_order_print", {
     p_order_id: orderId,
   } as any);
-  if (error) console.error("[print-service] Erro ao completar print:", error);
+  if (error) {
+    console.error("[print-service] Erro ao completar print:", error);
+    await logPrinterEvent(`Erro ao completar status de impressão: ${error.message}`, orderId, "error");
+  } else {
+    await logPrinterEvent("Status de impressão atualizado para: IMPRESSO", orderId, "success");
+  }
 }
 
 /**
