@@ -57,9 +57,9 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
               className={cn(
                 "shrink-0 rounded-2xl px-5 py-2.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider",
                 "min-h-[42px] flex items-center justify-center whitespace-nowrap",
-                isActive
-                  ? "text-primary-foreground shadow-[0_8px_20px_-4px_hsl(var(--primary)/0.6)] scale-[1.05] ring-2 ring-primary/20"
-                  : "border border-border/50 bg-card/40 text-foreground/60 hover:bg-card hover:text-foreground hover:border-primary/40 backdrop-blur-sm",
+            isActive
+              ? "text-black shadow-[0_8px_20px_-4px_hsl(var(--primary)/0.6)] scale-[1.05] ring-2 ring-primary/20"
+              : "border border-border/50 bg-card/40 text-black hover:bg-card hover:text-black hover:border-primary/40 backdrop-blur-sm",
               )}
               style={isActive ? { background: "var(--brand-gradient)" } : undefined}
             >
