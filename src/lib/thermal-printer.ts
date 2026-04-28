@@ -717,9 +717,10 @@ export interface ReceiptExtras {
   serviceType?: "delivery" | "pickup" | "dine_in" | string | null;
   customerName?: string | null;
   customerPhone?: string | null;
-  /** Order id usado para fingerprint do rodapé. */
   orderId?: string | null;
-  /** Fingerprint propagado para o rodapé do cupom. */
+  orderShortId?: string | null;
+  total?: number | null;
+  itemsCount?: number | null;
   fingerprint?: import("./receipt-layout").BuildLayoutInput["fingerprint"];
 }
 
