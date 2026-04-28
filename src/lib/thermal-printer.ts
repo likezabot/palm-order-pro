@@ -179,9 +179,7 @@ export async function checkBridgeStatus(
     const printerOk = !!(
       data.printer_connected === true ||
       data.printer_ok === true ||
-      data.printer_ready === true ||
-      (typeof data.printer_name === "string" && data.printer_name.length > 0)
-    );
+      data.printer_ready === true || (typeof data.printer_name === "string" && data.printer_name.length > 0);
 
     const reallyOnline = isOnline || printerOk;
     debugLog[reallyOnline ? "success" : "warn"]("bridge", `health OK em ${ms}ms — online=${isOnline}, printer=${printerOk}`, { url: healthUrl });
