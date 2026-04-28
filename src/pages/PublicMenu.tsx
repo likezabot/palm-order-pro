@@ -452,7 +452,7 @@ export default function PublicMenu() {
                 if (!entries.length) return null;
 
                 return (
-                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-[110px] md:scroll-mt-[120px]">
+                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-[130px] md:scroll-mt-[150px]">
                     <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
                     {/* Mobile: respeita colunas específicas se solicitado */}
                     <div className={cn("sm:hidden", mobileGridClass)}>
