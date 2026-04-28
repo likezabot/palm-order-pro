@@ -73,11 +73,8 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       )
 
-      const fileName = `${productSlug}-${Date.now()}.webp` // We'll try to save as webp
-      // Note: For real webp conversion in Edge Functions, we'd need a library.
-      // Deno's environment is limited. For now, we'll save the original format 
-      // but the user asked for webp. If we can't convert easily, we'll save as-is 
-      // and maybe use a secondary service or just accept the original format.
+      const fileExt = blob.type.split('/')[1] || 'jpg';
+      const fileName = `${productSlug}.${fileExt}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('product-images')
