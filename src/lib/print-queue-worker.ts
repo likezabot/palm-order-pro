@@ -57,61 +57,6 @@ function shouldDeferByBackoff(job: PrintJob): boolean {
 export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnline: boolean }> {
   debugLog.warn("queue", "worker automático desativado no modo conservador; use reimpressão manual");
   return { processed: 0, bridgeOnline: false };
-  if (running) return { processed: 0, bridgeOnline: false };
-  running = true;
-
-  try {
-    const queue = (await getPrintQueue()).filter((j) => !j.dead);
-    if (queue.length === 0) return { processed: 0, bridgeOnline: true };
-
-    // O health check inicial é apenas informativo para o retorno do tick.
-    // O processamento individual de cada job já lida com falhas de conexão.
-    const cfg = await import("@/lib/print-config").then(m => m.loadPrintConfig());
-    const bridgeOnline = cfg.bridgeUrl ? (await checkBridgeStatus(cfg.bridgeUrl)).online : false;
-
-    let processed = 0;
-    for (const job of queue) {
-      if (processed >= MAX_PER_CYCLE) break;
-      if (shouldDeferByBackoff(job)) continue;
-
-      // Garante que o pedido ainda existe e tenta resgatar service_type
-      const { data: order } = await supabase
-        .from("orders")
-        .select("print_status, service_type")
-        .eq("id", job.orderId)
-        .maybeSingle();
-
-      if (!order) {
-        // Pedido sumiu — descarta job
-        await removePrintJob(job.id);
-        processed++;
-        continue;
-      }
-
-      const serviceType = (order as any)?.service_type ?? null;
-      const ok = await sendQueuedPayload(job, serviceType);
-      processed++;
-
-      if (ok) {
-        debugLog.success("queue", `retry ✓ pedido ${job.orderId} (${job.printType}) — tentativa ${job.attempts + 1}`);
-        // Marca pedido como impresso (RPC existente, idempotente — só fecha
-        // se estiver em 'printing'; se já estava 'printed' nada acontece)
-        try {
-          await supabase.rpc("complete_order_print", { p_order_id: job.orderId } as any);
-        } catch (e) {
-          debugLog.warn("queue", `complete_order_print falhou (não-crítico) pedido ${job.orderId}`, e);
-        }
-        await removePrintJob(job.id);
-      } else {
-        debugLog.warn("queue", `retry ✗ pedido ${job.orderId} (${job.printType}) — tentativa ${job.attempts + 1}`);
-        await incrementAttempts(job.id, "retry_failed");
-      }
-    }
-
-    return { processed, bridgeOnline: true };
-  } finally {
-    running = false;
-  }
 }
 
 function scheduleTick() {
