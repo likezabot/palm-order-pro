@@ -55,6 +55,8 @@ function shouldDeferByBackoff(job: PrintJob): boolean {
 }
 
 export async function tickPrintQueue(): Promise<{ processed: number; bridgeOnline: boolean }> {
+  debugLog.warn("queue", "worker automático desativado no modo conservador; use reimpressão manual");
+  return { processed: 0, bridgeOnline: false };
   if (running) return { processed: 0, bridgeOnline: false };
   running = true;
 
@@ -123,23 +125,5 @@ function scheduleTick() {
 export function startPrintQueueWorker() {
   if (started) return;
   started = true;
-  debugLog.info("queue", "worker iniciado (tick a cada 15s)");
-
-  // Tick rápido ao subir e quando a fila recebe novo job
-  setTimeout(() => tickPrintQueue().catch(() => {}), 2000);
-
-  subscribePrintQueue((msg) => {
-    if (msg.kind === "enqueued") {
-      // Pequeno delay para evitar tempestade
-      setTimeout(() => tickPrintQueue().catch(() => {}), 1500);
-    }
-  });
-
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) tickPrintQueue().catch(() => {});
-    });
-  }
-
-  scheduleTick();
+  debugLog.warn("queue", "worker automático pausado no modo conservador");
 }
