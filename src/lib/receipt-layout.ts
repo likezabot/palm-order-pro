@@ -49,7 +49,15 @@ export type LayoutBlock =
   | { kind: "itemTableRow"; quantity: number; name: string; unit: number; subtotal: number }
   | { kind: "itemTableTotal"; value: string }
   | { kind: "footer"; text: string }
-  | { kind: "cutMark" };
+  | { kind: "cutMark" }
+  /** Cabeçalho de seção alinhado à esquerda (ex.: "ITENS", "PAGAMENTO"). */
+  | { kind: "sectionHeader"; text: string }
+  /** Linha solta esquerda sem label (ex.: hash do pedido). */
+  | { kind: "rawLine"; text: string; muted?: boolean }
+  /** Item em formato bullet: "• {qtd} x {nome} - R$ {preço}". */
+  | { kind: "bulletItem"; quantity: number; name: string; subtotal: number; note?: string | null }
+  /** Linha "- Label: valor" alinhada à esquerda (sub-item de PAGAMENTO). */
+  | { kind: "kvLine"; label: string; value: string; bold?: boolean };
 
 export interface ReceiptLayout {
   blocks: LayoutBlock[];
