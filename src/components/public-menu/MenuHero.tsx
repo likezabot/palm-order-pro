@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Clock } from "lucide-react";
+import { Clock, Gift } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { fetchLoyaltyEnabled } from "@/lib/loyalty";
 import { type Restaurant } from "@/lib/public-menu";
 import { cn } from "@/lib/utils";
 import {
