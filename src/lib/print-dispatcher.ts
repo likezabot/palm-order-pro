@@ -79,14 +79,16 @@ async function loadItemsWithRetry(orderId: string) {
  * Sanitiza extras: NUNCA imprimir N/A. Campos vazios são removidos para que
  * o layout simplesmente não renderize a linha.
  */
-function buildExtras(o: OrderRow, printPath: string, source: DispatchSource): ReceiptExtras {
+function buildExtras(o: OrderRow, printPath: string, source: DispatchSource, items?: any[]): ReceiptExtras {
   const extras: ReceiptExtras = {
     orderId: o.id,
+    orderShortId: o.table_name?.replace(/^.*#/, "") || null,
+    customerName: o.customer_name_snapshot?.trim() || null,
+    total: o.total ?? 0,
+    itemsCount: items?.length ?? 0,
     fingerprint: { printPath, source },
   };
   if (o.service_type) extras.serviceType = o.service_type;
-  if (o.customer_name_snapshot && o.customer_name_snapshot.trim())
-    extras.customerName = o.customer_name_snapshot.trim();
   if (o.customer_phone_snapshot && o.customer_phone_snapshot.trim())
     extras.customerPhone = o.customer_phone_snapshot.trim();
   return extras;
