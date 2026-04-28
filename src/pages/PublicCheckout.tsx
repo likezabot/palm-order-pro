@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams, Navigate, Link } from "react-router-dom";
-import { ArrowLeft, Gift } from "lucide-react";
+import { ArrowLeft, Gift, UserCheck, Loader2, MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ import {
   validatePhone,
   formatPhone,
   computeDeliveryFee,
-  fetchLastCustomerAddress,
+  fetchCustomerProfile,
   DELIVERY_FEE_FIXED,
   type ServiceType,
   type PaymentMethod,
@@ -25,6 +25,8 @@ import { fetchRestaurantBySlug } from "@/lib/public-menu";
 import { fetchLoyaltyStatus, normalizePhoneClient } from "@/lib/loyalty";
 import { logError, extractErrorCode } from "@/lib/error-log";
 import LoyaltySection from "@/components/public-menu/LoyaltySection";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const PHONE_KEY = "pb_loyalty_phone";
 const REWARD_KEY = "pb_pending_reward";
