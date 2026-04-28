@@ -158,19 +158,18 @@ export default function PublicCheckout() {
     staleTime: 10_000,
   });
 
-  // Aplica brinde pendente quando rewards carregam (apenas pickup)
+  // Aplica brinde pendente quando rewards carregam
   useEffect(() => {
     if (!pendingRewardId || !loyaltyQuery.data?.enabled) return;
-    if (serviceType !== "pickup") {
-      // Em delivery/dine_in, descarta brinde pendente
-      try { sessionStorage.removeItem(REWARD_KEY); } catch { /* ignore */ }
-      setPendingRewardId(null);
-      return;
-    }
+    
     const reward = loyaltyQuery.data.rewards.find((r) => r.id === pendingRewardId);
+    // Se o brinde estiver disponível para o método de serviço atual, aplica
     if (reward && reward.available) {
       setLoyaltyRewardId(pendingRewardId);
       setPendingRewardId(null);
+    } else if (reward && !reward.available && reward.blocked_reason === "pickup_only" && serviceType !== "pickup") {
+      // Se for apenas retirada e estamos em entrega, não aplica mas mantém o alerta se necessário
+      // Não descartamos o pendingRewardId aqui para caso o usuário mude para retirada
     }
   }, [pendingRewardId, loyaltyQuery.data, serviceType]);
 
