@@ -41,27 +41,30 @@ function invalidateOrderCaches(qc: QueryClient) {
 }
 
 async function runAutoPrint(order: Order) {
+  const logCtx = { orderId: order.id, status: order.print_status, table: order.table_name };
+
   if (inFlight.has(order.id)) {
-    debugLog.info("global-print", `skip — já em processamento ${order.id}`);
+    debugLog.info("global-print", "skip — já em processamento local", logCtx);
     return;
   }
   if ((order as any).printed_at || order.print_status === "printed") {
-    debugLog.info("global-print", `skip — pedido já impresso ${order.id}`);
+    debugLog.info("global-print", "skip — pedido já impresso no banco", logCtx);
     return;
   }
   if (order.print_status === "printing") {
-    debugLog.info("global-print", `skip — pedido já em impressão ${order.id}`);
+    debugLog.info("global-print", "skip — pedido já em impressão (outra instância?)", logCtx);
     return;
   }
   if (order.print_status === "failed") {
-    debugLog.info("global-print", `skip — pedido falhou e exige ação manual ${order.id}`);
+    debugLog.info("global-print", "skip — pedido falhou e exige ação manual", logCtx);
     return;
   }
   if (autoAttempted.has(order.id)) {
-    debugLog.info("global-print", `skip — autoimpressão já tentada para ${order.id}`);
+    debugLog.info("global-print", "skip — autoimpressão já tentada nesta sessão", logCtx);
     return;
   }
 
+  debugLog.info("global-print", "iniciando autoimpressão", logCtx);
   autoAttempted.add(order.id);
   inFlight.add(order.id);
   try {
@@ -70,15 +73,16 @@ async function runAutoPrint(order: Order) {
     if (result.printed) {
       debugLog.success(
         "global-print",
-        `impressão concluída pedido ${order.id} reason=${result.reason}`,
+        `autoimpressão CONCLUÍDA`,
+        { ...logCtx, reason: result.reason }
       );
     } else if (result.reason === "already_claimed") {
-      debugLog.info("global-print", `claim recusado (outra instância) ${order.id}`);
+      debugLog.info("global-print", `claim recusado (já processado por outro)`, logCtx);
     } else {
-      debugLog.warn("global-print", `não imprimiu motivo=${result.reason} ${order.id}`);
+      debugLog.warn("global-print", `autoimpressão FALHOU/RECUSADA`, { ...logCtx, reason: result.reason });
     }
   } catch (err) {
-    debugLog.error("global-print", `erro autoimpressão ${order.id}`, err);
+    debugLog.error("global-print", `erro fatal na autoimpressão`, { ...logCtx, error: String(err) });
   } finally {
     inFlight.delete(order.id);
   }
