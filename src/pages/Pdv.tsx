@@ -405,6 +405,13 @@ const Pdv = () => {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
+            onClick={() => navigate("/orders/new")}
+            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs sm:text-sm font-black shadow-md hover:brightness-110 active:scale-95 transition-all"
+          >
+            <FilePlus size={18} />
+            <span className="hidden xs:inline sm:inline">NOVO PEDIDO</span>
+          </button>
+          <button
             onClick={toggleStaffMode}
             title={staffMode ? "Desativar modo garçom (mostrar admin)" : "Ativar modo garçom (ocultar admin)"}
             className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border text-xs sm:text-sm font-bold transition-colors ${
