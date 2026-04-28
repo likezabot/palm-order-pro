@@ -13,6 +13,9 @@ export type LoyaltyReward = {
   min_order_subtotal: number;
   available: boolean;
   blocked_reason: string | null;
+  allow_pickup: boolean;
+  allow_delivery: boolean;
+  description?: string;
 };
 
 export type LoyaltyStatus = {

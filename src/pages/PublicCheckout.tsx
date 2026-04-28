@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams, Navigate, Link } from "react-router-dom";
-import { ArrowLeft, Gift } from "lucide-react";
+import { ArrowLeft, Gift, UserCheck, Loader2, MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ import {
   validatePhone,
   formatPhone,
   computeDeliveryFee,
-  fetchLastCustomerAddress,
+  fetchCustomerProfile,
   DELIVERY_FEE_FIXED,
   type ServiceType,
   type PaymentMethod,
@@ -25,6 +25,8 @@ import { fetchRestaurantBySlug } from "@/lib/public-menu";
 import { fetchLoyaltyStatus, normalizePhoneClient } from "@/lib/loyalty";
 import { logError, extractErrorCode } from "@/lib/error-log";
 import LoyaltySection from "@/components/public-menu/LoyaltySection";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const PHONE_KEY = "pb_loyalty_phone";
 const REWARD_KEY = "pb_pending_reward";
@@ -71,36 +73,67 @@ export default function PublicCheckout() {
     }
   }, []);
 
-  // Auto-preenche endereço pelo telefone (apenas delivery, e só se campos vazios)
+  // Auto-preenche dados do cliente pelo telefone
+  const [customerFound, setCustomerFound] = useState<any>(null);
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
   const lastFetchedPhoneRef = useRef<string>("");
+
   useEffect(() => {
-    if (serviceType !== "delivery") return;
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) return;
+    if (digits.length < 10) {
+      setCustomerFound(null);
+      return;
+    }
     if (lastFetchedPhoneRef.current === digits) return;
-    // Não sobrescreve se cliente já começou a digitar
-    if (street.trim() || number.trim() || neighborhood.trim()) return;
 
     const handle = setTimeout(async () => {
       lastFetchedPhoneRef.current = digits;
-      const addr = await fetchLastCustomerAddress(digits);
-      if (!addr) return;
-      // Re-checa: se cliente digitou algo durante o debounce, não sobrescrever
-      if (street.trim() || number.trim() || neighborhood.trim()) return;
-      if (addr.street) setStreet(addr.street);
-      if (addr.number) setNumber(addr.number);
-      if (addr.neighborhood) setNeighborhood(addr.neighborhood);
-      if (addr.complement) setComplement(addr.complement);
-      if (addr.reference) setReference(addr.reference);
-      toast({
-        title: "Endereço preenchido",
-        description: "Usamos o endereço do seu último pedido.",
-      });
-    }, 500);
+      setSearchingCustomer(true);
+      try {
+        const profile = await fetchCustomerProfile(digits, slug ?? "");
+        if (profile) {
+          setCustomerFound(profile);
+          
+          // Auto-preenche nome se estiver vazio
+          if (!name.trim() && profile.name) {
+            setName(profile.name);
+          }
+          
+          // Auto-preenche endereço se todos os campos estiverem vazios
+          const addressEmpty = !street.trim() && !number.trim() && !neighborhood.trim();
+          if (addressEmpty && profile.street) {
+            setStreet(profile.street);
+            if (profile.number) setNumber(profile.number);
+            if (profile.neighborhood) setNeighborhood(profile.neighborhood);
+            if (profile.complement) setComplement(profile.complement);
+            if (profile.reference) setReference(profile.reference);
+            
+            toast({
+              title: "Endereço preenchido",
+              description: "Usamos o endereço do seu último pedido.",
+            });
+          }
+
+          // Auto-preenche última forma de recebimento e pagamento se não selecionados/vazios
+          if (profile.last_service_type) {
+            setServiceType(profile.last_service_type as ServiceType);
+          }
+          if (profile.last_payment_method) {
+            setPaymentMethod(profile.last_payment_method as PaymentMethod);
+          }
+
+        } else {
+          setCustomerFound(null);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar cliente:", err);
+      } finally {
+        setSearchingCustomer(false);
+      }
+    }, 600);
 
     return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, serviceType]);
+  }, [phone, slug]);
 
   // client_request_id estável durante a sessão de checkout
   const [requestId] = useState(() => newClientRequestId());
@@ -125,19 +158,18 @@ export default function PublicCheckout() {
     staleTime: 10_000,
   });
 
-  // Aplica brinde pendente quando rewards carregam (apenas pickup)
+  // Aplica brinde pendente quando rewards carregam
   useEffect(() => {
     if (!pendingRewardId || !loyaltyQuery.data?.enabled) return;
-    if (serviceType !== "pickup") {
-      // Em delivery/dine_in, descarta brinde pendente
-      try { sessionStorage.removeItem(REWARD_KEY); } catch { /* ignore */ }
-      setPendingRewardId(null);
-      return;
-    }
+    
     const reward = loyaltyQuery.data.rewards.find((r) => r.id === pendingRewardId);
+    // Se o brinde estiver disponível para o método de serviço atual, aplica
     if (reward && reward.available) {
       setLoyaltyRewardId(pendingRewardId);
       setPendingRewardId(null);
+    } else if (reward && !reward.available && reward.blocked_reason === "pickup_only" && serviceType !== "pickup") {
+      // Se for apenas retirada e estamos em entrega, não aplica mas mantém o alerta se necessário
+      // Não descartamos o pendingRewardId aqui para caso o usuário mude para retirada
     }
   }, [pendingRewardId, loyaltyQuery.data, serviceType]);
 
@@ -238,6 +270,7 @@ export default function PublicCheckout() {
               : null,
           loyalty_points_pending: projectedEarn,
           loyalty_reward_name: selectedReward?.display_name ?? null,
+          loyalty_reward_points: selectedReward?.points_cost ?? null,
           loyalty_balance_after: balanceAfter,
         },
       });
@@ -315,13 +348,48 @@ export default function PublicCheckout() {
           </div>
           <div>
             <Label htmlFor="phone">Telefone (WhatsApp)</Label>
-            <Input
-              id="phone"
-              value={phone}
-              onChange={(e) => setPhone(formatPhone(e.target.value))}
-              placeholder="(11) 99999-9999"
-              inputMode="tel"
-            />
+            <div className="relative">
+              <Input
+                id="phone"
+                value={phone}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
+                placeholder="(11) 99999-9999"
+                inputMode="tel"
+                className={cn(searchingCustomer && "pr-10")}
+              />
+              {searchingCustomer && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            {phoneOk && !searchingCustomer && customerFound && (
+              <Card className="mt-2 p-3 bg-primary/5 border-primary/20 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="mt-1 bg-primary/10 p-1.5 rounded-full">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 space-y-0.5">
+                  <p className="text-sm font-bold text-primary">Cliente encontrado</p>
+                  <p className="text-xs font-medium">Olá, {customerFound.name || "Cliente"}!</p>
+                  <p className="text-xs text-muted-foreground">
+                    Você tem <span className="font-bold text-foreground">{customerFound.points_balance || 0}</span> pontos.
+                  </p>
+                  {customerFound.street && (
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1">
+                      <MapPin size={10} />
+                      <span className="truncate max-w-[200px]">
+                        {customerFound.street}, {customerFound.number} - {customerFound.neighborhood}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+            {phoneOk && !searchingCustomer && !customerFound && phoneDigits.length >= 10 && (
+              <p className="text-[10px] text-muted-foreground mt-1 px-1">
+                Primeira vez por aqui? Seja bem-vindo!
+              </p>
+            )}
           </div>
         </section>
 

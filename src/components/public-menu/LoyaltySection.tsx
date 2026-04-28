@@ -41,11 +41,17 @@ export default function LoyaltySection({
   const [status, setStatus] = useState<LoyaltyStatus>(EMPTY);
   const [loading, setLoading] = useState(false);
   const isPickup = serviceType === "pickup";
+  const isDelivery = serviceType === "delivery";
 
-  // Limpa brinde selecionado se mudar para delivery/dine_in
+  // Se o método de serviço mudar, verifica se o brinde selecionado ainda é válido
   useEffect(() => {
-    if (!isPickup && selectedRewardId) onChange(null);
-  }, [isPickup, selectedRewardId, onChange]);
+    if (selectedRewardId && status.rewards.length > 0) {
+      const reward = status.rewards.find(r => r.id === selectedRewardId);
+      if (reward && !reward.available) {
+        onChange(null);
+      }
+    }
+  }, [serviceType, status.rewards, selectedRewardId, onChange]);
 
   const phoneDigits = phone.replace(/\D/g, "");
   const phoneOk = phoneDigits.length >= 10;
@@ -101,31 +107,13 @@ export default function LoyaltySection({
           </div>
         ) : (
           <>
-            {!isPickup && (
-              <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2.5 space-y-1">
-                <div className="flex items-start gap-2 text-sm">
-                  <Info size={14} className="mt-0.5 text-warning shrink-0" />
-                  <div className="space-y-1">
-                    {serviceType === "delivery" && (
-                      <p className="font-semibold text-foreground">
-                        Pedidos de entrega não acumulam pontos.
-                      </p>
-                    )}
-                    <p className="text-muted-foreground text-xs">
-                      Resgate de brindes disponível apenas para retirada.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2.5 space-y-1">
               <div className="flex flex-wrap items-baseline justify-between gap-1">
                 <span className="text-sm">
                   Você tem <strong className="text-primary text-base">{status.balance}</strong> pontos
                 </span>
               </div>
-              {isPickup && status.projected_earn > 0 && (
+              {status.projected_earn > 0 && (
                 <p className="text-xs text-muted-foreground">
                   Você vai ganhar <strong className="text-success">+{status.projected_earn}</strong>{" "}
                   pontos quando este pedido for finalizado
@@ -163,14 +151,10 @@ export default function LoyaltySection({
                   <span className="text-sm font-medium">Não quero resgatar agora</span>
                 </label>
                 {status.rewards.map((r) => {
-                  const disabled = !r.available || !isPickup;
+                  const disabled = !r.available;
                   let badge: { label: string; cls: string } | null = null;
-                  if (!isPickup) {
-                    badge = {
-                      label: "Apenas para retirada",
-                      cls: "bg-warning/15 text-warning border-warning/30",
-                    };
-                  } else if (r.available) {
+                  
+                  if (r.available) {
                     badge = {
                       label: "Disponível",
                       cls: "bg-success/15 text-success border-success/30",
@@ -178,6 +162,11 @@ export default function LoyaltySection({
                   } else if (r.blocked_reason === "pickup_only") {
                     badge = {
                       label: "Apenas para retirada",
+                      cls: "bg-warning/15 text-warning border-warning/30",
+                    };
+                  } else if (r.blocked_reason === "delivery_only") {
+                    badge = {
+                      label: "Apenas para entrega",
                       cls: "bg-warning/15 text-warning border-warning/30",
                     };
                   } else if (r.blocked_reason?.startsWith("missing_points:")) {

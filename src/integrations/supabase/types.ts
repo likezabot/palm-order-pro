@@ -186,29 +186,50 @@ export type Database = {
       }
       customers: {
         Row: {
+          complement: string | null
           created_at: string
           id: string
           last_order_at: string | null
+          last_payment_method: string | null
+          last_service_type: string | null
           name: string | null
+          neighborhood: string | null
+          number: string | null
           phone: string
+          reference: string | null
+          street: string | null
           total_orders: number
           updated_at: string
         }
         Insert: {
+          complement?: string | null
           created_at?: string
           id?: string
           last_order_at?: string | null
+          last_payment_method?: string | null
+          last_service_type?: string | null
           name?: string | null
+          neighborhood?: string | null
+          number?: string | null
           phone: string
+          reference?: string | null
+          street?: string | null
           total_orders?: number
           updated_at?: string
         }
         Update: {
+          complement?: string | null
           created_at?: string
           id?: string
           last_order_at?: string | null
+          last_payment_method?: string | null
+          last_service_type?: string | null
           name?: string | null
+          neighborhood?: string | null
+          number?: string | null
           phone?: string
+          reference?: string | null
+          street?: string | null
           total_orders?: number
           updated_at?: string
         }
@@ -483,7 +504,10 @@ export type Database = {
       loyalty_rewards: {
         Row: {
           active: boolean
+          allow_delivery: boolean | null
+          allow_pickup: boolean | null
           created_at: string
+          description: string | null
           display_name: string
           id: string
           min_order_subtotal: number
@@ -495,7 +519,10 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          allow_delivery?: boolean | null
+          allow_pickup?: boolean | null
           created_at?: string
+          description?: string | null
           display_name: string
           id?: string
           min_order_subtotal?: number
@@ -507,7 +534,10 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          allow_delivery?: boolean | null
+          allow_pickup?: boolean | null
           created_at?: string
+          description?: string | null
           display_name?: string
           id?: string
           min_order_subtotal?: number
@@ -1329,7 +1359,22 @@ export type Database = {
       }
       admin_loyalty_list_rewards: {
         Args: { p_restaurant_id: string }
-        Returns: Json
+        Returns: {
+          active: boolean
+          allow_delivery: boolean
+          allow_pickup: boolean
+          description: string
+          display_name: string
+          effective_cost_per_point: number
+          id: string
+          min_order_subtotal: number
+          points_cost: number
+          product_id: string
+          product_name: string
+          product_price: number
+          restaurant_id: string
+          sort_order: number
+        }[]
       }
       admin_loyalty_search_customer: {
         Args: { p_phone: string }
@@ -1341,19 +1386,36 @@ export type Database = {
         Returns: undefined
       }
       admin_loyalty_top_customers: { Args: { p_limit?: number }; Returns: Json }
-      admin_loyalty_upsert_reward: {
-        Args: {
-          p_active: boolean
-          p_display_name: string
-          p_id: string
-          p_min_order_subtotal: number
-          p_points_cost: number
-          p_product_id?: string
-          p_restaurant_id: string
-          p_sort_order: number
-        }
-        Returns: string
-      }
+      admin_loyalty_upsert_reward:
+        | {
+            Args: {
+              p_active?: boolean
+              p_allow_delivery?: boolean
+              p_allow_pickup?: boolean
+              p_description?: string
+              p_display_name: string
+              p_id: string
+              p_min_order_subtotal?: number
+              p_points_cost: number
+              p_product_id?: string
+              p_restaurant_id: string
+              p_sort_order?: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_active: boolean
+              p_display_name: string
+              p_id: string
+              p_min_order_subtotal: number
+              p_points_cost: number
+              p_product_id?: string
+              p_restaurant_id: string
+              p_sort_order: number
+            }
+            Returns: string
+          }
       admin_reorder_products: {
         Args: { p_ids: string[]; p_orders: number[] }
         Returns: undefined
@@ -1659,38 +1721,22 @@ export type Database = {
         }
         Returns: Json
       }
-      create_public_order:
-        | {
-            Args: {
-              p_address: Json
-              p_change_for: number
-              p_client_request_id: string
-              p_customer_name: string
-              p_customer_phone: string
-              p_items: Json
-              p_note: string
-              p_payment_method: string
-              p_restaurant_slug: string
-              p_service_type: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_address: Json
-              p_change_for: number
-              p_client_request_id: string
-              p_customer_name: string
-              p_customer_phone: string
-              p_items: Json
-              p_loyalty_reward_id?: string
-              p_note: string
-              p_payment_method: string
-              p_restaurant_slug: string
-              p_service_type: string
-            }
-            Returns: Json
-          }
+      create_public_order: {
+        Args: {
+          p_address?: Json
+          p_change_for?: number
+          p_client_request_id?: string
+          p_customer_name: string
+          p_customer_phone: string
+          p_items?: Json
+          p_loyalty_reward_id?: string
+          p_note?: string
+          p_payment_method: string
+          p_restaurant_slug: string
+          p_service_type: string
+        }
+        Returns: Json
+      }
       defer_order_print: { Args: { p_order_id: string }; Returns: undefined }
       enqueue_print_job: {
         Args: { p_job_type: string; p_order_id: string; p_payload?: Json }
@@ -1707,11 +1753,27 @@ export type Database = {
       fix_create_public_order_duplicate: { Args: never; Returns: string }
       force_clear_orphan_prints: { Args: never; Returns: Json }
       get_customer_orders: { Args: { p_phone: string }; Returns: Json }
-      get_last_customer_address: { Args: { p_phone: string }; Returns: Json }
-      get_or_create_customer: {
-        Args: { p_name: string; p_phone: string }
-        Returns: string
+      get_customer_profile: {
+        Args: { p_phone: string; p_restaurant_slug: string }
+        Returns: Json
       }
+      get_last_customer_address: { Args: { p_phone: string }; Returns: Json }
+      get_or_create_customer:
+        | { Args: { p_name: string; p_phone: string }; Returns: string }
+        | {
+            Args: {
+              p_complement?: string
+              p_last_payment_method?: string
+              p_last_service_type?: string
+              p_name: string
+              p_neighborhood?: string
+              p_number?: string
+              p_phone: string
+              p_reference?: string
+              p_street?: string
+            }
+            Returns: string
+          }
       get_print_config: { Args: never; Returns: Json }
       get_public_loyalty_status:
         | {

@@ -48,6 +48,7 @@ type LocState = {
   address?: LocAddress | null;
   loyalty_points_pending?: number;
   loyalty_reward_name?: string | null;
+  loyalty_reward_points?: number | null;
   loyalty_balance_after?: number;
 };
 
@@ -123,6 +124,8 @@ function formatWhatsAppMessage(opts: {
   deliveryFee?: number;
   total: number;
   address?: LocAddress | null;
+  rewardName?: string | null;
+  pointsUsed?: number | null;
 }): string {
   const lines: string[] = [];
   lines.push(`🔥 *NOVO PEDIDO - ${opts.restaurantName.toUpperCase()}*`);
@@ -159,6 +162,10 @@ function formatWhatsAppMessage(opts: {
     }
   } else {
     lines.push("• (itens não disponíveis)");
+  }
+
+  if (opts.rewardName) {
+    lines.push(`🎁 *BRINDE RESGATADO:* ${opts.rewardName} — ${opts.pointsUsed || 0} pts`);
   }
 
   lines.push("");
@@ -263,6 +270,8 @@ export default function PublicOrderSuccess() {
     deliveryFee: Number(deliveryFee),
     total: Number(total),
     address: state.address,
+    rewardName: state.loyalty_reward_name,
+    pointsUsed: state.loyalty_reward_points,
   });
 
   const waUrl = restaurantWa
@@ -364,6 +373,15 @@ export default function PublicOrderSuccess() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Taxa de entrega</span>
                 <span className="tabular-nums">R$ {Number(deliveryFee).toFixed(2)}</span>
+              </div>
+            )}
+            {state.loyalty_reward_name && (
+              <div className="flex justify-between text-primary font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <Gift size={13} />
+                  Brinde: {state.loyalty_reward_name}
+                </span>
+                <span className="tabular-nums">Grátis</span>
               </div>
             )}
             <div className="flex justify-between text-lg font-black border-t border-border pt-2 mt-1">

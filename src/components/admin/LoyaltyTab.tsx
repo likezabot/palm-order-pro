@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Plus, Trash2, Search, Sparkles, Phone, AlertTriangle, Truck, Info } from "lucide-react";
+import { Gift, Plus, Trash2, Search, Sparkles, Phone, AlertTriangle, Truck, Info, Check, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,9 @@ type Reward = {
   min_order_subtotal: number;
   active: boolean;
   sort_order: number;
+  allow_pickup: boolean;
+  allow_delivery: boolean;
+  description: string | null;
   effective_cost_per_point: number | null;
 };
 
@@ -151,6 +154,9 @@ export default function LoyaltyTab() {
     sort_order: string;
     active: boolean;
     product_id: string;
+    allow_pickup: boolean;
+    allow_delivery: boolean;
+    description: string;
   }>({
     id: null,
     display_name: "",
@@ -159,6 +165,9 @@ export default function LoyaltyTab() {
     sort_order: "0",
     active: true,
     product_id: "",
+    allow_pickup: true,
+    allow_delivery: false,
+    description: "",
   });
 
   function resetForm() {
@@ -170,6 +179,9 @@ export default function LoyaltyTab() {
       sort_order: "0",
       active: true,
       product_id: "",
+      allow_pickup: true,
+      allow_delivery: false,
+      description: "",
     });
   }
 
@@ -206,6 +218,9 @@ export default function LoyaltyTab() {
         p_active: form.active,
         p_sort_order: Number(form.sort_order) || 0,
         p_product_id: form.product_id || null,
+        p_allow_pickup: form.allow_pickup,
+        p_allow_delivery: form.allow_delivery,
+        p_description: form.description.trim() || null,
       } as never,
     );
     if (error) {
@@ -244,6 +259,9 @@ export default function LoyaltyTab() {
       sort_order: String(r.sort_order),
       active: r.active,
       product_id: r.product_id ?? "",
+      allow_pickup: r.allow_pickup,
+      allow_delivery: r.allow_delivery,
+      description: r.description ?? "",
     });
   }
 
@@ -387,21 +405,29 @@ export default function LoyaltyTab() {
               placeholder="Ex: Espeto de frango grátis"
             />
           </div>
+          <div className="sm:col-span-2">
+            <Label>Descrição curta (opcional)</Label>
+            <Input
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Ex: Coca-cola lata 350ml bem gelada"
+              maxLength={150}
+            />
+          </div>
           <div>
-            <Label>Custo (pontos) — mínimo 100</Label>
+            <Label>Custo (pontos)</Label>
             <Input
               type="number" inputMode="decimal"
-              min={100}
+              min={0}
               value={form.points_cost}
               onChange={(e) => setForm({ ...form, points_cost: e.target.value })}
             />
           </div>
           <div>
-            <Label>Pedido mínimo (R$) — máximo 80</Label>
+            <Label>Pedido mínimo (R$)</Label>
             <Input
               type="number" inputMode="decimal"
               step="0.01"
-              max={80}
               value={form.min_order_subtotal}
               onChange={(e) => setForm({ ...form, min_order_subtotal: e.target.value })}
             />
@@ -422,12 +448,28 @@ export default function LoyaltyTab() {
               placeholder="uuid do produto"
             />
           </div>
-          <div className="flex items-center gap-2 pt-6">
-            <Switch
-              checked={form.active}
-              onCheckedChange={(v) => setForm({ ...form, active: v })}
-            />
-            <span className="text-sm">Ativo</span>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.active}
+                onCheckedChange={(v) => setForm({ ...form, active: v })}
+              />
+              <span className="text-sm font-medium">Ativo</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.allow_pickup}
+                onCheckedChange={(v) => setForm({ ...form, allow_pickup: v })}
+              />
+              <span className="text-sm font-medium">Permitir na Retirada</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.allow_delivery}
+                onCheckedChange={(v) => setForm({ ...form, allow_delivery: v })}
+              />
+              <span className="text-sm font-medium font-bold text-primary">Permitir na Entrega</span>
+            </div>
           </div>
           <div className="sm:col-span-2 flex gap-2">
             <Button onClick={saveReward}>
@@ -467,12 +509,19 @@ export default function LoyaltyTab() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}
-                    {r.product_name && ` · vinc. ${r.product_name} (R$ ${Number(r.product_price ?? 0).toFixed(2)})`}
-                    {r.effective_cost_per_point !== null &&
-                      ` · custo efetivo R$ ${r.effective_cost_per_point.toFixed(2)}/pt`}
+                  <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                    <span>{r.points_cost} pts · mín R$ {Number(r.min_order_subtotal).toFixed(2)}</span>
+                    <span className="flex items-center gap-1 font-medium">
+                      {r.allow_pickup ? <Check className="h-3 w-3 text-success" /> : <XCircle className="h-3 w-3 text-destructive" />}
+                      Retirada
+                    </span>
+                    <span className="flex items-center gap-1 font-medium">
+                      {r.allow_delivery ? <Check className="h-3 w-3 text-success" /> : <XCircle className="h-3 w-3 text-destructive" />}
+                      Entrega
+                    </span>
+                    {r.product_name && ` · vinc. ${r.product_name}`}
                   </div>
+                  {r.description && <div className="text-[10px] italic text-muted-foreground mt-0.5">{r.description}</div>}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <Button size="sm" variant="outline" onClick={() => editReward(r)}>

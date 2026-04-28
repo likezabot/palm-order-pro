@@ -17,6 +17,7 @@ export default function LoyaltyRewardCard({ reward, balance, onChoose }: Props) 
   const pct = Math.min(100, Math.round((balance / Math.max(1, reward.points_cost)) * 100));
   const missing = Math.max(0, reward.points_cost - balance);
   const isPickupOnly = reward.blocked_reason === "pickup_only";
+  const isDeliveryOnly = reward.blocked_reason === "delivery_only";
 
   let statusBadge: { label: string; tone: "success" | "warning" | "muted" } = enoughPoints
     ? { label: "Disponível por pontos", tone: "success" }
@@ -33,9 +34,11 @@ export default function LoyaltyRewardCard({ reward, balance, onChoose }: Props) 
 
   if (isPickupOnly) {
     statusBadge = { label: "Apenas para retirada", tone: "warning" };
+  } else if (isDeliveryOnly) {
+    statusBadge = { label: "Apenas para entrega", tone: "warning" };
   }
 
-  const canChoose = enoughPoints && !isPickupOnly;
+  const canChoose = enoughPoints && !isPickupOnly && !isDeliveryOnly;
 
   const toneClass =
     statusBadge.tone === "success"
@@ -98,10 +101,12 @@ export default function LoyaltyRewardCard({ reward, balance, onChoose }: Props) 
         className="w-full font-bold"
       >
         {isPickupOnly
-          ? "Disponível apenas para retirada"
-          : enoughPoints
-            ? "Escolher este brinde"
-            : "Continue acumulando"}
+          ? "Apenas para retirada"
+          : isDeliveryOnly
+            ? "Apenas para entrega"
+            : enoughPoints
+              ? "Escolher este brinde"
+              : "Continue acumulando"}
       </Button>
     </div>
   );
