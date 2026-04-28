@@ -6,46 +6,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
-import { formatPrintTableValue } from "@/lib/utils";
-import { loadPrintConfig, ensureFreshPrintConfig } from "@/lib/print-config";
-import {
-  buildEscPosReceipt,
-  buildEscPosDelta,
-  buildEscPosBill,
-  buildEscPosDelivery,
-  type DeliveryPayloadInput,
-} from "@/lib/thermal-printer";
-import { encodePayloadB64, enqueuePrintJob, type PrintJobType } from "@/lib/print-queue";
 import { debugLog } from "@/lib/debug-logger";
-
-/**
- * Quando o bridge falha, enfileira o payload ESC/POS para retry posterior.
- * No-op se config não estiver em modo bridge (no browser não há fallback).
- * Idempotente por (orderId, printType).
- */
-async function enqueueOnBridgeFailure(
-  orderId: string,
-  tableName: string,
-  printType: PrintJobType,
-  payload: Uint8Array,
-): Promise<void> {
-  try {
-    const cfg = loadPrintConfig();
-    if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
-    await enqueuePrintJob({
-      orderId,
-      tableName,
-      printType,
-      payloadB64: encodePayloadB64(payload),
-      bridgeUrl: cfg.bridgeUrl,
-      lastError: "bridge_offline",
-    });
-    debugLog.warn("queue", `enfileirado (${printType}) — mesa ${tableName}, pedido ${orderId}`);
-  } catch (e) {
-    debugLog.error("queue", `falha ao enfileirar job (${printType})`, e);
-  }
-}
 
 interface PrintableItem {
   product_name: string;
@@ -121,19 +82,6 @@ async function failPrint(orderId: string, errorMsg?: string): Promise<void> {
   if (error) console.error("[print-service] Erro ao registrar falha:", error);
 }
 
-/**
- * Adia a impressão: o job já foi enfileirado localmente (IndexedDB) e o worker
- * `print-queue-worker` cuidará de reimprimir quando a ponte voltar.
- * Marca o pedido como `queued` SEM atualizar `updated_at` para não disparar
- * loop de re-impressão pelo realtime.
- */
-async function deferPrint(orderId: string): Promise<void> {
-  const { error } = await supabase.rpc("defer_order_print", {
-    p_order_id: orderId,
-  } as any);
-  if (error) console.error("[print-service] Erro ao adiar print:", error);
-}
-
 export async function isOrderPrinted(orderId: string): Promise<boolean> {
   const { data } = await supabase
     .from("orders")
@@ -169,10 +117,6 @@ export async function autoPrintOrder(order: {
     if (r.ok && r.bridgeOk) {
       await completePrint(order.id);
       return { printed: true, reason: r.reason };
-    }
-    if (r.queued) {
-      await deferPrint(order.id);
-      return { printed: false, reason: "bridge_offline_queued" };
     }
     await failPrint(order.id, r.reason);
     return { printed: false, reason: r.reason };
@@ -214,10 +158,6 @@ export async function autoPrintUpdate(order: {
     if (r.ok && r.bridgeOk) {
       await completePrint(order.id);
       return { printed: true, reason: r.reason };
-    }
-    if (r.queued) {
-      await deferPrint(order.id);
-      return { printed: false, reason: "bridge_offline_queued" };
     }
     await failPrint(order.id, r.reason);
     return { printed: false, reason: r.reason };
