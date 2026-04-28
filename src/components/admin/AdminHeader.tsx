@@ -1,10 +1,10 @@
-import { ArrowLeft, Eye, EyeOff, Plus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Plus, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import DuplicatesResolver from "@/components/admin/DuplicatesResolver";
 import SettingsDialog from "@/components/admin/SettingsDialog";
 import TabIdBadge from "@/components/TabIdBadge";
 import { useFeedback } from "@/hooks/use-feedback";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 
 interface Props {
   staffMode: boolean;
@@ -25,9 +25,9 @@ export const AdminHeader = ({
   const { playFeedback } = useFeedback();
 
   return (
-    <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 bg-white shadow-sm">
+    <div className="border-b border-border p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 bg-white shadow-sm sticky top-0 z-50">
       <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-        <SidebarTrigger className="shrink-0" />
+        <SidebarTrigger className="shrink-0 lg:hidden" />
         <button
           onClick={() => {
             playFeedback("click");

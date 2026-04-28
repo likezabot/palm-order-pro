@@ -226,8 +226,14 @@ const Admin = () => {
   }
 
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className={`min-h-screen-safe flex w-full ${staffMode ? "staff-mode" : ""}`}>
+    <SidebarProvider 
+      defaultOpen={true}
+      style={{ 
+        "--sidebar-width": "240px",
+        "--sidebar-width-mobile": "260px"
+      } as React.CSSProperties}
+    >
+      <div className={`min-h-screen-safe flex w-full overflow-x-hidden ${staffMode ? "staff-mode" : ""}`}>
         <AdminSidebar
           active={activeTab}
           onChange={setActiveTab}
@@ -235,7 +241,7 @@ const Admin = () => {
           unresolvedErrors={unresolvedErrors}
         />
 
-        <SidebarInset className="flex flex-col bg-slate-50/50 min-w-0">
+        <SidebarInset className="flex flex-col bg-slate-50/50 min-w-0 w-full flex-1">
           <AdminHeader
             staffMode={staffMode}
             onToggleStaffMode={() => setStaffMode((v) => !v)}
