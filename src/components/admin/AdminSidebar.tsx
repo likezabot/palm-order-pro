@@ -85,11 +85,10 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
 
   return (
     <Sidebar 
-      collapsible="none" 
-      className="!bg-white border-r border-[#E5E5E5] w-[260px] min-w-[240px] max-w-[280px] h-screen sticky top-0"
-      style={{ "--sidebar-width": "260px" } as React.CSSProperties}
+      collapsible="offcanvas" 
+      className="bg-white border-r border-[#E5E5E5] h-full"
     >
-      <SidebarContent className="!bg-white p-3">
+      <SidebarContent className="bg-white p-3">
         {groups.map((group) => {
           const visible = group.items.filter((i) => !i.adminOnly || !staffMode);
           if (visible.length === 0) return null;
