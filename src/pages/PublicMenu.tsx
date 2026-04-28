@@ -375,7 +375,9 @@ export default function PublicMenu() {
                   const slugLower = cat.slug.toLowerCase();
                   if (slugLower.includes("espeto")) catLayoutKey = "grid-2";
                   if (slugLower.includes("bebida")) catLayoutKey = "grid-3";
+                  if (slugLower.includes("refeic")) catLayoutKey = "list";
                 }
+                const catShowDescription = (cat.slug === 'refeicoes') || showDescriptions;
                 const catAspect = ov.image_aspect ?? imageAspect;
                 const catCardStyle = ov.card_style ?? "detailed";
                 // Mobile sempre lista compacta; grid só em sm+ (tablet/desktop)
