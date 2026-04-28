@@ -235,6 +235,9 @@ export default function PublicMenu() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
+        // Se estivermos em scroll manual (clique no botão), ignoramos o observer
+        if (isScrollingRef.current) return;
+
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const id = entry.target.id;
@@ -244,7 +247,7 @@ export default function PublicMenu() {
         });
       },
       {
-        rootMargin: "-110px 0px -85% 0px", // Zona de ativação estreita logo abaixo do nav sticky
+        rootMargin: "-120px 0px -70% 0px", // Ajustado para evitar disparos falsos
         threshold: 0,
       }
     );
@@ -256,6 +259,7 @@ export default function PublicMenu() {
       sections.forEach((section) => observer.unobserve(section));
     };
   }, [categories]); // Re-executa se as categorias mudarem
+
 
   const blockIfPreview = (action: () => void) => {
     if (isPreview) {
