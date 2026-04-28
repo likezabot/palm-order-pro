@@ -34,6 +34,9 @@ type Reward = {
   min_order_subtotal: number;
   active: boolean;
   sort_order: number;
+  allow_pickup: boolean;
+  allow_delivery: boolean;
+  description: string | null;
   effective_cost_per_point: number | null;
 };
 
