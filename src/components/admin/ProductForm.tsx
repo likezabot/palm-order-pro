@@ -135,6 +135,11 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
           p_active: data.active,
           p_aliases: data.aliases,
           p_unit: "unidade",
+          p_image_url: data.image_url,
+          p_description: data.description,
+          p_is_featured: data.is_featured,
+          p_is_available_online: data.is_available_online,
+          p_is_sold_out: data.is_sold_out,
         });
         if (error) throw error;
       }, product ? "Editar produto" : "Criar produto");
