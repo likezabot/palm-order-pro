@@ -201,7 +201,76 @@ const ProductForm = ({ product, onBack, onSaved, initialCategory }: Props) => {
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-muted-foreground mb-1 block">Categoria</label>
+          <label className="text-sm font-semibold text-muted-foreground mb-1 block">Descrição (opcional)</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            className="w-full rounded-lg border border-border bg-card p-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            placeholder="Ex: Refrescante, lata 350ml."
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-semibold text-muted-foreground mb-1 block">URL da Imagem</label>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://exemplo.com/imagem.jpg"
+                className="flex-1 rounded-lg border border-border bg-card p-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl("")}
+                  className="rounded-lg bg-muted px-4 text-muted-foreground hover:bg-muted/80"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                // Heurística básica de sugestão baseada no nome
+                const query = encodeURIComponent(name);
+                toast({ 
+                  title: "Sugestão de imagem", 
+                  description: "Busque no Google e copie a URL da imagem desejada.",
+                  action: (
+                    <button 
+                      onClick={() => window.open(`https://www.google.com/search?tbm=isch&q=${query}`, '_blank')}
+                      className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded"
+                    >
+                      Abrir busca
+                    </button>
+                  )
+                });
+              }}
+              className="text-xs font-semibold text-primary/80 hover:text-primary transition-colors flex items-center gap-1"
+            >
+              <Plus size={14} /> Sugerir imagem (Google)
+            </button>
+
+            {imageUrl && (
+              <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted flex items-center justify-center">
+                <img
+                  src={imageUrl}
+                  alt="Preview"
+                  className={category === "bebidas" || category === "cervejas" ? "h-full object-contain" : "h-full w-full object-cover"}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x225?text=Imagem+Inv%C3%A1lida";
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
           <div className="grid grid-cols-2 gap-2">
             {CATEGORIES.map((cat) => (
               <button
