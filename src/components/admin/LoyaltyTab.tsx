@@ -154,6 +154,9 @@ export default function LoyaltyTab() {
     sort_order: string;
     active: boolean;
     product_id: string;
+    allow_pickup: boolean;
+    allow_delivery: boolean;
+    description: string;
   }>({
     id: null,
     display_name: "",
@@ -162,6 +165,9 @@ export default function LoyaltyTab() {
     sort_order: "0",
     active: true,
     product_id: "",
+    allow_pickup: true,
+    allow_delivery: false,
+    description: "",
   });
 
   function resetForm() {
