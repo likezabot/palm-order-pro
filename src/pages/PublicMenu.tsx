@@ -228,6 +228,32 @@ export default function PublicMenu() {
     if (!activeCat && categories.length) setActiveCat(categories[0].slug);
   }, [activeCat, categories]);
 
+  // Sincroniza categoria ativa com o scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            const slug = id.replace("categoria-", "");
+            setActiveCat(slug);
+          }
+        });
+      },
+      {
+        rootMargin: "-100px 0px -70% 0px", // Ajusta para disparar quando o topo da seção estiver próximo do topo
+        threshold: 0,
+      }
+    );
+
+    const sections = document.querySelectorAll('section[id^="categoria-"]');
+    sections.forEach((section) => observer.observe(section));
+
+    return () => {
+      sections.forEach((section) => observer.unobserve(section));
+    };
+  }, [categories]); // Re-executa se as categorias mudarem
+
   const blockIfPreview = (action: () => void) => {
     if (isPreview) {
       toast.info("Modo preview: ações de pedido estão desativadas.");
@@ -348,18 +374,9 @@ export default function PublicMenu() {
                   activeSlug={activeCat}
                   onSelect={(s) => {
                     setActiveCat(s);
-                    const el = document.getElementById(`cat-${s}`);
+                    const el = document.getElementById(`categoria-${s}`);
                     if (el) {
-                      const offset = 80; // Compensar o sticky nav
-                      const bodyRect = document.body.getBoundingClientRect().top;
-                      const elementRect = el.getBoundingClientRect().top;
-                      const elementPosition = elementRect - bodyRect;
-                      const offsetPosition = elementPosition - offset;
-
-                      window.scrollTo({
-                        top: offsetPosition,
-                        behavior: "smooth"
-                      });
+                      el.scrollIntoView({ behavior: "smooth", block: "start" });
                     }
                   }}
                 />
@@ -418,7 +435,7 @@ export default function PublicMenu() {
                 if (!entries.length) return null;
 
                 return (
-                  <section key={cat.id} id={`cat-${cat.slug}`} className="scroll-mt-20">
+                  <section key={cat.id} id={`categoria-${cat.slug}`} className="scroll-mt-24">
                     <h3 className="mb-2 text-base font-black uppercase tracking-wide sm:text-lg">{cat.name}</h3>
                     {/* Mobile: respeita colunas específicas se solicitado */}
                     <div className={cn("sm:hidden", mobileGridClass)}>

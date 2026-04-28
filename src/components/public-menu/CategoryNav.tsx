@@ -16,6 +16,7 @@ type Props = {
  */
 export default function CategoryNav({ categories, activeSlug, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
@@ -23,12 +24,25 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     if (!el) return;
     const onScroll = () => {
       const top = el.getBoundingClientRect().top;
-      setStuck(top <= 0);
+      setStuck(top <= 1);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Faz scroll horizontal do botão ativo para dentro da visão
+  useEffect(() => {
+    if (!activeSlug || !scrollRef.current) return;
+    const activeButton = scrollRef.current.querySelector('[data-active="true"]');
+    if (activeButton) {
+      activeButton.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center"
+      });
+    }
+  }, [activeSlug]);
 
   if (!categories.length) return null;
 
@@ -36,37 +50,47 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-20 -mx-4 px-4 transition-all duration-300",
+        "sticky top-0 z-30 -mx-4 px-4 transition-all duration-300",
         stuck
-          ? "border-b border-primary/20 bg-white/95 backdrop-blur-xl shadow-[0_8px_32px_-12px_hsl(var(--primary)/0.35)] translate-y-0"
-          : "bg-transparent translate-y-1",
+          ? "border-b border-white/10 bg-black/80 backdrop-blur-xl shadow-xl translate-y-0"
+          : "bg-transparent translate-y-0",
       )}
     >
       <style dangerouslySetInnerHTML={{ __html: `
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
-      <div className="flex flex-nowrap overflow-x-auto gap-2 py-3 no-scrollbar scroll-smooth">
+      <div 
+        ref={scrollRef} 
+        className="flex flex-nowrap overflow-x-auto gap-3 py-4 no-scrollbar scroll-smooth snap-x snap-mandatory"
+      >
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
             <button
               key={c.id}
+              data-active={isActive}
               type="button"
               onClick={() => onSelect(c.slug)}
               className={cn(
-                "shrink-0 rounded-2xl px-5 py-2.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider",
-                "min-h-[42px] flex items-center justify-center whitespace-nowrap",
-            isActive
-              ? "text-black shadow-[0_8px_20px_-4px_hsl(var(--primary)/0.6)] scale-[1.05] ring-2 ring-primary/20"
-              : "border border-border/50 bg-card/40 text-black hover:bg-card hover:text-black hover:border-primary/40 backdrop-blur-sm",
+                "shrink-0 rounded-full px-5 py-2.5 text-[13px] font-bold transition-all duration-300 uppercase tracking-tight snap-center",
+                "min-h-[42px] flex items-center justify-center whitespace-nowrap border",
+                isActive
+                  ? "text-white border-white/30 shadow-[0_4px_12px_rgba(255,106,0,0.4)] scale-[1.05]"
+                  : "text-white border-white/15 hover:bg-white/10 active:scale-95",
               )}
-              style={isActive ? { background: "var(--brand-gradient)" } : undefined}
+              style={
+                isActive 
+                  ? { background: "var(--brand-gradient)" } 
+                  : { background: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.18)" }
+              }
             >
               {c.name}
             </button>
           );
         })}
+        {/* Espaçador final para garantir que o último item não cole na borda */}
+        <div className="shrink-0 w-8 h-1" aria-hidden="true" />
       </div>
     </div>
   );
