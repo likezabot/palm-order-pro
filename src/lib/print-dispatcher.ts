@@ -18,6 +18,7 @@ import { logPrintEngine } from "@/lib/print-engine";
 import { auditTestLogger } from "@/lib/audit-test-logger";
 import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
 import { type DeliveryPayloadInput, type ReceiptExtras } from "@/lib/thermal-printer";
+import { logPrinterEvent } from "@/lib/printer-logger";
 
 export type DispatchMode = "full" | "delta" | "bill";
 export type DispatchSource = "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
