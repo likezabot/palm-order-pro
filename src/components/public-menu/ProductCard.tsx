@@ -10,6 +10,7 @@ type Props = {
   layout?: "list" | "grid";
   showImage?: boolean;
   showDescription?: boolean;
+  fullDescription?: boolean;
   imageAspect?: "square" | "wide" | "tall";
   /** Override por categoria. "compact" reduz para nome+preço, sem imagem grande nem descrição. */
   cardStyle?: "compact" | "detailed";
