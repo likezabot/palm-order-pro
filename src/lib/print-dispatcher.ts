@@ -16,15 +16,7 @@ import { formatPrintTableValue } from "@/lib/utils";
 import { debugLog } from "@/lib/debug-logger";
 import { logPrintEngine } from "@/lib/print-engine";
 import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
-import {
-  buildEscPosReceipt,
-  buildEscPosDelta,
-  buildEscPosBill,
-  buildEscPosDelivery,
-  type DeliveryPayloadInput,
-  type ReceiptExtras,
-} from "@/lib/thermal-printer";
-import { encodePayloadB64, enqueuePrintJob, type PrintJobType } from "@/lib/print-queue";
+import { type DeliveryPayloadInput, type ReceiptExtras } from "@/lib/thermal-printer";
 
 export type DispatchMode = "full" | "delta" | "bill";
 export type DispatchSource = "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
@@ -106,30 +98,6 @@ function safeTableValue(o: OrderRow): string {
 function safeWaiter(o: OrderRow): string {
   const w = (o.waiter_name ?? "").trim();
   return w; 
-}
-
-async function tryEnqueue(
-  orderId: string,
-  tableValue: string,
-  jobType: PrintJobType,
-  payload: Uint8Array,
-): Promise<boolean> {
-  try {
-    const cfg = await ensureFreshPrintConfig();
-    if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return false;
-    await enqueuePrintJob({
-      orderId,
-      tableName: tableValue || `pedido-${orderId.slice(0, 6)}`,
-      printType: jobType,
-      payloadB64: encodePayloadB64(payload),
-      bridgeUrl: cfg.bridgeUrl,
-      lastError: "bridge_offline",
-    });
-    return true;
-  } catch (e) {
-    debugLog.error("queue", "dispatcher enqueue falhou", e);
-    return false;
-  }
 }
 
 /**
@@ -230,9 +198,8 @@ export async function printOrderByServiceType(
     const ok = bridgeActuallyOnline ? await printDelivery(input) : { ok: false };
     if (ok.ok) return { ok: true, reason: "delivery_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: "delivery" };
 
-    const payload = buildEscPosDelivery(input, cfg);
-    const queued = await tryEnqueue(orderId, tableValue, "full", payload);
-    return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: "delivery" };
+    debugLog.warn("print", `bridge offline/falhou para delivery ${orderId}; aguardando reimpressão manual`);
+    return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: "delivery" };
   }
 
   const layoutKey = isPickup ? "pickup" : (mode === "delta" ? "dine_in_delta" : mode === "bill" ? "dine_in_bill" : "dine_in_full");
@@ -243,9 +210,8 @@ export async function printOrderByServiceType(
 
     const ok = bridgeActuallyOnline ? await printDelta(tableValue, waiter, deltaItems, extras) : { ok: false };
     if (ok.ok) return { ok: true, reason: "delta_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
-    const payload = buildEscPosDelta(tableValue, waiter, deltaItems, cfg, extras);
-    const queued = await tryEnqueue(orderId, tableValue, "delta", payload);
-    return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
+    debugLog.warn("print", `bridge offline/falhou para delta ${orderId}; aguardando reimpressão manual`);
+    return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_delta" };
   }
 
   if (items.length === 0)
@@ -254,14 +220,12 @@ export async function printOrderByServiceType(
   if (mode === "bill") {
     const ok = bridgeActuallyOnline ? await printBill(tableValue, waiter, items as any[], order.total ?? 0, extras) : { ok: false };
     if (ok.ok) return { ok: true, reason: "bill_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
-    const payload = buildEscPosBill(tableValue, waiter, items as any[], order.total ?? 0, cfg, extras);
-    const queued = await tryEnqueue(orderId, tableValue, "bill", payload);
-    return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
+    debugLog.warn("print", `bridge offline/falhou para bill ${orderId}; aguardando reimpressão manual`);
+    return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_bill" };
   }
 
   const ok = bridgeActuallyOnline ? await printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras) : { ok: false };
   if (ok.ok) return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
-  const payload = buildEscPosReceipt(tableValue, waiter, items as any[], order.total ?? 0, cfg, extras);
-  const queued = await tryEnqueue(orderId, tableValue, "full", payload);
-  return { ok: queued, reason: queued ? "queued" : "bridge_failed", bridgeOk: false, queued, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
+  debugLog.warn("print", `bridge offline/falhou para full ${orderId}; aguardando reimpressão manual`);
+  return { ok: false, reason: "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
 }

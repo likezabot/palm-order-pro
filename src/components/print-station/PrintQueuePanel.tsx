@@ -79,7 +79,7 @@ export default function PrintQueuePanel() {
             <p className="text-xs text-slate-500 mt-0.5 truncate">
               {status === "empty"
                 ? "Sem jobs pendentes — bridge saudável."
-                : "Pedidos aguardando o bridge voltar. Retry automático a cada 15s."}
+                : "Modo conservador ativo: itens antigos ficam pausados até limpeza manual."}
             </p>
           </div>
         </div>
@@ -112,7 +112,7 @@ export default function PrintQueuePanel() {
             <>
               <Button size="sm" variant="outline" onClick={handleRetry} className="h-8 gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Reprocessar</span>
+                 <span className="hidden sm:inline">Verificar</span>
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>

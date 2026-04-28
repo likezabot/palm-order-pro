@@ -16,6 +16,14 @@ interface Props {
  * (evita "NA FILA" falso para pedidos enviados sem imprimir).
  */
 export function PrintStatusBadge({ jobInfo, legacyStatus, size = "xs" }: Props) {
+  if (legacyStatus === "printing") {
+    return (
+      <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 ${SIZE[size]} font-bold uppercase bg-primary/10 text-primary border-primary/20`}>
+        <Printer className="w-2.5 h-2.5" /> Imprimindo
+      </span>
+    );
+  }
+
   // Nova fonte de verdade
   if (jobInfo) {
     const cfg = STATUS_MAP[jobInfo.status];
