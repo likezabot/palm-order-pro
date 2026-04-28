@@ -9,40 +9,43 @@ type Props = {
 };
 
 /**
- * Navegação de categorias responsiva (premium):
- * - Chip ativo com gradiente de marca + glow.
- * - Chip inativo limpo, com hairline e fundo card.
- * - Sticky com blur elegante e borda em tom de marca a 10%.
+ * Navegação de categorias definitiva (sem scroll horizontal):
+ * - Grid responsiva que cabe tudo na tela.
+ * - Versão compacta quando sticky.
+ * - Cores otimizadas para contraste.
  */
 export default function CategoryNav({ categories, activeSlug, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const onScroll = () => {
-      const top = el.getBoundingClientRect().top;
-      setStuck(top <= 1);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
-  // Faz scroll horizontal do botão ativo para dentro da visão
-  useEffect(() => {
-    if (!activeSlug || !scrollRef.current) return;
-    const activeButton = scrollRef.current.querySelector('[data-active="true"]');
-    if (activeButton) {
-      activeButton.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center"
-      });
-    }
-  }, [activeSlug]);
+    const onScroll = () => {
+      // Usamos window.scrollY para detectar se passou do ponto inicial
+      // Ou melhor, observamos a posição do container original
+      const rect = el.getBoundingClientRect();
+      // Se o container subir além do topo, ativamos o modo stuck
+      // Mas como ele muda para 'fixed', precisamos de um marcador ou lógica baseada em scrollY
+      if (window.scrollY > 400) { // Valor aproximado após o Hero
+         setStuck(true);
+      } else {
+         setStuck(false);
+      }
+    };
+    
+    // Uma abordagem melhor para sticky sem pulos é manter o elemento no fluxo 
+    // e usar classes do Tailwind 'sticky top-0'
+    const handleScroll = () => {
+      if (!containerRef.current) return;
+      const top = containerRef.current.getBoundingClientRect().top;
+      setStuck(top <= 0);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   if (!categories.length) return null;
 
@@ -50,56 +53,54 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-30 -mx-4 w-[calc(100%+2rem)] transition-all duration-300",
-        stuck
-          ? "border-b border-white/10 bg-black/90 backdrop-blur-xl shadow-2xl"
-          : "bg-transparent",
+        "sticky top-0 z-40 w-full transition-all duration-300",
+        stuck 
+          ? "bg-[#0F0806]/92 backdrop-blur-[10px] border-b border-white/10 shadow-xl py-2 px-2" 
+          : "bg-transparent py-4 px-0"
       )}
     >
-      <style dangerouslySetInnerHTML={{ __html: `
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}} />
-      <div 
-        ref={scrollRef} 
-        className="flex flex-nowrap overflow-x-auto overflow-y-hidden gap-[clamp(8px,2vw,16px)] px-[clamp(16px,4vw,32px)] py-4 no-scrollbar scroll-smooth snap-x snap-mandatory lg:justify-center lg:max-w-7xl lg:mx-auto"
-      >
-        {categories.map((c) => {
-          const isActive = activeSlug === c.slug;
-          return (
-            <button
-              key={c.id}
-              data-active={isActive}
-              type="button"
-              onClick={() => onSelect(c.slug)}
-              className={cn(
-                "shrink-0 rounded-xl transition-all duration-300 uppercase tracking-tight snap-center",
-                "flex items-center justify-center whitespace-nowrap border",
-                "touch-manipulation select-none",
-                isActive
-                  ? "text-white border-white/40 shadow-[0_8px_20px_rgba(255,106,0,0.3)] scale-[1.02]"
-                  : "text-white/90 border-white/10 hover:bg-white/10 hover:text-white active:scale-95",
-              )}
-              style={{
-                minWidth: "clamp(120px, 32vw, 180px)",
-                height: "clamp(52px, 7vw, 68px)",
-                padding: "clamp(10px, 2vw, 18px)",
-                fontSize: "clamp(14px, 3.5vw, 18px)",
-                fontWeight: 800,
-                ...(isActive 
-                  ? { background: "var(--brand-gradient)" } 
-                  : { background: "rgba(255, 255, 255, 0.08)" }
-                )
-              }}
-            >
-              <span className="truncate w-full text-center px-1">
-                {c.name}
-              </span>
-            </button>
-          );
-        })}
-        {/* Espaçador final generoso para garantir que o último item apareça completo e com respiro */}
-        <div className="shrink-0 w-[clamp(24px,6vw,48px)] h-1" aria-hidden="true" />
+      <div className="mx-auto max-w-3xl">
+        <div 
+          className={cn(
+            "grid gap-2",
+            // Ajuste dinâmico de colunas baseado no número de itens
+            categories.length <= 3 ? "grid-cols-3" : 
+            categories.length <= 4 ? "grid-cols-2 sm:grid-cols-4" :
+            "grid-cols-3 sm:grid-cols-4 md:grid-cols-6"
+          )}
+        >
+          {categories.map((c) => {
+            const isActive = activeSlug === c.slug;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onSelect(c.slug)}
+                className={cn(
+                  "transition-all duration-200 uppercase tracking-tight",
+                  "flex items-center justify-center whitespace-nowrap border",
+                  "touch-manipulation select-none overflow-hidden",
+                  stuck 
+                    ? "h-[38px] rounded-[12px] px-1 text-[10px]" 
+                    : "h-[44px] rounded-[16px] px-2 text-[12px]",
+                  isActive
+                    ? "text-white border-white/30 shadow-[0_4px_12px_rgba(255,106,0,0.2)] scale-[1.02] font-black"
+                    : "text-white/90 border-white/10 font-extrabold hover:bg-white/5",
+                )}
+                style={{
+                  minWidth: 0,
+                  background: isActive 
+                    ? "var(--brand-gradient, linear-gradient(135deg, #FF6A00 0%, #FF8A00 100%))" 
+                    : "rgba(255, 255, 255, 0.08)"
+                }}
+              >
+                <span className="truncate w-full text-center px-1">
+                  {c.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
