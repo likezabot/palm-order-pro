@@ -36,13 +36,13 @@ export default function CategoryNav({ categories, activeSlug, onSelect }: Props)
     <div
       ref={containerRef}
       className={cn(
-        "sticky top-0 z-20 -mx-4 mt-3 px-4 transition-all",
+        "sticky top-0 z-20 -mx-4 px-4 transition-all duration-300",
         stuck
-          ? "border-b border-primary/10 bg-background/85 backdrop-blur-md shadow-[0_4px_20px_-12px_hsl(var(--primary)/0.25)]"
-          : "bg-transparent",
+          ? "border-b border-primary/20 bg-background/95 backdrop-blur-xl shadow-[0_8px_32px_-12px_hsl(var(--primary)/0.35)] translate-y-0"
+          : "bg-transparent translate-y-1",
       )}
     >
-      <div className="flex flex-wrap gap-1.5 py-2">
+      <div className="flex flex-nowrap overflow-x-auto gap-2 py-3 no-scrollbar scroll-smooth">
         {categories.map((c) => {
           const isActive = activeSlug === c.slug;
           return (
