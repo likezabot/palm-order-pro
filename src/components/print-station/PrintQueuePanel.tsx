@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Inbox, RefreshCw, Trash2, ChevronDown, ChevronUp, AlertTriangle, Wand2 } from "lucide-react";
+import { Inbox, RefreshCw, Trash2, ChevronDown, ChevronUp, AlertTriangle, Wand2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -85,6 +86,12 @@ export default function PrintQueuePanel() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+            <Link to="/debug/print">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Auditoria</span>
+            </Link>
+          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button size="sm" variant="outline" className="h-8 gap-1.5" title="Marca pedidos pagos com impressão pendente como impressos no banco (não toca na bridge).">
