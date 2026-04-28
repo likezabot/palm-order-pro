@@ -725,6 +725,12 @@ const Pdv = () => {
                     <span className="font-semibold text-xs">Aguardando impressão</span>
                   </div>
                 )}
+                {selectedOrder.print_status === 'printing' && (
+                  <div className="flex items-center gap-1 text-primary">
+                    <Printer className="w-3.5 h-3.5" />
+                    <span className="font-semibold text-xs">Imprimindo</span>
+                  </div>
+                )}
                 {selectedOrder.print_status === 'failed' && (
                   <div className="flex items-center gap-1 text-destructive">
                     <AlertCircle className="w-3.5 h-3.5" />
@@ -763,7 +769,7 @@ const Pdv = () => {
                   onClick={() => handlePrint(selectedOrder)}
                   className="rounded-lg border border-border bg-card px-2 py-2.5 font-bold text-sm text-foreground active:scale-95 transition-transform flex items-center justify-center gap-1.5"
                 >
-                  <Printer size={16} /> Imprimir
+                  <Printer size={16} /> {selectedOrder.print_status === 'failed' ? 'Imprimir novamente' : 'Imprimir'}
                 </button>
                 <button
                   onClick={() => navigate(`/orders/${selectedOrder.id}/edit`)}
