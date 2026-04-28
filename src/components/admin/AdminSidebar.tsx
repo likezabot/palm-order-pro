@@ -96,15 +96,15 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
   ];
 
   return (
-    <Sidebar collapsible="offcanvas" className="border-r border-gray-200 bg-white">
-      <SidebarContent className="bg-white">
+    <Sidebar collapsible="offcanvas" className="!bg-white border-r border-gray-200">
+      <SidebarContent className="!bg-white">
         {groups.map((group) => {
           const visible = group.items.filter((i) => !i.adminOnly || !staffMode);
           if (visible.length === 0) return null;
           return (
             <SidebarGroup key={group.title} className="p-0">
               {!collapsed && (
-                <SidebarGroupLabel className="px-4 pt-6 pb-2 text-[11px] font-black uppercase tracking-widest text-black opacity-100 h-auto">
+                <SidebarGroupLabel className="px-4 pt-6 pb-2 text-[11px] font-black uppercase tracking-widest !text-black opacity-100 h-auto">
                   {group.title}
                 </SidebarGroupLabel>
               )}
@@ -121,19 +121,19 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
                           tooltip={item.label}
                           className={cn(
                             "w-full h-auto p-0 rounded-none border-none transition-none",
-                            "hover:bg-[#F3F3F3] hover:text-black",
-                            isActive && "bg-[#EAEAEA] border-l-[3px] border-black hover:bg-[#EAEAEA]",
-                            "data-[active=true]:bg-[#EAEAEA] data-[active=true]:text-black"
+                            "hover:!bg-[#F3F3F3] hover:!text-black",
+                            isActive && "!bg-[#EAEAEA] border-l-[3px] !border-black hover:!bg-[#EAEAEA]",
+                            "data-[active=true]:!bg-[#EAEAEA] data-[active=true]:!text-black"
                           )}
                         >
                           <button
                             type="button"
                             onClick={() => onChange(item.value)}
                             className={cn(
-                              "w-full flex items-center gap-3 py-3 px-4 font-semibold text-sm transition-none text-black",
+                              "w-full flex items-center gap-3 py-3 px-4 font-semibold text-sm transition-none !text-black",
                             )}
                           >
-                            <Icon className="w-5 h-5 shrink-0 text-black" style={{ color: '#000000' }} />
+                            <Icon className="w-5 h-5 shrink-0 !text-black" />
                             {!collapsed && <span className="truncate">{item.label}</span>}
                             {!collapsed && item.badge != null && item.badge > 0 && (
                               <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-black text-white text-[10px] font-black leading-none">
