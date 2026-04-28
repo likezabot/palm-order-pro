@@ -171,7 +171,12 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
             <span className="font-medium text-foreground">{getTimeLabel()}</span>
           </span>
         </div>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-1.5">
+          {showPrintWarning && (
+            <div className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase" title="Impresso por outra aba ou instância antiga">
+              <AlertTriangle className="w-2.5 h-2.5" /> ORIGEM EXTERNA
+            </div>
+          )}
           <PrintStatusBadge jobInfo={jobInfo} legacyStatus={order.print_status} />
         </div>
       </div>
