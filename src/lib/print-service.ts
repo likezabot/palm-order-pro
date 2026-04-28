@@ -199,8 +199,22 @@ export async function manualPrintOrder(order: {
   waiter_name?: string | null;
   total?: number | null;
 }): Promise<ManualPrintResult> {
-  const r = await printOrderByServiceType(order.id, "full", "manual");
-  return toManual(r);
+  // Mesmo em manual, tentamos "clamar" para evitar que o auto-print dispare em paralelo
+  // ou para marcar que estamos tentando imprimir agora.
+  await claimOrderForPrint(order.id);
+
+  try {
+    const r = await printOrderByServiceType(order.id, "full", "manual");
+    if (r.ok && r.bridgeOk) {
+      await completePrint(order.id);
+      return { ok: true, reason: "success", queued: false, bridgeOk: true };
+    }
+    await failPrint(order.id, r.reason);
+    return toManual(r);
+  } catch (err) {
+    await failPrint(order.id, String(err));
+    return { ok: false, reason: "error", queued: false, bridgeOk: false, error: String(err) };
+  }
 }
 
 export async function manualPrintDelta(order: {
@@ -209,8 +223,19 @@ export async function manualPrintDelta(order: {
   original_table_name?: string | null;
   waiter_name?: string | null;
 }): Promise<ManualPrintResult> {
-  const r = await printOrderByServiceType(order.id, "delta", "manual");
-  return toManual(r);
+  await claimOrderForPrint(order.id);
+  try {
+    const r = await printOrderByServiceType(order.id, "delta", "manual");
+    if (r.ok && r.bridgeOk) {
+      await completePrint(order.id);
+      return { ok: true, reason: "success", queued: false, bridgeOk: true };
+    }
+    await failPrint(order.id, r.reason);
+    return toManual(r);
+  } catch (err) {
+    await failPrint(order.id, String(err));
+    return { ok: false, reason: "error", queued: false, bridgeOk: false, error: String(err) };
+  }
 }
 
 export async function manualPrintBill(order: {
@@ -220,8 +245,19 @@ export async function manualPrintBill(order: {
   waiter_name?: string | null;
   total?: number | null;
 }): Promise<ManualPrintResult> {
-  const r = await printOrderByServiceType(order.id, "bill", "manual");
-  return toManual(r);
+  await claimOrderForPrint(order.id);
+  try {
+    const r = await printOrderByServiceType(order.id, "bill", "manual");
+    if (r.ok && r.bridgeOk) {
+      await completePrint(order.id);
+      return { ok: true, reason: "success", queued: false, bridgeOk: true };
+    }
+    await failPrint(order.id, r.reason);
+    return toManual(r);
+  } catch (err) {
+    await failPrint(order.id, String(err));
+    return { ok: false, reason: "error", queued: false, bridgeOk: false, error: String(err) };
+  }
 }
 
 /** Reimpressão explícita (ex.: botão "Imprimir novamente"). */
@@ -229,7 +265,18 @@ export async function reprintOrder(
   order: { id: string },
   mode: DispatchMode = "full",
 ): Promise<ManualPrintResult> {
-  const r = await printOrderByServiceType(order.id, mode, "reprint");
-  return toManual(r);
+  await claimOrderForPrint(order.id);
+  try {
+    const r = await printOrderByServiceType(order.id, mode, "reprint");
+    if (r.ok && r.bridgeOk) {
+      await completePrint(order.id);
+      return { ok: true, reason: "success", queued: false, bridgeOk: true };
+    }
+    await failPrint(order.id, r.reason);
+    return toManual(r);
+  } catch (err) {
+    await failPrint(order.id, String(err));
+    return { ok: false, reason: "error", queued: false, bridgeOk: false, error: String(err) };
+  }
 }
 
