@@ -5,11 +5,11 @@
 @layer base {
   /* Light mode (default when .dark not present) */
   :root {
-    --background: 60 9% 98%;
-    --foreground: 0 0% 6%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 6%;
+    --card-foreground: 0 0% 0%;
 
     --surface-elevated: 60 6% 95%;
 
@@ -17,17 +17,17 @@
     --popover-foreground: 0 0% 6%;
 
     --primary: 14 78% 44%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
     --primary-glow: 20 85% 50%;
 
     --secondary: 60 6% 95%;
-    --secondary-foreground: 0 0% 6%;
+    --secondary-foreground: 0 0% 0%;
 
-    --muted: 60 6% 95%;
-    --muted-foreground: 0 0% 36%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 12%;
 
-    --accent: 60 6% 95%;
-    --accent-foreground: 0 0% 6%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 0%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;

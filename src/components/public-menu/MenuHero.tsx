@@ -135,14 +135,14 @@ export default function MenuHero({
         <div className="relative z-10 mx-auto flex h-full max-w-3xl items-end px-4 pb-16">
           <div className={cn("min-w-0 flex-1", isCenter && "text-center")}>
             <h1
-              className="truncate text-2xl font-black leading-tight tracking-tight text-white sm:text-3xl"
+              className="truncate text-2xl font-black leading-tight tracking-tight text-foreground sm:text-3xl"
               style={titleShadow}
             >
               {displayTitle}
             </h1>
             {displaySub && (
               <p
-                className="mt-1 line-clamp-1 text-sm font-medium text-white/95 sm:text-base"
+                className="mt-1 line-clamp-1 text-sm font-medium text-foreground/90 sm:text-base"
                 style={subShadow}
               >
                 {displaySub}
