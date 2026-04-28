@@ -7,6 +7,11 @@ export interface Product {
   created_at: string;
   /** Apelidos / variações para reconhecimento por voz/texto no Telegram. */
   aliases?: string[];
+  image_url?: string | null;
+  description?: string | null;
+  is_featured?: boolean;
+  is_available_online?: boolean;
+  is_sold_out?: boolean;
 }
 
 export interface CartItem {
