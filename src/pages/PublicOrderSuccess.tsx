@@ -453,8 +453,7 @@ export default function PublicOrderSuccess() {
         )}
 
         {!cancelled &&
-          ((serviceType === "pickup" &&
-            state.loyalty_points_pending &&
+          ((state.loyalty_points_pending &&
             state.loyalty_points_pending > 0) ||
             state.loyalty_reward_name) && (
             <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-5 shadow-[var(--shadow-warm)] space-y-3">
