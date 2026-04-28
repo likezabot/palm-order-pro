@@ -106,6 +106,27 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
       case "cutMark":
         parts.push(`<div class="cut">✂ --------------------------------</div>`);
         break;
+      case "sectionHeader":
+        parts.push(`<div class="section-header">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "rawLine":
+        parts.push(`<div class="raw-line${blk.muted ? " raw-line-muted" : ""}">${escapeHtml(blk.text)}</div>`);
+        break;
+      case "bulletItem": {
+        const price = `R$ ${blk.subtotal.toFixed(2).replace(".", ",")}`;
+        const note = blk.note
+          ? `<div class="bullet-note">↳ ${escapeHtml(blk.note)}</div>`
+          : "";
+        parts.push(
+          `<div class="bullet-item">• ${blk.quantity} x ${escapeHtml(blk.name)} - ${price}</div>${note}`
+        );
+        break;
+      }
+      case "kvLine":
+        parts.push(
+          `<div class="kv-line${blk.bold ? " kv-line-bold" : ""}"><span class="kv-dash">-</span> <span class="kv-label">${escapeHtml(blk.label)}:</span> <span class="kv-value">${escapeHtml(blk.value)}</span></div>`
+        );
+        break;
     }
   }
   return parts.join("\n");
