@@ -96,20 +96,20 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
   ];
 
   return (
-    <Sidebar collapsible="offcanvas" className="border-r border-border">
-      <SidebarContent className="bg-background">
+    <Sidebar collapsible="offcanvas" className="border-r border-gray-200 bg-white">
+      <SidebarContent className="bg-white">
         {groups.map((group) => {
           const visible = group.items.filter((i) => !i.adminOnly || !staffMode);
           if (visible.length === 0) return null;
           return (
-            <SidebarGroup key={group.title}>
+            <SidebarGroup key={group.title} className="p-0">
               {!collapsed && (
-                <SidebarGroupLabel className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/80">
+                <SidebarGroupLabel className="px-4 pt-6 pb-2 text-[11px] font-black uppercase tracking-widest text-black opacity-100 h-auto">
                   {group.title}
                 </SidebarGroupLabel>
               )}
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="gap-0">
                   {visible.map((item) => {
                     const Icon = item.icon;
                     const isActive = active === item.value;
@@ -119,19 +119,24 @@ export default function AdminSidebar({ active, onChange, staffMode, unresolvedEr
                           asChild
                           isActive={isActive}
                           tooltip={item.label}
+                          className={cn(
+                            "w-full h-auto p-0 rounded-none border-none transition-none",
+                            "hover:bg-[#F3F3F3] hover:text-black",
+                            isActive && "bg-[#EAEAEA] border-l-[3px] border-black hover:bg-[#EAEAEA]",
+                            "data-[active=true]:bg-[#EAEAEA] data-[active=true]:text-black"
+                          )}
                         >
                           <button
                             type="button"
                             onClick={() => onChange(item.value)}
                             className={cn(
-                              "w-full flex items-center gap-2 font-bold text-sm",
-                              isActive && "text-primary",
+                              "w-full flex items-center gap-3 py-3 px-4 font-semibold text-sm transition-none text-black",
                             )}
                           >
-                            <Icon className="w-4 h-4 shrink-0" />
+                            <Icon className="w-5 h-5 shrink-0 text-black" style={{ color: '#000000' }} />
                             {!collapsed && <span className="truncate">{item.label}</span>}
                             {!collapsed && item.badge != null && item.badge > 0 && (
-                              <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black leading-none">
+                              <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-black text-white text-[10px] font-black leading-none">
                                 {item.badge > 99 ? "99+" : item.badge}
                               </span>
                             )}
