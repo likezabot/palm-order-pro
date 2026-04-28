@@ -644,4 +644,3 @@ export default function OrderEditor() {
   );
 }
 
-import { UtensilsCrossed as UtensilsIcon } from "lucide-react";
