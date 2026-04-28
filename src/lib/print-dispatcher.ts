@@ -121,6 +121,17 @@ export async function printOrderByServiceType(
     };
   }
 
+  if (order.status === "cancelled" && source !== "reprint") {
+    return {
+      ok: false,
+      reason: "order_cancelled",
+      bridgeOk: false,
+      queued: false,
+      serviceType: order.service_type,
+      layoutUsed: "dine_in_full",
+    };
+  }
+
   const cfg = await ensureFreshPrintConfig();
   const serviceType = order.service_type ?? "dine_in";
   const isDelivery = serviceType === "delivery";
