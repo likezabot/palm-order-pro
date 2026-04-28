@@ -32,25 +32,23 @@ serve(async (req) => {
       });
       
       const html = await response.text();
-      // Regex to find the JSON-like data in Bing's results
-      const regex = /m="({&quot;murl&quot;:&quot;[^"]+&quot;,&quot;turl&quot;:&quot;[^"]+&quot;,&quot;t&quot;:&quot;[^"]+&quot;[^}]*})"/g;
+      // More robust regex to find image data in Bing's results
       const results = [];
-      let match;
+      const murlRegex = /"murl":"([^"]+)"/g;
+      const turlRegex = /"turl":"([^"]+)"/g;
+      const titleRegex = /"t":"([^"]+)"/g;
       
-      while ((match = regex.exec(html)) !== null && results.length < 15) {
-        try {
-          const jsonStr = match[1].replace(/&quot;/g, '"');
-          const data = JSON.parse(jsonStr);
-          results.push({
-            thumbnail: data.turl,
-            url: data.murl,
-            title: data.t || 'Sem título',
-            source: data.murl, // Fallback
-            domain: new URL(data.murl).hostname
-          });
-        } catch (e) {
-          console.error('Error parsing match', e);
-        }
+      let murlMatch;
+      while ((murlMatch = murlRegex.exec(html)) !== null && results.length < 15) {
+        const murl = murlMatch[1];
+        // Try to find corresponding thumbnail and title nearby if possible, or just use murl
+        results.push({
+          thumbnail: murl, // Fallback to murl if thumbnail not found
+          url: murl,
+          title: 'Produto',
+          source: murl,
+          domain: new URL(murl).hostname
+        });
       }
 
       return new Response(JSON.stringify({ results }), {
