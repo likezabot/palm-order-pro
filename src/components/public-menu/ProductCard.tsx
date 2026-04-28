@@ -129,7 +129,8 @@ export default function ProductCard({
         type={interactive ? "button" : undefined}
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
-          "flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors",
+          "flex w-full items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-left transition-colors",
+          !className?.includes("bg-") && "bg-card",
           isBlocked
             ? "opacity-60 cursor-not-allowed"
             : "hover:border-primary/40 active:scale-[0.99]",
@@ -167,7 +168,8 @@ export default function ProductCard({
         type={interactive ? "button" : undefined}
         onClick={interactive ? () => onClick!(product) : undefined}
         className={cn(
-          "group relative flex w-full flex-col text-left overflow-hidden rounded-xl border border-border/60 bg-card transition-all duration-300",
+          "group relative flex w-full flex-col text-left overflow-hidden rounded-xl border border-border/60 transition-all duration-300",
+          !className?.includes("bg-") && "bg-card",
           shadowClass,
           isBlocked
             ? "opacity-60 cursor-not-allowed"
@@ -219,7 +221,8 @@ export default function ProductCard({
       type={interactive ? "button" : undefined}
       onClick={interactive ? () => onClick!(product) : undefined}
       className={cn(
-        "group relative flex w-full text-left items-stretch gap-3 rounded-xl border border-border/60 bg-card p-2.5 transition-all duration-200",
+        "group relative flex w-full text-left items-stretch gap-3 rounded-xl border border-border/60 p-2.5 transition-all duration-200",
+        !className?.includes("bg-") && "bg-card",
         shadowClass,
         isBlocked
           ? "opacity-60 cursor-not-allowed"

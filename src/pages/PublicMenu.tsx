@@ -375,29 +375,26 @@ export default function PublicMenu() {
             )}
 
             {(settings?.show_category_nav ?? true) && (
-              <div className="mt-4 mb-2">
-                <CategoryNav
-                  categories={categories}
-                  activeSlug={activeCat}
-                  onSelect={(s) => {
-                    // Bloqueia o IntersectionObserver durante o scroll
-                    isScrollingRef.current = true;
-                    setActiveCat(s);
-                    
-                    const el = document.getElementById(`categoria-${s}`);
-                    if (el) {
-                      el.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }
+              <CategoryNav
+                categories={categories}
+                activeSlug={activeCat}
+                onSelect={(s) => {
+                  // Bloqueia o IntersectionObserver durante o scroll
+                  isScrollingRef.current = true;
+                  setActiveCat(s);
+                  
+                  const el = document.getElementById(`categoria-${s}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
 
-                    // Libera o observer após o término esperado do scroll
-                    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-                    scrollTimeoutRef.current = setTimeout(() => {
-                      isScrollingRef.current = false;
-                    }, 1000);
-                  }}
-
-                />
-              </div>
+                  // Libera o observer após o término esperado do scroll
+                  if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                  scrollTimeoutRef.current = setTimeout(() => {
+                    isScrollingRef.current = false;
+                  }, 1000);
+                }}
+              />
             )}
 
             {(settings?.show_categories_section_title ?? true) && (
@@ -575,14 +572,15 @@ export default function PublicMenu() {
 
   return (
     <PublicMenuLayout buttonStyle={settings?.button_style ?? "solid"}>
-      {isPreview && (
-        <div className="sticky top-0 z-50 bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground backdrop-blur">
-          Modo preview — pedidos desativados
-        </div>
-      )}
+      <div data-preview-mode={isPreview}>
+        {isPreview && (
+          <div className="sticky top-0 z-50 bg-warning px-4 py-2 text-center text-xs font-bold text-warning-foreground backdrop-blur h-[32px] flex items-center justify-center">
+            Modo preview — pedidos desativados
+          </div>
+        )}
 
-      
-      {sectionOrder.map(renderSection)}
+        
+        {sectionOrder.map(renderSection)}
 
       {!isOpen && !isPreview && (
         <div className="mx-auto max-w-3xl px-4">
@@ -664,6 +662,7 @@ export default function PublicMenu() {
         onAdd={(p) => blockIfPreview(() => cart.add(p, 1, ""))}
         disabled={!isOpen && !isPreview}
       />
+      </div>
     </PublicMenuLayout>
   );
 }
