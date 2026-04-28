@@ -61,6 +61,8 @@ export function usePdvRealtime() {
         markRealtimeHeartbeat();
         const updated = payload.new as Order;
         const activeStatuses = ["new", "preparing", "done"];
+        const isCancelled = updated.status === "cancelled";
+
         
         queryClient.setQueryData<Order[]>(["pdv-orders"], (old) => {
           if (!old) return old;
