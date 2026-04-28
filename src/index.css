@@ -1,3 +1,12 @@
+#lovable-badge,
+a[href*="lovable.dev"],
+aside:has(a[href*="lovable.dev"]) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -389,7 +398,6 @@ html.hc svg {
   transform: scale(1.05);
   transform-origin: center;
 }
-
 
 /* ============================================================
  * Public menu — variantes de botão de ação (.btn-accent)
