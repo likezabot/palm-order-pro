@@ -228,6 +228,32 @@ export default function PublicMenu() {
     if (!activeCat && categories.length) setActiveCat(categories[0].slug);
   }, [activeCat, categories]);
 
+  // Sincroniza categoria ativa com o scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            const slug = id.replace("categoria-", "");
+            setActiveCat(slug);
+          }
+        });
+      },
+      {
+        rootMargin: "-100px 0px -70% 0px", // Ajusta para disparar quando o topo da seção estiver próximo do topo
+        threshold: 0,
+      }
+    );
+
+    const sections = document.querySelectorAll('section[id^="categoria-"]');
+    sections.forEach((section) => observer.observe(section));
+
+    return () => {
+      sections.forEach((section) => observer.unobserve(section));
+    };
+  }, [categories]); // Re-executa se as categorias mudarem
+
   const blockIfPreview = (action: () => void) => {
     if (isPreview) {
       toast.info("Modo preview: ações de pedido estão desativadas.");
