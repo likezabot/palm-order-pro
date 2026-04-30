@@ -393,7 +393,7 @@ function buildSenhaLayout(
   // 16-18. Itens Loop
   input.items.forEach((it) => {
     blocks.push({
-      kind: "bulletItem",
+      kind: "item",
       name: it.product_name.toUpperCase(),
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
