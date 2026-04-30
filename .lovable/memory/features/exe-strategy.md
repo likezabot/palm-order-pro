@@ -12,7 +12,7 @@ type: constraint
 
 - Usar EXATAMENTE o mesmo bundle/build do web aprovado
 - Deve mostrar o mesmo `APP_BUILD` e `PRINT_ENGINE` que o web
-- Bridge local funcionando na porta 9100
+- Bridge local funcionando na porta 3001
 - NÃO pode imprimir com template antigo
 - Pedido real DEVE sair com `PRINT_PATH`, `ORDER`, `SERVICE` no rodapé
 - Instalar em pasta separada da estável

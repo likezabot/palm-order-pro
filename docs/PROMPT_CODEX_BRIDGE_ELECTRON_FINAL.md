@@ -1,7 +1,7 @@
 # Plano B Fast Order — Bridge Electron .exe (instalador único Windows)
 
 ## Contexto
-Já existe um app PDV web em https://palm-order-pro.lovable.app que envia ESC/POS para `http://localhost:9100/print`. Sua tarefa é criar UM ÚNICO instalador Windows que sobe a bridge HTTP + abre o app + fica na bandeja, sem console preto.
+Já existe um app PDV web em https://palm-order-pro.lovable.app que envia ESC/POS para `http://localhost:3001/print`. Sua tarefa é criar UM ÚNICO instalador Windows que sobe a bridge HTTP + abre o app + fica na bandeja, sem console preto.
 
 ## Estrutura do projeto
 
@@ -13,7 +13,7 @@ desktop/
 ├── main.cjs              ← processo principal Electron
 ├── preload.cjs           ← contexto isolado
 ├── bridge/
-│   ├── server.cjs        ← Express na porta 9100
+│   ├── server.cjs        ← Express na porta 3001
 │   ├── printer.cjs       ← lógica spooler-powershell
 │   └── config.cjs        ← load/save em %APPDATA%/plano-b-bridge/
 ├── assets/
@@ -65,12 +65,12 @@ desktop/
 ## main.cjs (essencial)
 
 - `app.whenReady()`:
-  1. `require('./bridge/server.cjs').start({ port: 9100, host: '0.0.0.0' })`
+  1. `require('./bridge/server.cjs').start({ port: 3001, host: '0.0.0.0' })`
   2. Cria `BrowserWindow` 1366x800, `frame: true`, `autoHideMenuBar: true`, carrega `https://palm-order-pro.lovable.app/admin`.
   3. Cria `Tray` com menu: "Abrir Painel", "Status: <printer>", "Reiniciar Bridge", "Abrir Logs", separador, "Iniciar com Windows" (checkbox), "Sair".
 - `window.on('close', e => { e.preventDefault(); win.hide(); })` — só sai pelo menu tray > Sair.
 - `app.setLoginItemSettings({ openAtLogin: <persistido> })`.
-- A cada 30s, ping interno em `http://localhost:9100/health`, atualiza label do menu.
+- A cada 30s, ping interno em `http://localhost:3001/health`, atualiza label do menu.
 - `app.requestSingleInstanceLock()` — segunda execução só foca a janela.
 
 ## bridge/server.cjs — endpoints obrigatórios
@@ -145,7 +145,7 @@ module.exports = { printRaw };
 ```nsis
 !macro customInstall
   ExecWait 'netsh advfirewall firewall delete rule name="Plano B Bridge"'
-  ExecWait 'netsh advfirewall firewall add rule name="Plano B Bridge" dir=in action=allow protocol=TCP localport=9100'
+  ExecWait 'netsh advfirewall firewall add rule name="Plano B Bridge" dir=in action=allow protocol=TCP localport=3001'
 !macroend
 
 !macro customUnInstall
@@ -177,6 +177,6 @@ npm run build
 
 ## NÃO MEXER
 
-- Em código React do palm-order-pro (já está configurado pra falar com `localhost:9100`).
+- Em código React do palm-order-pro (já está configurado pra falar com `localhost:3001`).
 - Em Supabase / Lovable Cloud.
 - Em endpoints já documentados (mantenha mesma assinatura).

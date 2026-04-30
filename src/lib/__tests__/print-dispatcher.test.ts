@@ -8,7 +8,7 @@ vi.mock("@/lib/print-config", () => ({
     headerText: "TESTE PLANO B",
     footerText: "Obrigado",
     printMode: "bridge",
-    bridgeUrl: "http://localhost:9100/print",
+    bridgeUrl: "http://localhost:3001/print",
     layoutPreset: "classico",
     fontSizes: {},
     visibleSections: { title: true, waiter: true, date: true, notes: true, footer: true },
@@ -19,7 +19,7 @@ vi.mock("@/lib/print-config", () => ({
   }),
   loadPrintConfig: vi.fn().mockReturnValue({
     printMode: "bridge",
-    bridgeUrl: "http://localhost:9100/print",
+    bridgeUrl: "http://localhost:3001/print",
   }),
 }));
 

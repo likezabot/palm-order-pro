@@ -19,18 +19,18 @@ Agora preciso que **a bridge v2.2 (dentro do .exe `Plano B Fast Order`) bata com
 [BOOT] Bridge v2.2.0
 [BOOT] Modo de impressao: spooler-powershell
 [BOOT] Impressora configurada: POS80_MeuSistema
-[BOOT] HTTP: http://0.0.0.0:9100
+[BOOT] HTTP: http://0.0.0.0:3001
 warn: node-printer indisponivel (Cannot find module '@thiagoelg/node-printer')
 ```
 
 E no navegador:
 ```
-GET http://localhost:9100/health → signal is aborted without reason  (timeout 1500ms)
+GET http://localhost:3001/health → signal is aborted without reason  (timeout 1500ms)
 ```
 
 Ou seja:
-- Bridge sobe e diz que está ouvindo em `0.0.0.0:9100`
-- Mas o `fetch` do site para `http://localhost:9100/health` **não recebe resposta em 1.5s**
+- Bridge sobe e diz que está ouvindo em `0.0.0.0:3001`
+- Mas o `fetch` do site para `http://localhost:3001/health` **não recebe resposta em 1.5s**
 - E o módulo nativo `@thiagoelg/node-printer` não foi empacotado
 
 ---
@@ -126,14 +126,14 @@ CORS: liberar `*` em todos.
 
 ### 5. Bind correto
 
-Continuar ouvindo em `0.0.0.0:9100`. **Não** mudar para `127.0.0.1` — o celular precisa acessar pelo IP da rede.
+Continuar ouvindo em `0.0.0.0:3001`. **Não** mudar para `127.0.0.1` — o celular precisa acessar pelo IP da rede.
 
 ### 6. Firewall (instalar regra automaticamente)
 
 No instalador (NSIS / electron-builder), adicionar script `installer-include.nsh` que rode na instalação:
 
 ```
-ExecWait 'netsh advfirewall firewall add rule name="Plano B Fast Order Bridge" dir=in action=allow protocol=TCP localport=9100'
+ExecWait 'netsh advfirewall firewall add rule name="Plano B Fast Order Bridge" dir=in action=allow protocol=TCP localport=3001'
 ```
 
 E no uninstall:
@@ -162,24 +162,24 @@ npm run dist:win
 # 2. Instalar e abrir o app
 
 # 3. Verificar bind
-netstat -ano | findstr :9100
-# Esperado: 0.0.0.0:9100 LISTENING
+netstat -ano | findstr :3001
+# Esperado: 0.0.0.0:3001 LISTENING
 
 # 4. Health rápido
-Measure-Command { Invoke-RestMethod http://localhost:9100/health }
+Measure-Command { Invoke-RestMethod http://localhost:3001/health }
 # Esperado: TotalMilliseconds < 200
 
 # 5. Confirmar campos novos
-(Invoke-RestMethod http://localhost:9100/health) | ConvertTo-Json
+(Invoke-RestMethod http://localhost:3001/health) | ConvertTo-Json
 # Esperado ver: bridge_version=2.2.0, printer_ok=true, printer_name="POS80_MeuSistema"
 
 # 6. Listar impressoras
-Invoke-RestMethod http://localhost:9100/printers
+Invoke-RestMethod http://localhost:3001/printers
 
 # 7. Teste de print real (payload mínimo ESC/POS = ESC @ + texto + LF + cut)
 $bytes = [byte[]](27,64) + [System.Text.Encoding]::ASCII.GetBytes("TESTE BRIDGE`n`n`n") + [byte[]](29,86,65,3)
 $b64 = [Convert]::ToBase64String($bytes)
-Invoke-RestMethod -Method Post -Uri http://localhost:9100/print `
+Invoke-RestMethod -Method Post -Uri http://localhost:3001/print `
   -ContentType "application/json" `
   -Body (@{ payload=$b64; format="escpos"; source="codex-test" } | ConvertTo-Json)
 # Esperado: { success: true, jobId: ..., printed_at: ... } E SAIR PAPEL DA IMPRESSORA
@@ -192,7 +192,7 @@ Invoke-RestMethod -Method Post -Uri http://localhost:9100/print `
 - [ ] Site (desktop) abre Admin → Diagnóstico e mostra **ONLINE · v2.2.0**
 - [ ] Botão **2. MÍNIMO** no Diagnóstico imprime de verdade
 - [ ] Botão **3. CUPOM** no Diagnóstico imprime de verdade
-- [ ] Pedido novo no celular (na mesma rede Wi-Fi, apontando pra `http://IP_DO_PC:9100/print`) sai automaticamente na impressora
+- [ ] Pedido novo no celular (na mesma rede Wi-Fi, apontando pra `http://IP_DO_PC:3001/print`) sai automaticamente na impressora
 - [ ] Instalador adiciona regra de firewall sozinho
 
 ## Repositório
@@ -208,5 +208,5 @@ Invoke-RestMethod -Method Post -Uri http://localhost:9100/print `
 ## Observações importantes
 
 - **NÃO** usar Zadig nem mexer em driver USB. A impressora já está instalada como impressora do Windows e o app de entregas usa o mesmo nome — precisa continuar compartilhada.
-- **NÃO** mudar a porta 9100.
+- **NÃO** mudar a porta 3001.
 - **NÃO** voltar a sincronizar `bridgeUrl` pelo Supabase — o site agora trata isso como local.

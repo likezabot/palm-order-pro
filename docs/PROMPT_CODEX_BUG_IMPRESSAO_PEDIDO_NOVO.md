@@ -15,7 +15,7 @@
 - Backend: Supabase (Lovable Cloud) — tabela `orders` com `print_status`,
   `print_type`, `printed_at`, `version`, `delta_items`.
 - Bridge local: `bridge/lp-bridge.js` (Node) escutando em
-  `http://localhost:9100/print` e `/health`.
+  `http://localhost:3001/print` e `/health`.
 - Impressora: térmica ESC/POS USB (Bematech / Epson-compatível, 80mm).
 
 **Pipeline do pedido novo (Palm → papel):**
@@ -31,7 +31,7 @@ Palm (src/pages/Palm.tsx + src/hooks/use-palm-cart.ts)
                                  └─ createReceiptLayoutModel({ docType:'PEDIDO', ... })
                                       em src/lib/receipt-layout.ts
                                  └─ renderLayout(blocks, cfg) → Uint8Array ESC/POS
-                            └─ sendToBridge(payload, 'http://localhost:9100/print')
+                            └─ sendToBridge(payload, 'http://localhost:3001/print')
 ```
 
 **Pipeline da adição (que funciona):**
@@ -163,7 +163,7 @@ desalinhado.
 
 ### Passo 1 — Capturar payloads reais
 
-No DevTools do navegador, na aba Network, filtrar por `localhost:9100/print`,
+No DevTools do navegador, na aba Network, filtrar por `localhost:3001/print`,
 pegar o JSON body, extrair `payload` (base64) de:
 
 - **A:** Um pedido novo (que não imprimiu)
@@ -348,7 +348,7 @@ O 4º teste **vai falhar hoje** — esse é o ponto. O fix em
 ## 8. Resumo executivo para colar no Codex
 
 > No projeto `palm-order-pro`, pedidos novos do Palm chegam no bridge
-> local (`localhost:9100/print`) com HTTP 200, mas a impressora térmica
+> local (`localhost:3001/print`) com HTTP 200, mas a impressora térmica
 > não imprime. Adições ao pedido e fechamento de conta imprimem
 > normalmente. O payload base64 capturado mostra `TOTAL: R$ 0.00` em
 > pedidos novos com itens reais. Suspeita: `order.total` chega como

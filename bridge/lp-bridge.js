@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 
 const app = express();
-const PORT = 3001; // Porta diferente da 9100 (que é da impressora)
+const PORT = 3001; // Porta diferente da 3001 (que é da impressora)
 const PRINTER_NAME = 'POS80 Printer'; // Nome exato da impressora no Windows
 
 app.use(cors());

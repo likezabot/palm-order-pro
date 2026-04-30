@@ -76,7 +76,7 @@ Em `Pdv.tsx` e `Cashier.tsx`, `manualPrintOrder()` retorna `{ok, bridgeOk, queue
 
 ## Configuração padrão
 
-A bridge será um app Electron rodando em `http://localhost:9100/print` (ver Prompt 2 do Codex). O frontend só conhece esse contrato HTTP — qualquer bridge que respeite o contrato `/health`, `/printers`, `/print` funciona.
+A bridge será um app Electron rodando em `http://localhost:3001/print` (ver Prompt 2 do Codex). O frontend só conhece esse contrato HTTP — qualquer bridge que respeite o contrato `/health`, `/printers`, `/print` funciona.
 
 ## PWA
 

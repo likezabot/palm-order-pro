@@ -21,7 +21,7 @@
 - Windows 10/11 x64.
 - Impressora térmica USB instalada como `POS80_MeuSistema` (visível em **Painel de Controle → Dispositivos e Impressoras**).
 - Mesma impressora também usada por app de entregas (driver nativo, **NÃO MEXER**).
-- Bridge roda como `.exe` standalone (via `pkg`), porta `9100`, IP `0.0.0.0`.
+- Bridge roda como `.exe` standalone (via `pkg`), porta `3001`, IP `0.0.0.0`.
 
 ---
 
@@ -78,7 +78,7 @@ bridge/
 ```json
 {
   "printer_name": "POS80_MeuSistema",
-  "port": 9100
+  "port": 3001
 }
 ```
 
@@ -345,7 +345,7 @@ IF NOT EXIST node_modules (
     call npm install
 )
 
-echo Iniciando Bridge na porta 9100...
+echo Iniciando Bridge na porta 3001...
 node lp-bridge.js
 pause
 ```
@@ -379,7 +379,7 @@ Manter winston-daily-rotate-file da v2. Adicionar no boot:
 [BOOT] Modo de impressão: spooler-native | spooler-powershell
 [BOOT] Impressora configurada: POS80_MeuSistema
 [BOOT] Status inicial: IDLE
-[BOOT] HTTP: http://0.0.0.0:9100
+[BOOT] HTTP: http://0.0.0.0:3001
 ```
 
 Em cada `/print`:

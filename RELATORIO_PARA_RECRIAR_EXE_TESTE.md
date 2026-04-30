@@ -3,7 +3,7 @@
 ## 1. RESUMO EXECUTIVO
 - **O que mudou no web:** O sistema de impressão foi totalmente reconstruído com um motor unificado (`print-engine`), novo roteamento de serviços (`print-dispatcher`), editor visual de cupom no Admin e suporte completo a Delivery/Retirada com layouts específicos.
 - **Por que o EXE antigo não deve ser usado:** O EXE atual (3.2.0 ou anterior) contém um bundle web defasado e caminhos de impressão que ignoram as novas configurações do banco de dados e os novos layouts. Isso resulta em impressões com templates antigos e falta de informações críticas.
-- **Necessidade do novo EXE:** É fundamental gerar um novo executável que utilize o build web atual para validar o novo fluxo de impressão térmica via Bridge local (porta 9100) e garantir que a configuração salva no Admin reflita fielmente no papel.
+- **Necessidade do novo EXE:** É fundamental gerar um novo executável que utilize o build web atual para validar o novo fluxo de impressão térmica via Bridge local (porta 3001) e garantir que a configuração salva no Admin reflita fielmente no papel.
 
 ---
 
@@ -79,7 +79,7 @@
 - **Sincronização:** A função `ensureFreshPrintConfig()` compara o `updated_at` local com o do banco antes de cada impressão. Se o banco for mais novo, atualiza o local.
 - **Campos Locais (Não Sincronizados):**
   - `printMode`: (browser ou bridge) - Cada PC pode ter seu modo.
-  - `bridgeUrl`: (ex.: http://localhost:9100/print) - Cada PC aponta para sua bridge.
+  - `bridgeUrl`: (ex.: http://localhost:3001/print) - Cada PC aponta para sua bridge.
 
 ---
 
@@ -99,7 +99,7 @@
 ---
 
 ## 7. PROBLEMA IDENTIFICADO NO EXE ANTIGO
-- O EXE antigo servia a bridge na porta 9100 mas rodava um bundle web embutido (app.asar) muito antigo.
+- O EXE antigo servia a bridge na porta 3001 mas rodava um bundle web embutido (app.asar) muito antigo.
 - Por causa disso, ao imprimir "pelo EXE", o sistema usava templates de meses atrás, ignorando as correções de layout de Delivery e Mesa.
 - O novo EXE **precisa** conter o build gerado hoje para que o código de impressão dentro dele seja o mesmo do navegador.
 
@@ -109,7 +109,7 @@
 - **Nome do Produto:** `Plano B Fast Order PDV 3.3.0 TESTE`
 - **AppId:** `com.planob.fastorder.pdv.teste` (Diferente da versão estável)
 - **Pasta de Instalação:** `%AppData%/plano-b-pdv-teste` (Não sobrescrever a 3.2.0)
-- **Porta Bridge:** Manter `9100`.
+- **Porta Bridge:** Manter `3001`.
 - **Build Web:** Deve usar o resultado de `npm run build` atual.
 - **Cache:** O Electron deve iniciar com a sessão limpa ou garantir que o service worker não sirva arquivos antigos.
 
@@ -117,7 +117,7 @@
 
 ## 9. ESTRATÉGIA RECOMENDADA
 **Abordagem:** EXE com Bundle Web Atualizado.
-Embora o modo "Bridge-only" (onde o EXE só serve a porta 9100 e o usuário usa o Chrome) seja mais fácil de atualizar, o cliente prefere o EXE como aplicativo. Portanto, o EXE deve ser gerado contendo o build completo da Web para evitar discrepâncias.
+Embora o modo "Bridge-only" (onde o EXE só serve a porta 3001 e o usuário usa o Chrome) seja mais fácil de atualizar, o cliente prefere o EXE como aplicativo. Portanto, o EXE deve ser gerado contendo o build completo da Web para evitar discrepâncias.
 
 ---
 
@@ -166,5 +166,5 @@ Embora o modo "Bridge-only" (onde o EXE só serve a porta 9100 e o usuário usa 
 > 2. Mude o nome do produto para 'Plano B Fast Order PDV 3.3.0 TESTE' e o AppID para algo único que não sobrescreva a versão estável 3.2.0.
 > 3. Certifique-se de realizar um novo `npm run build` da web para incluir todos os novos layouts de impressão (`receipt-layout.ts`) e o motor `print-engine`.
 > 4. Gere o instalador e me informe o caminho do arquivo final. 
-> 5. **NÃO** remova a funcionalidade de Bridge na porta 9100.
+> 5. **NÃO** remova a funcionalidade de Bridge na porta 3001.
 > 6. Validar que o `APP_BUILD` e `PRINT_ENGINE` (v2026-04-27...) aparecem corretamente nos logs ou no console do Electron."

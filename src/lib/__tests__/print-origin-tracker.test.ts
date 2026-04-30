@@ -23,7 +23,7 @@ describe("print-origin-tracker", () => {
       orderId: "abc12345",
       serviceType: "dine_in",
       tableName: "Mesa 1",
-      bridgeUrl: "http://localhost:9100/print",
+      bridgeUrl: "http://localhost:3001/print",
       bytes: 123,
       ok: true,
       errorMsg: null,
