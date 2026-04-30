@@ -112,6 +112,51 @@ async function runAutoPrint(order: Order) {
   }
 }
 
+/** Watchdog: tenta reimprimir pedidos que falharam nos últimos 10min 
+ * quando a bridge volta a ficar online. Roda a cada 60s. */
+async function retryFailedOrders(queryClient: QueryClient) {
+  const cfg = await ensureFreshPrintConfig();
+  if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
+
+  // Só tenta se bridge estiver online
+  const { checkBridgeStatus } = await import("@/lib/thermal-printer");
+  const health = await checkBridgeStatus(cfg.bridgeUrl, true);
+  if (!health.online) return;
+
+  // Busca pedidos falhos criados nos últimos 10 minutos
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: failedOrders } = await supabase
+    .from("orders")
+    .select("id, table_name, original_table_name, waiter_name, total, print_status, status")
+    .eq("print_status", "failed")
+    .gte("created_at", cutoff)
+    .limit(5);
+
+  if (!failedOrders?.length) return;
+
+  debugLog.warn("global-print", `watchdog: encontrados ${failedOrders.length} pedidos falhos — tentando reenviar`);
+
+  for (const order of failedOrders) {
+    // Reset status para pending no banco para que o claim funcione
+    const { error } = await supabase
+      .from("orders")
+      .update({ print_status: "pending" })
+      .eq("id", order.id)
+      .eq("print_status", "failed");
+
+    if (!error) {
+      // Permite nova tentativa removendo do autoAttempted
+      autoAttempted.delete(order.id);
+      handledEvents.delete(`${order.id}:insert`);
+      // Aguarda propagação antes de tentar imprimir
+      await new Promise((r) => setTimeout(r, 300));
+      void runAutoPrint({ ...order, print_status: "pending" } as Order);
+    }
+  }
+
+  invalidateOrderCaches(queryClient);
+}
+
 async function bootstrapPending() {
   debugLog.warn(
     "global-orders",
@@ -212,6 +257,11 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
     }
   });
 
+  // Watchdog: retry de pedidos falhos a cada 60 segundos
+  retryTimer = setInterval(() => {
+    void retryFailedOrders(queryClient);
+  }, 60_000);
+
   // Bootstrap inicial desativado no modo conservador.
   void bootstrapPending();
 
@@ -234,6 +284,10 @@ export function stopGlobalOrderRuntime(): void {
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
+  }
+  if (retryTimer) {
+    clearInterval(retryTimer);
+    retryTimer = null;
   }
   if (unsubConn) {
     unsubConn();
