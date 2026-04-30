@@ -77,7 +77,7 @@ export const DEFAULT_CONFIG: PrintConfig = {
   headerText: "PLANO B ESPETARIA",
   footerText: "Obrigado pela preferência!",
   printMode: "browser",
-  bridgeUrl: "http://localhost:9100/print",
+  bridgeUrl: "http://localhost:9100",
   layoutPreset: "classico",
   fontSizes: {},
   visibleSections: { ...DEFAULT_VISIBLE },
@@ -146,7 +146,9 @@ function normalizeConfig(raw: Partial<PrintConfig>, source: PrintConfig["configS
   const isDesktop = typeof window !== "undefined" && (window as any).desktopPrinter?.isDesktop?.() === true;
   if (isDesktop) {
     config.printMode = "bridge";
-    config.bridgeUrl = "http://localhost:9100/print";
+    // Lê a bridgeUrl dinâmica do preload (reflete a porta real do config.json)
+    const preloadBridgeUrl = (window as any).desktopPrinter?.bridgeUrl;
+    config.bridgeUrl = preloadBridgeUrl || "http://localhost:9100";
   }
 
   return config;
