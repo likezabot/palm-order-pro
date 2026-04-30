@@ -59,7 +59,7 @@ function isLocalhostUrl(url: string): boolean {
 function buildBridgeUrlFromIp(ip: string): string {
   const clean = ip.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/:.*/, "");
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(clean)) return "";
-  return `http://${clean}:9100/print`;
+  return `http://${clean}:3001/print`;
 }
 
 function shortUa(): string {
@@ -314,7 +314,7 @@ export default function BridgeOriginDiagnostics({
                   achar a impressora.
                 </div>
                 <div className="font-mono text-[11px] bg-rose-100 dark:bg-rose-900/40 rounded px-2 py-1 inline-block">
-                  Exemplo: http://192.168.0.10:9100/print
+                  Exemplo: http://192.168.0.10:3001/print
                 </div>
                 <div className="text-[11px]">
                   ↓ Use o campo <strong>"IP do PC da impressora"</strong> abaixo para corrigir.
@@ -342,7 +342,7 @@ export default function BridgeOriginDiagnostics({
           {isLocalhost && device === "desktop" && (
             <Alert tone="info">
               <strong>localhost OK no PC da impressora.</strong> Em outros dispositivos,
-              troque por <code>http://IP_DO_PC:9100/print</code>.
+              troque por <code>http://IP_DO_PC:3001/print</code>.
             </Alert>
           )}
         </section>
@@ -376,7 +376,7 @@ export default function BridgeOriginDiagnostics({
           <ol className="space-y-2 text-[11px] leading-snug">
             <Step n={1} title="No PC da impressora, abrir no navegador:">
               <code className="font-mono text-[11px] block bg-muted px-2 py-1 rounded mt-1">
-                http://localhost:9100/health
+                http://localhost:3001/health
               </code>
               <span className="text-muted-foreground">
                 Tem que retornar JSON com <code>online:true</code>. Se não, a bridge/EXE não está
@@ -385,7 +385,7 @@ export default function BridgeOriginDiagnostics({
             </Step>
             <Step n={2} title="No celular, abrir no navegador:">
               <code className="font-mono text-[11px] block bg-muted px-2 py-1 rounded mt-1">
-                http://{detectedIp || "IP_DO_PC"}:9100/health
+                http://{detectedIp || "IP_DO_PC"}:3001/health
               </code>
               <span className="text-muted-foreground">
                 Tem que retornar o mesmo JSON. Se carregar no PC mas não no celular, é problema
@@ -395,7 +395,7 @@ export default function BridgeOriginDiagnostics({
             <Step n={3} title="Se o passo 2 falhar, é UMA destas três coisas:">
               <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
                 <li>PC e celular não estão na mesma rede WiFi.</li>
-                <li>Firewall do Windows bloqueia a porta 9100.</li>
+                <li>Firewall do Windows bloqueia a porta 3001.</li>
                 <li>Bridge está ouvindo só em <code>127.0.0.1</code> (localhost), não na LAN.</li>
               </ul>
             </Step>
@@ -403,7 +403,7 @@ export default function BridgeOriginDiagnostics({
               <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
                 <li>
                   Configure BRIDGE_URL como{" "}
-                  <code className="font-mono">http://IP_DO_PC:9100/print</code> (use o campo acima).
+                  <code className="font-mono">http://IP_DO_PC:3001/print</code> (use o campo acima).
                 </li>
                 <li>Clique <strong>"Testar /health, /printers e /config"</strong>.</li>
                 <li>Clique <strong>"Imprimir teste de origem"</strong>.</li>
@@ -674,7 +674,7 @@ function classifyNetworkError(e: any, url: string): string {
     if (isLocalhostUrl(url)) {
       return "Conexão recusada (localhost). Em celular, troque por IP do PC.";
     }
-    return "Conexão recusada (firewall? bridge fechada? porta 9100 bloqueada?)";
+    return "Conexão recusada (firewall? bridge fechada? porta 3001 bloqueada?)";
   }
   if (/CORS/i.test(msg)) return "Bloqueio CORS — bridge precisa habilitar CORS para este domínio.";
   if (/DNS/i.test(msg)) return "DNS/URL inválida.";
