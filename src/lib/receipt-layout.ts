@@ -53,7 +53,7 @@ export type LayoutBlock =
   /** Cabeçalho de seção alinhado à esquerda (ex.: "ITENS", "PAGAMENTO"). */
   | { kind: "sectionHeader"; text: string }
   /** Linha solta esquerda sem label (ex.: hash do pedido). */
-  | { kind: "rawLine"; text: string; muted?: boolean }
+  | { kind: "rawLine"; text: string; muted?: boolean; align?: "left" | "center" | "right" }
   /** Item em formato bullet: "• {qtd} x {nome} - R$ {preço}". */
   | { kind: "bulletItem"; quantity: number; name: string; subtotal: number; note?: string | null }
   /** Linha "Label: valor" alinhada à esquerda. Quando dash=true, vira "- Label: valor" (PAGAMENTO). */
