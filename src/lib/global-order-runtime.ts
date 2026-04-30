@@ -13,7 +13,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { autoPrintOrder } from "@/lib/print-service";
-import { loadPrintConfig } from "@/lib/print-config";
+import { ensureFreshPrintConfig } from "@/lib/print-config";
 import { debugLog } from "@/lib/debug-logger";
 import { auditTestLogger } from "@/lib/audit-test-logger";
 import {
@@ -26,6 +26,7 @@ import type { Order } from "@/lib/types";
 let started = false;
 let channel: ReturnType<typeof supabase.channel> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let retryTimer: ReturnType<typeof setInterval> | null = null;
 let unsubConn: (() => void) | null = null;
 
 /** IDs em processamento neste tab (evita disparar 2x do mesmo evento). */
@@ -53,7 +54,7 @@ async function runAutoPrint(order: Order) {
   // REQUISITO: Apenas dispositivos com ponte térmica configurada devem "clamar" autoimpressão.
   // Isso evita que o celular do cliente ou de garçons sem impressora "roubem" o claim e 
   // marquem como impresso (ou falha) sem que o papel saia no caixa.
-  const cfg = loadPrintConfig();
+  const cfg = await ensureFreshPrintConfig();
   const canPrint = cfg.printMode === "bridge" && !!cfg.bridgeUrl;
   
   if (!canPrint) {
@@ -111,6 +112,51 @@ async function runAutoPrint(order: Order) {
   }
 }
 
+/** Watchdog: tenta reimprimir pedidos que falharam nos últimos 10min 
+ * quando a bridge volta a ficar online. Roda a cada 60s. */
+async function retryFailedOrders(queryClient: QueryClient) {
+  const cfg = await ensureFreshPrintConfig();
+  if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
+
+  // Só tenta se bridge estiver online
+  const { checkBridgeStatus } = await import("@/lib/thermal-printer");
+  const health = await checkBridgeStatus(cfg.bridgeUrl, true);
+  if (!health.online) return;
+
+  // Busca pedidos falhos criados nos últimos 10 minutos
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: failedOrders } = await supabase
+    .from("orders")
+    .select("id, table_name, original_table_name, waiter_name, total, print_status, status")
+    .eq("print_status", "failed")
+    .gte("created_at", cutoff)
+    .limit(5);
+
+  if (!failedOrders?.length) return;
+
+  debugLog.warn("global-print", `watchdog: encontrados ${failedOrders.length} pedidos falhos — tentando reenviar`);
+
+  for (const order of failedOrders) {
+    // Reset status para pending no banco para que o claim funcione
+    const { error } = await supabase
+      .from("orders")
+      .update({ print_status: "pending" })
+      .eq("id", order.id)
+      .eq("print_status", "failed");
+
+    if (!error) {
+      // Permite nova tentativa removendo do autoAttempted
+      autoAttempted.delete(order.id);
+      handledEvents.delete(`${order.id}:insert`);
+      // Aguarda propagação antes de tentar imprimir
+      await new Promise((r) => setTimeout(r, 300));
+      void runAutoPrint({ ...order, print_status: "pending" } as Order);
+    }
+  }
+
+  invalidateOrderCaches(queryClient);
+}
+
 async function bootstrapPending() {
   debugLog.warn(
     "global-orders",
@@ -145,7 +191,8 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
           "global-orders",
           `INSERT pedido ${order.id} mesa ${order.table_name} waiter=${order.waiter_name ?? "-"}`,
         );
-        if (order.print_status === "pending") {
+        const skipStatuses = ["printed", "failed"];
+        if (!skipStatuses.includes(order.print_status ?? "")) {
           runAutoPrint(order);
         }
       },
@@ -166,6 +213,12 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
             "global-orders",
             `UPDATE pedido ${updated.id} print_status ${old.print_status ?? "-"} -> ${updated.print_status}`,
           );
+        }
+
+        // Se voltou para "pending" (ex: outro dispositivo falhou e liberou o claim),
+        // tenta autoimpressão novamente neste dispositivo.
+        if (updated.print_status === "pending" && !autoAttempted.has(updated.id)) {
+          runAutoPrint(updated);
         }
       },
     )
@@ -204,6 +257,11 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
     }
   });
 
+  // Watchdog: retry de pedidos falhos a cada 60 segundos
+  retryTimer = setInterval(() => {
+    void retryFailedOrders(queryClient);
+  }, 60_000);
+
   // Bootstrap inicial desativado no modo conservador.
   void bootstrapPending();
 
@@ -226,6 +284,10 @@ export function stopGlobalOrderRuntime(): void {
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
+  }
+  if (retryTimer) {
+    clearInterval(retryTimer);
+    retryTimer = null;
   }
   if (unsubConn) {
     unsubConn();
