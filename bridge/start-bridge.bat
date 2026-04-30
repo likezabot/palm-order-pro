@@ -14,12 +14,12 @@ IF NOT EXIST node_modules (
     echo.
 )
 
-echo Iniciando bridge na porta 3001...
+echo Iniciando bridge na porta 9100...
 echo Impressora: POS80 Printer
 echo.
 echo Para testar, abra no navegador:
-echo http://localhost:3001/health
-echo http://localhost:3001/test
+echo http://localhost:9100/health
+echo http://localhost:9100/test
 echo.
 
 node lp-bridge.js

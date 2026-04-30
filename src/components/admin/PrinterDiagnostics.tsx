@@ -294,7 +294,7 @@ export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
           <Input
             value={urlDraft}
             onChange={(e) => setUrlDraft(e.target.value)}
-            placeholder="http://192.168.1.23:3001/print"
+            placeholder="http://192.168.1.23:9100/print"
             className="flex-1 font-mono text-xs h-9"
             spellCheck={false}
             autoCapitalize="off"
@@ -306,8 +306,8 @@ export function PrinterDiagnostics({ bridgeUrl, onBridgeUrlChange }: Props) {
         </div>
         <p className="text-[10px] text-muted-foreground leading-relaxed">
           <strong>Esta URL é salva apenas neste dispositivo.</strong> No PC use{" "}
-          <code className="font-mono">http://localhost:3001/print</code>; no celular use{" "}
-          <code className="font-mono">http://IP_DO_PC:3001/print</code>. O <code className="font-mono">/print</code> no final é opcional —
+          <code className="font-mono">http://localhost:9100/print</code>; no celular use{" "}
+          <code className="font-mono">http://IP_DO_PC:9100/print</code>. O <code className="font-mono">/print</code> no final é opcional —
           o sistema deriva <code className="font-mono">/health</code>, <code className="font-mono">/printers</code> e{" "}
           <code className="font-mono">/config</code> automaticamente.
         </p>

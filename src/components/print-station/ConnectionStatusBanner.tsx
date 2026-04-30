@@ -5,7 +5,7 @@ import { usePrintQueue } from "@/hooks/use-print-queue";
 
 interface Props {
   realtimeStatus: "online" | "offline";
-  /** URL base da bridge .exe (ex: http://localhost:3001). Se vazio, não checa. */
+  /** URL base da bridge .exe (ex: http://localhost:9100). Se vazio, não checa. */
   bridgeUrl?: string;
 }
 
