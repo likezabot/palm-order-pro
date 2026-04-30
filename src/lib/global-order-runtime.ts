@@ -28,6 +28,7 @@ let channel: ReturnType<typeof supabase.channel> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let retryTimer: ReturnType<typeof setInterval> | null = null;
 let unsubConn: (() => void) | null = null;
+const retryCount = new Map<string, number>();
 
 /** IDs em processamento neste tab (evita disparar 2x do mesmo evento). */
 const inFlight = new Set<string>();
