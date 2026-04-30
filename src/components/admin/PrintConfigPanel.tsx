@@ -961,7 +961,7 @@ function BridgeCard({
                 <Input
                   value={cfg.bridgeUrl}
                   onChange={(e) => onChange({ bridgeUrl: e.target.value })}
-                  placeholder="http://localhost:9100/print"
+                  placeholder="http://localhost:3001/print"
                   className="font-mono text-xs"
                 />
                 <Button size="sm" variant="outline" onClick={onTest} disabled={checking} className="gap-1.5 shrink-0">

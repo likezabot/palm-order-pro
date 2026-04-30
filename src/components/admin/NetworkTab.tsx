@@ -32,10 +32,10 @@ function getBridgeBaseUrl(): string {
   try {
     const cfg = loadPrintConfig();
     const raw = (cfg.bridgeUrl ?? "").trim();
-    if (!raw) return "http://127.0.0.1:9100";
+    if (!raw) return "http://127.0.0.1:3001";
     return raw.replace(/\/print\/?$/, "").replace(/\/$/, "");
   } catch {
-    return "http://127.0.0.1:9100";
+    return "http://127.0.0.1:3001";
   }
 }
 
@@ -315,7 +315,7 @@ function ContextNotice({ ctx }: { ctx: Context }) {
               "Bridge offline" aqui <strong>não é erro</strong>. O celular não consegue acessar
               <code className="mx-1 px-1 bg-muted rounded">localhost</code>. A impressão acontece no PC do caixa
               via fila <code className="mx-1 px-1 bg-muted rounded">print_jobs</code>. Para testar manualmente,
-              configure o IP do PC, ex: <code className="ml-1 px-1 bg-muted rounded">http://192.168.x.x:9100</code>.
+              configure o IP do PC, ex: <code className="ml-1 px-1 bg-muted rounded">http://192.168.x.x:3001</code>.
             </div>
           </div>
         </CardContent>
