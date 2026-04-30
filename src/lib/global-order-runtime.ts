@@ -28,6 +28,7 @@ let channel: ReturnType<typeof supabase.channel> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let retryTimer: ReturnType<typeof setInterval> | null = null;
 let unsubConn: (() => void) | null = null;
+const retryCount = new Map<string, number>();
 
 /** IDs em processamento neste tab (evita disparar 2x do mesmo evento). */
 const inFlight = new Set<string>();
@@ -51,14 +52,19 @@ async function runAutoPrint(order: Order) {
     return;
   }
 
+  // REQUISITO: Apenas o app desktop (EXE) deve disparar autoimpressão.
+  // Isso evita loops infinitos e double printing quando o operador tem o site aberto no browser.
+  const isDesktopApp = typeof window !== "undefined" && (window as any).desktopPrinter?.isDesktop?.() === true;
+  if (!isDesktopApp) {
+    // Não loga como skip para não poluir o console de quem não é o caixa
+    return;
+  }
+
   // REQUISITO: Apenas dispositivos com ponte térmica configurada devem "clamar" autoimpressão.
-  // Isso evita que o celular do cliente ou de garçons sem impressora "roubem" o claim e 
-  // marquem como impresso (ou falha) sem que o papel saia no caixa.
   const cfg = await ensureFreshPrintConfig();
   const canPrint = cfg.printMode === "bridge" && !!cfg.bridgeUrl;
   
   if (!canPrint) {
-    // Não loga como skip para não poluir o console de quem não é o caixa
     return;
   }
 
@@ -115,6 +121,10 @@ async function runAutoPrint(order: Order) {
 /** Watchdog: tenta reimprimir pedidos que falharam nos últimos 10min 
  * quando a bridge volta a ficar online. Roda a cada 60s. */
 async function retryFailedOrders(queryClient: QueryClient) {
+  // Apenas o app desktop (EXE) deve tentar recuperar impressões falhas
+  const isDesktopApp = typeof window !== "undefined" && (window as any).desktopPrinter?.isDesktop?.() === true;
+  if (!isDesktopApp) return;
+
   const cfg = await ensureFreshPrintConfig();
   if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
 
@@ -137,6 +147,15 @@ async function retryFailedOrders(queryClient: QueryClient) {
   debugLog.warn("global-print", `watchdog: encontrados ${failedOrders.length} pedidos falhos — tentando reenviar`);
 
   for (const order of failedOrders) {
+    // Limite de 3 tentativas automáticas por sessão para evitar loop infinito
+    const attempts = retryCount.get(order.id) || 0;
+    if (attempts >= 3) {
+      debugLog.warn("global-print", `watchdog: limite de retentativas atingido para pedido ${order.id}`);
+      continue;
+    }
+
+    retryCount.set(order.id, attempts + 1);
+
     // Reset status para pending no banco para que o claim funcione
     const { error } = await supabase
       .from("orders")
@@ -269,7 +288,8 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
   setInterval(() => {
     if (handledEvents.size > 500) {
       handledEvents.clear();
-      debugLog.info("global-orders", "handledEvents cache limpo");
+      retryCount.clear(); // Limpa também o contador de retentativas
+      debugLog.info("global-orders", "handledEvents e retryCount caches limpos");
     }
   }, 5 * 60_000);
 }
