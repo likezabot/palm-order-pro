@@ -1,6 +1,6 @@
 {
   "name": "lp-bridge",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Ponte de impressão térmica para Plano B Espetaria",
   "main": "lp-bridge.js",
   "scripts": {
@@ -8,8 +8,6 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "escpos": "^3.0.0-alpha.6",
-    "escpos-usb": "^3.0.0-alpha.4",
     "express": "^4.18.2"
   }
 }
