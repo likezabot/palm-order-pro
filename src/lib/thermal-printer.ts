@@ -493,9 +493,8 @@ export async function sendToBridge(
 // ============================================================
 
 function paperColumns(paper: "58mm" | "80mm"): number {
-  // Largura útil em Font A (12x24): 80mm ≈ 42 cols, 58mm ≈ 32 cols.
-  // Antes usávamos 48 em 80mm, o que estourava a linha em quase todas as impressoras.
-  return paper === "58mm" ? 32 : 42;
+  // Largura útil em Font A (12x24): 80mm ≈ 48 cols (Plano B Espetaria), 58mm ≈ 32 cols.
+  return paper === "58mm" ? 32 : 48;
 }
 
 /** Trunca/preenche string para o tamanho exato. */
