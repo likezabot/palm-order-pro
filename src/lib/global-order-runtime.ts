@@ -13,7 +13,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { autoPrintOrder } from "@/lib/print-service";
-import { loadPrintConfig } from "@/lib/print-config";
+import { ensureFreshPrintConfig } from "@/lib/print-config";
 import { debugLog } from "@/lib/debug-logger";
 import { auditTestLogger } from "@/lib/audit-test-logger";
 import {
@@ -26,6 +26,7 @@ import type { Order } from "@/lib/types";
 let started = false;
 let channel: ReturnType<typeof supabase.channel> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let retryTimer: ReturnType<typeof setInterval> | null = null;
 let unsubConn: (() => void) | null = null;
 
 /** IDs em processamento neste tab (evita disparar 2x do mesmo evento). */
@@ -53,7 +54,7 @@ async function runAutoPrint(order: Order) {
   // REQUISITO: Apenas dispositivos com ponte térmica configurada devem "clamar" autoimpressão.
   // Isso evita que o celular do cliente ou de garçons sem impressora "roubem" o claim e 
   // marquem como impresso (ou falha) sem que o papel saia no caixa.
-  const cfg = loadPrintConfig();
+  const cfg = await ensureFreshPrintConfig();
   const canPrint = cfg.printMode === "bridge" && !!cfg.bridgeUrl;
   
   if (!canPrint) {
@@ -145,7 +146,8 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
           "global-orders",
           `INSERT pedido ${order.id} mesa ${order.table_name} waiter=${order.waiter_name ?? "-"}`,
         );
-        if (order.print_status === "pending") {
+        const skipStatuses = ["printed", "failed"];
+        if (!skipStatuses.includes(order.print_status ?? "")) {
           runAutoPrint(order);
         }
       },
@@ -166,6 +168,12 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
             "global-orders",
             `UPDATE pedido ${updated.id} print_status ${old.print_status ?? "-"} -> ${updated.print_status}`,
           );
+        }
+
+        // Se voltou para "pending" (ex: outro dispositivo falhou e liberou o claim),
+        // tenta autoimpressão novamente neste dispositivo.
+        if (updated.print_status === "pending" && !autoAttempted.has(updated.id)) {
+          runAutoPrint(updated);
         }
       },
     )
