@@ -79,6 +79,19 @@ async function completePrint(orderId: string): Promise<void> {
     await logPrinterEvent(`Erro ao completar status de impressão: ${error.message}`, orderId, "error");
   } else {
     await logPrinterEvent("Status de impressão atualizado para: IMPRESSO", orderId, "success");
+    
+    // Atualiza print_jobs.status para "printed" — a RPC complete_order_print 
+    // só muda orders.print_status, mas o badge visual lê print_jobs.
+    // Sem esta atualização o badge fica preso em "Na fila" mesmo após impressão.
+    try {
+      await supabase
+        .from("print_jobs")
+        .update({ status: "printed" })
+        .eq("order_id", orderId)
+        .in("status", ["queued", "printing"]);
+    } catch (e) {
+      debugLog.warn("print", `Aviso: não foi possível atualizar print_jobs para pedido ${orderId}`, e);
+    }
   }
 }
 
