@@ -262,162 +262,198 @@ export function createReceiptLayoutModel(
 }
 
 /** Layout do cupom DELIVERY — mesmo padrão visual de retirada. */
+/** Layout do cupom DELIVERY — padrão exato Plano B Espetaria. */
 function buildDeliveryLayout(
   input: BuildLayoutInput,
   cfg: PrintConfig,
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
+  const order = input;
+  const items = input.items;
 
-  // 1-3. Cabeçalho
+  const safe = (v: string | null | undefined) => v?.trim() || "—";
+  const formatCurr = (v: number | null | undefined) => `R$ ${(v ?? 0).toFixed(2).replace(".", ",")}`;
+  const formatHora = (iso: string | null | undefined) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", });
+    } catch {
+      return "—";
+    }
+  };
+
+  const orderId = (order as any).counter ?? (order as any).order_number ?? (order as any).id?.slice(-6) ?? "—";
+  const isPickup = (order as any).delivery_type === "pickup" || (order as any).orderType === "retirada" || (order as any).tipo === "retirada" || (order as any).serviceType === "pickup";
+
+  // === CABECALHO ===
   blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "title", text: cfg.headerText || "PLANO B ESPETARIA" });
+  blocks.push({ kind: "title", text: cfg.headerText?.trim() || "PLANO B ESPETARIA", });
   blocks.push({ kind: "sep", bold: true });
 
-  // 4-6. Identificação
-  const shortId = (input.orderShortId || input.orderId?.slice(-6).toUpperCase() || "---").replace(/^#/, "");
-  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${shortId}` });
-  blocks.push({ kind: "rawLine", text: "TIPO: DELIVERY" });
+  // === IDENTIFICACAO ===
+  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderId}` });
+  blocks.push({ kind: "rawLine", text: isPickup ? "TIPO: RETIRADA" : "TIPO: DELIVERY", });
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 7-9. Cliente
-  blocks.push({ kind: "kvLine", label: "CLIENTE", value: safe(input.customerName) });
-  if (!isBlank(input.customerPhone)) {
-    blocks.push({ kind: "kvLine", label: "TEL", value: input.customerPhone! });
+  // === CLIENTE ===
+  blocks.push({ kind: "kvLine", label: "CLIENTE", value: safe((order as any).customer_name ?? (order as any).customerName), });
+  const phone = (order as any).customer_phone ?? (order as any).customerPhone ?? (order as any).phone;
+  if (phone) {
+    blocks.push({ kind: "kvLine", label: "TEL", value: safe(phone) });
   }
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 10-13. Endereço
-  blocks.push({ kind: "rawLine", text: "ENDERECO:" });
-  const addr = input.deliveryAddress;
-  let fullAddr = "—";
-  if (addr) {
-    const parts = [];
-    if (addr.street) parts.push(addr.street);
-    if (addr.number) parts.push(addr.number);
-    let line1 = parts.join(", ");
-    if (addr.neighborhood) line1 += ` - ${addr.neighborhood}`;
-    fullAddr = line1 || "—";
+  // === ENDERECO (somente delivery) ===
+  if (!isPickup) {
+    const address = (order as any).delivery_address ?? (order as any).deliveryAddress ?? (order as any).endereco;
+    blocks.push({ kind: "rawLine", text: "ENDERECO:" });
+    if (typeof address === 'object' && address !== null) {
+      // Caso seja o objeto DeliveryAddressData
+      const addr = address as DeliveryAddressData;
+      const parts = [];
+      if (addr.street) parts.push(addr.street);
+      if (addr.number) parts.push(addr.number);
+      let line = parts.join(", ");
+      if (addr.neighborhood) line += ` - ${addr.neighborhood}`;
+      blocks.push({ kind: "rawLine", text: safe(line).toUpperCase() });
+    } else {
+      blocks.push({ kind: "rawLine", text: safe(address as string).toUpperCase(), });
+    }
+    const ref = (order as any).delivery_reference ?? (order as any).reference ?? (order as any).referencia;
+    if (ref) {
+      blocks.push({ kind: "kvLine", label: "REF", value: safe(ref as string).toUpperCase() });
+    }
+    blocks.push({ kind: "rawLine", text: "" });
   }
-  blocks.push({ kind: "rawLine", text: fullAddr.toUpperCase() });
-  
-  if (addr?.reference) {
-    blocks.push({ kind: "kvLine", label: "REF", value: addr.reference.toUpperCase() });
-  }
-  blocks.push({ kind: "rawLine", text: "" });
 
-  // 14-16. Seção de Itens
+  // === ITENS ===
   blocks.push({ kind: "sep", bold: false });
   blocks.push({ kind: "sectionHeader", text: "ITENS" });
   blocks.push({ kind: "sep", bold: false });
 
-  // 17-19. Itens Loop
-  input.items.forEach((it) => {
+  for (const it of items) {
     blocks.push({
-      kind: "item",
-      name: it.product_name.toUpperCase(),
-      quantity: it.quantity,
-      subtotal: it.product_price * it.quantity,
+      kind: "bulletItem",
+      name: (it.product_name ?? (it as any).name ?? "ITEM").toUpperCase(),
+      quantity: it.quantity ?? (it as any).qty ?? 1,
+      subtotal: (it as any).subtotal ?? (it.quantity ?? 1) * (it.product_price ?? (it as any).unitPrice ?? (it as any).unit_price ?? 0),
+      note: it.note ?? (it as any).notes ?? null,
     });
-    if (it.note) {
-      blocks.push({ kind: "noteBlock", label: "OBS", text: it.note });
-    }
-  });
+  }
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 20-21. Observação Geral
-  if (input.generalNote && input.generalNote.trim()) {
-    blocks.push({ kind: "kvLine", label: "OBS", value: input.generalNote.trim().toUpperCase() });
+  // === OBSERVACOES ===
+  const obs = (order as any).generalNote ?? (order as any).notes ?? (order as any).observacoes ?? (order as any).obs;
+  if (obs) {
+    blocks.push({ kind: "kvLine", label: "OBS", value: safe(obs) });
     blocks.push({ kind: "rawLine", text: "" });
   }
 
-  // 22-25. Financeiro
+  // === FINANCEIRO ===
   blocks.push({ kind: "sep", bold: false });
-  const subtotal = input.subtotal ?? (input.total ?? 0) - (input.deliveryFee ?? 0) + (input.discount ?? 0);
-  blocks.push({ kind: "kvLine", label: "SUBTOTAL", value: moneyBr(subtotal) });
-  blocks.push({ kind: "kvLine", label: "ENTREGA", value: moneyBr(input.deliveryFee ?? 0) });
-  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(input.total ?? 0), bold: true });
+  const totalAmount = (order as any).total ?? (order as any).total_amount ?? (order as any).totalAmount ?? 0;
+  const deliveryFee = (order as any).deliveryFee ?? (order as any).delivery_fee ?? (order as any).taxa_entrega ?? 0;
+  const subtotal = (order as any).subtotal ?? (totalAmount - deliveryFee);
+  
+  blocks.push({ kind: "kvLine", label: "SUBTOTAL", value: formatCurr(subtotal > 0 ? subtotal : totalAmount), });
+  if (!isPickup) {
+    blocks.push({ kind: "kvLine", label: "ENTREGA", value: formatCurr(deliveryFee), });
+  }
+  blocks.push({ kind: "kvLine", label: "TOTAL", value: formatCurr(totalAmount), bold: true, });
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 26-29. Status e Pagamento
-  blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
+  // === PAGAMENTO / STATUS ===
+  blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: safe(
+    (order as any).paymentMethod ?? (order as any).payment_method ?? (order as any).forma_pagamento
+  ), });
   blocks.push({ kind: "rawLine", text: "STATUS: AGUARDANDO" });
   blocks.push({ kind: "sep", bold: false });
 
-  // 30. Hora
-  blocks.push({ kind: "kvLine", label: "HORA", value: ctx.time });
-
-  // 31-32. Rodapé Final
+  // === RODAPE ===
+  blocks.push({ kind: "kvLine", label: "HORA", value: formatHora((order as any).created_at ?? (order as any).createdAt), });
   blocks.push({ kind: "sep", bold: true });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "DELIVERY" };
 }
 
+/** Layout do cupom SENHA (BALCÃO) — padrão exato Plano B Espetaria. */
 function buildSenhaLayout(
   input: BuildLayoutInput,
   cfg: PrintConfig,
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
+  const order = input;
+  const items = input.items;
 
-  // 1-3. Cabeçalho
+  const safe = (v: string | null | undefined) => v?.trim() || "—";
+  const formatCurr = (v: number | null | undefined) => `R$ ${(v ?? 0).toFixed(2).replace(".", ",")}`;
+  const formatHora = (iso: string | null | undefined) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", });
+    } catch {
+      return "—";
+    }
+  };
+
+  const senhaNum = (order as any).counter ?? (order as any).senha ?? (order as any).id?.slice(-4) ?? "—";
+
+  // === CABECALHO ===
   blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "title", text: cfg.headerText || "PLANO B ESPETARIA" });
+  blocks.push({ kind: "title", text: cfg.headerText?.trim() || "PLANO B ESPETARIA", });
   blocks.push({ kind: "sep", bold: true });
+
+  // === SENHA ===
+  blocks.push({ kind: "rawLine", text: "" });
+  blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}`, });
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 4-6. Senha
-  const senhaNum = (input.senha || input.orderShortId || input.orderId?.slice(-4) || "---").replace(/^#/, "");
-  blocks.push({ kind: "senha", text: `SENHA: ${senhaNum}` });
-  blocks.push({ kind: "rawLine", text: "" });
-
-  // 7-9. Info Pedido
-  const orderId = (input.orderShortId || input.orderId?.slice(-6) || "---").replace(/^#/, "");
-  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderId}` });
+  // === IDENTIFICACAO ===
+  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${senhaNum}`, });
   blocks.push({ kind: "rawLine", text: "TIPO: BALCAO / RETIRADA" });
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 10-12. Cliente
-  blocks.push({ kind: "kvLine", label: "CLIENTE", value: safe(input.customerName) });
-  if (!isBlank(input.customerPhone)) {
-    blocks.push({ kind: "kvLine", label: "TEL", value: input.customerPhone! });
+  // === CLIENTE ===
+  blocks.push({ kind: "kvLine", label: "CLIENTE", value: safe((order as any).customer_name ?? (order as any).customerName), });
+  const phone = (order as any).customer_phone ?? (order as any).customerPhone ?? (order as any).phone;
+  if (phone) {
+    blocks.push({ kind: "kvLine", label: "TEL", value: safe(phone) });
   }
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 13-15. Seção de Itens
+  // === ITENS ===
   blocks.push({ kind: "sep", bold: false });
   blocks.push({ kind: "sectionHeader", text: "ITENS" });
   blocks.push({ kind: "sep", bold: false });
 
-  // 16-18. Itens Loop
-  input.items.forEach((it) => {
+  for (const it of items) {
     blocks.push({
-      kind: "item",
-      name: it.product_name.toUpperCase(),
-      quantity: it.quantity,
-      subtotal: it.product_price * it.quantity,
+      kind: "bulletItem",
+      name: (it.product_name ?? (it as any).name ?? "ITEM").toUpperCase(),
+      quantity: it.quantity ?? (it as any).qty ?? 1,
+      subtotal: (it as any).subtotal ?? (it.quantity ?? 1) * (it.product_price ?? (it as any).unitPrice ?? (it as any).unit_price ?? 0),
+      note: it.note ?? (it as any).notes ?? null,
     });
-    if (it.note) {
-      blocks.push({ kind: "noteBlock", label: "OBS", text: it.note });
-    }
-  });
+  }
   blocks.push({ kind: "rawLine", text: "" });
 
-  // 19-21. Financeiro
+  // === TOTAIS ===
   blocks.push({ kind: "sep", bold: false });
-  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(input.total ?? 0), bold: true });
-  blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
+  blocks.push({ kind: "kvLine", label: "TOTAL", value: formatCurr((order as any).total ?? (order as any).total_amount ?? (order as any).totalAmount), bold: true, });
+  blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: safe(
+    (order as any).paymentMethod ?? (order as any).payment_method ?? (order as any).forma_pagamento
+  ), });
   blocks.push({ kind: "rawLine", text: "" });
-
-  // 22-24. Status
   blocks.push({ kind: "rawLine", text: "STATUS: PRONTO PARA RETIRADA" });
   blocks.push({ kind: "sep", bold: false });
-  blocks.push({ kind: "kvLine", label: "HORA", value: ctx.time });
-  blocks.push({ kind: "rawLine", text: "" });
 
-  // 27-29. Rodapé
-  blocks.push({ kind: "footer", text: "APRESENTAR ESTA SENHA NO BALCAO" });
+  // === RODAPE ===
+  blocks.push({ kind: "kvLine", label: "HORA", value: formatHora((order as any).created_at ?? (order as any).createdAt), });
+  blocks.push({ kind: "rawLine", text: "" });
+  blocks.push({ kind: "rawLine", text: "APRESENTAR ESTA SENHA NO BALCAO", align: "center", });
   blocks.push({ kind: "sep", bold: true });
   blocks.push({ kind: "cutMark" });
 
