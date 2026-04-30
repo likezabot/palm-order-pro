@@ -120,6 +120,10 @@ async function runAutoPrint(order: Order) {
 /** Watchdog: tenta reimprimir pedidos que falharam nos últimos 10min 
  * quando a bridge volta a ficar online. Roda a cada 60s. */
 async function retryFailedOrders(queryClient: QueryClient) {
+  // Apenas o app desktop (EXE) deve tentar recuperar impressões falhas
+  const isDesktopApp = typeof window !== "undefined" && (window as any).desktopPrinter?.isDesktop?.() === true;
+  if (!isDesktopApp) return;
+
   const cfg = await ensureFreshPrintConfig();
   if (cfg.printMode !== "bridge" || !cfg.bridgeUrl) return;
 
