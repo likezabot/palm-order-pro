@@ -6,9 +6,28 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Tenta ler configuração externa (na raiz do projeto ou na pasta da bridge)
+let config = {
+  port: 3001,
+  printerName: 'POS80 Printer'
+};
+
+const rootConfigPath = path.join(__dirname, '..', 'bridge-config.json');
+const localConfigPath = path.join(__dirname, 'config.json');
+
+try {
+  if (fs.existsSync(rootConfigPath)) {
+    config = JSON.parse(fs.readFileSync(rootConfigPath, 'utf8'));
+  } else if (fs.existsSync(localConfigPath)) {
+    config = JSON.parse(fs.readFileSync(localConfigPath, 'utf8'));
+  }
+} catch (e) {
+  console.log('[LOG] Usando configurações padrão (erro ao ler config.json)');
+}
+
 const app = express();
-const PORT = 3001; // Porta diferente da 3001 (que é da impressora)
-const PRINTER_NAME = 'POS80 Printer'; // Nome exato da impressora no Windows
+const PORT = config.port || 3001;
+const PRINTER_NAME = config.printerName || 'POS80 Printer';
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -18,6 +37,7 @@ console.log('   PONTE DE IMPRESSÃO TÉRMICA            ');
 console.log('   Plano B Espetaria - Local Service     ');
 console.log('   Porta: ' + PORT);
 console.log('   Impressora: ' + PRINTER_NAME);
+console.log('   Config: ' + (fs.existsSync(rootConfigPath) ? 'bridge-config.json' : 'padrão'));
 console.log('=========================================');
 
 // Gera os bytes ESC/POS a partir do objeto de pedido
