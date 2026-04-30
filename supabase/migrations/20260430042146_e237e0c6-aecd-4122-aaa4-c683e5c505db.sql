@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.create_public_order(text, text, text, text, text, numeric, jsonb, jsonb, text, text, uuid) TO anon, authenticated;
