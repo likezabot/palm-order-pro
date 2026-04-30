@@ -11,7 +11,7 @@ Para imprimir diretamente em impressoras térmicas USB sem a janela do navegador
 1. Baixe o projeto ou apenas os arquivos `lp-bridge.js` e `start-bridge.bat`.
 2. Dê um duplo clique no arquivo **`start-bridge.bat`**.
 3. Na primeira execução, ele instalará as dependências automaticamente.
-4. Você deverá ver a mensagem: `[OK] Servidor ativo em: http://localhost:9100`.
+4. Você deverá ver a mensagem: `[OK] Servidor ativo em: http://localhost:3001`.
 
 > **Dica**: Mantenha a janela preta do terminal aberta enquanto o PDV estiver em uso.
 
@@ -28,10 +28,10 @@ Se quiser testar manualmente se a ponte está ouvindo:
 
 ```powershell
 # Testar saúde e impressora
-Invoke-RestMethod -Uri "http://localhost:9100/health"
+Invoke-RestMethod -Uri "http://localhost:3001/health"
 
 # Listar impressoras encontradas
-Invoke-RestMethod -Uri "http://localhost:9100/printers"
+Invoke-RestMethod -Uri "http://localhost:3001/printers"
 ```
 
 ## 5. Solução de Problemas
@@ -40,7 +40,7 @@ Invoke-RestMethod -Uri "http://localhost:9100/printers"
 - **Impressora Não Detectada**: 
   - Verifique se a impressora está ligada.
   - Em alguns casos raros, o Node.js precisa de acesso direto ao USB. Se não funcionar, tente usar o utilitário [Zadig](https://zadig.akeo.ie/) para trocar o driver da sua impressora para **WinUSB**.
-- **Erro de Porta**: Se a porta 9100 estiver ocupada, feche outros aplicativos que possam estar usando-a.
+- **Erro de Porta**: Se a porta 3001 estiver ocupada, feche outros aplicativos que possam estar usando-a.
 
 ---
 **Plano B Espetaria - Sistema de PDV**

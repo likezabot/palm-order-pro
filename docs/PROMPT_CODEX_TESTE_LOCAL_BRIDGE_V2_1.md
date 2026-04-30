@@ -6,11 +6,11 @@
 
 ## 1. Contexto
 
-- **Bridge:** `lp-bridge-v2.1.0.exe` está rodando no PC Windows do balcão, em modo `spooler-powershell`, escutando em `:9100`.
+- **Bridge:** `lp-bridge-v2.1.0.exe` está rodando no PC Windows do balcão, em modo `spooler-powershell`, escutando em `:3001`.
 - **Impressora física:** térmica USB, instalada no Windows como fila `POS80_MeuSistema` (compartilhada com o app de entregas — pode coexistir).
 - **Site:** `https://palm-order-pro.lovable.app` (já em produção). UI de configuração da bridge fica em **Admin → Sistema → Diagnóstico de Impressora**.
 - **Cenário a validar:** o **celular do garçom** (Android, mesmo Wi-Fi do PC, IP `192.168.x.y`) precisa conseguir abrir o site, mandar um pedido e o cupom sair na impressora do PC.
-- **Hipótese atual de falha:** firewall do Windows bloqueando `:9100` para conexões externas, OU URL da bridge salva no localStorage do celular ainda apontando pra `localhost`.
+- **Hipótese atual de falha:** firewall do Windows bloqueando `:3001` para conexões externas, OU URL da bridge salva no localStorage do celular ainda apontando pra `localhost`.
 
 ---
 
@@ -21,15 +21,15 @@
 ipconfig | Select-String "IPv4"
 
 # 2.2 — Bridge respondendo localmente?
-Invoke-RestMethod http://localhost:9100/health | ConvertTo-Json -Depth 5
+Invoke-RestMethod http://localhost:3001/health | ConvertTo-Json -Depth 5
 
 # 2.3 — Bridge ouvindo em TODAS as interfaces (não só 127.0.0.1)?
-netstat -ano | Select-String ":9100"
-# Esperado: TCP    0.0.0.0:9100    0.0.0.0:0    LISTENING    <PID>
-# Se aparecer só 127.0.0.1:9100 → bridge precisa ser reiniciada com bind 0.0.0.0
+netstat -ano | Select-String ":3001"
+# Esperado: TCP    0.0.0.0:3001    0.0.0.0:0    LISTENING    <PID>
+# Se aparecer só 127.0.0.1:3001 → bridge precisa ser reiniciada com bind 0.0.0.0
 ```
 
-**Se `netstat` mostrar apenas `127.0.0.1:9100`:** abrir `bridge/lp-bridge.js`, conferir se o `app.listen` está como `app.listen(PORT, '0.0.0.0', ...)` e não `app.listen(PORT, ...)`. Se precisar mexer, recompilar o `.exe` com `npm run build:exe` dentro de `bridge/`.
+**Se `netstat` mostrar apenas `127.0.0.1:3001`:** abrir `bridge/lp-bridge.js`, conferir se o `app.listen` está como `app.listen(PORT, '0.0.0.0', ...)` e não `app.listen(PORT, ...)`. Se precisar mexer, recompilar o `.exe` com `npm run build:exe` dentro de `bridge/`.
 
 ---
 
@@ -37,8 +37,8 @@ netstat -ano | Select-String ":9100"
 
 ```powershell
 # Roda uma vez como admin. Idempotente — se já existir, vai dar erro inofensivo.
-New-NetFirewallRule -DisplayName "LP Bridge 9100" `
-  -Direction Inbound -Protocol TCP -LocalPort 9100 -Action Allow `
+New-NetFirewallRule -DisplayName "LP Bridge 3001" `
+  -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow `
   -Profile Private,Domain
 ```
 
@@ -50,7 +50,7 @@ New-NetFirewallRule -DisplayName "LP Bridge 9100" `
 
 1. No celular Android conectado ao **mesmo Wi-Fi** do PC, abrir no Chrome:
    ```
-   http://<IP_DO_PC>:9100/health
+   http://<IP_DO_PC>:3001/health
    ```
 2. Resultado esperado: JSON com `"ok": true`, `"bridge_version": "2.1.0"`, `"printer_method": "spooler-powershell"`, `"printer_name": "POS80_MeuSistema"`.
 3. Se der **"não foi possível conectar"**:
@@ -66,7 +66,7 @@ New-NetFirewallRule -DisplayName "LP Bridge 9100" `
 2. Menu → **Admin** → digitar PIN do gerente.
 3. Aba **Sistema** → rolar até o card **"Diagnóstico de Impressora"**.
 4. **Endereço da Bridge:**
-   - Apagar o que estiver e colar `http://<IP_DO_PC>:9100/print`
+   - Apagar o que estiver e colar `http://<IP_DO_PC>:3001/print`
    - Clicar **Salvar**
    - Clicar **1. HEALTH** → deve aparecer evento verde com `Online · impressora detectada · v2.1.0`
 5. **Impressora do Windows:**
@@ -101,7 +101,7 @@ New-NetFirewallRule -DisplayName "LP Bridge 9100" `
 | `/health` responde mas `2. MÍNIMO` falha | Impressora não selecionada na bridge | `/health` deve trazer `printer_name` ≠ vazio. Se vazio, refazer passo 5.5 |
 | Cupom sai com caracteres estranhos (`Ã§` em vez de `ç`) | Encoding do driver Windows | Trocar driver da impressora para "Generic / Text Only" no Windows, ou ajustar codepage no `lp-bridge.js` (CP860 pt-PT funciona bem com POS-80) |
 | Cupom sai cortado / sem corte automático | Comando de corte ESC/POS não interpretado pelo driver Windows | Modo `spooler-powershell` repassa texto puro — o corte precisa ser feito pelo driver. Verificar nas propriedades da impressora se "auto-cut" está ligado |
-| Pedido criado mas cupom nunca sai | Job ficou na fila sem ser claimed | No PC: `Invoke-RestMethod http://localhost:9100/health` → olhar `queue_size`. Se > 0 e não cai, restart do `.exe` |
+| Pedido criado mas cupom nunca sai | Job ficou na fila sem ser claimed | No PC: `Invoke-RestMethod http://localhost:3001/health` → olhar `queue_size`. Se > 0 e não cai, restart do `.exe` |
 
 ---
 
@@ -127,7 +127,7 @@ Cole o template abaixo preenchido na sua resposta:
 ### Resultado do teste E2E Bridge v2.1
 
 - IP do PC usado: 192.168.___.___
-- Bridge ouvindo em 0.0.0.0:9100? [ sim / não ]
+- Bridge ouvindo em 0.0.0.0:3001? [ sim / não ]
 - Regra de firewall criada? [ sim / já existia / não foi necessário ]
 - /health acessível do celular? [ sim / não ]  → JSON recebido: <colar aqui>
 - HEALTH no painel: [ verde / vermelho ]  → mensagem: <...>

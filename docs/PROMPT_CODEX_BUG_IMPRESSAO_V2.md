@@ -4,7 +4,7 @@
 
 ## Contexto
 
-- Stack: React + Supabase + bridge local Node (`bridge/lp-bridge.js` :9100), impressora ESC/POS USB.
+- Stack: React + Supabase + bridge local Node (`bridge/lp-bridge.js` :3001), impressora ESC/POS USB.
 - Pipeline: `enqueue → claim_order_print → fetch order → buildPayload → POST /print → complete_order_print`.
 - RPCs envolvidas: `claim_order_print`, `fail_order_print`, `defer_order_print`, `complete_order_print`, `requeue_stuck_print_jobs(p_seconds=90)`.
 
@@ -65,7 +65,7 @@ Pedido `extra` sem `delta_items` mas com `order_items > 0` deve **imprimir como 
 ```
 02:38:48  claim_order_print  → true
 02:38:48  GET order_items     → [{"product_name":"Bovino","quantity":9,"subtotal":90.00,...}]
-02:38:50  POST localhost:9100/print → Failed to fetch  (bridge offline)
+02:38:50  POST localhost:3001/print → Failed to fetch  (bridge offline)
 02:38:51  defer_order_print  → 204
 02:39:25  claim_order_print  → false   ← deveria voltar a true após defer
 02:39:29  claim_order_print  → false   (outro pedido)

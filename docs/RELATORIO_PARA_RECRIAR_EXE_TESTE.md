@@ -3,7 +3,7 @@
 ## 1. RESUMO EXECUTIVO
 - **O que mudou no web:** O sistema de impressão foi totalmente reconstruído com um motor unificado (`print-engine`), novo roteamento de serviços (`print-dispatcher`), editor visual de cupom no Admin e suporte completo a Delivery/Retirada com layouts específicos. Foi implementado o sistema de Fidelidade (pontos/brindes) e diagnóstico de Bridge.
 - **Por que o EXE antigo não deve ser usado:** O EXE atual (3.2.0 ou anterior) contém um bundle web antigo e caminhos de impressão que ignoram as novas configurações do banco de dados (`print_config`) e os novos layouts corrigidos. Isso causa divergência entre o que o cliente vê na tela (web) e o que sai na impressora (EXE).
-- **Necessidade do novo EXE:** O novo EXE servirá para validar o build aprovado em ambiente desktop, garantindo que a impressão térmica local (porta 9100) utilize exatamente a mesma lógica do navegador atual.
+- **Necessidade do novo EXE:** O novo EXE servirá para validar o build aprovado em ambiente desktop, garantindo que a impressão térmica local (porta 3001) utilize exatamente a mesma lógica do navegador atual.
 
 ---
 
@@ -31,7 +31,7 @@
 
 ### Bridge / Diagnóstico
 - Rastreamento de origem (`print-origin-tracker.ts`) enviando IP e identificador do dispositivo.
-- Diagnóstico detalhado de falhas de comunicação com a porta 9100.
+- Diagnóstico detalhado de falhas de comunicação com a porta 3001.
 
 ### Templates de Talão
 - Layouts unificados em `receipt-layout.ts`.
@@ -89,7 +89,7 @@
 - **Sincronização:** O Admin salva no banco. O PDV (Web ou EXE) verifica se o banco é mais novo via `ensureFreshPrintConfig()`.
 - **Campos Locais (Não sincronizam):**
   - `printMode`: Determina se o PC usa Bridge ou Browser.
-  - `bridgeUrl`: IP/Porta da bridge (ex: `http://localhost:9100/print`).
+  - `bridgeUrl`: IP/Porta da bridge (ex: `http://localhost:3001/print`).
 - **Cache:** Sempre sincronizado com `localStorage` (`print_config`) para evitar delay na primeira impressão.
 
 ---
@@ -115,7 +115,7 @@
 - **Nome:** `Plano B Fast Order PDV 3.3.0 TESTE`
 - **appId:** `com.planob.fastorder.pdv.teste` (Não sobrescrever a 3.2.0 estável).
 - **Pasta:** `%AppData%/PlanoBFastOrderPDVTeste`.
-- **Porta:** Manter `9100` (Bridge ativa).
+- **Porta:** Manter `3001` (Bridge ativa).
 - **Build:** Usar build web atual (saída de `npm run build`).
 - **Identificação:** Deve mostrar `PRINT_ENGINE: v2026-04-27-delivery-layout` no cupom.
 
@@ -159,7 +159,7 @@ O EXE deve ser um wrapper (Electron) que contém o build web atualizado. A recom
 
 ## 13. O QUE NÃO PODE ACONTECER
 - **Sobrescrever o ícone/atalho da 3.2.0 estável.**
-- **Remover o serviço de Bridge na porta 9100.**
+- **Remover o serviço de Bridge na porta 3001.**
 - **Conectar em um banco de dados diferente (deve usar o mesmo Supabase).**
 
 ---
@@ -177,7 +177,7 @@ Passos:
 1. Leia o relatório técnico em docs/RELATORIO_PARA_RECRIAR_EXE_TESTE.md.
 2. Localize os arquivos de configuração do Electron (package.json e electron-builder.json se houver).
 3. Certifique-se de realizar um novo 'npm run build' para capturar as mudanças de layout e motor de impressão (print-engine v2026-04-27).
-4. Gere o executável preservando a Bridge na porta 9100.
+4. Gere o executável preservando a Bridge na porta 3001.
 5. Valide que o APP_BUILD e fingerprints aparecem no rodapé das impressões.
 6. Forneça o link ou caminho para o instalador gerado sem publicar como versão definitiva."
 ```

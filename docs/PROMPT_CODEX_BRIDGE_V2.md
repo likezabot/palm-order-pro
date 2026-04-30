@@ -6,7 +6,7 @@
 
 ## 1. Contexto
 
-A pasta `bridge/` contém uma "ponte de impressão" Node.js (Express + `escpos` + `escpos-usb`) que roda como `.exe` na máquina do caixa do restaurante **Plano B Espetaria**. O frontend (PWA hospedado em `palm-order-pro.lovable.app`) faz `POST http://<host>:9100/print` com um payload ESC/POS já montado em base64, e a ponte envia para a impressora térmica USB.
+A pasta `bridge/` contém uma "ponte de impressão" Node.js (Express + `escpos` + `escpos-usb`) que roda como `.exe` na máquina do caixa do restaurante **Plano B Espetaria**. O frontend (PWA hospedado em `palm-order-pro.lovable.app`) faz `POST http://<host>:3001/print` com um payload ESC/POS já montado em base64, e a ponte envia para a impressora térmica USB.
 
 **Versão atual**: `bridge/lp-bridge.js` (117 linhas, monolítico). Funciona nos primeiros minutos e depois **para silenciosamente** — bridge continua respondendo `200 OK`, mas a impressora não imprime mais nada. Operador precisa reiniciar o `.exe` para voltar.
 
@@ -121,7 +121,7 @@ class JobQueue {
 ### 4.4 `lp-bridge.js` — Entry point
 
 - Express com `cors()` aberto e `express.json({ limit: '10mb' })`.
-- `app.listen(9100, '0.0.0.0', ...)`.
+- `app.listen(3001, '0.0.0.0', ...)`.
 - Banner no console com versão `2.0.0`, caminho do log, IP local detectado (`os.networkInterfaces()` filtrado IPv4 não-loopback).
 - No boot: `await printer.ensureOpen().catch(err => logger.warn(...))` — não derruba o processo se impressora estiver offline.
 
@@ -226,8 +226,8 @@ Inclua:
 - Onde fica o log (`%APPDATA%/lp-bridge/bridge-YYYY-MM-DD.log`).
 - Como ativar debug (`set LP_BRIDGE_DEBUG=1` antes de iniciar).
 - **Seção "Testes manuais de aceite"** com:
-  1. Abrir `http://localhost:9100/test` no Chrome → cupom "TESTE BRIDGE v2" sai.
-  2. Abrir `http://localhost:9100/health` → JSON com `bridge_version: "2.0.0"` e `printer_status` real.
+  1. Abrir `http://localhost:3001/test` no Chrome → cupom "TESTE BRIDGE v2" sai.
+  2. Abrir `http://localhost:3001/health` → JSON com `bridge_version: "2.0.0"` e `printer_status` real.
   3. Loop de 20 prints via `curl` (cole o snippet `for /L %i in (1,1,20) do curl -X POST ...`) → todos saem **em ordem**, nenhum perdido.
   4. Tirar o papel da impressora → `/health` mostra `paper_out` em até 2s; próximo `/print` retorna erro 503 claro.
   5. Desligar a impressora → `/health` mostra `offline`; jobs novos falham com mensagem.
@@ -271,10 +271,10 @@ Os campos extras (`jobId`, `printed_at`, `printer_ok`, `bridge_version`, `printe
 - [ ] `bridge/package.json` atualizado para `2.0.0` com novas deps e script `build:exe`.
 - [ ] `bridge/README.md` com docs e roteiro de aceite.
 - [ ] `npm install` roda sem erro.
-- [ ] `npm start` sobe servidor com banner v2.0.0 escutando em `0.0.0.0:9100`.
-- [ ] `curl http://localhost:9100/health` retorna JSON com `bridge_version: "2.0.0"`.
-- [ ] `curl http://localhost:9100/test` enfileira e imprime cupom de teste.
+- [ ] `npm start` sobe servidor com banner v2.0.0 escutando em `0.0.0.0:3001`.
+- [ ] `curl http://localhost:3001/health` retorna JSON com `bridge_version: "2.0.0"`.
+- [ ] `curl http://localhost:3001/test` enfileira e imprime cupom de teste.
 - [ ] `npm run build:exe` gera `lp-bridge.exe` funcional.
-- [ ] Site antigo (campo `URL DA PONTE` apontando pra `http://localhost:9100/print`) continua imprimindo normalmente.
+- [ ] Site antigo (campo `URL DA PONTE` apontando pra `http://localhost:3001/print`) continua imprimindo normalmente.
 
 Quando terminar, me devolva: caminho do `.exe`, tamanho, e print do `npm start` mostrando o banner.
