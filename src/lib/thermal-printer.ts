@@ -708,7 +708,8 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         break;
       }
       case "rawLine": {
-        b.resetStyle().align("left");
+        const align = blk.align || "left";
+        b.resetStyle().align(align as any);
         // quebra automática se exceder colunas
         const txt = blk.text;
         if (txt.length <= cols) {
