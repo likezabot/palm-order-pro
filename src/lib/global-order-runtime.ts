@@ -147,6 +147,15 @@ async function retryFailedOrders(queryClient: QueryClient) {
   debugLog.warn("global-print", `watchdog: encontrados ${failedOrders.length} pedidos falhos — tentando reenviar`);
 
   for (const order of failedOrders) {
+    // Limite de 3 tentativas automáticas por sessão para evitar loop infinito
+    const attempts = retryCount.get(order.id) || 0;
+    if (attempts >= 3) {
+      debugLog.warn("global-print", `watchdog: limite de retentativas atingido para pedido ${order.id}`);
+      continue;
+    }
+
+    retryCount.set(order.id, attempts + 1);
+
     // Reset status para pending no banco para que o claim funcione
     const { error } = await supabase
       .from("orders")
