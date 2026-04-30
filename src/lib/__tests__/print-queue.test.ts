@@ -16,7 +16,7 @@ const baseJob = {
   tableName: "Mesa 1",
   printType: "full" as const,
   payloadB64: "AAA=",
-  bridgeUrl: "http://localhost:3001/print",
+  bridgeUrl: "http://localhost:9100/print",
 };
 
 describe("print-queue (IndexedDB)", () => {

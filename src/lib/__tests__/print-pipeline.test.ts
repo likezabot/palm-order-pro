@@ -37,7 +37,7 @@ vi.mock("@/lib/print-config", async () => {
     loadPrintConfig: () => ({
       ...actual.defaultPrintConfig,
       printMode: "bridge",
-      bridgeUrl: "http://localhost:3001/print",
+      bridgeUrl: "http://localhost:9100/print",
     }),
   };
 });
@@ -78,7 +78,7 @@ describe("sendTestMinimal", () => {
       "fetch",
       vi.fn().mockRejectedValue(new Error("Failed to fetch")),
     );
-    const r = await sendTestMinimal("http://localhost:3001/print");
+    const r = await sendTestMinimal("http://localhost:9100/print");
     expect(r.ok).toBe(false);
     expect(typeof r.latencyMs).toBe("number");
   });
@@ -91,7 +91,7 @@ describe("sendTestMinimal", () => {
         json: async () => ({ success: true }),
       }),
     );
-    const r = await sendTestMinimal("http://localhost:3001/print");
+    const r = await sendTestMinimal("http://localhost:9100/print");
     expect(r.ok).toBe(true);
   });
 });

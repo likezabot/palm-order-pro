@@ -8,7 +8,7 @@ const os = require('os');
 
 // Tenta ler configuração externa (na raiz do projeto ou na pasta da bridge)
 let config = {
-  port: 3001,
+  port: 9100,
   printerName: 'POS80 Printer'
 };
 
@@ -26,7 +26,7 @@ try {
 }
 
 const app = express();
-const PORT = config.port || 3001;
+const PORT = config.port || 9100;
 const PRINTER_NAME = config.printerName || 'POS80 Printer';
 
 app.use(cors());

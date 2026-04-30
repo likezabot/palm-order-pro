@@ -54,7 +54,7 @@ const DB_KEY = "print_config";
 
 /**
  * Campos que NÃO devem ser sincronizados pelo banco — são por dispositivo.
- * Ex.: o desktop usa http://localhost:3001/print e o celular usa http://IP:3001/print.
+ * Ex.: o desktop usa http://localhost:9100/print e o celular usa http://IP:9100/print.
  * Se sincronizássemos isso, um dispositivo quebraria o outro.
  */
 const LOCAL_ONLY_KEYS = ["bridgeUrl", "printMode"] as const;
@@ -77,7 +77,7 @@ export const DEFAULT_CONFIG: PrintConfig = {
   headerText: "PLANO B ESPETARIA",
   footerText: "Obrigado pela preferência!",
   printMode: "browser",
-  bridgeUrl: "http://localhost:3001",
+  bridgeUrl: "http://localhost:9100",
   layoutPreset: "classico",
   fontSizes: {},
   visibleSections: { ...DEFAULT_VISIBLE },
@@ -148,7 +148,7 @@ function normalizeConfig(raw: Partial<PrintConfig>, source: PrintConfig["configS
     config.printMode = "bridge";
     // Lê a bridgeUrl dinâmica do preload (reflete a porta real do config.json)
     const preloadBridgeUrl = (window as any).desktopPrinter?.bridgeUrl;
-    config.bridgeUrl = preloadBridgeUrl || "http://localhost:3001";
+    config.bridgeUrl = preloadBridgeUrl || "http://localhost:9100";
   }
 
   return config;
