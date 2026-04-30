@@ -288,7 +288,8 @@ export function startGlobalOrderRuntime(queryClient: QueryClient): void {
   setInterval(() => {
     if (handledEvents.size > 500) {
       handledEvents.clear();
-      debugLog.info("global-orders", "handledEvents cache limpo");
+      retryCount.clear(); // Limpa também o contador de retentativas
+      debugLog.info("global-orders", "handledEvents e retryCount caches limpos");
     }
   }, 5 * 60_000);
 }
