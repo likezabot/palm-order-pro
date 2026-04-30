@@ -77,6 +77,11 @@ async function completePrint(orderId: string): Promise<void> {
   if (error) {
     console.error("[print-service] Erro ao completar print:", error);
     await logPrinterEvent(`Erro ao completar status de impressão: ${error.message}`, orderId, "error");
+    
+    // Se falhar a conclusão (ex: erro de rede ou auth), NÃO resetamos para 'pending'
+    // para evitar loop infinito de autoimpressão. Mantemos em 'failed' para ação manual
+    // ou deixamos o watchdog tratar com parcimônia.
+    await failPrint(orderId, `Erro ao completar status: ${error.message}`);
   } else {
     await logPrinterEvent("Status de impressão atualizado para: IMPRESSO", orderId, "success");
     
