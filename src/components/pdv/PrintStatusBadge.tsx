@@ -24,7 +24,18 @@ export function PrintStatusBadge({ jobInfo, legacyStatus, size = "xs" }: Props) 
     );
   }
 
-  // Nova fonte de verdade
+  // Nova fonte de verdade — mas se o job diz "queued"/"printing" e o
+  // legado já diz "printed", o status do banco é mais confiável
+  // (a RPC complete_order_print atualizou orders mas o job ainda não foi
+  // sincronizado por causa de RLS no update direto de print_jobs)
+  if (jobInfo && legacyStatus === "printed" && (jobInfo.status === "queued" || jobInfo.status === "printing")) {
+    return (
+      <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 ${SIZE[size]} font-bold uppercase bg-success/10 text-success border-success/20`}>
+        <CheckCircle2 className="w-2.5 h-2.5" /> Impresso
+      </span>
+    );
+  }
+
   if (jobInfo) {
     const cfg = STATUS_MAP[jobInfo.status];
     if (!cfg) return null;
