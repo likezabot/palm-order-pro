@@ -51,14 +51,19 @@ async function runAutoPrint(order: Order) {
     return;
   }
 
+  // REQUISITO: Apenas o app desktop (EXE) deve disparar autoimpressão.
+  // Isso evita loops infinitos e double printing quando o operador tem o site aberto no browser.
+  const isDesktopApp = typeof window !== "undefined" && (window as any).desktopPrinter?.isDesktop?.() === true;
+  if (!isDesktopApp) {
+    // Não loga como skip para não poluir o console de quem não é o caixa
+    return;
+  }
+
   // REQUISITO: Apenas dispositivos com ponte térmica configurada devem "clamar" autoimpressão.
-  // Isso evita que o celular do cliente ou de garçons sem impressora "roubem" o claim e 
-  // marquem como impresso (ou falha) sem que o papel saia no caixa.
   const cfg = await ensureFreshPrintConfig();
   const canPrint = cfg.printMode === "bridge" && !!cfg.bridgeUrl;
   
   if (!canPrint) {
-    // Não loga como skip para não poluir o console de quem não é o caixa
     return;
   }
 
