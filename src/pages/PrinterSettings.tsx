@@ -30,6 +30,7 @@ import HeaderFooterSection from "@/components/printer-settings/HeaderFooterSecti
 import VisibleSectionsSection from "@/components/printer-settings/VisibleSectionsSection";
 import AutoPrintSection from "@/components/printer-settings/AutoPrintSection";
 import AdvancedSection from "@/components/printer-settings/AdvancedSection";
+import PerTypeSection from "@/components/printer-settings/PerTypeSection";
 import LivePreview from "@/components/printer-settings/LivePreview";
 
 function formatTimestamp(iso?: string) {
@@ -114,6 +115,7 @@ export default function PrinterSettings() {
       <HeaderFooterSection cfg={cfg} onChange={patch} />
       <VisibleSectionsSection cfg={cfg} onChange={patch} />
       <AutoPrintSection cfg={cfg} onChange={patch} />
+      <PerTypeSection cfg={cfg} onChange={patch} />
       <AdvancedSection cfg={cfg} onChange={patch} />
     </div>
   );
