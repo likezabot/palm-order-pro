@@ -169,84 +169,119 @@ export function createReceiptLayoutModel(
   input: BuildLayoutInput,
   cfg: PrintConfig
 ): ReceiptLayout {
-  const v = cfg.visibleSections;
-  const blocks: LayoutBlock[] = [];
   const now = new Date();
   const time = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const ctx = { date, time };
 
   if (input.docType === "SENHA") {
-    return buildSenhaLayout(input, cfg, { date, time });
+    return buildSenhaLayout(input, cfg, ctx);
   }
 
   if (input.docType === "DELIVERY") {
-    return buildDeliveryLayout(input, cfg, { date, time });
+    return buildDeliveryLayout(input, cfg, ctx);
   }
 
-  // --- TOPO ---
-  if (cfg.headerText) {
-    blocks.push({ kind: "title", text: cfg.headerText.toUpperCase() });
+  if (input.docType === "ACRESCIMO") {
+    return buildAcrescimoLayout(input, cfg, ctx);
+  }
+
+  // --- TIPO 1: MESA / DINE-IN (Default) ---
+  const blocks: LayoutBlock[] = [];
+  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
+  
+  // Cabeçalho
+  blocks.push({ kind: "title", text: establishment.toUpperCase() });
+  blocks.push({ kind: "sep", bold: true });
+
+  // Mesa em destaque
+  if (input.tableName) {
+    blocks.push({ kind: "banner", text: input.tableName.toUpperCase() });
+    blocks.push({ kind: "sep" });
+  }
+
+  // Info básica
+  const orderNum = input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
+  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
+  blocks.push({ kind: "kvLine", label: "DATA", value: `${date} ${time}` });
+  
+  if (!isBlank(input.waiterName)) {
+    blocks.push({ kind: "kvLine", label: "GARCOM", value: input.waiterName!.toUpperCase() });
   }
   blocks.push({ kind: "sep" });
 
-  // Tipo de serviço (banner grande centralizado) + data/hora simples
-  let typeText = "MESA";
-  if (input.serviceType === "pickup" || input.serviceType === "balcao" || input.serviceType === "balcão") {
-    typeText = "RETIRADA";
-  } else if (input.serviceType === "delivery") {
-    typeText = "ENTREGA";
-  }
-  blocks.push({ kind: "banner", text: typeText });
-  blocks.push({ kind: "rawLine", text: `${date} ${time}` });
-  blocks.push({ kind: "sep" });
-
-  // --- PEDIDO / CLIENTE (esquerda, formato "Label: valor") ---
-  const shortId = (input.orderShortId || input.tableName || input.orderId?.slice(-6).toUpperCase() || "---").replace(/^#/, "");
-  blocks.push({ kind: "kvLine", label: "Pedido", value: `#${shortId}` });
-  if (!isBlank(input.customerName)) {
-    blocks.push({ kind: "kvLine", label: "Cliente", value: input.customerName!.trim() });
-  }
-  if (!isBlank(input.customerPhone)) {
-    blocks.push({ kind: "kvLine", label: "Telefone", value: input.customerPhone! });
-  }
-  if (input.orderId) {
-    blocks.push({ kind: "rawLine", text: input.orderId.replace(/-/g, "").slice(0, 24), muted: true });
-  }
-  blocks.push({ kind: "sep" });
-
-  // --- ITENS ---
-  blocks.push({ kind: "sectionHeader", text: "ITENS" });
+  // Itens
+  blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
   input.items.forEach((it) => {
     blocks.push({
       kind: "bulletItem",
-      name: it.product_name,
+      name: it.product_name.toUpperCase(),
       quantity: it.quantity,
       subtotal: it.product_price * it.quantity,
-      note: v.notes ? it.note ?? null : null,
+      note: it.note ?? null,
     });
   });
   blocks.push({ kind: "sep" });
 
-  // --- PAGAMENTO ---
-  blocks.push({ kind: "sectionHeader", text: "PAGAMENTO" });
+  // Totais e Pagamento
+  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(input.total ?? 0), bold: true });
   if (!isBlank(input.paymentMethod)) {
-    blocks.push({ kind: "kvLine", label: "Forma", value: paymentLabel(input.paymentMethod) , dash: true });
+    blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
   }
-  blocks.push({ kind: "kvLine", label: "Total", value: moneyBr(input.total ?? 0), bold: true, dash: true });
 
-  // --- OPCIONAL (OBSERVAÇÃO) ---
-  if (input.generalNote && input.generalNote.trim() && v.notes) {
+  // Observação
+  if (input.generalNote && input.generalNote.trim()) {
     blocks.push({ kind: "sep" });
-    blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim() });
+    blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim().toUpperCase() });
   }
 
-  if (v.footer && cfg.footerText) {
-    blocks.push({ kind: "footer", text: cfg.footerText });
-  }
-  pushFingerprint(blocks, input);
+  blocks.push({ kind: "sep", bold: true });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: input.docType };
+}
+
+/** TIPO 4: ACRESCIMO / ADICIONAL */
+function buildAcrescimoLayout(
+  input: BuildLayoutInput,
+  cfg: PrintConfig,
+  ctx: { date: string; time: string }
+): ReceiptLayout {
+  const blocks: LayoutBlock[] = [];
+  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
+
+  blocks.push({ kind: "title", text: establishment.toUpperCase() });
+  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "banner", text: "ACRESCIMO" });
+  blocks.push({ kind: "sep" });
+
+  if (input.tableName) {
+    blocks.push({ kind: "kvLine", label: "MESA", value: input.tableName.toUpperCase(), bold: true });
+  }
+  const orderNum = input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
+  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
+  blocks.push({ kind: "kvLine", label: "HORARIO", value: ctx.time });
+  blocks.push({ kind: "sep" });
+
+  blocks.push({ kind: "sectionHeader", text: "NOVOS ITENS" });
+  input.items.forEach((it) => {
+    blocks.push({
+      kind: "bulletItem",
+      name: it.product_name.toUpperCase(),
+      quantity: it.quantity,
+      subtotal: it.product_price * it.quantity,
+      note: it.note ?? null,
+    });
+  });
+  blocks.push({ kind: "sep" });
+
+  const subtotal = input.items.reduce((acc, it) => acc + it.product_price * it.quantity, 0);
+  blocks.push({ kind: "kvLine", label: "SUBTOTAL ACRESC.", value: moneyBr(subtotal), bold: true });
+  
+  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "cutMark" });
+
+  return { blocks, docType: "ACRESCIMO" };
 }
 
 /** Layout do cupom DELIVERY — mesmo padrão visual de retirada. */
