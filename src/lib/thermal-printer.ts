@@ -583,7 +583,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
       case "sep": {
         const style = blk.style || "line";
         if (style === "none") break;
-        const char = style === "dashes" ? "-" : style === "stars" ? "*" : (blk.bold ? "=" : "-");
+        const char = style === "dashes" ? "-" : style === "stars" ? "*" : style === "line" ? "=" : (blk.bold ? "=" : "-");
         b.resetStyle().align(align).line(char.repeat(cols));
         break;
       }

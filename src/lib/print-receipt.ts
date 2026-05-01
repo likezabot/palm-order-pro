@@ -400,9 +400,17 @@ export async function printCustomerReceipt(
   buildHtmlFromBlocks("Comprovante", layout.blocks, cfg);
 
   if (cfg.printMode === "bridge") {
+    const typeCfg = getEffectiveTypeConfig("dine_in", cfg);
     const payload = renderLayout(layout.blocks, cfg);
-    const result = await sendToBridge(payload, cfg.bridgeUrl);
-    return result.success;
+    const result = await executePrintJob(payload, cfg.bridgeUrl, {
+      printPath: "printCustomerReceipt",
+      source: "manual",
+      orderId: null,
+      serviceType: "dine_in",
+      tableName,
+      printerName: typeCfg.printerName,
+    }, typeCfg.copies);
+    return result.ok;
   }
 
   console.log("[print] Comprovante do cliente ignorado no modo browser.");
