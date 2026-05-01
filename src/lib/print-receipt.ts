@@ -27,6 +27,48 @@ async function getPrintConfigForOutput() {
   return await ensureFreshPrintConfig();
 }
 
+/**
+ * Resolve a configuração final para um tipo de serviço específico,
+ * mesclando as regras globais com as sobrescritas por tipo.
+ */
+function getEffectiveTypeConfig(
+  serviceType: string | null | undefined,
+  globalCfg: import("./print-config").PrintConfig
+) {
+  const type = (serviceType === "dine_in" ? "mesa" : serviceType === "pickup" ? "balcao" : serviceType === "delivery" ? "delivery" : null) as "mesa" | "balcao" | "delivery" | null;
+  const perType = type ? globalCfg.perType?.[type] : null;
+
+  return {
+    copies: perType?.copies ?? globalCfg.copiesDefault ?? 1,
+    // Se for undefined (usar global), pegamos o global dependendo do tipo
+    autoPrint: perType?.autoPrint ?? (type === "balcao" ? globalCfg.printSenhaEnabled : globalCfg.autoPrintNewOrders),
+    printerName: perType?.printerName
+  };
+}
+
+/**
+ * Envia o payload para a bridge respeitando o número de cópias e impressora específica.
+ */
+async function executePrintJob(
+  payload: Uint8Array,
+  bridgeUrl: string,
+  meta: import("./thermal-printer").SendToBridgeMeta,
+  copies: number
+): Promise<{ ok: boolean; error?: string }> {
+  let success = true;
+  let lastError = "";
+
+  for (let i = 0; i < copies; i++) {
+    const result = await sendToBridge(payload, bridgeUrl, meta);
+    if (!result.success) {
+      success = false;
+      lastError = result.error || "Erro desconhecido na bridge";
+    }
+  }
+
+  return { ok: success, error: lastError || undefined };
+}
+
 function logPrintCall(
   functionName: string,
   cfg: import("./print-config").PrintConfig,
