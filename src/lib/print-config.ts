@@ -75,6 +75,7 @@ const DEFAULT_VISIBLE: VisibleSections = {
   date: true,
   notes: true,
   footer: true,
+  showOrderNumber: true,
 };
 
 export const DEFAULT_CONFIG: PrintConfig = {
@@ -89,6 +90,8 @@ export const DEFAULT_CONFIG: PrintConfig = {
   visibleSections: { ...DEFAULT_VISIBLE },
   contentAlign: "center",
   printSenhaEnabled: true,
+  autoPrintNewOrders: true,
+  autoPrintAcrescimos: true,
   configSource: "default",
 };
 
