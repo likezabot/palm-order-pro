@@ -33,7 +33,7 @@ const ROWS: {
 
 export default function AutoPrintSection({ cfg, onChange }: Props) {
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center gap-2">
           <Zap className="w-4 h-4" /> Impressão Automática
