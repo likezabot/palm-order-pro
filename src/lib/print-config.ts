@@ -109,7 +109,7 @@ export function applyPreset(preset: LayoutPreset, base: PrintConfig): PrintConfi
       break;
     case "conta_destacada":
       next.fontSizes = { title: 22, header: 15, items: 15, notes: 12, total: 26 };
-      next.visibleSections = { title: true, waiter: true, date: true, notes: true, footer: true };
+      next.visibleSections = { title: true, waiter: true, date: true, notes: true, footer: true, showOrderNumber: true };
       break;
   }
   return next;
