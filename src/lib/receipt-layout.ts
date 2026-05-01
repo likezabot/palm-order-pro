@@ -30,9 +30,10 @@ export interface DeliveryAddressData {
 }
 
 export type LayoutBlock =
+  | { kind: "image"; url: string; align?: "left" | "center" | "right" }
   | { kind: "title"; text: string }
   | { kind: "banner"; text: string } // *** ACRESCIMO ***, *** CONTA ***, DELIVERY
-  | { kind: "sep"; bold?: boolean }
+  | { kind: "sep"; bold?: boolean; style?: "line" | "dashes" | "stars" | "none" }
   | { kind: "info"; label: string; value: string }
   /** Endereço em múltiplas linhas (sem label "ENDEREÇO" embutido — o label vem antes). */
   | { kind: "addressBlock"; lines: string[] }
@@ -162,6 +163,30 @@ function buildAddressLines(addr?: DeliveryAddressData | null): string[] {
 }
 
 /**
+ * Injeta o cabeçalho padrão (Logo, Nome, Endereço, Contato, CNPJ).
+ */
+function pushEstablishmentHeader(blocks: LayoutBlock[], cfg: PrintConfig) {
+  if (cfg.logoUrl) {
+    blocks.push({ kind: "image", url: cfg.logoUrl, align: "center" });
+  }
+
+  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
+  blocks.push({ kind: "title", text: establishment.toUpperCase() });
+
+  if (cfg.addressLine1 || cfg.addressLine2 || cfg.phone || cfg.cnpj) {
+    const lines: string[] = [];
+    if (cfg.addressLine1) lines.push(cfg.addressLine1.toUpperCase());
+    if (cfg.addressLine2) lines.push(cfg.addressLine2.toUpperCase());
+    if (cfg.phone) lines.push(`TEL: ${cfg.phone}`);
+    if (cfg.cnpj) lines.push(`CNPJ: ${cfg.cnpj}`);
+    
+    blocks.push({ kind: "addressBlock", lines });
+  }
+
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
+}
+
+/**
  * Monta a sequência canônica de blocos do cupom.
  * Respeita visibleSections, headerText, footerText e docType.
  */
@@ -188,16 +213,13 @@ export function createReceiptLayoutModel(
 
   // --- TIPO 1: MESA / DINE-IN (Default) ---
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
   
-  // Cabeçalho
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  pushEstablishmentHeader(blocks, cfg);
 
   // Mesa em destaque
   if (input.tableName) {
     blocks.push({ kind: "banner", text: input.tableName.toUpperCase() });
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
   }
 
   // Info básica
@@ -210,7 +232,7 @@ export function createReceiptLayoutModel(
   if (!isBlank(input.waiterName)) {
     blocks.push({ kind: "kvLine", label: "GARCOM", value: input.waiterName!.toUpperCase() });
   }
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Itens
   blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
@@ -223,7 +245,7 @@ export function createReceiptLayoutModel(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // TOTAL em destaque (bloco grande)
   blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
@@ -233,11 +255,11 @@ export function createReceiptLayoutModel(
 
   // Observação
   if (input.generalNote && input.generalNote.trim()) {
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
     blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim().toUpperCase() });
   }
 
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: input.docType };
@@ -250,12 +272,10 @@ function buildAcrescimoLayout(
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
-
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  
+  pushEstablishmentHeader(blocks, cfg);
   blocks.push({ kind: "banner", text: "ACRESCIMO" });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   if (input.tableName) {
     blocks.push({ kind: "kvLine", label: "MESA", value: input.tableName.toUpperCase(), bold: true });
@@ -265,7 +285,7 @@ function buildAcrescimoLayout(
     blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
   }
   blocks.push({ kind: "kvLine", label: "HORARIO", value: ctx.time });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   blocks.push({ kind: "sectionHeader", text: "NOVOS ITENS" });
   input.items.forEach((it) => {
@@ -277,12 +297,12 @@ function buildAcrescimoLayout(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   const subtotal = input.items.reduce((acc, it) => acc + it.product_price * it.quantity, 0);
   blocks.push({ kind: "total", label: "SUBTOTAL ACRESC.", value: moneyBr(subtotal) });
   
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "ACRESCIMO" };
@@ -295,13 +315,10 @@ function buildDeliveryLayout(
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
-
-  // Cabeçalho
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  
+  pushEstablishmentHeader(blocks, cfg);
   blocks.push({ kind: "banner", text: "DELIVERY" });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Cliente e Entrega
   blocks.push({ kind: "kvLine", label: "CLIENTE", value: (input.customerName || "---").toUpperCase() });
@@ -325,7 +342,7 @@ function buildDeliveryLayout(
   }
   
   blocks.push({ kind: "kvLine", label: "DATA", value: `${ctx.date} ${ctx.time}` });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Itens
   blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
@@ -338,7 +355,7 @@ function buildDeliveryLayout(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Financeiro
   const deliveryFee = input.deliveryFee ?? 0;
@@ -355,17 +372,17 @@ function buildDeliveryLayout(
 
   // Observação
   if (input.generalNote && input.generalNote.trim()) {
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
     blocks.push({ kind: "noteBlock", label: "OBSERVACOES", text: input.generalNote.trim().toUpperCase() });
   }
 
   // Rodapé Opcional para Delivery
   if (cfg.footerText) {
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
 
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "DELIVERY" };
@@ -378,19 +395,16 @@ function buildSenhaLayout(
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
-
-  // Cabeçalho
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  
+  pushEstablishmentHeader(blocks, cfg);
 
   // SENHA em destaque MAXIMO (numero gigante)
   const senhaNum = input.senha || input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
   blocks.push({ kind: "senhaTitle", text: "SENHA" });
   blocks.push({ kind: "senha", text: senhaNum });
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "banner", text: "BALCAO / RETIRADA" });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Identificação
   if (!isBlank(input.customerName)) {
@@ -400,7 +414,7 @@ function buildSenhaLayout(
     blocks.push({ kind: "kvLine", label: "TEL", value: input.customerPhone! });
   }
   blocks.push({ kind: "kvLine", label: "DATA", value: `${ctx.date} ${ctx.time}` });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Itens
   blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
@@ -413,7 +427,7 @@ function buildSenhaLayout(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Totais
   blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
@@ -422,9 +436,9 @@ function buildSenhaLayout(
   }
 
   // Rodapé instrução
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "banner", text: "RETIRE NO BALCAO" });
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "SENHA" };

@@ -20,6 +20,11 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
 
   for (const blk of blocks) {
     switch (blk.kind) {
+      case "image":
+        parts.push(
+          `<div class="image-block" style="text-align:${blk.align || "center"}"><img src="${blk.url}" alt="logo" /></div>`
+        );
+        break;
       case "title":
         parts.push(`<div class="header-text">${escapeHtml(blk.text)}</div>`);
         break;
@@ -28,9 +33,18 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
           `<div class="center bold" style="font-size:${Math.round(f.total * 1.25)}px;margin:8px 0;text-transform:uppercase;">${escapeHtml(blk.text)}</div>`
         );
         break;
-      case "sep":
-        parts.push(blk.bold ? `<hr class="sep-bold">` : `<hr class="sep">`);
+      case "sep": {
+        const style = blk.style || "line";
+        if (style === "none") break;
+        const className = blk.bold ? "sep-bold" : "sep";
+        const char = style === "dashes" ? "-" : style === "stars" ? "*" : "";
+        if (char) {
+          parts.push(`<div class="${className}-text">${char.repeat(32)}</div>`);
+        } else {
+          parts.push(`<hr class="${className}">`);
+        }
         break;
+      }
       case "info":
         parts.push(
           blk.value
@@ -167,6 +181,10 @@ export function thermalCSS(cfg: PrintConfig): string {
     }
     .sep { border: none !important; border-top: 1px dashed #000 !important; margin: 5px 0 !important; }
     .sep-bold { border: none !important; border-top: 2px solid #000 !important; margin: 5px 0 !important; }
+    .sep-text, .sep-bold-text { text-align: center !important; font-family: monospace !important; font-size: 14px !important; letter-spacing: 2px !important; margin: 4px 0 !important; overflow: hidden !important; white-space: nowrap !important; }
+    .sep-bold-text { font-weight: 900 !important; }
+    .image-block { padding: 4px 0 !important; margin-bottom: 4px !important; }
+    .image-block img { max-width: 120px !important; max-height: 80px !important; object-fit: contain !important; }
     .info-row {
       display: block !important;
       text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;

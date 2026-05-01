@@ -562,6 +562,12 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
 
   for (const blk of blocks) {
     switch (blk.kind) {
+      case "image": {
+        // ESC/POS image printing is complex. We skip for now in bit-raster.
+        // Some bridges support { kind: "image", url: "..." } if the payload was JSON.
+        // But since we are generating raw bytes here, we skip.
+        break;
+      }
       case "title": {
         b.resetStyle().align("center").bold(true).size(titleLarge, titleLarge).line(blk.text);
         b.resetStyle();
@@ -573,7 +579,10 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         break;
       }
       case "sep": {
-        b.resetStyle().align(align).line((blk.bold ? "=" : "-").repeat(cols));
+        const style = blk.style || "line";
+        if (style === "none") break;
+        const char = style === "dashes" ? "-" : style === "stars" ? "*" : (blk.bold ? "=" : "-");
+        b.resetStyle().align(align).line(char.repeat(cols));
         break;
       }
       case "info": {
