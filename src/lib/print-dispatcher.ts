@@ -153,7 +153,8 @@ export async function printOrderByServiceType(
   const cfg = await ensureFreshPrintConfig();
   const serviceType = order.service_type ?? "dine_in";
   const isDelivery = serviceType === "delivery";
-  const isPickup = serviceType === "pickup" || serviceType === "balcao" || serviceType === "balcão";
+  const isPickup = serviceType === "pickup" || serviceType === "balcao" || serviceType === "balcão"
+    || (order.table_name || "").toUpperCase() === "BALCÃO";
   const tableValue = safeTableValue(order);
   const waiter = safeWaiter(order);
 

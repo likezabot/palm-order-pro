@@ -180,23 +180,26 @@ const OrderSuccess = ({
             <p className="text-xl font-bold text-white/85 uppercase tracking-widest">Sua Senha</p>
             <p className="text-7xl sm:text-8xl font-black text-white mt-1 drop-shadow-2xl tabular-nums">{senha}</p>
 
-            <div className="pt-4">
-              <PrintStatusBadge
-                status={status}
-                labelIdle={!bridgeMode ? "Impressão local desativada" : undefined}
-                onRetry={status === "error" ? handleManualPrint : undefined}
-              />
-            </div>
+            {bridgeMode && (
+              <>
+                <div className="pt-4">
+                  <PrintStatusBadge
+                    status={status}
+                    onRetry={status === "error" ? handleManualPrint : undefined}
+                  />
+                </div>
 
-            <button
-              type="button"
-              onClick={handleManualPrint}
-              disabled={isPrinting}
-              className="mt-6 inline-flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <Printer size={24} className={isPrinting ? "animate-print-bounce" : ""} />
-              {isPrinting ? "IMPRIMINDO..." : "IMPRIMIR NOVAMENTE"}
-            </button>
+                <button
+                  type="button"
+                  onClick={handleManualPrint}
+                  disabled={isPrinting}
+                  className="mt-6 inline-flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  <Printer size={24} className={isPrinting ? "animate-print-bounce" : ""} />
+                  {isPrinting ? "IMPRIMINDO..." : "IMPRIMIR NOVAMENTE"}
+                </button>
+              </>
+            )}
           </>
         )}
         <p className="text-success-foreground font-bold text-lg opacity-80 pt-8">

@@ -85,7 +85,7 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
 
   const title = online && order.customer_name_snapshot
     ? order.customer_name_snapshot
-    : kind === "pickup" && senha
+    : (kind === "pickup" || kind === "counter") && senha
       ? `BALCÃO ${senha}`
       : formatTableLabel(order.table_name, order.original_table_name);
 

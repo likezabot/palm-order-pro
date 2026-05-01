@@ -566,7 +566,7 @@ const Pdv = () => {
                     itemCount={(order as any).item_count || 0}
                     selected={selectedId === order.id}
                     isUnseen={isOnlineOrder(order) && !isSeen(order.id)}
-                    senha={order.table_name === "BALCÃO" ? getSenha(order.id, orders) : undefined}
+                    senha={order.table_name === "BALCÃO" ? getSenha(order.id, [...orders, ...closedOrders]) : undefined}
                     onSelect={() => {
                       markSeen(order.id);
                       setSelectedId(order.id);
@@ -607,7 +607,7 @@ const Pdv = () => {
                     order={order}
                     itemCount={(order as any).item_count || 0}
                     selected={selectedId === order.id}
-                    senha={order.table_name === "BALCÃO" ? getSenha(order.id, orders) : undefined}
+                    senha={order.table_name === "BALCÃO" ? getSenha(order.id, [...orders, ...closedOrders]) : undefined}
                     onSelect={() => { setSelectedId(order.id); setShowPayment(false); setPaymentsHistory([]); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}
