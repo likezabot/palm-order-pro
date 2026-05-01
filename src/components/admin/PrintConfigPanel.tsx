@@ -378,6 +378,18 @@ export default function PrintConfigPanel() {
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-6 w-full">
       {/* ========== COLUNA ESQUERDA — Editor ========== */}
       <div className="space-y-6 min-w-0">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between gap-3">
+          <div className="text-sm">
+            <strong>Nova!</strong> Página dedicada com preview ao vivo e tudo editável.
+          </div>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => { window.location.href = "/configuracoes/impressora"; }}
+          >
+            Abrir página completa
+          </Button>
+        </div>
         {/* 1. STATUS */}
         <StatusCard
           cfg={cfg}

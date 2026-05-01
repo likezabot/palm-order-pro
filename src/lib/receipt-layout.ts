@@ -202,7 +202,9 @@ export function createReceiptLayoutModel(
 
   // Info básica
   const orderNum = input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
-  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
+  if (cfg.visibleSections?.showOrderNumber !== false) {
+    blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
+  }
   blocks.push({ kind: "kvLine", label: "DATA", value: `${date} ${time}` });
   
   if (!isBlank(input.waiterName)) {
@@ -259,7 +261,9 @@ function buildAcrescimoLayout(
     blocks.push({ kind: "kvLine", label: "MESA", value: input.tableName.toUpperCase(), bold: true });
   }
   const orderNum = input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
-  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
+  if (cfg.visibleSections?.showOrderNumber !== false) {
+    blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
+  }
   blocks.push({ kind: "kvLine", label: "HORARIO", value: ctx.time });
   blocks.push({ kind: "sep" });
 

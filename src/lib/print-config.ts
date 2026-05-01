@@ -27,6 +27,8 @@ export interface VisibleSections {
   date: boolean;      // linha de data/hora
   notes: boolean;     // observações dos itens
   footer: boolean;    // rodapé "Obrigado..."
+  /** Mostrar a linha "PEDIDO #1234" */
+  showOrderNumber: boolean;
 }
 
 export interface PrintConfig {
@@ -44,6 +46,10 @@ export interface PrintConfig {
   contentAlign: ContentAlign;
   /** Imprime senha automaticamente quando finaliza pedido no BALCÃO. */
   printSenhaEnabled: boolean;
+  /** Imprime cupom automaticamente quando um pedido novo chega. */
+  autoPrintNewOrders: boolean;
+  /** Imprime acréscimos automaticamente quando itens são adicionados a um pedido existente. */
+  autoPrintAcrescimos: boolean;
   /** Metadados de sincronização do cache local. */
   configUpdatedAt?: string;
   configSource?: "default" | "local" | "db";
@@ -69,6 +75,7 @@ const DEFAULT_VISIBLE: VisibleSections = {
   date: true,
   notes: true,
   footer: true,
+  showOrderNumber: true,
 };
 
 export const DEFAULT_CONFIG: PrintConfig = {
@@ -83,6 +90,8 @@ export const DEFAULT_CONFIG: PrintConfig = {
   visibleSections: { ...DEFAULT_VISIBLE },
   contentAlign: "center",
   printSenhaEnabled: true,
+  autoPrintNewOrders: true,
+  autoPrintAcrescimos: true,
   configSource: "default",
 };
 
@@ -92,7 +101,7 @@ export function applyPreset(preset: LayoutPreset, base: PrintConfig): PrintConfi
   switch (preset) {
     case "mesa_simples":
       next.fontSizes = { title: 18, header: 14, items: 14, notes: 11, total: 18 };
-      next.visibleSections = { title: true, waiter: false, date: false, notes: true, footer: false };
+      next.visibleSections = { title: true, waiter: false, date: false, notes: true, footer: false, showOrderNumber: true };
       break;
     case "classico":
       next.fontSizes = {}; // usa defaults do printSize
@@ -100,7 +109,7 @@ export function applyPreset(preset: LayoutPreset, base: PrintConfig): PrintConfi
       break;
     case "conta_destacada":
       next.fontSizes = { title: 22, header: 15, items: 15, notes: 12, total: 26 };
-      next.visibleSections = { title: true, waiter: true, date: true, notes: true, footer: true };
+      next.visibleSections = { title: true, waiter: true, date: true, notes: true, footer: true, showOrderNumber: true };
       break;
   }
   return next;
