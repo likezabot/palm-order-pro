@@ -285,15 +285,32 @@ export async function printDelta(
   console.log(`[print] Preparando ACRÉSCIMO para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
+    const typeCfg = getEffectiveTypeConfig(extras.serviceType || "dine_in", cfg);
+
+    // No caso de acréscimo, temos um toggle específico global: cfg.autoPrintAcrescimos.
+    // Mas se o usuário desativou autoPrint para Mesa (dine_in), talvez queira honrar isso também.
+    // Por enquanto, seguimos o toggle específico global se for auto.
+    const isAuto = extras.fingerprint?.source === "auto" || !extras.fingerprint?.source;
+    if (isAuto && !cfg.autoPrintAcrescimos) {
+      console.log("[print] Impressão automática de acréscimos desativada globalmente.");
+      return { ok: true };
+    }
+
     const payload = buildEscPosDelta(tableName, waiterName, deltaItems, cfg, extras);
-    const result = await sendToBridge(payload, cfg.bridgeUrl, {
-      printPath: extras.fingerprint?.printPath ?? "printDelta",
-      source: (extras.fingerprint?.source as any) ?? "unknown",
-      orderId: extras.orderId ?? null,
-      serviceType: extras.serviceType ?? null,
-      tableName,
-    });
-    return { ok: result.success, error: result.error };
+    const result = await executePrintJob(
+      payload, 
+      cfg.bridgeUrl, 
+      {
+        printPath: extras.fingerprint?.printPath ?? "printDelta",
+        source: (extras.fingerprint?.source as any) ?? "unknown",
+        orderId: extras.orderId ?? null,
+        serviceType: extras.serviceType ?? null,
+        tableName,
+        printerName: typeCfg.printerName,
+      },
+      typeCfg.copies
+    );
+    return result;
   }
 
   console.log("[print] Acréscimo ignorado no modo browser.");
