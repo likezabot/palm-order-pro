@@ -194,6 +194,7 @@ export async function checkBridgeStatus(
       bridge_version: data.bridge_version,
       printer_count: data.printer_count,
       printer_status: data.printer_status,
+      printer_name: typeof data.printer_name === "string" ? data.printer_name : undefined,
       queue_depth: data.queue_depth ?? data.queue_size,
       raw: data,
     });
