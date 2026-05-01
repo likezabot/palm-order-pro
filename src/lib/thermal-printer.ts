@@ -114,6 +114,7 @@ export interface BridgeHealth {
   bridge_version?: string;
   printer_count?: number;
   printer_status?: string;
+  printer_name?: string;
   queue_depth?: number;
   raw?: any;
 }
