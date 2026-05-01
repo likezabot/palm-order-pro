@@ -402,15 +402,30 @@ export async function printDelivery(
   console.log(`[print] Preparando DELIVERY pedido ${input.orderShortId ?? input.orderId ?? "?"}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
+    const typeCfg = getEffectiveTypeConfig(input.serviceType || "delivery", cfg);
+    
+    // Respeita autoPrint para delivery (se não for manual/reprint/test)
+    const isAuto = input.fingerprint?.source === "auto" || !input.fingerprint?.source;
+    if (isAuto && !typeCfg.autoPrint) {
+      console.log("[print] Impressão automática desativada para delivery");
+      return { ok: true };
+    }
+
     const payload = buildEscPosDelivery(input, cfg);
-    const result = await sendToBridge(payload, cfg.bridgeUrl, {
-      printPath: input.fingerprint?.printPath ?? "printDelivery",
-      source: (input.fingerprint?.source as any) ?? "unknown",
-      orderId: input.orderId ?? null,
-      serviceType: input.serviceType ?? "delivery",
-      tableName: input.orderShortId ?? null,
-    });
-    return { ok: result.success, error: result.error };
+    const result = await executePrintJob(
+      payload, 
+      cfg.bridgeUrl, 
+      {
+        printPath: input.fingerprint?.printPath ?? "printDelivery",
+        source: (input.fingerprint?.source as any) ?? "unknown",
+        orderId: input.orderId ?? null,
+        serviceType: input.serviceType ?? "delivery",
+        tableName: input.orderShortId ?? null,
+        printerName: typeCfg.printerName,
+      },
+      typeCfg.copies
+    );
+    return result;
   }
 
   console.log("[print] Delivery ignorado no modo browser.");
