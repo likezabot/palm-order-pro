@@ -239,20 +239,31 @@ export async function printReceipt(
   console.log(`[print] Preparando cupom para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
-    const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg, extras);
-    const result = await sendToBridge(payload, cfg.bridgeUrl, {
-      printPath: extras.fingerprint?.printPath ?? "printReceipt",
-      source: (extras.fingerprint?.source as any) ?? "unknown",
-      orderId: extras.orderId ?? null,
-      serviceType: extras.serviceType ?? null,
-      tableName,
-    });
+    const typeCfg = getEffectiveTypeConfig(extras.serviceType, cfg);
     
-    if (!result.success) {
-      console.warn("[print] Falha na ponte térmica:", result.error);
-      return { ok: false, error: result.error };
+    // Respeita autoPrint para mesa/delivery (se não for manual/reprint/test)
+    const isAuto = extras.fingerprint?.source === "auto" || !extras.fingerprint?.source;
+    if (isAuto && !typeCfg.autoPrint) {
+      console.log(`[print] Impressão automática desativada para ${extras.serviceType || "mesa"}`);
+      return { ok: true }; // Consideramos sucesso (o sistema não deve travar)
     }
-    return { ok: true };
+
+    const payload = buildEscPosReceipt(tableName, waiterName, items, total, cfg, extras);
+    const result = await executePrintJob(
+      payload, 
+      cfg.bridgeUrl, 
+      {
+        printPath: extras.fingerprint?.printPath ?? "printReceipt",
+        source: (extras.fingerprint?.source as any) ?? "unknown",
+        orderId: extras.orderId ?? null,
+        serviceType: extras.serviceType ?? null,
+        tableName,
+        printerName: typeCfg.printerName,
+      },
+      typeCfg.copies
+    );
+    
+    return result;
   }
 
   console.log("[print] Pedido ignorado no modo browser.");
