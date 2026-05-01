@@ -276,7 +276,7 @@ function buildAcrescimoLayout(
   blocks.push({ kind: "sep" });
 
   const subtotal = input.items.reduce((acc, it) => acc + it.product_price * it.quantity, 0);
-  blocks.push({ kind: "kvLine", label: "SUBTOTAL ACRESC.", value: moneyBr(subtotal), bold: true });
+  blocks.push({ kind: "total", label: "SUBTOTAL ACRESC.", value: moneyBr(subtotal) });
   
   blocks.push({ kind: "sep", bold: true });
   blocks.push({ kind: "cutMark" });
@@ -343,7 +343,7 @@ function buildDeliveryLayout(
 
   blocks.push({ kind: "kvLine", label: "SUBTOTAL", value: moneyBr(subtotal) });
   blocks.push({ kind: "kvLine", label: "TAXA ENTREGA", value: moneyBr(deliveryFee) });
-  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(total), bold: true });
+  blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(total) });
   
   if (!isBlank(input.paymentMethod)) {
     blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
