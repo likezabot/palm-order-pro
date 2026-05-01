@@ -272,12 +272,10 @@ function buildAcrescimoLayout(
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
-
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  
+  pushEstablishmentHeader(blocks, cfg);
   blocks.push({ kind: "banner", text: "ACRESCIMO" });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   if (input.tableName) {
     blocks.push({ kind: "kvLine", label: "MESA", value: input.tableName.toUpperCase(), bold: true });
@@ -287,7 +285,7 @@ function buildAcrescimoLayout(
     blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${orderNum}` });
   }
   blocks.push({ kind: "kvLine", label: "HORARIO", value: ctx.time });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   blocks.push({ kind: "sectionHeader", text: "NOVOS ITENS" });
   input.items.forEach((it) => {
@@ -299,12 +297,12 @@ function buildAcrescimoLayout(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   const subtotal = input.items.reduce((acc, it) => acc + it.product_price * it.quantity, 0);
   blocks.push({ kind: "total", label: "SUBTOTAL ACRESC.", value: moneyBr(subtotal) });
   
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "ACRESCIMO" };
