@@ -21,6 +21,7 @@ import {
   savePrintConfig,
   resetPrintConfig,
   syncPrintConfigFromDb,
+  ensureFreshPrintConfig,
   type PrintConfig,
 } from "@/lib/print-config";
 
@@ -57,9 +58,10 @@ export default function PrinterSettings() {
   const [syncing, setSyncing] = useState(true);
   const [resyncing, setResyncing] = useState(false);
 
-  // Sync inicial do banco
+  // Sync inicial: usa ensureFreshPrintConfig para preservar dados locais
+  // se eles forem mais novos que o banco (evita sobrescrever save recente).
   useEffect(() => {
-    syncPrintConfigFromDb()
+    ensureFreshPrintConfig()
       .then((fresh) => {
         setCfg(fresh);
         setSavedCfg(fresh);
@@ -73,7 +75,7 @@ export default function PrinterSettings() {
     setCfg((c) => ({ ...c, ...p }));
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
       const stamped = { ...cfg, configUpdatedAt: new Date().toISOString() };

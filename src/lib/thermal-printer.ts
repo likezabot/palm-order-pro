@@ -553,12 +553,13 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
   const b = new EscPosBuilder();
   const cols = paperColumns(cfg.paperWidth);
   const f = getFontSizes(cfg);
-  // baselines para decidir "grande"
-  const titleLarge = isLarge(cfg.fontSizes?.title, f.title - 4) || f.title >= 18;
-  const totalLarge = isLarge(cfg.fontSizes?.total, f.total - 4) || f.total >= 18;
-  const itemsLarge = isLarge(cfg.fontSizes?.items, f.base);
-  const headerLarge = isLarge(cfg.fontSizes?.header, f.base);
-  const notesLarge = isLarge(cfg.fontSizes?.notes, f.note);
+  // Thresholds fixos: compara o tamanho final resolvido (já com overrides aplicados)
+  // contra valores estáveis — assim o slider realmente muda o comportamento.
+  const titleLarge  = f.title  >= 18;
+  const totalLarge  = f.total  >= 18;
+  const itemsLarge  = f.base   >= 16;
+  const headerLarge = (f as any).headerInfo >= 15;
+  const notesLarge  = f.note   >= 12;
 
   const align: "left" | "center" = cfg.contentAlign === "left" ? "left" : "center";
 
