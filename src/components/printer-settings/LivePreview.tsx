@@ -37,11 +37,11 @@ export default function LivePreview({ cfg }: Props) {
       </div>
 
       <Tabs value={kind} onValueChange={(v) => setKind(v as PreviewKind)} className="mb-4">
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-4 w-full h-auto gap-1">
           {TABS.map(({ value, label, Icon }) => (
-            <TabsTrigger key={value} value={value} className="flex items-center gap-1.5 text-xs">
-              <Icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{label}</span>
+            <TabsTrigger key={value} value={value} className="flex items-center justify-center gap-1.5 text-xs px-1.5 py-2">
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{label}</span>
             </TabsTrigger>
           ))}
         </TabsList>
