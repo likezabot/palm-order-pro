@@ -16,9 +16,10 @@ import { formatPrintTableValue } from "@/lib/utils";
 import { debugLog } from "@/lib/debug-logger";
 import { logPrintEngine } from "@/lib/print-engine";
 import { auditTestLogger } from "@/lib/audit-test-logger";
-import { printReceipt, printDelta, printBill, printDelivery } from "@/lib/print-receipt";
+import { printReceipt, printDelta, printBill, printDelivery, printSenha } from "@/lib/print-receipt";
 import { type DeliveryPayloadInput, type ReceiptExtras } from "@/lib/thermal-printer";
 import { logPrinterEvent } from "@/lib/printer-logger";
+import { getSenha } from "@/lib/senha";
 
 export type DispatchMode = "full" | "delta" | "bill";
 export type DispatchSource = "auto" | "manual" | "reprint" | "queue" | "test" | "unknown";
@@ -70,11 +71,24 @@ async function loadItemsWithRetry(orderId: string) {
   return [];
 }
 
+/** Busca todos os pedidos BALCÃO criados hoje para calcular a senha. */
+async function loadTodayBalcaoOrders(): Promise<{ id: string; table_name: string; created_at: string }[]> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const { data } = await supabase
+    .from("orders")
+    .select("id, table_name, created_at")
+    .eq("table_name", "BALCÃO")
+    .gte("created_at", today.toISOString())
+    .order("created_at", { ascending: true });
+  return (data ?? []) as any[];
+}
+
 /**
  * Sanitiza extras: NUNCA imprimir N/A. Campos vazios são removidos para que
  * o layout simplesmente não renderize a linha.
  */
-function buildExtras(o: OrderRow, printPath: string, source: DispatchSource, items?: any[]): ReceiptExtras {
+function buildExtras(o: OrderRow, printPath: string, source: DispatchSource, items?: any[], senhaValue?: string | null): ReceiptExtras {
   const extras: ReceiptExtras = {
     orderId: o.id,
     orderShortId: o.table_name?.replace(/^.*#/, "") || o.id.slice(0, 8).toUpperCase(),
@@ -86,6 +100,7 @@ function buildExtras(o: OrderRow, printPath: string, source: DispatchSource, ite
   if (o.service_type) extras.serviceType = o.service_type;
   if (o.customer_phone_snapshot && o.customer_phone_snapshot.trim())
     extras.customerPhone = o.customer_phone_snapshot.trim();
+  if (senhaValue) extras.senha = senhaValue;
   return extras;
 }
 
@@ -146,8 +161,19 @@ export async function printOrderByServiceType(
   const deltaItems = (mode === "delta") ? (order.delta_items ?? []) as any[] : [];
   const activeItems = mode === "delta" ? deltaItems : items;
 
+  // Calcula senha para pedidos BALCÃO (pickup)
+  let senhaValue: string | null = null;
+  if (isPickup) {
+    try {
+      const todayBalcao = await loadTodayBalcaoOrders();
+      senhaValue = getSenha(orderId, todayBalcao);
+    } catch (e) {
+      console.warn("[DISPATCHER] Falha ao calcular senha:", e);
+    }
+  }
+
   const printPath = `dispatcher.${serviceType}.${mode}`;
-  const extras = buildExtras(order, printPath, source, activeItems);
+  const extras = buildExtras(order, printPath, source, activeItems, senhaValue);
 
   // LOG OBRIGATÓRIO: ANTES DE IMPRIMIR
   await logPrinterEvent(
@@ -309,6 +335,28 @@ export async function printOrderByServiceType(
   }
 
   const res = bridgeActuallyOnline ? await sendToBridge(() => printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras)) : { ok: false, error: "bridge_offline" };
-  if (res.ok) return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
+  if (res.ok) {
+    // Para pedidos BALCÃO: imprime também o slip de senha separado
+    if (isPickup && senhaValue && bridgeActuallyOnline) {
+      try {
+        const senhaItems = (items as any[]).map((i) => ({
+          product_name: i.product_name,
+          quantity: i.quantity,
+          product_price: i.product_price,
+        }));
+        await printSenha(senhaValue, senhaItems, {
+          orderId,
+          waiterName: waiter || undefined,
+          customerName: order.customer_name_snapshot ?? undefined,
+          total: order.total ?? 0,
+          force: true,
+          source,
+        });
+      } catch (e) {
+        console.warn("[DISPATCHER] Falha ao imprimir slip de senha:", e);
+      }
+    }
+    return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
+  }
   return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
 }

@@ -31,10 +31,17 @@ const OrderSuccess = ({
   const mountedRef = useRef(true);
   const printingRef = useRef(false);
 
-  // bridge mode resolved once on mount — avoids re-evaluating localStorage mid-flow
+  // bridge mode resolved once on mount — avoids re-evaluating localStorage mid-flow.
+  // Em mobile com bridge apontando para localhost, a bridge é inacessível; tratamos
+  // como sem bridge para não exibir "Falha na impressão" sem sentido.
   const [bridgeMode] = useState(() => {
     try {
-      return loadPrintConfig().printMode === "bridge";
+      const cfg = loadPrintConfig();
+      if (cfg.printMode !== "bridge") return false;
+      // Desktop EXE expõe window.desktopPrinter
+      const isDesktop = typeof (window as any).desktopPrinter !== "undefined";
+      if (!isDesktop && /localhost|127\.0\.0\.1/.test(cfg.bridgeUrl ?? "")) return false;
+      return true;
     } catch {
       return false;
     }

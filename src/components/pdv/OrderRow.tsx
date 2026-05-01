@@ -85,7 +85,9 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
 
   const title = online && order.customer_name_snapshot
     ? order.customer_name_snapshot
-    : formatTableLabel(order.table_name, order.original_table_name);
+    : kind === "pickup" && senha
+      ? `BALCÃO ${senha}`
+      : formatTableLabel(order.table_name, order.original_table_name);
 
   const KindIcon = kind === "delivery" ? Bike : kind === "pickup" ? ShoppingBag : null;
 
@@ -148,11 +150,6 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
             <span className={`inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
               {STATUS_LABEL[status] || status.toUpperCase()}
             </span>
-            {senha && kind === "pickup" && (
-              <span className="inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-black uppercase tracking-wide bg-teal-500/15 text-teal-400 border-teal-500/30">
-                SENHA {senha}
-              </span>
-            )}
           </div>
         </div>
       </div>
