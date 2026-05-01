@@ -31,6 +31,12 @@ export interface VisibleSections {
   showOrderNumber: boolean;
 }
 
+export interface PerTypeConfig {
+  copies?: number;
+  autoPrint?: boolean;
+  printerName?: string;
+}
+
 export interface PrintConfig {
   paperWidth: PaperWidth;
   printSize: PrintSize;
@@ -59,6 +65,11 @@ export interface PrintConfig {
   logoUrl?: string;         // URL do logo no Supabase Storage
   copiesDefault?: number;   // Número de vias padrão (default: 1)
   separatorStyle?: "line" | "dashes" | "stars" | "none";
+  perType?: {
+    mesa?: PerTypeConfig;
+    balcao?: PerTypeConfig;
+    delivery?: PerTypeConfig;
+  };
 
   /** Metadados de sincronização do cache local. */
   configUpdatedAt?: string;
@@ -111,6 +122,7 @@ export const DEFAULT_CONFIG: PrintConfig = {
   logoUrl: "",
   copiesDefault: 1,
   separatorStyle: "line",
+  perType: {},
 };
 
 /** Aplica preset e devolve overrides recomendados (usuário ainda pode ajustar). */
