@@ -395,19 +395,16 @@ function buildSenhaLayout(
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
-
-  // Cabeçalho
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  
+  pushEstablishmentHeader(blocks, cfg);
 
   // SENHA em destaque MAXIMO (numero gigante)
   const senhaNum = input.senha || input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
   blocks.push({ kind: "senhaTitle", text: "SENHA" });
   blocks.push({ kind: "senha", text: senhaNum });
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "banner", text: "BALCAO / RETIRADA" });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Identificação
   if (!isBlank(input.customerName)) {
@@ -417,7 +414,7 @@ function buildSenhaLayout(
     blocks.push({ kind: "kvLine", label: "TEL", value: input.customerPhone! });
   }
   blocks.push({ kind: "kvLine", label: "DATA", value: `${ctx.date} ${ctx.time}` });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Itens
   blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
@@ -430,7 +427,7 @@ function buildSenhaLayout(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Totais
   blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
@@ -439,9 +436,9 @@ function buildSenhaLayout(
   }
 
   // Rodapé instrução
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "banner", text: "RETIRE NO BALCAO" });
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "SENHA" };
