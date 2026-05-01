@@ -46,6 +46,10 @@ export interface PrintConfig {
   contentAlign: ContentAlign;
   /** Imprime senha automaticamente quando finaliza pedido no BALCÃO. */
   printSenhaEnabled: boolean;
+  /** Imprime cupom automaticamente quando um pedido novo chega. */
+  autoPrintNewOrders: boolean;
+  /** Imprime acréscimos automaticamente quando itens são adicionados a um pedido existente. */
+  autoPrintAcrescimos: boolean;
   /** Metadados de sincronização do cache local. */
   configUpdatedAt?: string;
   configSource?: "default" | "local" | "db";
