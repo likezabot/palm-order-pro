@@ -83,11 +83,14 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
     return `${elapsed}`;
   };
 
-  const title = online && order.customer_name_snapshot
-    ? order.customer_name_snapshot
-    : (kind === "pickup" || kind === "counter") && senha
-      ? `BALCÃO ${senha}`
-      : formatTableLabel(order.table_name, order.original_table_name);
+  const namedCustomer = order.customer_name_snapshot?.trim();
+  const title = kind === "counter"
+    ? (namedCustomer || (senha ? `BALCÃO ${senha}` : "BALCÃO"))
+    : online && namedCustomer
+      ? namedCustomer
+      : kind === "pickup" && senha
+        ? `BALCÃO ${senha}`
+        : formatTableLabel(order.table_name, order.original_table_name);
 
   const KindIcon = kind === "delivery" ? Bike : kind === "pickup" ? ShoppingBag : null;
 

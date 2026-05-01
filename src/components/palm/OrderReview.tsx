@@ -238,6 +238,7 @@ const OrderReview = ({
         p_items: rpcItems,
         p_should_print: shouldPrint,
         p_original_table_name: originalTableName || tableName,
+        p_customer_name: isBalcao ? (customerName?.trim() || null) : null,
       };
 
       const { data: createData, error: createError } = await supabase.rpc("create_order", payload as any);

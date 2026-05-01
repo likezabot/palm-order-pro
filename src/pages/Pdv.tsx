@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { Order, OrderItem } from "@/lib/types";
 import { manualPrintOrder, manualPrintDelta, manualPrintBill } from "@/lib/print-service";
 import { printCustomerReceipt } from "@/lib/print-receipt";
+import { reprintSenhaForOrder } from "@/lib/reprint-senha";
 import { loadPrintConfig } from "@/lib/print-config";
 import { enqueuePrintJob } from "@/lib/print-jobs";
 import { useToast } from "@/hooks/use-toast";
@@ -186,6 +187,19 @@ const Pdv = () => {
         description: result.error || "Bridge local offline e fila indisponível. Verifique a ponte em Admin → Sistema.",
         variant: "destructive",
       });
+    }
+  }, [toast]);
+
+  const handleCupomCliente = useCallback(async (orderId: string) => {
+    try {
+      const r = await reprintSenhaForOrder(orderId);
+      if (r.ok) {
+        toast({ title: "Cupom do cliente enviado para impressão!" });
+      } else {
+        toast({ title: "Falha ao imprimir cupom", description: r.reason, variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "Erro ao imprimir cupom", variant: "destructive" });
     }
   }, [toast]);
 
@@ -722,9 +736,19 @@ const Pdv = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h2 className="text-xl font-bold">
-                  {isOnlineOrder(selectedOrder) && selectedOrder.customer_name_snapshot
-                    ? selectedOrder.customer_name_snapshot
-                    : formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name)}
+                  {(() => {
+                    const k = getOrderKind(selectedOrder);
+                    const named = selectedOrder.customer_name_snapshot?.trim();
+                    if (k === "counter") {
+                      const s = selectedOrder.table_name === "BALCÃO"
+                        ? getSenha(selectedOrder.id, [...orders, ...closedOrders])
+                        : undefined;
+                      return named || (s ? `BALCÃO ${s}` : "BALCÃO");
+                    }
+                    return (isOnlineOrder(selectedOrder) && named)
+                      ? named
+                      : formatTableLabel(selectedOrder.table_name, selectedOrder.original_table_name);
+                  })()}
                 </h2>
                 <div className="flex items-center gap-1 flex-wrap">
                   {isOnlineOrder(selectedOrder) && (
@@ -842,6 +866,18 @@ const Pdv = () => {
                   </>
                 )}
               </div>
+
+              {/* Cupom do cliente — apenas para BALCÃO (counter) */}
+              {getOrderKind(selectedOrder) === "counter" && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => handleCupomCliente(selectedOrder.id)}
+                    className="w-full rounded-lg border border-teal-500/40 bg-teal-500/10 px-3 py-2.5 font-black text-sm text-teal-400 hover:bg-teal-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Receipt size={16} /> CUPOM DO CLIENTE
+                  </button>
+                </div>
+              )}
 
               {/* Linha 1: ações secundárias */}
               <div className="grid grid-cols-3 gap-2 pt-2">

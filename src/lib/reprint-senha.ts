@@ -15,7 +15,7 @@ export interface ReprintResult {
 export async function reprintSenhaForOrder(orderId: string): Promise<ReprintResult> {
   const { data: order, error: orderErr } = await supabase
     .from("orders")
-    .select("id, table_name, waiter_name, total, created_at")
+    .select("id, table_name, waiter_name, total, created_at, customer_name_snapshot")
     .eq("id", orderId)
     .single();
 
@@ -52,16 +52,23 @@ export async function reprintSenhaForOrder(orderId: string): Promise<ReprintResu
     product_price: i.product_price,
   }));
 
+  const customerName = (order as any).customer_name_snapshot?.trim() || undefined;
+
   const ok = await printSenha(senha, printItems, {
     waiterName: order.waiter_name || undefined,
     orderId: order.id,
+    customerName,
     total: Number(order.total) || 0,
     force: true,
     source: "reprint",
   });
 
-  // Enfileira também como comando explícito para o .exe (não bloqueia)
-  await enqueuePrintJob(order.id, "manual", { senha, kind: "reprint_senha" });
+  // Enfileira para o .exe com job_type customer_receipt (não bloqueia)
+  await enqueuePrintJob(order.id, "customer_receipt", {
+    senha,
+    customerName: customerName || null,
+    kind: "customer_receipt",
+  });
 
   return { ok, reason: ok ? undefined : "Impressora indisponível ou modo browser." };
 }
