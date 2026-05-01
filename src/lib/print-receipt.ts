@@ -193,14 +193,29 @@ export async function printSenha(
       },
       cfg,
     );
-    const result = await sendToBridge(renderLayout(layout.blocks, cfg), cfg.bridgeUrl, {
-      printPath: "printSenha",
-      source: opts.source ?? "auto",
-      orderId: opts.orderId ?? null,
-      serviceType: "balcao",
-      tableName: opts.customerName ?? null,
-    });
-    return result.success;
+
+    const typeCfg = getEffectiveTypeConfig("pickup", cfg);
+    
+    // Respeita toggle de autoPrint (sobrescrita por tipo ou global)
+    if (!opts.force && !typeCfg.autoPrint) {
+      console.log("[print] Senha automática desativada para balcão.");
+      return false;
+    }
+
+    const result = await executePrintJob(
+      renderLayout(layout.blocks, cfg), 
+      cfg.bridgeUrl, 
+      {
+        printPath: "printSenha",
+        source: opts.source ?? "auto",
+        orderId: opts.orderId ?? null,
+        serviceType: "balcao",
+        tableName: opts.customerName ?? null,
+        printerName: typeCfg.printerName,
+      },
+      typeCfg.copies
+    );
+    return result.ok;
   }
 
   // No navegador/celular, não imprimir senha para evitar PDF
