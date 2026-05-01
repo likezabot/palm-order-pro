@@ -50,6 +50,16 @@ export interface PrintConfig {
   autoPrintNewOrders: boolean;
   /** Imprime acréscimos automaticamente quando itens são adicionados a um pedido existente. */
   autoPrintAcrescimos: boolean;
+  
+  // ----- campos de auditoria (sem UI ainda) -----
+  addressLine1?: string;    // Endereço linha 1
+  addressLine2?: string;    // Endereço linha 2
+  phone?: string;           // Telefone
+  cnpj?: string;            // CNPJ
+  logoUrl?: string;         // URL do logo no Supabase Storage
+  copiesDefault?: number;   // Número de vias padrão (default: 1)
+  separatorStyle?: "line" | "dashes" | "stars" | "none";
+
   /** Metadados de sincronização do cache local. */
   configUpdatedAt?: string;
   configSource?: "default" | "local" | "db";
@@ -93,6 +103,14 @@ export const DEFAULT_CONFIG: PrintConfig = {
   autoPrintNewOrders: true,
   autoPrintAcrescimos: true,
   configSource: "default",
+  // Novos campos default
+  addressLine1: "",
+  addressLine2: "",
+  phone: "",
+  cnpj: "",
+  logoUrl: "",
+  copiesDefault: 1,
+  separatorStyle: "line",
 };
 
 /** Aplica preset e devolve overrides recomendados (usuário ainda pode ajustar). */

@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Printer } from "lucide-react";
-import { Utensils, Store, Truck, Plus } from "lucide-react";
+import { Printer, Utensils, Store, Truck, Plus } from "lucide-react";
 import { createReceiptLayoutModel } from "@/lib/receipt-layout";
 import { buildHtmlFromBlocks } from "@/lib/receipt-html";
 import type { PrintConfig } from "@/lib/print-config";
