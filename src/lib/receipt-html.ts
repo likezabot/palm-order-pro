@@ -20,6 +20,11 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
 
   for (const blk of blocks) {
     switch (blk.kind) {
+      case "image":
+        parts.push(
+          `<div class="image-block" style="text-align:${blk.align || "center"}"><img src="${blk.url}" alt="logo" /></div>`
+        );
+        break;
       case "title":
         parts.push(`<div class="header-text">${escapeHtml(blk.text)}</div>`);
         break;
@@ -28,9 +33,18 @@ export function renderBlocksToHtml(blocks: LayoutBlock[], cfg: PrintConfig): str
           `<div class="center bold" style="font-size:${Math.round(f.total * 1.25)}px;margin:8px 0;text-transform:uppercase;">${escapeHtml(blk.text)}</div>`
         );
         break;
-      case "sep":
-        parts.push(blk.bold ? `<hr class="sep-bold">` : `<hr class="sep">`);
+      case "sep": {
+        const style = blk.style || "line";
+        if (style === "none") break;
+        const className = blk.bold ? "sep-bold" : "sep";
+        const char = style === "dashes" ? "-" : style === "stars" ? "*" : "";
+        if (char) {
+          parts.push(`<div class="${className}-text">${char.repeat(32)}</div>`);
+        } else {
+          parts.push(`<hr class="${className}">`);
+        }
         break;
+      }
       case "info":
         parts.push(
           blk.value
