@@ -55,7 +55,7 @@ describe("createReceiptLayoutModel — fluxo crítico impressão (fonte única)"
   it("respeita visibleSections — oculta título/garçom/data/footer/notas", () => {
     const cfg = {
       ...DEFAULT_CONFIG,
-      visibleSections: { title: false, waiter: false, date: false, notes: false, footer: false },
+      visibleSections: { title: false, waiter: false, date: false, notes: false, footer: false, showOrderNumber: true },
     };
     const { blocks } = createReceiptLayoutModel(
       { docType: "PEDIDO", tableName: "Mesa 5", waiterName: "Ana", items: baseItems, total: 28 },
