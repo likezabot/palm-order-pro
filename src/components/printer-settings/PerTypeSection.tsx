@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Utensils, Store, Truck, Printer, Copy, Zap } from "lucide-react";
+import { Utensils, Store, Truck, Printer, Copy, Zap, Settings2 } from "lucide-react";
 import type { PrintConfig, PerTypeConfig } from "@/lib/print-config";
 
 interface Props {
@@ -142,24 +142,3 @@ export default function PerTypeSection({ cfg, onChange }: Props) {
   );
 }
 
-function Settings2(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M20 7h-9" />
-      <path d="M14 17H5" />
-      <circle cx="17" cy="17" r="3" />
-      <circle cx="7" cy="7" r="3" />
-    </svg>
-  );
-}
