@@ -1762,6 +1762,7 @@ export type Database = {
       }
       create_order: {
         Args: {
+          p_customer_name?: string
           p_items: Json
           p_original_table_name?: string
           p_should_print?: boolean

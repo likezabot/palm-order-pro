@@ -116,15 +116,16 @@ const OrderSuccess = ({
     [senha, buildPrintArgs, waiterName, orderId, customerName],
   );
 
-  // Auto-print uma única vez ao montar (se aplicável)
+  // Auto-print da senha foi REMOVIDO. A decisão de imprimir é feita no
+  // PrintSenhaDialog logo após o envio. Aqui só fica o botão manual.
+  // (status inicial fica "idle" para não mostrar spinner sem motivo.)
   useEffect(() => {
-    if (!shouldShowBadge || !bridgeMode || printedRef.current) return;
-    printedRef.current = true;
-    const timer = setTimeout(() => {
-      if (mountedRef.current) runPrint(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [shouldShowBadge, bridgeMode, runPrint]);
+    if (initialStatus === "printing") {
+      // força idle no mount (caso initialStatus tenha vindo "printing")
+      setStatus("idle");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-reset: para mesas, dispara imediatamente (próximo frame).
   // Para pedidos com badge (BALCÃO + impressão), aguarda impressão terminar ou fallback.
@@ -180,26 +181,23 @@ const OrderSuccess = ({
             <p className="text-xl font-bold text-white/85 uppercase tracking-widest">Sua Senha</p>
             <p className="text-7xl sm:text-8xl font-black text-white mt-1 drop-shadow-2xl tabular-nums">{senha}</p>
 
-            {bridgeMode && (
-              <>
-                <div className="pt-4">
-                  <PrintStatusBadge
-                    status={status}
-                    onRetry={status === "error" ? handleManualPrint : undefined}
-                  />
-                </div>
+            <div className="pt-4">
+              <PrintStatusBadge
+                status={status}
+                labelIdle={!bridgeMode ? "Impressão local desativada" : undefined}
+                onRetry={status === "error" ? handleManualPrint : undefined}
+              />
+            </div>
 
-                <button
-                  type="button"
-                  onClick={handleManualPrint}
-                  disabled={isPrinting}
-                  className="mt-6 inline-flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl disabled:opacity-50 disabled:pointer-events-none"
-                >
-                  <Printer size={24} className={isPrinting ? "animate-print-bounce" : ""} />
-                  {isPrinting ? "IMPRIMINDO..." : "IMPRIMIR NOVAMENTE"}
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={handleManualPrint}
+              disabled={isPrinting}
+              className="mt-6 inline-flex items-center gap-2 mx-auto rounded-lg bg-white px-8 py-4 text-success font-black text-xl active:scale-95 transition-transform shadow-xl disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <Printer size={24} className={isPrinting ? "animate-print-bounce" : ""} />
+              {isPrinting ? "IMPRIMINDO..." : "IMPRIMIR NOVAMENTE"}
+            </button>
           </>
         )}
         <p className="text-success-foreground font-bold text-lg opacity-80 pt-8">

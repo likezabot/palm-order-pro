@@ -21,6 +21,8 @@ import {
 import CartItemRow from "./CartItemRow";
 import OrderReviewFooter from "./OrderReviewFooter";
 import { PrintType } from "./PrintTypeSelector";
+import PrintSenhaDialog from "./PrintSenhaDialog";
+import { printSenha } from "@/lib/print-receipt";
 
 interface Props {
   tableName: string;
@@ -58,6 +60,10 @@ const OrderReview = ({
   const [showConfirm, setShowConfirm] = useState(false);
   const [conflict, setConflict] = useState<{ orderId: string; tableName: string } | null>(null);
   const [reprintStatus, setReprintStatus] = useState<"idle" | "printing" | "success" | "error">("idle");
+  const [senhaDialog, setSenhaDialog] = useState<
+    | { open: true; senha: string; orderId?: string; customerName?: string }
+    | { open: false }
+  >({ open: false });
   const { toast } = useToast();
   const { playFeedback } = useFeedback();
   const queryClient = useQueryClient();
@@ -238,7 +244,7 @@ const OrderReview = ({
         p_items: rpcItems,
         p_should_print: shouldPrint,
         p_original_table_name: originalTableName || tableName,
-        p_customer_name: isBalcao ? (customerName?.trim() || null) : null,
+        p_customer_name: customerName?.trim() || null,
       };
 
       const { data: createData, error: createError } = await supabase.rpc("create_order", payload as any);
@@ -277,6 +283,16 @@ const OrderReview = ({
           await enqueuePrintJob(newOrderId, "order", { senha: newSenha });
         }
       }
+      // BALCÃO: abrir diálogo "Imprimir senha?" antes de seguir pra OrderSuccess.
+      if (isBalcao && newSenha) {
+        setSenhaDialog({
+          open: true,
+          senha: newSenha,
+          orderId: newOrderId,
+          customerName: customerName?.trim() || undefined,
+        });
+        return; // a finalização de UI acontece quando o usuário escolhe no diálogo
+      }
       onSuccess(newSenha, newOrderId, customerName?.trim() || undefined);
     } catch (err: any) {
       if (myReq !== requestIdRef.current || timedOut) return;
@@ -313,6 +329,48 @@ const OrderReview = ({
     } finally {
       reprintingRef.current = false;
     }
+  };
+
+  const handleSenhaChoice = async (printIt: boolean) => {
+    if (!senhaDialog.open) return;
+    const { senha: senhaNum, orderId: oid, customerName: cname } = senhaDialog;
+    setSenhaDialog({ open: false });
+
+    if (printIt) {
+      try {
+        const items = cart.map((i) => ({
+          product_name: i.product.name,
+          quantity: i.quantity,
+          product_price: i.product.price,
+        }));
+        const total = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+        const ok = await printSenha(senhaNum, items, {
+          orderId: oid,
+          waiterName,
+          customerName: cname,
+          total,
+          force: true,
+          source: "manual",
+        });
+        if (ok) {
+          toast({ title: "Cupom de senha enviado", description: `Senha ${senhaNum}` });
+        } else {
+          toast({
+            title: "Falha ao imprimir senha",
+            description: "Você pode tentar novamente na tela seguinte.",
+            variant: "destructive",
+          });
+        }
+      } catch (e: any) {
+        toast({
+          title: "Erro ao imprimir senha",
+          description: e?.message || "Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    }
+
+    onSuccess(senhaNum, oid, cname);
   };
 
   return (
@@ -492,6 +550,15 @@ const OrderReview = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {senhaDialog.open && (
+        <PrintSenhaDialog
+          open={senhaDialog.open}
+          senha={senhaDialog.senha}
+          customerName={senhaDialog.customerName}
+          onChoose={handleSenhaChoice}
+        />
+      )}
     </div>
   );
 };

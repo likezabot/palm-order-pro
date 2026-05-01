@@ -6,8 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft, Plus, Minus, Trash2, Save, Printer, 
   User, Phone, MapPin, Hash, Wallet, Clock, Info, Search,
-  ShoppingBag, Bike, UtensilsCrossed
+  ShoppingBag, Bike, UtensilsCrossed, Eye, X
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +67,12 @@ export default function OrderEditor() {
   // Product selection
   const [openProductSearch, setOpenProductSearch] = useState(false);
 
+  // Mobile preview toggle
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Editor é usado apenas para editar pedido existente (rota /orders/:id/edit).
+  const isNew = !id || id === "new";
+
   // Fetch products for addition
   const { data: products = [] } = useQuery({
     queryKey: ["products-list"],
@@ -84,7 +91,7 @@ export default function OrderEditor() {
   const { data: existingOrder, isLoading: isLoadingOrder } = useQuery({
     queryKey: ["order-edit", id],
     queryFn: async () => {
-      if (!id || id === "new") return null;
+      if (isNew) return null;
       const { data, error } = await supabase
         .from("orders")
         .select("*")
@@ -93,14 +100,14 @@ export default function OrderEditor() {
       if (error) throw error;
       return data as Order;
     },
-    enabled: !!id && id !== "new"
+    enabled: !isNew
   });
 
   // Load items
   const { data: existingItems, isLoading: isLoadingItems } = useQuery({
     queryKey: ["order-items-edit", id],
     queryFn: async () => {
-      if (!id || id === "new") return [];
+      if (isNew) return [];
       const { data, error } = await supabase
         .from("order_items")
         .select("*")
@@ -108,7 +115,7 @@ export default function OrderEditor() {
       if (error) throw error;
       return data as OrderItem[];
     },
-    enabled: !!id && id !== "new"
+    enabled: !isNew
   });
 
   // Populate form when data loads
@@ -129,7 +136,7 @@ export default function OrderEditor() {
           reference: existingOrder.delivery_address.reference || ""
         });
       }
-    } else if (id === "new") {
+    } else if (isNew) {
       const table = searchParams.get("table");
       if (table) setTableName(table);
       setWaiterName(localStorage.getItem("waiter_name") || "");
@@ -211,7 +218,7 @@ export default function OrderEditor() {
 
       let orderId = id;
 
-      if (id === "new") {
+      if (isNew) {
         const { data, error } = await supabase
           .from("orders")
           .insert([orderPayload])
@@ -302,63 +309,97 @@ export default function OrderEditor() {
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="shrink-0 border-b border-border bg-card p-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/pdv")}>
-            <ArrowLeft size={24} />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-black tracking-tight">
-              {id === "new" ? "NOVO PEDIDO" : `EDITAR PEDIDO #${id?.slice(-6).toUpperCase()}`}
-            </h1>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium uppercase tracking-wider">
-              <Clock size={12} />
+      <header className="shrink-0 border-b border-border bg-card px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3 z-10">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/pdv")} className="shrink-0">
+          <ArrowLeft size={22} />
+        </Button>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base sm:text-xl lg:text-2xl font-black tracking-tight truncate">
+            {isNew ? "NOVO PEDIDO" : `EDITAR PEDIDO #${id?.slice(-6).toUpperCase() ?? ""}`}
+          </h1>
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider">
+            <Clock size={11} />
+            <span className="truncate">
               {new Date().toLocaleString("pt-BR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
-            </div>
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="lg" onClick={() => navigate("/pdv")} className="font-bold">
-            CANCELAR
-          </Button>
-          <Button size="lg" onClick={handleSave} className="font-bold bg-success hover:bg-success/90 text-success-foreground px-8">
-            <Save className="mr-2" size={20} />
-            SALVAR PEDIDO
-          </Button>
+        {/* Botões do header — versões distintas mobile vs desktop */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* MOBILE: só ícones (preview + salvar). CANCELAR é o ← */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setShowPreview(true)}
+              aria-label="Ver preview de impressão"
+            >
+              <Printer size={18} />
+            </Button>
+            <Button
+              size="icon"
+              onClick={handleSave}
+              className="bg-success hover:bg-success/90 text-success-foreground"
+              aria-label="Salvar pedido"
+            >
+              <Save size={18} />
+            </Button>
+          </div>
+
+          {/* DESKTOP: textos completos */}
+          <div className="hidden lg:flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => navigate("/pdv")}
+              className="font-bold"
+            >
+              CANCELAR
+            </Button>
+            <Button
+              size="lg"
+              onClick={handleSave}
+              className="font-bold bg-success hover:bg-success/90 text-success-foreground px-8"
+            >
+              <Save className="mr-2" size={20} />
+              SALVAR PEDIDO
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_450px]">
         {/* Left: Editor */}
-        <div className="overflow-y-auto p-6 space-y-8 bg-background/50">
+        <div className="overflow-y-auto p-3 sm:p-6 space-y-6 sm:space-y-8 bg-background/50">
           
           {/* Section: Type & Header */}
           <section className="space-y-4">
             <div className="flex gap-2">
               <Button 
                 variant={serviceType === "dine_in" ? "default" : "outline"}
-                className={`flex-1 h-14 text-base font-black uppercase tracking-wider transition-all ${serviceType === "dine_in" ? "ring-2 ring-primary ring-offset-2" : ""}`}
+                className={`flex-1 h-12 sm:h-14 px-2 text-xs sm:text-sm font-bold uppercase sm:tracking-wider transition-all ${serviceType === "dine_in" ? "ring-2 ring-primary ring-offset-2" : ""}`}
                 onClick={() => setServiceType("dine_in")}
               >
-                <Hash className="mr-2" size={18} />
-                MESA / BALCÃO
+                <Hash className="sm:mr-2 shrink-0" size={16} />
+                <span className="hidden sm:inline">MESA / BALCÃO</span>
+                <span className="sm:hidden ml-1">MESA</span>
               </Button>
               <Button 
                 variant={serviceType === "pickup" ? "default" : "outline"}
-                className={`flex-1 h-14 text-base font-black uppercase tracking-wider transition-all ${serviceType === "pickup" ? "ring-2 ring-primary ring-offset-2" : ""}`}
+                className={`flex-1 h-12 sm:h-14 px-2 text-xs sm:text-sm font-bold uppercase sm:tracking-wider transition-all ${serviceType === "pickup" ? "ring-2 ring-primary ring-offset-2" : ""}`}
                 onClick={() => setServiceType("pickup")}
               >
-                <ShoppingBag className="mr-2" size={18} />
-                RETIRADA
+                <ShoppingBag className="sm:mr-2 shrink-0" size={16} />
+                <span className="ml-1 sm:ml-0">RETIRADA</span>
               </Button>
               <Button 
                 variant={serviceType === "delivery" ? "default" : "outline"}
-                className={`flex-1 h-14 text-base font-black uppercase tracking-wider transition-all ${serviceType === "delivery" ? "ring-2 ring-primary ring-offset-2" : ""}`}
+                className={`flex-1 h-12 sm:h-14 px-2 text-xs sm:text-sm font-bold uppercase sm:tracking-wider transition-all ${serviceType === "delivery" ? "ring-2 ring-primary ring-offset-2" : ""}`}
                 onClick={() => setServiceType("delivery")}
               >
-                <Bike className="mr-2" size={18} />
-                ENTREGA
+                <Bike className="sm:mr-2 shrink-0" size={16} />
+                <span className="ml-1 sm:ml-0">ENTREGA</span>
               </Button>
             </div>
 
@@ -621,25 +662,54 @@ export default function OrderEditor() {
             </div>
           </section>
 
-          <div className="h-20" /> {/* Spacer */}
+          {/* Spacer extra no mobile pra não esconder último card atrás da bottom bar */}
+          <div className="h-24 lg:h-20" />
         </div>
 
-        {/* Right: Preview */}
-        <div className="border-l border-border bg-zinc-50 overflow-hidden flex flex-col">
+        {/* Right: Preview (apenas em ≥lg) */}
+        <div className="hidden lg:flex border-l border-border bg-zinc-50 overflow-hidden flex-col">
           <OrderEditorPreview input={previewInput} />
         </div>
       </main>
-      
-      <style dangerouslySetInnerHTML={{ __html: `
-        .thermal-preview-container * {
-          font-family: 'Courier New', Courier, monospace !important;
-          line-height: 1.2 !important;
-        }
-        .thermal-preview-container .center { text-align: center; }
-        .thermal-preview-container .bold { font-weight: bold; }
-        .thermal-preview-container .hr { border-top: 1px dashed #ccc; margin: 4px 0; }
-        .thermal-preview-container .item-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px; }
-      `}} />
+
+      {/* MOBILE: barra fixa no rodapé com TOTAL + SALVAR (sempre visível) */}
+      <div
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-20 bg-card border-t border-border shadow-[0_-4px_12px_rgba(0,0,0,0.15)]"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              Total
+            </div>
+            <div className="text-2xl font-black text-primary tabular-nums tracking-tighter truncate">
+              R$ {total.toFixed(2)}
+            </div>
+          </div>
+          <Button
+            onClick={handleSave}
+            className="h-12 px-6 font-bold bg-success hover:bg-success/90 text-success-foreground shrink-0"
+          >
+            <Save className="mr-2" size={18} />
+            SALVAR
+          </Button>
+        </div>
+      </div>
+
+      {/* Preview mobile via Sheet */}
+      <Sheet open={showPreview} onOpenChange={setShowPreview}>
+        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b border-border shrink-0">
+            <SheetTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+              <Printer size={14} />
+              Preview de Impressão
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-hidden">
+            <OrderEditorPreview input={previewInput} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

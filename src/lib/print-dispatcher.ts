@@ -153,8 +153,7 @@ export async function printOrderByServiceType(
   const cfg = await ensureFreshPrintConfig();
   const serviceType = order.service_type ?? "dine_in";
   const isDelivery = serviceType === "delivery";
-  const isPickup = serviceType === "pickup" || serviceType === "balcao" || serviceType === "balcão"
-    || (order.table_name || "").toUpperCase() === "BALCÃO";
+  const isPickup = serviceType === "pickup" || serviceType === "balcao" || serviceType === "balcão";
   const tableValue = safeTableValue(order);
   const waiter = safeWaiter(order);
 
@@ -337,26 +336,8 @@ export async function printOrderByServiceType(
 
   const res = bridgeActuallyOnline ? await sendToBridge(() => printReceipt(tableValue, waiter, items as any[], order.total ?? 0, extras)) : { ok: false, error: "bridge_offline" };
   if (res.ok) {
-    // Para pedidos BALCÃO: imprime também o slip de senha separado
-    if (isPickup && senhaValue && bridgeActuallyOnline) {
-      try {
-        const senhaItems = (items as any[]).map((i) => ({
-          product_name: i.product_name,
-          quantity: i.quantity,
-          product_price: i.product_price,
-        }));
-        await printSenha(senhaValue, senhaItems, {
-          orderId,
-          waiterName: waiter || undefined,
-          customerName: order.customer_name_snapshot ?? undefined,
-          total: order.total ?? 0,
-          force: true,
-          source,
-        });
-      } catch (e) {
-        console.warn("[DISPATCHER] Falha ao imprimir slip de senha:", e);
-      }
-    }
+    // NOTE: senha do BALCÃO NÃO sai automaticamente aqui.
+    // Agora é responsabilidade explícita do Palm/PDV (diálogo "Imprimir senha?" + botão).
     return { ok: true, reason: "full_ok", bridgeOk: true, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };
   }
   return { ok: false, reason: res.error || "bridge_failed", bridgeOk: false, queued: false, serviceType, layoutUsed: isPickup ? "pickup" : "dine_in_full" };

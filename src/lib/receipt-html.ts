@@ -354,11 +354,29 @@ export function buildHtmlFromLayout(
   cfg: PrintConfig,
 ): string {
   const layout = createReceiptLayoutModel({ docType, ...data }, cfg);
-  return buildHtmlFromBlocks(title, layout.blocks, cfg);
+  return buildHtmlFromBlocks(title, layout.blocks, cfg, docType);
+}
+
+/** CSS extra que sobrescreve tamanhos de fonte para o cupom de SENHA. */
+function senhaOverrideCSS(cfg: PrintConfig): string {
+  const sl = cfg.senhaLayout;
+  if (!sl) return "";
+  const fs = sl.fontSizes;
+  return `
+    .senha-num { font-size: ${fs.senhaNumber}px !important; }
+    .senha-title { font-size: ${fs.senhaTitle}px !important; }
+    .bullet-item { font-size: ${fs.items}px !important; }
+    .bullet-note { font-size: ${Math.max(9, fs.items - 3)}px !important; }
+    .total-row { font-size: ${fs.total}px !important; }
+    .kv-line { font-size: ${fs.auxiliary}px !important; }
+  `;
 }
 
 /** Helper: monta HTML completo a partir de blocos JA prontos (preserva extras injetados). */
-export function buildHtmlFromBlocks(title: string, blocks: LayoutBlock[], cfg: PrintConfig): string {
+export function buildHtmlFromBlocks(title: string, blocks: LayoutBlock[], cfg: PrintConfig, docType?: DocType): string {
   const body = `<div class="receipt" id="receipt-root">${renderBlocksToHtml(blocks, cfg)}</div>`;
-  return wrapHtml(title, cfg, body);
+  const extra = docType === "SENHA" ? senhaOverrideCSS(cfg) : "";
+  if (!extra) return wrapHtml(title, cfg, body);
+  // injeta o CSS extra dentro do <style> existente
+  return wrapHtml(title, cfg, body).replace("</style>", `${extra}</style>`);
 }

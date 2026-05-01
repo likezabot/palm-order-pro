@@ -399,50 +399,81 @@ function buildSenhaLayout(
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  
-  pushEstablishmentHeader(blocks, cfg);
+  const sl = cfg.senhaLayout;
+  const B = sl?.blocks;
 
-  // SENHA em destaque MAXIMO (numero gigante)
+  if (!B || B.establishmentHeader) {
+    pushEstablishmentHeader(blocks, cfg);
+  }
+
   const senhaNum = input.senha || input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
-  blocks.push({ kind: "senhaTitle", text: "SENHA" });
-  blocks.push({ kind: "senha", text: senhaNum });
+  if (!B || B.senhaTitle) {
+    blocks.push({ kind: "senhaTitle", text: "SENHA" });
+  }
+  if (!B || B.senhaNumber) {
+    blocks.push({ kind: "senha", text: senhaNum });
+  }
+
   blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
-  blocks.push({ kind: "banner", text: "BALCAO / RETIRADA" });
-  blocks.push({ kind: "sep", style: cfg.separatorStyle });
+
+  if (!B || B.banner) {
+    blocks.push({ kind: "banner", text: "BALCAO / RETIRADA" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
+  }
 
   // Identificação
-  if (!isBlank(input.customerName)) {
+  if ((!B || B.customer) && !isBlank(input.customerName)) {
     blocks.push({ kind: "kvLine", label: "CLIENTE", value: input.customerName!.toUpperCase() });
   }
-  if (!isBlank(input.customerPhone)) {
+  if ((!B || B.phone) && !isBlank(input.customerPhone)) {
     blocks.push({ kind: "kvLine", label: "TEL", value: input.customerPhone! });
   }
-  blocks.push({ kind: "kvLine", label: "DATA", value: `${ctx.date} ${ctx.time}` });
-  blocks.push({ kind: "sep", style: cfg.separatorStyle });
+  if (!B || B.dateTime) {
+    blocks.push({ kind: "kvLine", label: "DATA", value: `${ctx.date} ${ctx.time}` });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
+  }
 
   // Itens
-  blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
-  input.items.forEach((it) => {
-    blocks.push({
-      kind: "bulletItem",
-      name: it.product_name.toUpperCase(),
-      quantity: it.quantity,
-      subtotal: it.product_price * it.quantity,
-      note: it.note ?? null,
+  if ((!B || B.items) && input.items.length > 0) {
+    blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
+    input.items.forEach((it) => {
+      blocks.push({
+        kind: "bulletItem",
+        name: it.product_name.toUpperCase(),
+        quantity: it.quantity,
+        subtotal: it.product_price * it.quantity,
+        note: it.note ?? null,
+      });
     });
-  });
-  blocks.push({ kind: "sep", style: cfg.separatorStyle });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
+  }
 
   // Totais
-  blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
-  if (!isBlank(input.paymentMethod)) {
+  if (!B || B.total) {
+    blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
+  }
+  if ((!B || B.payment) && !isBlank(input.paymentMethod)) {
     blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
   }
 
-  // Rodapé instrução
-  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
-  blocks.push({ kind: "banner", text: "RETIRE NO BALCAO" });
-  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
+  // Mensagem livre
+  if (B?.message && sl?.customMessage && sl.customMessage.trim().length > 0) {
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
+    blocks.push({ kind: "footer", text: sl.customMessage.trim() });
+  }
+
+  // Banner final "RETIRE NO BALCAO"
+  if (!B || B.pickupBanner) {
+    blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
+    blocks.push({ kind: "banner", text: "RETIRE NO BALCAO" });
+    blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
+  }
+
+  // Rodapé padrão
+  if (B?.footer && cfg.footerText) {
+    blocks.push({ kind: "footer", text: cfg.footerText });
+  }
+
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "SENHA" };

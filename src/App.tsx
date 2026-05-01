@@ -74,7 +74,6 @@ const AnimatedRoutes = () => {
           <Route path="/pdv" element={<StaffGate><Pdv /></StaffGate>} />
           <Route path="/print-station" element={<StaffGate><PrintStation /></StaffGate>} />
           <Route path="/orders/:id/edit" element={<StaffGate><OrderEditor /></StaffGate>} />
-          <Route path="/orders/new" element={<StaffGate><OrderEditor /></StaffGate>} />
           <Route path="/atualizar" element={<StaffGate><ForceUpdate /></StaffGate>} />
           <Route path="/instalar/palm" element={<StaffGate><InstallPalm /></StaffGate>} />
           <Route path="/instalar/cozinha" element={<StaffGate><InstallKitchen /></StaffGate>} />

@@ -33,6 +33,8 @@ import AutoPrintSection from "@/components/printer-settings/AutoPrintSection";
 import AdvancedSection from "@/components/printer-settings/AdvancedSection";
 import PerTypeSection from "@/components/printer-settings/PerTypeSection";
 import LivePreview from "@/components/printer-settings/LivePreview";
+import SenhaLayoutSection from "@/components/printer-settings/SenhaLayoutSection";
+import SenhaPreview from "@/components/printer-settings/SenhaPreview";
 
 function formatTimestamp(iso?: string) {
   if (!iso) return "—";
@@ -153,38 +155,74 @@ export default function PrinterSettings() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5 pb-32">
-        {/* BRIDGE STATUS */}
         <BridgeStatusCard cfg={cfg} onChangeBridgeUrl={(url) => patch({ bridgeUrl: url })} />
 
-        {/* DESKTOP/TABLET: 2 colunas */}
-        <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,360px)] gap-6 w-full items-start">
-          <div className="min-w-0 space-y-4">{formContent}</div>
-          <div className="min-w-0">
-            <div className="sticky top-24">
-              <div className="bg-card border border-border rounded-xl p-4 max-h-[calc(100vh-180px)] overflow-auto">
-                {previewContent}
+        <Tabs defaultValue="geral">
+          <TabsList className="grid grid-cols-2 w-full max-w-md">
+            <TabsTrigger value="geral">Configurações gerais</TabsTrigger>
+            <TabsTrigger value="senha">Cupom de Senha</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="geral" className="mt-4">
+            {/* DESKTOP: 2 colunas */}
+            <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,360px)] gap-6 w-full items-start">
+              <div className="min-w-0 space-y-4">{formContent}</div>
+              <div className="min-w-0">
+                <div className="sticky top-24">
+                  <div className="bg-card border border-border rounded-xl p-4 max-h-[calc(100vh-220px)] overflow-auto">
+                    {previewContent}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+            {/* MOBILE */}
+            <div className="md:hidden">
+              <Tabs defaultValue="config">
+                <TabsList className="grid grid-cols-2 w-full">
+                  <TabsTrigger value="config">Configurações</TabsTrigger>
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                </TabsList>
+                <TabsContent value="config" className="mt-4">{formContent}</TabsContent>
+                <TabsContent value="preview" className="mt-4">
+                  <div className="bg-card border border-border rounded-xl p-4 min-h-[600px]">
+                    {previewContent}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </TabsContent>
 
-        {/* MOBILE: tabs */}
-        <div className="md:hidden">
-          <Tabs defaultValue="config">
-            <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="config">Configurações</TabsTrigger>
-              <TabsTrigger value="preview">Preview</TabsTrigger>
-            </TabsList>
-            <TabsContent value="config" className="mt-4">
-              {formContent}
-            </TabsContent>
-            <TabsContent value="preview" className="mt-4">
-              <div className="bg-card border border-border rounded-xl p-4 min-h-[600px]">
-                {previewContent}
+          <TabsContent value="senha" className="mt-4">
+            <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,360px)] gap-6 w-full items-start">
+              <div className="min-w-0">
+                <SenhaLayoutSection cfg={cfg} onChange={patch} />
               </div>
-            </TabsContent>
-          </Tabs>
-        </div>
+              <div className="min-w-0">
+                <div className="sticky top-24">
+                  <div className="bg-card border border-border rounded-xl p-4 max-h-[calc(100vh-220px)] overflow-auto">
+                    <SenhaPreview cfg={cfg} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="md:hidden">
+              <Tabs defaultValue="config">
+                <TabsList className="grid grid-cols-2 w-full">
+                  <TabsTrigger value="config">Editor</TabsTrigger>
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                </TabsList>
+                <TabsContent value="config" className="mt-4">
+                  <SenhaLayoutSection cfg={cfg} onChange={patch} />
+                </TabsContent>
+                <TabsContent value="preview" className="mt-4">
+                  <div className="bg-card border border-border rounded-xl p-4 min-h-[600px]">
+                    <SenhaPreview cfg={cfg} />
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* FOOTER FIXO DE AÇÕES */}

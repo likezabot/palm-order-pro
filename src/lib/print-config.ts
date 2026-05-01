@@ -37,6 +37,46 @@ export interface PerTypeConfig {
   printerName?: string;
 }
 
+/** Editor visual do cupom de SENHA (BALCÃO). */
+export interface SenhaLayoutBlocks {
+  establishmentHeader: boolean;
+  senhaTitle: boolean;
+  senhaNumber: boolean;
+  banner: boolean;
+  customer: boolean;
+  phone: boolean;
+  dateTime: boolean;
+  items: boolean;
+  total: boolean;
+  payment: boolean;
+  message: boolean;
+  pickupBanner: boolean;
+  footer: boolean;
+}
+
+export interface SenhaLayoutFontSizes {
+  /** Número da senha (#001) — px */
+  senhaNumber: number;
+  /** Título "SENHA" — px */
+  senhaTitle: number;
+  /** Linhas de itens — px */
+  items: number;
+  /** Total — px */
+  total: number;
+  /** Textos auxiliares (cliente, data) — px */
+  auxiliary: number;
+}
+
+export type SenhaPreset = "minimal" | "senha_items" | "completo";
+
+export interface SenhaLayoutConfig {
+  blocks: SenhaLayoutBlocks;
+  fontSizes: SenhaLayoutFontSizes;
+  /** Mensagem livre opcional (ex.: "Retire seu pedido no balcão"). */
+  customMessage: string;
+  preset: SenhaPreset;
+}
+
 export interface PrintConfig {
   paperWidth: PaperWidth;
   printSize: PrintSize;
@@ -71,6 +111,9 @@ export interface PrintConfig {
     delivery?: PerTypeConfig;
   };
 
+  /** Editor visual do cupom de senha (BALCÃO). */
+  senhaLayout?: SenhaLayoutConfig;
+
   /** Metadados de sincronização do cache local. */
   configUpdatedAt?: string;
   configSource?: "default" | "local" | "db";
@@ -79,11 +122,6 @@ export interface PrintConfig {
 const STORAGE_KEY = "print_config";
 const DB_KEY = "print_config";
 
-/**
- * Campos que NÃO devem ser sincronizados pelo banco — são por dispositivo.
- * Ex.: o desktop usa http://localhost:9100/print e o celular usa http://IP:9100/print.
- * Se sincronizássemos isso, um dispositivo quebraria o outro.
- */
 const LOCAL_ONLY_KEYS = ["bridgeUrl", "printMode"] as const;
 type LocalOnlyKey = typeof LOCAL_ONLY_KEYS[number];
 const META_ONLY_KEYS = ["configUpdatedAt", "configSource"] as const;
@@ -97,6 +135,37 @@ const DEFAULT_VISIBLE: VisibleSections = {
   notes: true,
   footer: true,
   showOrderNumber: true,
+};
+
+export const DEFAULT_SENHA_BLOCKS: SenhaLayoutBlocks = {
+  establishmentHeader: true,
+  senhaTitle: true,
+  senhaNumber: true,
+  banner: true,
+  customer: true,
+  phone: true,
+  dateTime: true,
+  items: true,
+  total: true,
+  payment: true,
+  message: false,
+  pickupBanner: true,
+  footer: false,
+};
+
+export const DEFAULT_SENHA_FONT_SIZES: SenhaLayoutFontSizes = {
+  senhaNumber: 96,
+  senhaTitle: 18,
+  items: 14,
+  total: 18,
+  auxiliary: 13,
+};
+
+export const DEFAULT_SENHA_LAYOUT: SenhaLayoutConfig = {
+  blocks: { ...DEFAULT_SENHA_BLOCKS },
+  fontSizes: { ...DEFAULT_SENHA_FONT_SIZES },
+  customMessage: "",
+  preset: "completo",
 };
 
 export const DEFAULT_CONFIG: PrintConfig = {
@@ -123,7 +192,41 @@ export const DEFAULT_CONFIG: PrintConfig = {
   copiesDefault: 1,
   separatorStyle: "line",
   perType: {},
+  senhaLayout: { ...DEFAULT_SENHA_LAYOUT, blocks: { ...DEFAULT_SENHA_BLOCKS }, fontSizes: { ...DEFAULT_SENHA_FONT_SIZES } },
 };
+
+/** Aplica preset do cupom de SENHA. */
+export function applySenhaPreset(preset: SenhaPreset): SenhaLayoutConfig {
+  const base: SenhaLayoutConfig = {
+    blocks: { ...DEFAULT_SENHA_BLOCKS },
+    fontSizes: { ...DEFAULT_SENHA_FONT_SIZES },
+    customMessage: "",
+    preset,
+  };
+  switch (preset) {
+    case "minimal":
+      base.blocks = {
+        establishmentHeader: false, senhaTitle: true, senhaNumber: true, banner: false,
+        customer: true, phone: false, dateTime: false, items: false, total: false,
+        payment: false, message: false, pickupBanner: true, footer: false,
+      };
+      base.fontSizes = { senhaNumber: 128, senhaTitle: 22, items: 14, total: 18, auxiliary: 14 };
+      break;
+    case "senha_items":
+      base.blocks = {
+        establishmentHeader: true, senhaTitle: true, senhaNumber: true, banner: true,
+        customer: true, phone: false, dateTime: true, items: true, total: true,
+        payment: false, message: false, pickupBanner: true, footer: false,
+      };
+      base.fontSizes = { senhaNumber: 96, senhaTitle: 18, items: 14, total: 18, auxiliary: 13 };
+      break;
+    case "completo":
+    default:
+      // defaults já são "completo"
+      break;
+  }
+  return base;
+}
 
 /** Aplica preset e devolve overrides recomendados (usuário ainda pode ajustar). */
 export function applyPreset(preset: LayoutPreset, base: PrintConfig): PrintConfig {
@@ -178,11 +281,18 @@ export function getFontSizes(sizeOrCfg: PrintSize | PrintConfig) {
 }
 
 function normalizeConfig(raw: Partial<PrintConfig>, source: PrintConfig["configSource"]): PrintConfig {
+  const rawSenha = (raw.senhaLayout || {}) as Partial<SenhaLayoutConfig>;
   const config: PrintConfig = {
     ...DEFAULT_CONFIG,
     ...raw,
     fontSizes: { ...(raw.fontSizes || {}) },
     visibleSections: { ...DEFAULT_VISIBLE, ...(raw.visibleSections || {}) },
+    senhaLayout: {
+      preset: rawSenha.preset ?? DEFAULT_SENHA_LAYOUT.preset,
+      customMessage: rawSenha.customMessage ?? DEFAULT_SENHA_LAYOUT.customMessage,
+      blocks: { ...DEFAULT_SENHA_BLOCKS, ...(rawSenha.blocks || {}) },
+      fontSizes: { ...DEFAULT_SENHA_FONT_SIZES, ...(rawSenha.fontSizes || {}) },
+    },
     configSource: source,
   };
 
