@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Save, RotateCcw, Loader2, CircleDot } from "lucide-react";
+import { ArrowLeft, Save, RotateCcw, Loader2, CircleDot, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   loadPrintConfig,
@@ -54,6 +54,7 @@ export default function PrinterSettings() {
   const [savedCfg, setSavedCfg] = useState<PrintConfig>(cfg);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(true);
+  const [resyncing, setResyncing] = useState(false);
 
   // Sync inicial do banco
   useEffect(() => {
@@ -93,6 +94,20 @@ export default function PrinterSettings() {
     toast.success("Configurações restauradas ao padrão");
   };
 
+  const handleResync = async () => {
+    setResyncing(true);
+    try {
+      const fresh = await syncPrintConfigFromDb();
+      setCfg(fresh);
+      setSavedCfg(fresh);
+      toast.success("Configurações sincronizadas do banco");
+    } catch {
+      toast.error("Falha ao sincronizar do banco");
+    } finally {
+      setResyncing(false);
+    }
+  };
+
   const formContent = (
     <div className="space-y-4">
       <PaperFormatSection cfg={cfg} onChange={patch} />
@@ -121,6 +136,10 @@ export default function PrinterSettings() {
               {syncing ? "Carregando do banco…" : `Última alteração salva: ${formatTimestamp(savedCfg.configUpdatedAt)}`}
             </p>
           </div>
+          <Button variant="ghost" size="sm" onClick={handleResync} disabled={resyncing} className="gap-1.5">
+            {resyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Sincronizar</span>
+          </Button>
           {dirty && (
             <Badge variant="outline" className="border-amber-500/40 text-amber-500 hidden sm:inline-flex">
               <CircleDot className="w-3 h-3 mr-1" /> Não salvo

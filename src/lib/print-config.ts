@@ -9,7 +9,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type PaperWidth = "58mm" | "80mm";
-export type PrintSize = "normal" | "grande";
+export type PrintSize = "pequeno" | "normal" | "grande" | "extra";
 export type LayoutPreset = "mesa_simples" | "classico" | "conta_destacada";
 export type ContentAlign = "left" | "center";
 
@@ -117,10 +117,16 @@ export function applyPreset(preset: LayoutPreset, base: PrintConfig): PrintConfi
 
 /** Tamanhos base derivados do preset printSize (compat). */
 function baseFontSizes(size: PrintSize) {
-  if (size === "grande") {
-    return { title: 20, base: 15, total: 19, senha: 80, note: 12, footer: 11, lineHeight: 1.5 };
+  switch (size) {
+    case "extra":
+      return { title: 24, base: 17, total: 22, senha: 96, note: 14, footer: 12, lineHeight: 1.6 };
+    case "grande":
+      return { title: 20, base: 15, total: 19, senha: 80, note: 12, footer: 11, lineHeight: 1.5 };
+    case "pequeno":
+      return { title: 14, base: 11, total: 13, senha: 52, note: 9, footer: 8, lineHeight: 1.3 };
+    default: // normal
+      return { title: 16, base: 13, total: 16, senha: 64, note: 10, footer: 9, lineHeight: 1.4 };
   }
-  return { title: 16, base: 13, total: 16, senha: 64, note: 10, footer: 9, lineHeight: 1.4 };
 }
 
 /** Tamanhos finais aplicando overrides do editor visual. */

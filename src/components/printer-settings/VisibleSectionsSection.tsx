@@ -9,12 +9,13 @@ interface Props {
   onChange: (patch: Partial<PrintConfig>) => void;
 }
 
-const ROWS: { key: keyof VisibleSections; label: string }[] = [
-  { key: "waiter", label: "Mostrar nome do garçom" },
-  { key: "date", label: "Mostrar data e hora" },
-  { key: "showOrderNumber", label: "Mostrar número do pedido" },
-  { key: "notes", label: "Mostrar observações do pedido" },
-  { key: "footer", label: "Mostrar rodapé" },
+const ROWS: { key: keyof VisibleSections; label: string; desc?: string }[] = [
+  { key: "title", label: "Nome do estabelecimento", desc: "Cabeçalho no topo do talão" },
+  { key: "waiter", label: "Nome do garçom" },
+  { key: "date", label: "Data e hora" },
+  { key: "showOrderNumber", label: "Número do pedido" },
+  { key: "notes", label: "Observações dos itens" },
+  { key: "footer", label: "Rodapé (mensagem final)" },
 ];
 
 export default function VisibleSectionsSection({ cfg, onChange }: Props) {
@@ -34,9 +35,12 @@ export default function VisibleSectionsSection({ cfg, onChange }: Props) {
             key={r.key}
             className="flex items-center justify-between py-2.5 border-b border-border last:border-0"
           >
-            <Label htmlFor={`vis-${r.key}`} className="text-sm font-medium cursor-pointer">
-              {r.label}
-            </Label>
+            <div className="flex-1 min-w-0 pr-3">
+              <Label htmlFor={`vis-${r.key}`} className="text-sm font-medium cursor-pointer">
+                {r.label}
+              </Label>
+              {r.desc && <p className="text-[11px] text-muted-foreground">{r.desc}</p>}
+            </div>
             <Switch
               id={`vis-${r.key}`}
               checked={!!cfg.visibleSections[r.key]}
