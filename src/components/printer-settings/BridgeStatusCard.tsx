@@ -55,9 +55,13 @@ export default function BridgeStatusCard({ cfg, onChangeBridgeUrl }: Props) {
     : status === "checking" ? "bg-amber-500 animate-pulse"
     : "bg-zinc-400";
 
+  const printerLabel = health?.printer_name && health.printer_name.toLowerCase() !== "unknown"
+    ? health.printer_name
+    : null;
+
   const headline =
     status === "online"
-      ? `Bridge conectada${health?.printer_status ? ` — ${health.printer_status}` : " — pronta"}`
+      ? `Bridge conectada${printerLabel ? ` — ${printerLabel}` : " — pronta"}`
       : status === "offline"
       ? "Bridge offline — verifique o app desktop"
       : status === "checking"
