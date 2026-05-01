@@ -163,6 +163,30 @@ function buildAddressLines(addr?: DeliveryAddressData | null): string[] {
 }
 
 /**
+ * Injeta o cabeçalho padrão (Logo, Nome, Endereço, Contato, CNPJ).
+ */
+function pushEstablishmentHeader(blocks: LayoutBlock[], cfg: PrintConfig) {
+  if (cfg.logoUrl) {
+    blocks.push({ kind: "image", url: cfg.logoUrl, align: "center" });
+  }
+
+  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
+  blocks.push({ kind: "title", text: establishment.toUpperCase() });
+
+  if (cfg.addressLine1 || cfg.addressLine2 || cfg.phone || cfg.cnpj) {
+    const lines: string[] = [];
+    if (cfg.addressLine1) lines.push(cfg.addressLine1.toUpperCase());
+    if (cfg.addressLine2) lines.push(cfg.addressLine2.toUpperCase());
+    if (cfg.phone) lines.push(`TEL: ${cfg.phone}`);
+    if (cfg.cnpj) lines.push(`CNPJ: ${cfg.cnpj}`);
+    
+    blocks.push({ kind: "addressBlock", lines });
+  }
+
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
+}
+
+/**
  * Monta a sequência canônica de blocos do cupom.
  * Respeita visibleSections, headerText, footerText e docType.
  */
@@ -189,16 +213,13 @@ export function createReceiptLayoutModel(
 
   // --- TIPO 1: MESA / DINE-IN (Default) ---
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
   
-  // Cabeçalho
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  pushEstablishmentHeader(blocks, cfg);
 
   // Mesa em destaque
   if (input.tableName) {
     blocks.push({ kind: "banner", text: input.tableName.toUpperCase() });
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
   }
 
   // Info básica
@@ -211,7 +232,7 @@ export function createReceiptLayoutModel(
   if (!isBlank(input.waiterName)) {
     blocks.push({ kind: "kvLine", label: "GARCOM", value: input.waiterName!.toUpperCase() });
   }
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Itens
   blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
