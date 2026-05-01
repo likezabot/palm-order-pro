@@ -134,7 +134,7 @@ export default function PrinterSettings() {
         <BridgeStatusCard cfg={cfg} onChangeBridgeUrl={(url) => patch({ bridgeUrl: url })} />
 
         {/* DESKTOP: 2 colunas */}
-        <div className="hidden xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,440px)] gap-6">
+        <div className="hidden lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-6 w-full">
           <div className="min-w-0">{formContent}</div>
           <div className="min-w-0">
             <div className="sticky top-24">
@@ -146,7 +146,7 @@ export default function PrinterSettings() {
         </div>
 
         {/* MOBILE/TABLET: tabs */}
-        <div className="xl:hidden">
+        <div className="lg:hidden">
           <Tabs defaultValue="config">
             <TabsList className="grid grid-cols-2 w-full">
               <TabsTrigger value="config">Configurações</TabsTrigger>
