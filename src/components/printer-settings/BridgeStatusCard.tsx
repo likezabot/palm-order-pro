@@ -102,9 +102,9 @@ export default function BridgeStatusCard({ cfg, onChangeBridgeUrl }: Props) {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-          <div className="flex flex-col gap-1 min-w-0 flex-1">
-            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider whitespace-nowrap">
+        <div className="space-y-3">
+          <div className="space-y-1.5 w-full">
+            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
               URL da bridge
             </Label>
             <Input
@@ -115,14 +115,14 @@ export default function BridgeStatusCard({ cfg, onChangeBridgeUrl }: Props) {
               className="w-full font-mono text-sm"
             />
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="default" onClick={verify} disabled={status === "checking"}>
               {status === "checking" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              <span className="ml-2 hidden sm:inline">Testar</span>
+              <span className="ml-2">Testar conexão</span>
             </Button>
             <Button variant="default" size="default" onClick={handleTestPrint} disabled={testing}>
               {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-              <span className="ml-2 hidden sm:inline">Imprimir teste</span>
+              <span className="ml-2">Imprimir teste</span>
             </Button>
           </div>
         </div>

@@ -106,7 +106,7 @@ export default function PrinterSettings() {
   const previewContent = <LivePreview cfg={cfg} />;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen w-full bg-background">
       {/* HEADER */}
       <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
@@ -133,20 +133,20 @@ export default function PrinterSettings() {
         {/* BRIDGE STATUS */}
         <BridgeStatusCard cfg={cfg} onChangeBridgeUrl={(url) => patch({ bridgeUrl: url })} />
 
-        {/* DESKTOP: 2 colunas */}
-        <div className="hidden lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-6 w-full">
-          <div className="min-w-0">{formContent}</div>
+        {/* DESKTOP/TABLET: 2 colunas */}
+        <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,360px)] gap-6 w-full items-start">
+          <div className="min-w-0 space-y-4">{formContent}</div>
           <div className="min-w-0">
             <div className="sticky top-24">
-              <div className="bg-card border border-border rounded-xl p-4 h-[calc(100vh-180px)]">
+              <div className="bg-card border border-border rounded-xl p-4 max-h-[calc(100vh-180px)] overflow-auto">
                 {previewContent}
               </div>
             </div>
           </div>
         </div>
 
-        {/* MOBILE/TABLET: tabs */}
-        <div className="lg:hidden">
+        {/* MOBILE: tabs */}
+        <div className="md:hidden">
           <Tabs defaultValue="config">
             <TabsList className="grid grid-cols-2 w-full">
               <TabsTrigger value="config">Configurações</TabsTrigger>

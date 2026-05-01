@@ -1,100 +1,81 @@
+# Fix Printer Settings Layout (V3)
 
-# Página dedicada de Configurações de Impressora
+Three targeted CSS/layout fixes on `/configuracoes/impressora`. No business logic, routes, or persistence changes.
 
-## Objetivo
+## 1. Breakpoint lg → md (PrinterSettings.tsx)
 
-Criar uma página própria, acessível pelo menu principal, com formulário completo à esquerda e preview ao vivo do talão à direita. Hoje só existe um painel embutido dentro do Admin (`PrintConfigPanel`); ele continuará funcionando, mas a nova página será o ponto de acesso oficial.
+The viewport is ~909px, so the `lg:` (1024px) two-column grid never activates and the page falls back to mobile tabs. Switch to `md:` (768px) so the form + preview render side by side on this size.
 
-## Rota e navegação
+In `src/pages/PrinterSettings.tsx`:
 
-- Nova rota protegida por StaffGate: `/configuracoes/impressora` (alias `/settings/printer` redireciona para a primeira).
-- Lazy-loaded em `src/App.tsx`, igual às outras páginas pesadas.
-- Adicionar entrada no menu principal (`src/pages/Index.tsx` — array de tiles do home da equipe), ícone `Printer`, label "Impressora".
-- Dentro do Admin, o card "Configuração da impressão" passa a mostrar um botão "Abrir página completa" que leva à nova rota (mantém o painel atual como atalho para não quebrar fluxo existente).
+- Two-column grid (line 137):
+  ```tsx
+  <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,360px)] gap-6 items-start">
+    <div className="min-w-0 space-y-4">{formContent}</div>
+    <div className="min-w-0">
+      <div className="sticky top-24">
+        <div className="bg-card border border-border rounded-xl p-4 max-h-[calc(100vh-180px)] overflow-auto">
+          {previewContent}
+        </div>
+      </div>
+    </div>
+  </div>
+  ```
+- Tabs wrapper (line 149): `lg:hidden` → `md:hidden`.
 
-## Estrutura da página
+## 2. Container width (PrinterSettings.tsx)
 
-```text
-+----------------------------------------------------------+
-| Header: < Voltar    Configurações de Impressão           |
-+--------------------------------+-------------------------+
-| Status da Bridge (card topo, full width)                 |
-+--------------------------------+-------------------------+
-| FORM (esquerda, scroll)        | PREVIEW (direita, sticky)|
-| 1. Papel e Formato             | Tabs: Mesa | Balcão |   |
-| 2. Cabeçalho e Rodapé          |       Delivery | Acrésc.|
-| 3. Seções Visíveis             |                         |
-| 4. Impressão Automática        | [ papel térmico render ]|
-| 5. Avançado (collapsible)      |                         |
-+--------------------------------+-------------------------+
-| Footer ações: [Salvar] [Restaurar padrão]  Última: ...   |
-+----------------------------------------------------------+
+The wrapper already uses `max-w-7xl mx-auto`, so the "espremido em 280px" effect comes from being mounted inside a narrower parent route layout. Confirm by reading `src/App.tsx` route definition and any wrapping layout component to ensure no `max-w-sm/md/xs` is applied around `<PrinterSettings />`. If found, remove it for this route (or render the page outside that wrapper).
+
+Also harden the page itself:
+- Header inner div: ensure `w-full max-w-7xl mx-auto` (already correct).
+- Main content div (line 132): keep `max-w-7xl mx-auto w-full`.
+- Add `w-full` to the outermost `<div className="min-h-screen bg-background">` for safety.
+
+## 3. URL input visibility (BridgeStatusCard.tsx)
+
+The input is rendered, but on tight widths the action buttons next to it can squeeze it. Make the URL block full-width on its own row and put the buttons on a second row on small screens:
+
+In `src/components/printer-settings/BridgeStatusCard.tsx` (lines 105–128), restructure to:
+
+```tsx
+<div className="space-y-3">
+  <div className="space-y-1.5 w-full">
+    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+      URL da bridge
+    </Label>
+    <Input
+      value={urlDraft}
+      onChange={(e) => setUrlDraft(e.target.value)}
+      onBlur={() => urlDraft !== cfg.bridgeUrl && onChangeBridgeUrl(urlDraft)}
+      placeholder="http://localhost:9100"
+      className="w-full font-mono text-sm"
+    />
+  </div>
+  <div className="flex flex-wrap gap-2">
+    <Button variant="outline" size="default" onClick={verify} disabled={status === "checking"}>
+      {status === "checking" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+      <span className="ml-2">Testar conexão</span>
+    </Button>
+    <Button variant="default" size="default" onClick={handleTestPrint} disabled={testing}>
+      {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+      <span className="ml-2">Imprimir teste</span>
+    </Button>
+  </div>
+</div>
 ```
 
-- Desktop ≥ `xl`: grid 2 colunas (`minmax(0,1fr) 420px`), preview com `position: sticky`.
-- Mobile/tablet: `<Tabs>` com duas abas — "Configurações" e "Preview".
+This guarantees the input gets the full row and never collapses to 0 width.
 
-## Seções (todas as do prompt)
+## Files touched
 
-1. **Status da Bridge** — card topo com bolinha (verde/amarelo/vermelho), texto descritivo, URL atual, botões "Testar conexão" (chama `checkBridgeStatus`) e "Imprimir página de teste" (envia ESC/POS simples via `printTest`/rota existente). Polling a cada 10s (já implementado em `PrintConfigPanel`).
-2. **Papel e Formato** — radios `paperWidth` (58mm/80mm), `printSize` (Normal/Grande), `contentAlign` (Esquerdo/Centralizado), com texto auxiliar.
-3. **Cabeçalho e Rodapé** — inputs `headerText` e `footerText`, com descrição "deixe vazio para omitir".
-4. **Seções Visíveis** — switches para `visibleSections.waiter`, `.date`, `.notes`, `.footer` + um novo toggle "Mostrar número do pedido" (adiciona campo `showOrderNumber` à `VisibleSections`, default true).
-5. **Impressão Automática** — switches: "Imprimir automaticamente pedidos novos" (`autoPrintNewOrders`), "Imprimir senha de cozinha" (já existe como `printSenhaEnabled`), "Imprimir acréscimos automaticamente" (`autoPrintAcrescimos`). Os dois novos campos entram em `PrintConfig` com default `true` e são lidos pelo dispatcher existente quando aplicável (apenas leitura nesta entrega — wiring real fica para outra task se ainda não estiver ligado).
-6. **Avançado (Accordion)** — `bridgeUrl` (input) e `printMode` (select Bridge/Navegador). Aviso de que esses dois são locais por dispositivo (já tratado em `LOCAL_ONLY_KEYS`).
+- `src/pages/PrinterSettings.tsx` — breakpoint swap, width hardening
+- `src/components/printer-settings/BridgeStatusCard.tsx` — URL row restructure
+- `src/App.tsx` (only if a constraining wrapper is found around the route)
 
-## Preview ao vivo
+## Out of scope
 
-- Tabs: Mesa, Balcão (senha), Delivery, Acréscimo.
-- Reusar `createReceiptLayoutModel` + `buildHtmlFromBlocks` (igual ao `OrderEditorPreview`) com os dados fictícios do prompt:
-  - Mesa 5 / João / 3 itens / R$ 66,00
-  - Senha 042 / Maria / 2 itens / R$ 28,00
-  - Delivery Pedro / endereço / 2 itens / taxa R$ 5 / total R$ 45,00
-  - Acréscimo Mesa 5 / +1 item / R$ 12,00
-- Container branco com sombra, fonte monoespaçada, largura derivada de `paperWidth`.
-- `useMemo` com dependência em `cfg` faz o preview atualizar instantaneamente.
-
-## Persistência
-
-- `loadPrintConfig` no mount + `syncPrintConfigFromDb` em background.
-- Edições atualizam estado local imediatamente; **botão "Salvar"** chama `savePrintConfig` (banco + cache), com toast.
-- "Restaurar padrão" chama `resetPrintConfig`, mostra confirmação.
-- Indicador "Última alteração salva: …" usa `cfg.configUpdatedAt` formatado em pt-BR.
-- Auto-save por campo é removido nesta página (no painel Admin atual cada change persiste; aqui o fluxo é "edita → vê preview → salva"), evitando spam ao banco.
-
-## Detalhes técnicos
-
-Arquivos novos:
-- `src/pages/PrinterSettings.tsx` — página, layout 2-colunas, header com voltar.
-- `src/components/printer-settings/BridgeStatusCard.tsx`
-- `src/components/printer-settings/PaperFormatSection.tsx`
-- `src/components/printer-settings/HeaderFooterSection.tsx`
-- `src/components/printer-settings/VisibleSectionsSection.tsx`
-- `src/components/printer-settings/AutoPrintSection.tsx`
-- `src/components/printer-settings/AdvancedSection.tsx` (não confundir com o `AdminAdvancedSection` existente — fica em outro path)
-- `src/components/printer-settings/LivePreview.tsx` (tabs + render usando `createReceiptLayoutModel`)
-- `src/components/printer-settings/sample-data.ts` (dados fictícios dos 4 tipos)
-
-Arquivos editados:
-- `src/App.tsx` — adicionar rotas lazy.
-- `src/pages/Index.tsx` — novo tile "Impressora" → `/configuracoes/impressora`.
-- `src/lib/print-config.ts` — adicionar `showOrderNumber: boolean` em `VisibleSections` (default true) e dois novos campos em `PrintConfig`: `autoPrintNewOrders` e `autoPrintAcrescimos` (default true). Atualizar `DEFAULT_CONFIG`, `DEFAULT_VISIBLE`, `normalizeConfig`, e o sanitizer do RPC (passa pelo banco). `printSenhaEnabled` já existe.
-- `src/lib/receipt-layout.ts` — respeitar `visibleSections.showOrderNumber` (omitir o `kvLine` "PEDIDO" quando false). Outros toggles (waiter/date/notes/footer) — checar se já são respeitados; caso não, ajustar nos quatro layouts.
-- `src/components/admin/PrintConfigPanel.tsx` — adicionar banner no topo: "Esta configuração agora tem uma página dedicada → [Abrir]". Não remover o painel.
-
-Componentes UI usados (já existem): `Card`, `Switch`, `RadioGroup`, `Input`, `Label`, `Button`, `Tabs`, `Collapsible` (para Avançado), `Badge` (status). Toast via `sonner`.
-
-## Comportamento esperado
-
-- Entrada na página → carrega config → preview já renderiza.
-- Toda edição: estado local muda, preview atualiza em tempo real, badge "Não salvo" aparece.
-- Salvar: persiste, badge desaparece, atualiza timestamp.
-- Restaurar padrão: dialog de confirmação → reset → toast.
-- Bridge: bolinha verde quando `bridgeStatus.ok`, amarela enquanto checa, vermelha quando offline ou modo navegador.
-- `bridgeUrl` e `printMode` permanecem locais (já tratado em `LOCAL_ONLY_KEYS`).
-
-## Fora do escopo desta task
-
-- Reescrever o pipeline de auto-impressão para realmente consumir `autoPrintNewOrders`/`autoPrintAcrescimos` (apenas adicionamos os toggles e os persistimos; ligação no dispatcher pode ser uma task seguinte se ainda não estiver ligado a um campo equivalente).
-- Mexer em `thermal-printer.ts`, bridge, ou EXE.
-- Mudar a porta da bridge (continua 9100).
+- Saving/loading/reset logic
+- Toggles, fields, preview content
+- Bridge `/health` integration
+- Routing
