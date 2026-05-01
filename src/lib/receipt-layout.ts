@@ -216,9 +216,13 @@ export function createReceiptLayoutModel(
   
   pushEstablishmentHeader(blocks, cfg);
 
-  // Mesa em destaque
+  // Mesa/balcão em destaque
   if (input.tableName) {
     blocks.push({ kind: "banner", text: input.tableName.toUpperCase() });
+    // Senha do balcão logo abaixo do nome da mesa
+    if (input.senha && input.serviceType === "pickup") {
+      blocks.push({ kind: "banner", text: `SENHA ${input.senha}` });
+    }
     blocks.push({ kind: "sep", style: cfg.separatorStyle });
   }
 

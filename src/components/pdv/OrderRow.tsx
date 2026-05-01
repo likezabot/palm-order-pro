@@ -47,9 +47,10 @@ interface OrderRowProps {
   onClose?: (order: Order) => void;
   onCancel?: (order: Order) => void;
   isUnseen?: boolean;
+  senha?: string;
 }
 
-const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose, onCancel, isUnseen }, ref) => {
+const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCount, selected, onSelect, onAdvance, onPrint, onEdit, onClose, onCancel, isUnseen, senha }, ref) => {
   const elapsed = useElapsedTime(order.updated_at || order.created_at);
   const { get: getJobInfo } = usePrintJobsStatus();
   const jobInfo = getJobInfo(order.id);
@@ -147,6 +148,11 @@ const OrderRowImpl = forwardRef<HTMLDivElement, OrderRowProps>(({ order, itemCou
             <span className={`inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-black uppercase tracking-wide ${STATUS_CHIP[status] || STATUS_CHIP.new}`}>
               {STATUS_LABEL[status] || status.toUpperCase()}
             </span>
+            {senha && kind === "pickup" && (
+              <span className="inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-black uppercase tracking-wide bg-teal-500/15 text-teal-400 border-teal-500/30">
+                SENHA {senha}
+              </span>
+            )}
           </div>
         </div>
       </div>

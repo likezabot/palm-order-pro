@@ -29,6 +29,7 @@ import { PrintSettingsDialog } from "@/components/pdv/PrintSettingsDialog";
 import { useSeenOrders } from "@/hooks/use-seen-orders";
 import { useSiren } from "@/hooks/use-siren";
 import { getOrderGroup, getOrderKind, isOnlineOrder, KIND_LABEL } from "@/lib/order-classification";
+import { getSenha } from "@/lib/senha";
 
 import { usePdvRealtime } from "@/hooks/use-pdv-realtime";
 import { summarizeItemWaiters, formatWaiterTag } from "@/lib/order-items-group";
@@ -127,6 +128,27 @@ const Pdv = () => {
     },
     refetchInterval: 30000,
   });
+
+  // Query de pedidos finalizados/cancelados de hoje
+  const { data: closedOrders = [] } = useQuery({
+    queryKey: ["pdv-closed-orders"],
+    queryFn: async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, table_name, status, total, created_at, customer_name_snapshot, service_type")
+        .not("status", "in", '("new","preparing","done")')
+        .gte("created_at", today.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    refetchInterval: 60000,
+  });
+
+  const [showClosed, setShowClosed] = useState(false);
 
   const { data: selectedItems = [] } = useQuery({
     queryKey: ["pdv-items", selectedId],
@@ -425,8 +447,63 @@ const Pdv = () => {
             <span className="hidden xs:inline sm:inline">{staffMode ? "GARÇOM" : "ADMIN"}</span>
           </button>
           <PrintSettingsDialog />
+          {/* Finalizadas hoje */}
+          <button
+            onClick={() => setShowClosed((v) => !v)}
+            className={`relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-bold transition-colors ${
+              showClosed
+                ? "border-muted-foreground bg-muted text-foreground"
+                : "border-border bg-card text-muted-foreground hover:bg-secondary"
+            }`}
+            title="Pedidos finalizados/cancelados de hoje"
+          >
+            <Receipt size={16} />
+            <span className="hidden sm:inline">FINALIZADAS</span>
+            {closedOrders.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-muted-foreground text-background text-[9px] font-black flex items-center justify-center">
+                {closedOrders.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Painel de pedidos finalizados/cancelados */}
+      {showClosed && (
+        <div className="border-b border-border bg-muted/30 px-4 py-3">
+          <div className="max-w-4xl mx-auto">
+            <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-2">
+              Finalizados/Cancelados hoje — {closedOrders.length} pedido(s)
+            </p>
+            {closedOrders.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Nenhum pedido finalizado hoje.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {closedOrders.map((o) => (
+                  <div
+                    key={o.id}
+                    className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-1.5 text-xs"
+                  >
+                    <span className="font-bold truncate max-w-[100px]">
+                      {o.customer_name_snapshot || o.table_name || "—"}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                      o.status === "cancelled"
+                        ? "bg-destructive/15 text-destructive"
+                        : "bg-success/15 text-success"
+                    }`}>
+                      {o.status === "cancelled" ? "CANCELADO" : o.status?.toUpperCase()}
+                    </span>
+                    {o.total != null && (
+                      <span className="text-muted-foreground font-mono">R$ {Number(o.total).toFixed(2)}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_420px] overflow-hidden">
@@ -489,6 +566,7 @@ const Pdv = () => {
                     itemCount={(order as any).item_count || 0}
                     selected={selectedId === order.id}
                     isUnseen={isOnlineOrder(order) && !isSeen(order.id)}
+                    senha={order.table_name === "BALCÃO" ? getSenha(order.id, orders) : undefined}
                     onSelect={() => {
                       markSeen(order.id);
                       setSelectedId(order.id);
@@ -529,6 +607,7 @@ const Pdv = () => {
                     order={order}
                     itemCount={(order as any).item_count || 0}
                     selected={selectedId === order.id}
+                    senha={order.table_name === "BALCÃO" ? getSenha(order.id, orders) : undefined}
                     onSelect={() => { setSelectedId(order.id); setShowPayment(false); setPaymentsHistory([]); }}
                     onAdvance={handleAdvance}
                     onPrint={handlePrint}

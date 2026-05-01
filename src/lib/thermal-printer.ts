@@ -800,6 +800,8 @@ export interface ReceiptExtras {
   orderShortId?: string | null;
   total?: number | null;
   itemsCount?: number | null;
+  /** Senha do balcão (ex: #001) — exibida na comanda de pickup */
+  senha?: string | null;
   fingerprint?: import("./receipt-layout").BuildLayoutInput["fingerprint"];
 }
 
@@ -844,6 +846,7 @@ export function buildEscPosReceipt(
       customerName: extras.customerName ?? undefined,
       customerPhone: extras.customerPhone ?? undefined,
       orderId: extras.orderId ?? undefined,
+      senha: extras.senha ?? undefined,
       fingerprint: extras.fingerprint ?? undefined,
     },
     config
