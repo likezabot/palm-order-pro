@@ -101,7 +101,7 @@ export function applyPreset(preset: LayoutPreset, base: PrintConfig): PrintConfi
   switch (preset) {
     case "mesa_simples":
       next.fontSizes = { title: 18, header: 14, items: 14, notes: 11, total: 18 };
-      next.visibleSections = { title: true, waiter: false, date: false, notes: true, footer: false };
+      next.visibleSections = { title: true, waiter: false, date: false, notes: true, footer: false, showOrderNumber: true };
       break;
     case "classico":
       next.fontSizes = {}; // usa defaults do printSize
