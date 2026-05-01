@@ -367,79 +367,62 @@ function buildDeliveryLayout(
   return { blocks, docType: "DELIVERY" };
 }
 
-/** Layout do cupom SENHA (BALCÃO) — padrão exato Plano B Espetaria. */
+/** TIPO 2: BALCAO / RETIRADA (com SENHA) */
 function buildSenhaLayout(
   input: BuildLayoutInput,
   cfg: PrintConfig,
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  const order = input;
-  const items = input.items;
+  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
 
-  const safe = (v: string | null | undefined) => v?.trim() || "—";
-  const formatCurr = (v: number | null | undefined) => `R$ ${(v ?? 0).toFixed(2).replace(".", ",")}`;
-  const formatHora = (iso: string | null | undefined) => {
-    if (!iso) return "—";
-    try {
-      return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", });
-    } catch {
-      return "—";
-    }
-  };
-
-  const senhaNum = (order as any).counter ?? (order as any).senha ?? (order as any).id?.slice(-4) ?? "—";
-
-  // === CABECALHO ===
-  blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "title", text: cfg.headerText?.trim() || "PLANO B ESPETARIA", });
+  // Cabeçalho
+  blocks.push({ kind: "title", text: establishment.toUpperCase() });
   blocks.push({ kind: "sep", bold: true });
 
-  // === SENHA ===
-  blocks.push({ kind: "rawLine", text: "" });
-  blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}`, });
-  blocks.push({ kind: "rawLine", text: "" });
+  // SENHA em destaque
+  const senhaNum = input.senha || input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
+  blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}` });
+  blocks.push({ kind: "sep" });
 
-  // === IDENTIFICACAO ===
-  blocks.push({ kind: "kvLine", label: "PEDIDO", value: `#${senhaNum}`, });
-  blocks.push({ kind: "rawLine", text: "TIPO: BALCAO / RETIRADA" });
-  blocks.push({ kind: "rawLine", text: "" });
-
-  // === CLIENTE ===
-  blocks.push({ kind: "kvLine", label: "CLIENTE", value: safe((order as any).customer_name ?? (order as any).customerName), });
-  const phone = (order as any).customer_phone ?? (order as any).customerPhone ?? (order as any).phone;
-  if (phone) {
-    blocks.push({ kind: "kvLine", label: "TEL", value: safe(phone) });
+  // Identificação
+  blocks.push({ kind: "kvLine", label: "TIPO", value: "BALCAO / RETIRADA", bold: true });
+  if (!isBlank(input.customerName)) {
+    blocks.push({ kind: "kvLine", label: "CLIENTE", value: input.customerName!.toUpperCase() });
   }
-  blocks.push({ kind: "rawLine", text: "" });
+  if (!isBlank(input.customerPhone)) {
+    blocks.push({ kind: "kvLine", label: "TEL", value: input.customerPhone! });
+  }
+  blocks.push({ kind: "kvLine", label: "DATA", value: `${ctx.date} ${ctx.time}` });
+  blocks.push({ kind: "sep" });
 
-  // === ITENS ===
-  blocks.push({ kind: "sep", bold: false });
-  blocks.push({ kind: "sectionHeader", text: "ITENS" });
-  blocks.push({ kind: "sep", bold: false });
-
-  for (const it of items) {
+  // Itens
+  blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
+  input.items.forEach((it) => {
     blocks.push({
       kind: "bulletItem",
-      name: (it.product_name ?? (it as any).name ?? "ITEM").toUpperCase(),
-      quantity: it.quantity ?? (it as any).qty ?? 1,
-      subtotal: (it as any).subtotal ?? (it.quantity ?? 1) * (it.product_price ?? (it as any).unitPrice ?? (it as any).unit_price ?? 0),
-      note: it.note ?? (it as any).notes ?? null,
+      name: it.product_name.toUpperCase(),
+      quantity: it.quantity,
+      subtotal: it.product_price * it.quantity,
+      note: it.note ?? null,
     });
+  });
+  blocks.push({ kind: "sep" });
+
+  // Totais
+  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(input.total ?? 0), bold: true });
+  if (!isBlank(input.paymentMethod)) {
+    blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
   }
-  blocks.push({ kind: "rawLine", text: "" });
 
-  // === TOTAIS ===
-  blocks.push({ kind: "sep", bold: false });
-  blocks.push({ kind: "kvLine", label: "TOTAL", value: formatCurr((order as any).total ?? (order as any).total_amount ?? (order as any).totalAmount), bold: true, });
-  blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: safe(
-    (order as any).paymentMethod ?? (order as any).payment_method ?? (order as any).forma_pagamento
-  ), });
-  blocks.push({ kind: "rawLine", text: "" });
-  blocks.push({ kind: "rawLine", text: "STATUS: PRONTO PARA RETIRADA" });
-  blocks.push({ kind: "sep", bold: false });
+  // Rodapé instrução
+  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "rawLine", text: "RETIRE NO BALCAO", align: "center" });
+  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "cutMark" });
 
-  // === RODAPE ===
+  return { blocks, docType: "SENHA" };
+}
   blocks.push({ kind: "kvLine", label: "HORA", value: formatHora((order as any).created_at ?? (order as any).createdAt), });
   blocks.push({ kind: "rawLine", text: "" });
   blocks.push({ kind: "rawLine", text: "APRESENTAR ESTA SENHA NO BALCAO", align: "center", });
