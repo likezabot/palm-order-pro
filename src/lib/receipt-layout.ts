@@ -30,9 +30,10 @@ export interface DeliveryAddressData {
 }
 
 export type LayoutBlock =
+  | { kind: "image"; url: string; align?: "left" | "center" | "right" }
   | { kind: "title"; text: string }
   | { kind: "banner"; text: string } // *** ACRESCIMO ***, *** CONTA ***, DELIVERY
-  | { kind: "sep"; bold?: boolean }
+  | { kind: "sep"; bold?: boolean; style?: "line" | "dashes" | "stars" | "none" }
   | { kind: "info"; label: string; value: string }
   /** Endereço em múltiplas linhas (sem label "ENDEREÇO" embutido — o label vem antes). */
   | { kind: "addressBlock"; lines: string[] }
