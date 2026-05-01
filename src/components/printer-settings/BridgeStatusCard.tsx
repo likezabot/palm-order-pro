@@ -103,7 +103,7 @@ export default function BridgeStatusCard({ cfg, onChangeBridgeUrl }: Props) {
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-1.5 w-full">
+          <div className="flex flex-col gap-1.5 w-full min-w-0">
             <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
               URL da bridge
             </Label>

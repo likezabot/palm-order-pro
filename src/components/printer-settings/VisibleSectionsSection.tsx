@@ -22,7 +22,7 @@ export default function VisibleSectionsSection({ cfg, onChange }: Props) {
     onChange({ visibleSections: { ...cfg.visibleSections, [k]: v } });
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-bold uppercase tracking-wide flex items-center gap-2">
           <Eye className="w-4 h-4" /> O que mostrar no talão
