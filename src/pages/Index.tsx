@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Monitor, Settings, Download, ChefHat, ShoppingBag } from "lucide-react";
+import { Smartphone, Monitor, Settings, Download, ChefHat, ShoppingBag, Printer } from "lucide-react";
 import { useFeedback } from "@/hooks/use-feedback";
 import { getAppVersion } from "@/lib/version-check";
 
@@ -10,6 +10,7 @@ const modes = [
   { label: "ATENDIMENTO / PALM", path: "/palm", Icon: Smartphone },
   { label: "PDV / CAIXA", path: "/pdv", Icon: ShoppingBag },
   { label: "PAINEL COZINHA", path: "/kitchen", Icon: ChefHat },
+  { label: "IMPRESSORA", path: "/configuracoes/impressora", Icon: Printer },
   { label: "ADMIN", path: "/admin", Icon: Settings },
 ];
 
