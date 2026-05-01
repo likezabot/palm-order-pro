@@ -315,13 +315,10 @@ function buildDeliveryLayout(
   ctx: { date: string; time: string }
 ): ReceiptLayout {
   const blocks: LayoutBlock[] = [];
-  const establishment = cfg.headerText?.trim() || "PLANO B ESPETARIA";
-
-  // Cabeçalho
-  blocks.push({ kind: "title", text: establishment.toUpperCase() });
-  blocks.push({ kind: "sep", bold: true });
+  
+  pushEstablishmentHeader(blocks, cfg);
   blocks.push({ kind: "banner", text: "DELIVERY" });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Cliente e Entrega
   blocks.push({ kind: "kvLine", label: "CLIENTE", value: (input.customerName || "---").toUpperCase() });
@@ -345,7 +342,7 @@ function buildDeliveryLayout(
   }
   
   blocks.push({ kind: "kvLine", label: "DATA", value: `${ctx.date} ${ctx.time}` });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Itens
   blocks.push({ kind: "sectionHeader", text: "ITENS DO PEDIDO" });
@@ -358,7 +355,7 @@ function buildDeliveryLayout(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // Financeiro
   const deliveryFee = input.deliveryFee ?? 0;
@@ -375,17 +372,17 @@ function buildDeliveryLayout(
 
   // Observação
   if (input.generalNote && input.generalNote.trim()) {
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
     blocks.push({ kind: "noteBlock", label: "OBSERVACOES", text: input.generalNote.trim().toUpperCase() });
   }
 
   // Rodapé Opcional para Delivery
   if (cfg.footerText) {
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
     blocks.push({ kind: "footer", text: cfg.footerText });
   }
 
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: "DELIVERY" };
