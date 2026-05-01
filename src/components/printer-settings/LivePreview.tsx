@@ -48,21 +48,28 @@ export default function LivePreview({ cfg }: Props) {
       </Tabs>
 
       <div className="flex-1 flex items-start justify-center bg-zinc-200 dark:bg-zinc-900 rounded-xl p-4 sm:p-6 overflow-y-auto">
-        <div
-          className="bg-white shadow-2xl rounded-sm"
+        <iframe
+          srcDoc={html}
+          title="Preview do talão"
+          scrolling="no"
           style={{
             width: paperWidthPx,
             minHeight: 420,
-            color: "#111",
-            fontFamily: "'Courier New', Courier, monospace",
-            padding: "12px 14px",
+            border: "none",
+            display: "block",
+            borderRadius: 2,
+            boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+            background: "#fff",
           }}
-        >
-          <div
-            className="thermal-preview"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        </div>
+          onLoad={(e) => {
+            // Ajusta altura do iframe ao conteúdo
+            const iframe = e.currentTarget;
+            try {
+              const h = iframe.contentDocument?.body?.scrollHeight;
+              if (h && h > 0) iframe.style.height = h + 24 + "px";
+            } catch {}
+          }}
+        />
       </div>
 
       <p className="text-[10px] text-muted-foreground text-center mt-3 italic">
