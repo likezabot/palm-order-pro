@@ -181,6 +181,10 @@ export function thermalCSS(cfg: PrintConfig): string {
     }
     .sep { border: none !important; border-top: 1px dashed #000 !important; margin: 5px 0 !important; }
     .sep-bold { border: none !important; border-top: 2px solid #000 !important; margin: 5px 0 !important; }
+    .sep-text, .sep-bold-text { text-align: center !important; font-family: monospace !important; font-size: 14px !important; letter-spacing: 2px !important; margin: 4px 0 !important; overflow: hidden !important; white-space: nowrap !important; }
+    .sep-bold-text { font-weight: 900 !important; }
+    .image-block { padding: 4px 0 !important; margin-bottom: 4px !important; }
+    .image-block img { max-width: 120px !important; max-height: 80px !important; object-fit: contain !important; }
     .info-row {
       display: block !important;
       text-align: ${cfg.contentAlign === "left" ? "left" : "center"} !important;
