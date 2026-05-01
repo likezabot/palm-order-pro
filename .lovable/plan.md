@@ -1,99 +1,67 @@
-## Objetivo
+## Contexto
 
-Alinhar o layout de impressão térmica ao padrão visual do recibo de referência (foto), ajustando organização, alinhamento e tamanhos de fonte. Mudanças isoladas em `receipt-layout.ts` e `receipt-html.ts` — nenhum fluxo de checkout, RPC ou lógica de pedido será tocado.
+A estrutura solicitada já existe em grande parte:
+- 4 layouts distintos (`PEDIDO`/dine-in, `SENHA`/balcão, `DELIVERY`, `ACRESCIMO`) já implementados em `src/lib/receipt-layout.ts`.
+- Bloco de debug/fingerprint (`ENGINE/APP/PATH/ORDER/SVC`) **já está removido** — `pushFingerprint()` é no-op.
+- Nomes de item já vão em MAIÚSCULAS, valores no formato `R$ 00,00`, UUID nunca renderizado (usa `orderShortId`).
 
-## Padrão de referência (extraído da foto)
+Faltam polimentos para deixar bonito e bater 100% com o brief. Tudo confinado a 3 arquivos: `receipt-layout.ts`, `receipt-html.ts`, `thermal-printer.ts`.
 
-```text
-        PLANO B ESPETARIA          ← título, centralizado, bold
-        --------------------
-        RETIRADA                   ← banner de tipo (grande, bold)
-        27/04/2026 19:29           ← data/hora simples, sem "DATA:"
-        --------------------
-Pedido: #2                         ← labels alinhados à esquerda
-Cliente: Gustavo
-Telefone: (67) 99178-2979
-69eff14a15a1d872008db063           ← order id curto (hash)
-        --------------------
-ITENS                              ← seção label, esquerda
- • 3 x Bovino - R$ 30,00          ← bullet, qtd x nome - preço
- • 1 x Pão de alho - R$ 8,00
- • 1 x Medalhão de Frango - R$
-   10,00                           ← quebra com indentação
-        --------------------
-PAGAMENTO
- - Forma: Cartão de Débito
- - Total: R$ 58,00
-```
+## Mudanças por talão
 
-Características-chave:
-- Título e blocos divisores centralizados; linhas de info alinhadas à **esquerda**
-- Sem coluna de preço à direita — preço vem em linha junto ao nome (`qtd x nome - R$ valor`)
-- Sem labels em CAIXA ALTA forçada nos valores (manter capitalização natural do nome do cliente/produto)
-- Seções `ITENS` e `PAGAMENTO` aparecem como cabeçalho de bloco à esquerda, não centralizados grandes
-- `Total` aparece **dentro** do bloco PAGAMENTO como linha simples (não como banner gigante)
-- Bullet `•` para itens; sub-itens de pagamento usam `-`
-- Espaçamento entre itens generoso (linha em branco entre eles)
+### Tipo 1 — MESA / Dine-in
+- Adicionar pequeno selo `MESA` acima do banner grande `MESA 5` (ou só usar o nome completo no banner — manter como está se já estiver legível).
+- Garantir que `PAGAMENTO` só apareça se houver método informado (já está).
+- Remover o `cfg.footerText` (Obrigado pela preferência) — confirmar que dine-in não emite `footer` (já não emite).
+- Total em destaque: hoje é `kvLine` bold `+2px` — promover a um bloco `total` real (texto maior ainda) ou manter `kvLine` bold mas aumentar destaque visual.
 
-## Mudanças por arquivo
+### Tipo 2 — BALCÃO / SENHA
+- **SENHA precisa ser GRANDE no topo.** Hoje usa `senhaTitle` que renderiza a `senha*0.55` (pequeno). Trocar por:
+  - linha 1: `rawLine` centralizado pequeno: `SENHA`
+  - linha 2: bloco `senha` grande (usa `f.senha` = fonte enorme) com só o número (ex: `042`).
+- Banner abaixo da senha: `BALCÃO / RETIRADA`.
+- Rodapé: manter `RETIRE NO BALCÃO` centralizado, mas em bold/maior.
 
-### 1. `src/lib/receipt-layout.ts`
+### Tipo 3 — DELIVERY
+- Manter banner `DELIVERY` grande.
+- Reordenar: cliente → telefone → endereço (linha cheia + bairro + complemento + referência) → data/hora.
+- Adicionar `noteBlock` para observações se `generalNote` presente (já tem).
+- Rodapé com `cfg.footerText` (Obrigado pela preferência) só aqui — já está.
 
-Reescrever `createReceiptLayoutModel` (mesa) e `buildDeliveryLayout`/`buildSenhaLayout` para emitirem a sequência:
+### Tipo 4 — ACRÉSCIMO
+- Banner `*** ACRÉSCIMO ***` ou só `ACRÉSCIMO` grande (já tem, simplificar visual).
+- Mostrar mesa + horário do acréscimo.
+- Listar **só** os novos itens (já listado a partir de `input.items`, que no fluxo `delta` traz só os novos).
+- Subtotal dos novos itens com label `SUBTOTAL ACRÉSC.` (já existe).
 
-1. `title` — nome da loja
-2. `sep`
-3. `banner` — tipo (RETIRADA / ENTREGA / MESA)
-4. `info` simples sem label — `dd/mm/aaaa HH:MM`
-5. `sep`
-6. `info` esquerda: `Pedido: #N`, `Cliente: ...`, `Telefone: ...`
-7. `info` esquerda (novo bloco `rawLine`): hash curto do order id (12-20 chars)
-8. `sep`
-9. `banner` pequeno alinhado esquerda: `ITENS` (novo `kind: "sectionHeader"`)
-10. itens com novo formato `qtd x nome - R$ preço` numa linha só (sem coluna direita)
-11. `sep`
-12. `sectionHeader`: `PAGAMENTO`
-13. linhas tipo ` - Forma: ...`, ` - Total: R$ ...` (novo `kind: "kvLine"` com prefixo `- `)
-14. footer + fingerprint + cutMark
+## Polimento visual (CSS — `receipt-html.ts`)
 
-Novos blocos:
-- `{ kind: "sectionHeader"; text: string }` — label de seção, esquerda, bold, sem fundo
-- `{ kind: "rawLine"; text: string }` — linha solta esquerda (hash)
-- `{ kind: "bulletItem"; text: string }` — `• {qtd} x {nome} - R$ {preço}`
-- `{ kind: "kvLine"; label: string; value: string }` — `- Label: valor`
+- `.bullet-item`: aumentar `padding` vertical para 5px e `font-weight` 700 → cozinha lê mais rápido.
+- `.section-header`: adicionar borda inferior fina `1px solid #000` para separar visualmente (mais "section divider" sem precisar de `<hr>` extra).
+- `.senha-num`: garantir `font-size = f.senha` (já está) e `letter-spacing 4px`.
+- `.kv-line` bold: subir tamanho do TOTAL para ficar realmente em destaque (`f.total + 2px`).
+- `.banner` (RETIRADA/DELIVERY/ACRÉSCIMO): manter centralizado, double height.
 
-### 2. `src/lib/receipt-html.ts`
+## Polimento ESC/POS (`thermal-printer.ts`)
 
-- Adicionar `case`s para os 4 novos blocos em `renderBlocksToHtml`
-- Em `thermalCSS`:
-  - `.info-row` → mudar `text-align` padrão para **left** (sem depender de `contentAlign`)
-  - Nova classe `.section-header` (esquerda, bold, font-size = `f.total * 0.95`, margin-top maior)
-  - Nova classe `.bullet-item` (esquerda, padding-left pequeno, espaçamento vertical maior)
-  - Nova classe `.kv-line` (esquerda, padding-left)
-  - `.banner` (RETIRADA) — manter centralizado e grande (já está), mas reduzir margem inferior
-  - `.header-text` — manter como está
-- Itens em formato livre permitem quebra de linha automática com indentação na continuação (como "Medalhão de Frango - R$ 10,00" quebra para a linha de baixo)
+- Já espelha todos os blocos. Apenas ajustar:
+  - `bulletItem`: o `*` ASCII fica feio — trocar por `> ` ou `- ` para parecer marcador limpo no papel térmico (preview HTML segue com `•`).
+  - `senha`: garantir `size(true, true)` e feed antes/depois (já tem).
+  - Em `kvLine` bold do TOTAL: usar `size(true, true)` em vez de só `size(false, true)` para destaque maior na cozinha.
 
-### 3. `src/lib/thermal-printer.ts` (ESC/POS)
+## O que NÃO muda
 
-Como `receipt-layout.ts` é fonte única, espelhar o tratamento dos 4 novos blocos no renderer ESC/POS para impressão real (não só preview HTML). Mudança puramente aditiva — blocos antigos continuam funcionando para retrocompatibilidade.
-
-## O que NÃO será alterado
-
-- `create_public_order` e qualquer função SQL
-- Schema do banco (orders, order_items, customers)
-- `PublicCheckout.tsx`, fluxo de pedido online
-- `print-config.ts`, `print-dispatcher.ts`, `print-service.ts` (mantêm contratos)
-- PDV, fila de impressão, kanban da cozinha
-- Lógica de fingerprint (continua no rodapé)
+- Nada em `print-dispatcher.ts`, `print-receipt.ts`, `print-service.ts`.
+- Nenhuma RPC, schema ou edge function.
+- `print-engine.ts` continua exportando `PRINT_ENGINE_VERSION` (usado em logs internos), mas nada disso aparece no papel.
+- Largura sempre 80mm/48 cols (suporte 58mm preservado para retrocompatibilidade).
 
 ## Validação
 
-1. Preview HTML dos 3 docTypes (mesa, delivery, senha) abre lado a lado com a foto e bate visualmente
-2. Smoke tests existentes em `src/test/` continuam verdes
-3. Reprint de pedido antigo (que não tem os campos novos) ainda renderiza sem quebrar
-4. Largura 58mm e 80mm ambas testadas no preview
+1. Abrir `OrderEditorPreview` para um pedido de cada tipo (mesa, balcão, delivery, acréscimo) e conferir visualmente.
+2. Rodar `vitest run src/lib/__tests__/receipt-layout.test.ts` — testes existentes não devem quebrar.
+3. Imprimir teste real via bridge — confirmar que nenhuma linha `ENGINE:`/`APP:`/`PATH:`/`ORDER:`/`SVC:` sai no papel.
 
-## Risco de regressão
+## Risco
 
-Baixo. Mudanças confinadas a 2 (3 com ESC/POS) arquivos de renderização. Blocos antigos preservados. Nenhuma coluna/RPC/payload alterado. Se algo sair errado, basta reverter os arquivos de layout.
+Baixo. Mudanças confinadas a renderização. Nenhum dado, RPC ou contrato externo afetado.

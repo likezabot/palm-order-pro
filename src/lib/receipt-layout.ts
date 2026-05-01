@@ -223,8 +223,8 @@ export function createReceiptLayoutModel(
   });
   blocks.push({ kind: "sep" });
 
-  // Totais e Pagamento
-  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(input.total ?? 0), bold: true });
+  // TOTAL em destaque (bloco grande)
+  blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
   if (!isBlank(input.paymentMethod)) {
     blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
   }
@@ -276,7 +276,7 @@ function buildAcrescimoLayout(
   blocks.push({ kind: "sep" });
 
   const subtotal = input.items.reduce((acc, it) => acc + it.product_price * it.quantity, 0);
-  blocks.push({ kind: "kvLine", label: "SUBTOTAL ACRESC.", value: moneyBr(subtotal), bold: true });
+  blocks.push({ kind: "total", label: "SUBTOTAL ACRESC.", value: moneyBr(subtotal) });
   
   blocks.push({ kind: "sep", bold: true });
   blocks.push({ kind: "cutMark" });
@@ -343,7 +343,7 @@ function buildDeliveryLayout(
 
   blocks.push({ kind: "kvLine", label: "SUBTOTAL", value: moneyBr(subtotal) });
   blocks.push({ kind: "kvLine", label: "TAXA ENTREGA", value: moneyBr(deliveryFee) });
-  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(total), bold: true });
+  blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(total) });
   
   if (!isBlank(input.paymentMethod)) {
     blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
@@ -380,13 +380,15 @@ function buildSenhaLayout(
   blocks.push({ kind: "title", text: establishment.toUpperCase() });
   blocks.push({ kind: "sep", bold: true });
 
-  // SENHA em destaque
+  // SENHA em destaque MAXIMO (numero gigante)
   const senhaNum = input.senha || input.orderShortId || input.orderId?.slice(-4).toUpperCase() || "---";
-  blocks.push({ kind: "senhaTitle", text: `SENHA: ${senhaNum}` });
+  blocks.push({ kind: "senhaTitle", text: "SENHA" });
+  blocks.push({ kind: "senha", text: senhaNum });
+  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "banner", text: "BALCAO / RETIRADA" });
   blocks.push({ kind: "sep" });
 
   // Identificação
-  blocks.push({ kind: "kvLine", label: "TIPO", value: "BALCAO / RETIRADA", bold: true });
   if (!isBlank(input.customerName)) {
     blocks.push({ kind: "kvLine", label: "CLIENTE", value: input.customerName!.toUpperCase() });
   }
@@ -410,14 +412,14 @@ function buildSenhaLayout(
   blocks.push({ kind: "sep" });
 
   // Totais
-  blocks.push({ kind: "kvLine", label: "TOTAL", value: moneyBr(input.total ?? 0), bold: true });
+  blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
   if (!isBlank(input.paymentMethod)) {
     blocks.push({ kind: "kvLine", label: "PAGAMENTO", value: paymentLabel(input.paymentMethod) });
   }
 
   // Rodapé instrução
-  blocks.push({ kind: "sep" });
-  blocks.push({ kind: "rawLine", text: "RETIRE NO BALCAO", align: "center" });
+  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "banner", text: "RETIRE NO BALCAO" });
   blocks.push({ kind: "sep", bold: true });
   blocks.push({ kind: "cutMark" });
 
