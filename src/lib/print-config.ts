@@ -27,6 +27,8 @@ export interface VisibleSections {
   date: boolean;      // linha de data/hora
   notes: boolean;     // observações dos itens
   footer: boolean;    // rodapé "Obrigado..."
+  /** Mostrar a linha "PEDIDO #1234" */
+  showOrderNumber: boolean;
 }
 
 export interface PrintConfig {
