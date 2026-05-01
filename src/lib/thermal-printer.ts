@@ -399,6 +399,7 @@ export interface SendToBridgeMeta {
   customerName?: string | null;
   total?: number | null;
   itemsCount?: number | null;
+  printerName?: string;
 }
 
 export async function sendToBridge(
@@ -458,6 +459,7 @@ export async function sendToBridge(
         format: "escpos",
         source: meta ? `Plano B PDV [${meta.printPath}/${meta.source}]` : "Plano B Espetaria PDV",
         timestamp: new Date().toISOString(),
+        printer_name: meta?.printerName,
       }),
     });
 
