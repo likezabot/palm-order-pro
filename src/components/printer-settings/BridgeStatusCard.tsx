@@ -102,25 +102,29 @@ export default function BridgeStatusCard({ cfg, onChangeBridgeUrl }: Props) {
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
-          <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">URL da bridge</Label>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider whitespace-nowrap">
+              URL da bridge
+            </Label>
             <Input
               value={urlDraft}
               onChange={(e) => setUrlDraft(e.target.value)}
               onBlur={() => urlDraft !== cfg.bridgeUrl && onChangeBridgeUrl(urlDraft)}
               placeholder="http://localhost:9100"
-              className="font-mono text-sm"
+              className="w-full font-mono text-sm"
             />
           </div>
-          <Button variant="outline" size="default" onClick={verify} disabled={status === "checking"}>
-            {status === "checking" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            <span className="ml-2 hidden sm:inline">Testar</span>
-          </Button>
-          <Button variant="default" size="default" onClick={handleTestPrint} disabled={testing}>
-            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-            <span className="ml-2 hidden sm:inline">Imprimir teste</span>
-          </Button>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="default" onClick={verify} disabled={status === "checking"}>
+              {status === "checking" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              <span className="ml-2 hidden sm:inline">Testar</span>
+            </Button>
+            <Button variant="default" size="default" onClick={handleTestPrint} disabled={testing}>
+              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+              <span className="ml-2 hidden sm:inline">Imprimir teste</span>
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
