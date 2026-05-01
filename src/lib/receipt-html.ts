@@ -193,22 +193,22 @@ export function thermalCSS(cfg: PrintConfig): string {
       font-style: italic !important; margin-bottom: 2px !important;
       ${cfg.contentAlign === "left" ? "padding-left: 16px !important;" : ""}
     }
-    .total-block { padding: 6px 0 !important; }
+    .total-block { padding: 8px 0 !important; margin: 4px 0 !important; border-top: 2px solid #000 !important; border-bottom: 2px solid #000 !important; }
     .total-row {
-      font-size: ${f.total}px !important; font-weight: 900 !important; display: block !important;
-      text-align: ${cfg.contentAlign === "left" ? "right" : "center"} !important;
-      letter-spacing: 0.5px !important;
+      font-size: ${Math.round(f.total * 1.15)}px !important; font-weight: 900 !important; display: flex !important;
+      justify-content: space-between !important; align-items: baseline !important;
+      letter-spacing: 1px !important; text-transform: uppercase !important;
     }
-    .total-row span { display: inline !important; margin: 0 4px !important; }
+    .total-row span { display: inline !important; }
     .qty-line { font-size: ${f.base - 1}px !important; text-align: center !important; color: #555 !important; padding: 2px 0 !important; }
     .senha-num {
       font-size: ${f.senha}px !important; font-weight: 900 !important; text-align: center !important;
-      line-height: 1.1 !important; margin: 8px 0 !important; letter-spacing: 3px !important;
+      line-height: 1.0 !important; margin: 4px 0 10px 0 !important; letter-spacing: 4px !important;
     }
     .senha-title {
-      font-size: ${Math.round(f.senha * 0.55)}px !important; font-weight: 900 !important;
-      text-align: center !important; line-height: 1.1 !important; margin: 4px 0 6px 0 !important;
-      letter-spacing: 2px !important; text-transform: uppercase !important;
+      font-size: ${f.base + 2}px !important; font-weight: 700 !important;
+      text-align: center !important; line-height: 1.1 !important; margin: 8px 0 0 0 !important;
+      letter-spacing: 6px !important; text-transform: uppercase !important; color: #555 !important;
     }
     .item-table-row {
       display: grid !important;
@@ -245,8 +245,10 @@ export function thermalCSS(cfg: PrintConfig): string {
       font-weight: 900 !important;
       font-size: ${f.base + 2}px !important;
       text-transform: uppercase !important;
-      letter-spacing: 0.5px !important;
-      margin: 6px 0 4px 0 !important;
+      letter-spacing: 1px !important;
+      margin: 8px 0 4px 0 !important;
+      padding-bottom: 3px !important;
+      border-bottom: 1px solid #000 !important;
     }
     .raw-line {
       text-align: left !important;
@@ -258,10 +260,10 @@ export function thermalCSS(cfg: PrintConfig): string {
     .bullet-item {
       text-align: left !important;
       font-size: ${f.base + 1}px !important;
-      padding: 4px 0 4px 6px !important;
-      text-indent: -6px !important;
-      margin-left: 6px !important;
-      font-weight: 600 !important;
+      padding: 5px 0 5px 8px !important;
+      text-indent: -8px !important;
+      margin-left: 8px !important;
+      font-weight: 700 !important;
       word-break: break-word !important;
     }
     .bullet-note {
