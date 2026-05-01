@@ -641,8 +641,9 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
         break;
       }
       case "total": {
-        b.resetStyle().align(align).bold(true).size(totalLarge, totalLarge);
-        b.line(`${blk.label}: ${blk.value}`);
+        b.resetStyle().align("center").line("=".repeat(cols));
+        b.align("center").bold(true).size(true, true).line(`${blk.label}: ${blk.value}`);
+        b.resetStyle().align("center").line("=".repeat(cols));
         b.resetStyle();
         break;
       }
@@ -723,7 +724,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
       case "bulletItem": {
         b.resetStyle().align("left");
         const price = `R$ ${blk.subtotal.toFixed(2).replace(".", ",")}`;
-        const head = `* ${blk.quantity} x ${blk.name.toUpperCase()} - ${price}`;
+        const head = `> ${blk.quantity} x ${blk.name.toUpperCase()} - ${price}`;
         // quebra a linha em palavras se exceder largura
         if (head.length <= cols) {
           b.line(head);
