@@ -423,11 +423,3 @@ function buildSenhaLayout(
 
   return { blocks, docType: "SENHA" };
 }
-  blocks.push({ kind: "kvLine", label: "HORA", value: formatHora((order as any).created_at ?? (order as any).createdAt), });
-  blocks.push({ kind: "rawLine", text: "" });
-  blocks.push({ kind: "rawLine", text: "APRESENTAR ESTA SENHA NO BALCAO", align: "center", });
-  blocks.push({ kind: "sep", bold: true });
-  blocks.push({ kind: "cutMark" });
-
-  return { blocks, docType: "SENHA" };
-}
