@@ -245,7 +245,7 @@ export function createReceiptLayoutModel(
       note: it.note ?? null,
     });
   });
-  blocks.push({ kind: "sep" });
+  blocks.push({ kind: "sep", style: cfg.separatorStyle });
 
   // TOTAL em destaque (bloco grande)
   blocks.push({ kind: "total", label: "TOTAL", value: moneyBr(input.total ?? 0) });
@@ -255,11 +255,11 @@ export function createReceiptLayoutModel(
 
   // Observação
   if (input.generalNote && input.generalNote.trim()) {
-    blocks.push({ kind: "sep" });
+    blocks.push({ kind: "sep", style: cfg.separatorStyle });
     blocks.push({ kind: "noteBlock", label: "OBSERVACAO", text: input.generalNote.trim().toUpperCase() });
   }
 
-  blocks.push({ kind: "sep", bold: true });
+  blocks.push({ kind: "sep", bold: true, style: cfg.separatorStyle });
   blocks.push({ kind: "cutMark" });
 
   return { blocks, docType: input.docType };
