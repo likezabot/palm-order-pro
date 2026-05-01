@@ -333,15 +333,22 @@ export async function printBill(
   console.log(`[print] Preparando CONTA para Mesa ${tableName}. Modo: ${cfg.printMode}`);
 
   if (cfg.printMode === "bridge") {
+    const typeCfg = getEffectiveTypeConfig(extras.serviceType || "dine_in", cfg);
     const payload = buildEscPosBill(tableName, waiterName, items, total, cfg, extras);
-    const result = await sendToBridge(payload, cfg.bridgeUrl, {
-      printPath: extras.fingerprint?.printPath ?? "printBill",
-      source: (extras.fingerprint?.source as any) ?? "unknown",
-      orderId: extras.orderId ?? null,
-      serviceType: extras.serviceType ?? null,
-      tableName,
-    });
-    return { ok: result.success, error: result.error };
+    const result = await executePrintJob(
+      payload, 
+      cfg.bridgeUrl, 
+      {
+        printPath: extras.fingerprint?.printPath ?? "printBill",
+        source: (extras.fingerprint?.source as any) ?? "unknown",
+        orderId: extras.orderId ?? null,
+        serviceType: extras.serviceType ?? null,
+        tableName,
+        printerName: typeCfg.printerName,
+      },
+      typeCfg.copies
+    );
+    return result;
   }
 
   console.log("[print] Conta ignorada no modo browser.");
