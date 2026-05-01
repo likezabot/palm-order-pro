@@ -557,7 +557,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
   // contra valores estáveis — assim o slider realmente muda o comportamento.
   const titleLarge  = f.title  >= 18;
   const totalLarge  = f.total  >= 18;
-  const itemsLarge  = f.base   >= 16;
+  const itemsLarge  = f.base   >= 15;   // "grande" (base=15) agora ativa double-size
   const headerLarge = (f as any).headerInfo >= 15;
   const notesLarge  = f.note   >= 12;
 
@@ -656,7 +656,7 @@ export function renderLayout(blocks: LayoutBlock[], cfg: PrintConfig): Uint8Arra
       }
       case "total": {
         b.resetStyle().align("center").line("=".repeat(cols));
-        b.align("center").bold(true).size(true, true).line(`${blk.label}: ${blk.value}`);
+        b.align("center").bold(true).size(totalLarge, totalLarge).line(`${blk.label}: ${blk.value}`);
         b.resetStyle().align("center").line("=".repeat(cols));
         b.resetStyle();
         break;
