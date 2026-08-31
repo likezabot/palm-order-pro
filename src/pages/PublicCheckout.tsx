@@ -35,9 +35,15 @@ import {
   type ServiceType,
   type PaymentMethod,
 } from "@/lib/public-cart";
-import { fetchCurrentRestaurant, fetchRestaurantBySlug } from "@/lib/public-menu";
+import {
+  fetchBusinessHours,
+  fetchCurrentRestaurant,
+  fetchRestaurantBySlug,
+  isRestaurantOpen,
+} from "@/lib/public-menu";
 import { fetchLoyaltyStatus, normalizePhoneClient } from "@/lib/loyalty";
 import { logError, extractErrorCode } from "@/lib/error-log";
+import { isRestaurantOpenForSchedule } from "@/lib/restaurant-hours";
 import LoyaltySection from "@/components/public-menu/LoyaltySection";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -77,6 +83,27 @@ export default function PublicCheckout() {
   const restaurant = restaurantQuery.data ?? currentRestaurantQuery.data ?? null;
   const resolvedSlug = restaurant?.slug ?? (hasValidRouteSlug ? routeSlug : "");
 
+  const hoursQuery = useQuery({
+    queryKey: ["pmenu", "hours", restaurant?.id],
+    queryFn: () => fetchBusinessHours(restaurant!.id),
+    enabled: !!restaurant?.id,
+    staleTime: 5 * 60_000,
+  });
+
+  const openQuery = useQuery({
+    queryKey: ["pmenu", "open", restaurant?.id],
+    queryFn: () => isRestaurantOpen(restaurant!.id),
+    enabled: !!restaurant?.id,
+    refetchInterval: 30_000,
+  });
+
+  const checkingOpenStatus =
+    !restaurant || hoursQuery.isLoading || openQuery.isLoading;
+  const isOpen =
+    !checkingOpenStatus &&
+    Boolean(openQuery.data) &&
+    isRestaurantOpenForSchedule(restaurant, hoursQuery.data ?? []);
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [serviceType, setServiceType] = useState<ServiceType>("pickup");
@@ -106,7 +133,9 @@ export default function PublicCheckout() {
   }, []);
 
   // Auto-preenche dados do cliente pelo telefone
-  const [customerFound, setCustomerFound] = useState<any>(null);
+  const [customerFound, setCustomerFound] = useState<
+    Awaited<ReturnType<typeof fetchCustomerProfile>>
+  >(null);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [showAddressFoundCard, setShowAddressFoundCard] = useState(false);
   const lastFetchedPhoneRef = useRef<string>("");
@@ -196,7 +225,7 @@ export default function PublicCheckout() {
     return loyaltyQuery.data.rewards.find((r) => r.id === loyaltyRewardId) ?? null;
   }, [loyaltyRewardId, loyaltyQuery.data]);
 
-  const canSubmit = useMemo(() => {
+  const formCanSubmit = useMemo(() => {
     if (cart.items.length === 0) return false;
     if (!name.trim()) return false;
     if (!validatePhone(phone)) return false;
@@ -205,6 +234,13 @@ export default function PublicCheckout() {
     }
     return true;
   }, [cart.items.length, name, phone, serviceType, street, number, neighborhood]);
+
+  const canSubmit = formCanSubmit && isOpen && !checkingOpenStatus;
+  const submitLabel = checkingOpenStatus
+    ? "VERIFICANDO HORÁRIO..."
+    : !isOpen
+      ? "LOJA FECHADA"
+      : "CONFIRMAR PEDIDO";
 
   if (cart.items.length === 0 && !submitting) {
     const fallback = resolvedSlug ? `/menu/${resolvedSlug}` : "/";
@@ -227,7 +263,7 @@ export default function PublicCheckout() {
   };
 
   async function handleSubmit() {
-    if (!canSubmit || submitting) return;
+    if (!formCanSubmit || submitting) return;
     if (isPreview) {
       toast({ title: "Modo preview", description: "Pedidos estão desativados nesta visualização." });
       return;
@@ -242,6 +278,28 @@ export default function PublicCheckout() {
     }
     setSubmitting(true);
     try {
+      // Revalida imediatamente antes do envio. Nunca confia apenas no estado
+      // carregado quando o cliente abriu a pagina.
+      const [freshOpen, freshHours] = await Promise.all([
+        openQuery.refetch(),
+        hoursQuery.refetch(),
+      ]);
+      const openAtSubmission =
+        !freshOpen.error &&
+        !freshHours.error &&
+        Boolean(freshOpen.data) &&
+        isRestaurantOpenForSchedule(restaurant, freshHours.data ?? []);
+
+      if (!openAtSubmission) {
+        toast({
+          title: "Loja fechada",
+          description: "Hoje não estamos recebendo pedidos. Domingo a Plano B não abre.",
+          variant: "destructive",
+        });
+        setSubmitting(false);
+        return;
+      }
+
       const itemsSnapshot = cart.items.map((it) => ({
         product_name: it.product_name,
         quantity: it.quantity,
@@ -330,8 +388,8 @@ export default function PublicCheckout() {
           loyalty_balance_after: balanceAfter,
         },
       });
-    } catch (e: any) {
-      const msg = String(e?.message ?? e ?? "");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e ?? "");
       const code = extractErrorCode(e);
       let friendly = "Não foi possível enviar o pedido. Tente novamente.";
       
@@ -374,6 +432,15 @@ export default function PublicCheckout() {
           <p className="text-[10px] uppercase font-bold text-orange-600 tracking-wider">Passo final</p>
         </div>
       </header>
+
+      {!isPreview && !checkingOpenStatus && !isOpen && (
+        <div
+          role="alert"
+          className="border-b border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm font-bold text-rose-700"
+        >
+          Estamos fechados e os pedidos estão bloqueados. Domingo a Plano B não abre.
+        </div>
+      )}
 
       <main className="mx-auto max-w-5xl px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-7 space-y-6">
@@ -691,9 +758,7 @@ export default function PublicCheckout() {
                         <Loader2 className="h-5 w-5 animate-spin" />
                         ENVIANDO...
                       </div>
-                    ) : (
-                      "CONFIRMAR PEDIDO"
-                    )}
+                    ) : submitLabel}
                   </Button>
                   <p className="text-center text-[10px] text-muted-foreground mt-3 uppercase font-bold tracking-widest opacity-60">
                     Ao confirmar, você aceita nossos termos
@@ -732,9 +797,7 @@ export default function PublicCheckout() {
                 <Loader2 className="h-5 w-5 animate-spin" />
                 ENVIANDO...
               </div>
-            ) : (
-              "CONFIRMAR PEDIDO"
-            )}
+            ) : submitLabel}
           </Button>
         </div>
         <div className="h-safe" />

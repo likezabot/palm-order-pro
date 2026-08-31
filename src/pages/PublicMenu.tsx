@@ -33,6 +33,7 @@ import UpsellDialog from "@/components/public-menu/UpsellDialog";
 import WhatsAppFab from "@/components/public-menu/WhatsAppFab";
 import TopSellersSection from "@/components/public-menu/TopSellersSection";
 import PublicGroupVariantSheet from "@/components/public-menu/PublicGroupVariantSheet";
+import { isRestaurantOpenForSchedule } from "@/lib/restaurant-hours";
 
 
 import { usePublicProductGroups, buildCategoryEntries } from "@/lib/public-menu-groups";
@@ -115,7 +116,11 @@ export default function PublicMenu() {
 
   const products = productsQuery.data ?? [];
   const settings = settingsQuery.data;
-  const isOpen = !!openQuery.data;
+  // Falha fechada: o servidor e a agenda local precisam concordar.
+  // Isso evita aceitar pedido se uma resposta antiga ou override incorreto disser "aberto".
+  const isOpen =
+    Boolean(openQuery.data) &&
+    isRestaurantOpenForSchedule(restaurantQuery.data, hoursQuery.data ?? []);
 
   // Aplica paleta + radius via CSS variables (escopado a esta página via cleanup)
   useEffect(() => {
